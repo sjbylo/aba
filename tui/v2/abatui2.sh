@@ -122,9 +122,9 @@ trap - ERR
 export ABA_SUPPRESS_WARNINGS=1
 
 # Make ESC key responsive. Default ncurses ESCDELAY is 1000ms (waits to
-# disambiguate ESC from multi-byte sequences like arrow keys).  200ms is
-# fast enough to feel instant while still handling escape sequences.
-export ESCDELAY=200
+# disambiguate ESC from multi-byte sequences like arrow keys).  25ms is
+# effectively instant while still handling escape sequences reliably.
+export ESCDELAY=25
 
 # Source TUI v2 modules
 source "$ABA_ROOT/tui/v2/tui-strings2.sh"
