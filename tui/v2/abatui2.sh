@@ -654,7 +654,7 @@ _conno_main() {
 "Partially disconnected mode with a mirror registry. Full ABA workflow:
 
 Mirror:
-  • Mirror Payload — manage OCP version, operators, additional images, and upgrade targets
+  • Mirror Payload — configure what gets mirrored and transferred (version, operators, images)
   • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
 

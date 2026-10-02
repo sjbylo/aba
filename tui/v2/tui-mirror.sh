@@ -1342,7 +1342,13 @@ mirror_payload_menu() {
 			case "$rc" in
 				2)
 					show_help "Mirror Payload" \
-"Configure what gets mirrored. The imageset-config.yaml (ISC) is built from these settings.
+"Configure what gets mirrored — and transferred in air-gapped environments.
+
+The mirror payload defines which images (OCP release, operators, extras) will
+be synced to your mirror registry (connected) or saved to a tar for transfer
+across the air gap (disconnected).
+
+The imageset-config.yaml (ISC) is built automatically from these settings.
 
 • OCP Version / Channel — change the OCP version or update channel
 • Select Operators — choose which operators to include
@@ -1938,13 +1944,45 @@ _operator_view_basket() {
 # =============================================================================
 # Dumb consumer: calls core functions, renders dialog, passes choices back.
 
+# OpenShift AI published an image-set document with no additional images.
+# At most once per TUI session: selecting the operator and later opening
+# Recommended Images must not repeat the same warning.
+_tui_note_rhoai_no_images() {
+	local _ver="$1"
+	[[ "${_TUI_RHOAI_EMPTY_WARNED:-}" == "1" ]] && return 0
+	_TUI_RHOAI_EMPTY_WARNED=1
+	dlg --backtitle "$(ui_backtitle)" --title "OpenShift AI" \
+		--msgbox "OpenShift AI ${_ver} does not list any additional images,\nso there is nothing to add." 0 0
+}
+
 _tui_image_set_checklist() {
-	tui_log "Action: Add Recommended Images"
+	tui_log "Action: Recommended Images"
+
+	# Resolve the dynamic AI list once, so an intentional empty list is not
+	# shown as "~50 images" and is not offered as something to add.
+	# A set already written to images.conf stays on the menu so it can be removed.
+	local _ai_ver="" _ai_count="" _ai_resolved=false
+	if _image_set_is_dynamic ai 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Checking OpenShift AI image list..." 3 50
+		local _ai_res
+		if _ai_res=$(image_set_dynamic_resolve ai 2>/dev/null); then
+			_ai_resolved=true
+			_ai_ver="${_ai_res%%$'\t'*}"
+			_ai_count="${_ai_res##*$'\t'}"
+		fi
+	fi
 
 	# Read available sets from core
 	local _sets_raw _items=() _set_name _display _status _count _detail _state
 	while IFS=$'\t' read -r _set_name _display _status _count _detail; do
 		[[ -z "$_set_name" ]] && continue
+		if [[ "$_set_name" == "ai" && "$_ai_resolved" == true && "$_ai_count" -eq 0 && "$_status" != "added" ]]; then
+			continue
+		fi
+		if [[ "$_set_name" == "ai" && "$_ai_resolved" == true && "$_ai_count" -gt 0 && "$_status" != "added" ]]; then
+			_count="$_ai_count"
+		fi
 		_state="off"
 		[[ "$_status" == "added" ]] && _state="on"
 		local _label="$_display"
@@ -1955,7 +1993,13 @@ _tui_image_set_checklist() {
 		_items+=("$_set_name" "$_label" "$_state")
 	done < <(image_set_list)
 
+	# The AI operator is selected and this version publishes no extra images.
+	if [[ "$_ai_resolved" == true && "$_ai_count" -eq 0 && "${OP_SET_ADDED[ai]:-}" == "1" ]]; then
+		_tui_note_rhoai_no_images "$_ai_ver"
+	fi
+
 	if [[ ${#_items[@]} -eq 0 ]]; then
+		[[ "$_ai_resolved" == true && "$_ai_count" -eq 0 ]] && return
 		dlg --backtitle "$(ui_backtitle)" --msgbox "No image sets available." 0 0
 		return
 	fi
@@ -2032,13 +2076,19 @@ _tui_image_set_checklist() {
 			local _preview_images _preview_count
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Fetching RHOAI $_ver image list from GitHub..." 3 55
-			_preview_images=$(fetch_rhoai_images "$_ver" 2>/dev/null) || _preview_images=""
-			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
-			if [[ $_preview_count -eq 0 ]]; then
+			_preview_images=$(fetch_rhoai_images "$_ver" 2>/dev/null)
+			local _fetch_rc=$?
+			if [[ $_fetch_rc -ne 0 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Could not fetch RHOAI $_ver images from GitHub.\n\nCheck internet connectivity and try again." 0 0
 				tui_log "Failed to fetch RHOAI $_ver images"
 				_failed=true
+				continue
+			fi
+			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
+			if [[ $_preview_count -eq 0 ]]; then
+				_tui_note_rhoai_no_images "$_ver"
+				tui_log "RHOAI $_ver has no additional images"
 				continue
 			fi
 			# Confirm with image list
@@ -2093,8 +2143,6 @@ _tui_image_set_checklist() {
 	[[ ${#_to_remove[@]} -gt 0 ]] && _summary+="Removed: ${_to_remove[*]}\n"
 	[[ -n "$_add_msg" ]] && _summary+="Added:\n$_add_msg"
 	if [[ -n "$_summary" ]]; then
-		_summary+="\nConfig will be regenerated."
-		dlg --backtitle "$(ui_backtitle)" --msgbox "$_summary" 0 0
 		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 	fi
 }
@@ -2120,6 +2168,22 @@ _tui_offer_companion_images() {
 	local _needed
 	_needed=$(image_set_companions_needed "${_new_sets[@]}" 2>/dev/null) || return
 	[[ -z "$_needed" ]] && return
+
+	# An empty OpenShift AI list is a normal result: say so once, and do not offer it.
+	if echo "$_needed" | grep -qx 'ai'; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Checking OpenShift AI image list..." 3 50
+		local _ai_res _ai_ver _ai_count
+		if _ai_res=$(image_set_dynamic_resolve ai 2>/dev/null); then
+			_ai_ver="${_ai_res%%$'\t'*}"
+			_ai_count="${_ai_res##*$'\t'}"
+			if [[ "$_ai_count" -eq 0 ]]; then
+				_tui_note_rhoai_no_images "$_ai_ver"
+				_needed=$(echo "$_needed" | grep -vx 'ai' || true)
+				[[ -z "$_needed" ]] && return
+			fi
+		fi
+	fi
 
 	# Build checklist: all companions pre-checked
 	local _items=() _set_name _display _status _count _detail
@@ -2225,9 +2289,9 @@ mirror_manage_images() {
 		_menu_items+=("A" "Add image")
 		if [[ $_count -gt 0 ]]; then
 			_menu_items+=("R" "Remove image")
-			_menu_items+=("D" "Delete all images")
+			_menu_items+=("D" "Clear all images")
 		fi
-		_menu_items+=("S" "Add Recommended Images")
+		_menu_items+=("S" "Recommended Images")
 		if [[ $_count -gt 0 ]]; then
 			_menu_items+=("X" "$_incl_label")
 		fi
@@ -2358,15 +2422,14 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					dlg --backtitle "$(ui_backtitle)" --msgbox "No images to delete." 0 0
 					continue
 				fi
-				dlg --backtitle "$(ui_backtitle)" --title "Delete All Images" \
-					--yes-label "Delete All" \
+				dlg --backtitle "$(ui_backtitle)" --title "Clear All Images" \
+					--yes-label "Clear All" \
 					--no-label "Cancel" \
 					--yesno "Remove all $_count image(s) from images.conf?\n\nThis cannot be undone." 0 0
 				if [[ $? -eq 0 ]]; then
 					> "$_img_file"
 					tui_kick_isconf_regen
 					tui_log "Deleted all images from images.conf"
-					dlg --backtitle "$(ui_backtitle)" --msgbox "All additional images removed.\nConfig will be regenerated." 0 0
 				fi
 				;;
 			S)
