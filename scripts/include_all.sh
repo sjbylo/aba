@@ -2187,20 +2187,37 @@ verify_upgrade_path_exists() {
 	fi
 
 	# Phase 2: BFS — verify a path exists from current_ver to target_ver
+	# Checks both regular edges and conditionalEdges (which have known risks).
 	local bfs_result
 	bfs_result=$(echo "$graph_json" | python3 -c '
 import sys, json
 data = json.load(sys.stdin)
 nodes = {i: n["version"] for i, n in enumerate(data.get("nodes", []))}
 rev = {v: k for k, v in nodes.items()}
+
+# Build adjacency from regular edges
 adj = {}
 for e in data.get("edges", []):
     adj.setdefault(e[0], []).append(e[1])
+
+# Build adjacency from conditionalEdges (version-based, not index-based)
+cond_adj = {}
+cond_risks = {}
+for ce in data.get("conditionalEdges", []):
+    risks = [r.get("name", "") for r in ce.get("risks", [])]
+    for e in ce.get("edges", []):
+        s_ver, d_ver = e.get("from", ""), e.get("to", "")
+        s_idx, d_idx = rev.get(s_ver), rev.get(d_ver)
+        if s_idx is not None and d_idx is not None:
+            cond_adj.setdefault(s_idx, []).append(d_idx)
+            cond_risks[(s_idx, d_idx)] = risks
+
 src, tgt = rev.get(sys.argv[1]), rev.get(sys.argv[2])
 if src is None or tgt is None:
     print("REACHABLE=0 HOPS=0")
     sys.exit(0)
-# BFS with hop tracking (safety limit: 10 hops)
+
+# BFS on regular edges first
 visited = {src: 0}
 queue = [src]
 while queue:
@@ -2212,22 +2229,53 @@ while queue:
             visited[nb] = visited[n] + 1
             queue.append(nb)
             if nb == tgt:
-                print("REACHABLE=1 HOPS=%d" % visited[nb])
+                print("REACHABLE=1 HOPS=%d CONDITIONAL=0" % visited[nb])
                 sys.exit(0)
-# Not reachable — find nearest valid targets from source
-reachable = sorted([nodes[k] for k in visited if k != src])
+
+# BFS including conditional edges
+visited2 = {src: 0}
+queue2 = [src]
+used_cond = False
+while queue2:
+    n = queue2.pop(0)
+    if visited2[n] >= 10:
+        continue
+    for nb in adj.get(n, []) + cond_adj.get(n, []):
+        if nb not in visited2:
+            visited2[nb] = visited2[n] + 1
+            if (n, nb) in cond_risks:
+                used_cond = True
+            queue2.append(nb)
+            if nb == tgt:
+                # Collect risk names for the direct edge
+                edge_risks = cond_risks.get((n, nb), [])
+                print("REACHABLE=1 HOPS=%d CONDITIONAL=1 RISKS=%s" % (
+                    visited2[nb], ",".join(edge_risks) if edge_risks else "unknown"))
+                sys.exit(0)
+
+# Not reachable even with conditional edges
+reachable = sorted([nodes[k] for k in visited2 if k != src])
 print("REACHABLE=0 HOPS=0 TARGETS=%s" % ",".join(reachable))
 ' "$current_ver" "$target_ver" 2>/dev/null) || return 0
 
-	local reachable hops
+	local reachable hops conditional risks
 	reachable=$(echo "$bfs_result" | grep -oP 'REACHABLE=\K[01]')
 	hops=$(echo "$bfs_result" | grep -oP 'HOPS=\K[0-9]+')
+	conditional=$(echo "$bfs_result" | grep -oP 'CONDITIONAL=\K[01]')
+	risks=$(echo "$bfs_result" | grep -oP 'RISKS=\K\S+')
 
 	if [[ "$reachable" == "1" ]]; then
 		if [[ "$shell_mode" ]]; then
-			echo "REACHABLE=1 HOPS=${hops:-1} CHANNEL=${tgt_channel}"
+			echo "REACHABLE=1 HOPS=${hops:-1} CHANNEL=${tgt_channel} CONDITIONAL=${conditional:-0} RISKS=${risks:-}"
 		fi
-		if [[ "${hops:-1}" -ge 3 ]]; then
+		if [[ "${conditional:-0}" == "1" ]]; then
+			aba_warn "Upgrade path from $current_ver to $target_ver is available but has known risks:"
+			local _r
+			for _r in $(echo "${risks:-}" | tr ',' '\n'); do
+				[[ -n "$_r" ]] && aba_warn "  - $_r"
+			done
+			aba_warn "Proceeding anyway. Review risks before upgrading the cluster."
+		elif [[ "${hops:-1}" -ge 3 ]]; then
 			aba_warn "Upgrade path from $current_ver to $target_ver requires ${hops} intermediate versions."
 		fi
 		return 0

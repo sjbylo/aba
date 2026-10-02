@@ -436,6 +436,13 @@ _mirror_install_remote() {
 # Pre-operation confirmation with OCP/operator summary + View ISC
 # =============================================================================
 
+# Stdout of mirror-status.sh --shell for the TUI to eval.
+# Provides mirror state, upgrade path validation, risks, etc.
+# Caller must eval the output to set local variables.
+_tui_mirror_status_shell() {
+	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/mirror-status.sh" --shell) 2>/dev/null || true
+}
+
 # Stdout of transfer-info.sh --shell for the TUI to eval.
 #
 # Default (no extra arg): if mirror/data/aba-transfer.tar exists, parse the ISC
@@ -549,6 +556,22 @@ _mirror_op_confirm() {
 	else
 		_summary+="Operators: none\n"
 	fi
+
+	# Upgrade path status from aba status (connected mode only, upgrade target set)
+	if [[ "$_TUI_MODE" != "DISCO" && -n "${_target:-}" ]]; then
+		local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
+		eval "$(_tui_mirror_status_shell)"
+		if [[ "$upgrade_path_conditional" == "true" ]]; then
+			_summary+="\n\\Z1Upgrade path has known risks:\\Zn\n"
+			local _r
+			for _r in $(echo "${upgrade_risks:-}" | tr ',' '\n'); do
+				[[ -n "$_r" ]] && _summary+="  - $_r\n"
+			done
+		elif [[ "$upgrade_path_exists" == "false" ]]; then
+			_summary+="\n\\Z1WARNING: No upgrade path available!\\Zn\n"
+		fi
+	fi
+
 	_summary+="\nContinue?"
 
 	# For "View ISC": show the ISC from the transfer tar if available
@@ -947,29 +970,32 @@ change your channel when selected." 0 0
 			continue
 		fi
 
-		# Validate upgrade path: source version must exist in the target channel graph.
-		local _path_diag
-		if _path_diag=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" 2>&1); then
-			: # path OK
-		else
-			# _path_diag is "src_ver|channel|lowest_ver" — parse pipe-delimited fields
-			local _src="${_path_diag%%|*}"            # first field (source version)
-			local _rest="${_path_diag#*|}"             # everything after first pipe
-			local _tgt_channel="${_rest%%|*}"          # second field (target channel)
-			local _lowest="${_rest##*|}"               # last field (lowest entry point)
-		local _hint=""
-			if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$_current_ver"; then
-				_hint="Upgrade to at least ${_lowest} first.\n\n"
-			else
-				_hint="Your version may not be in this channel yet. Try a different channel or target.\n\n"
-			fi
+		# Validate upgrade path (uses verify_upgrade_path_exists --shell).
+		local _path_shell
+		_path_shell=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" --shell 2>/dev/null) || true
+
+		if echo "$_path_shell" | grep -q 'REACHABLE=0'; then
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Not Available" --msgbox \
-			"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
-Version ${_current_ver} is not in channel ${_tgt_channel}.\n\
-Lowest entry point: ${_lowest:-unknown}\n\n\
-${_hint}\
+				"Cannot upgrade from ${_current_ver} to ${_target_ver}\n\
+on the ${_channel} channel.\n\n\
 Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_path/" 0 0
 			continue
+		elif echo "$_path_shell" | grep -q 'CONDITIONAL=1'; then
+			local _risks
+			_risks=$(echo "$_path_shell" | grep -oP 'RISKS=\K\S+')
+			local _risk_text=""
+			local _r
+			for _r in $(echo "${_risks:-}" | tr ',' '\n'); do
+				[[ -n "$_r" ]] && _risk_text+="  - $_r\n"
+			done
+			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Has Known Risks" \
+				--yes-label "Continue" --no-label "Cancel" \
+				--yesno "The upgrade path from ${_current_ver} to ${_target_ver}\nhas known risks:\n\n${_risk_text}\n\
+These are documented conditions that may affect\n\
+specific configurations. The upgrade will proceed\n\
+but review these risks before upgrading your cluster.\n\n\
+Continue with this target?" 0 0
+			[[ $? -ne 0 ]] && continue
 		fi
 
 		break
