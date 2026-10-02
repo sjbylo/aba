@@ -45,11 +45,6 @@ set +e
 
 source scripts/include_all.sh
 
-# include_all.sh installs a 'trap show_error ERR' that calls exit on any
-# non-zero. Preflight probes deliberately return non-zero as counter-bump
-# signals (not fatal errors). Clear the trap so all layers run fully.
-trap - ERR
-
 # Surface aba_info lines too (the D-12 explanatory footer uses aba_info,
 # which is gated behind INFO_ABA by default). aba_success is always visible.
 export INFO_ABA=1

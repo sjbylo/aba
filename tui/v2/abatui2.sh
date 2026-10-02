@@ -8,8 +8,6 @@
 # Design decisions:
 #   - NO 'set -e': dialog returns non-zero by design (1=Cancel, 2=Help, 3=Extra).
 #     Using set -e would crash the TUI on every Cancel/Back press.
-#   - ERR trap disabled: include_all.sh sets 'trap show_error ERR' which would
-#     also crash on dialog non-zero returns. We disable it after sourcing.
 #   - Single-letter tags as keyboard shortcuts (v1 pattern): pressing a letter
 #     jumps to that menu item (e.g. M=Mirror, B=Bundle, C=Configure).
 #     Tags are displayed left of the label for visual shortcut hints.
@@ -109,11 +107,6 @@ trap 'exit 0' HUP TERM INT
 
 # shellcheck disable=SC1091
 source scripts/include_all.sh
-
-# include_all.sh sets 'trap show_error ERR' which treats any non-zero return as
-# a fatal error. Since dialog returns 1 (Cancel/Back), 2 (Help), 3 (Extra/Next)
-# by design, the ERR trap must be disabled or every Back press crashes the TUI.
-trap - ERR
 
 # Suppress config drift warnings during startup splash screen.
 # tui-lib.sh runs normalize-mirror-conf at source time (top-level code, line ~333)
