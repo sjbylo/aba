@@ -67,7 +67,7 @@ until ! oc get po -A | awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != 
 	echo -n .
 done
 
-wait_all_pods openshift-cnv
+wait_all_pods $NS
 
 echo_step "Showing MTV pods"
 echo
