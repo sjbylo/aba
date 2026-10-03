@@ -872,6 +872,7 @@ fi
 
 # --- Detect mode (uses internet check result started during startup) ---
 _detect_mode
+_tui_apply_mode_colors
 
 tui_log "Final mode: $_TUI_MODE"
 
@@ -889,6 +890,7 @@ while :; do
 			disco_main || disco_rc=$?
 			if [[ $disco_rc -eq 2 ]]; then
 				_detect_mode
+				_tui_apply_mode_colors
 				continue
 			fi
 			[[ "$_TUI_MODE" != "DISCO" ]] && continue

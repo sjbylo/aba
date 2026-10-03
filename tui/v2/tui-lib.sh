@@ -241,6 +241,13 @@ form_active_text_color = (WHITE,BLUE,ON)
 form_text_color = (BLACK,WHITE,OFF)
 EOF
 
+# Apply DISCO-mode color theme (darker background to visually distinguish)
+_tui_apply_mode_colors() {
+	if [[ "$_TUI_MODE" == "DISCO" ]]; then
+		sed -i 's/^screen_color = .*/screen_color = (WHITE,CYAN,ON)/' "$_TUI_DIALOGRC"
+	fi
+}
+
 # =============================================================================
 # Core dialog wrapper
 # =============================================================================
