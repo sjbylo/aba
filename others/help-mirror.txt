@@ -27,6 +27,9 @@ Tuning (in ~/.aba/config):
   See README.md 'Troubleshooting' for more.
 
 Related commands:
+  aba [-d mirror] status               # Show mirror registry status (OCP version, registry, operators, ISC)
+  aba [-d mirror] status --shell        # Machine-readable key=value output for scripting
+
   aba [-d mirror] sync [--retry #]     # Copy images from the Internet into the mirror registry (mirror2mirror).
 
   aba [-d mirror] save [--retry #]     # Copy images from the Internet to disk (mirror2disk).

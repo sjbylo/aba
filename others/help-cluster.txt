@@ -49,6 +49,7 @@ Options:
 
 Related commands (run with --dir <cluster> or from inside the cluster directory):
 
+  aba [-d <cluster>] status               # Show cluster health (version, nodes, operators, API)
   aba [-d <cluster>] mon                  # Monitor installation (runs openshift-install agent wait-for)
   aba [-d <cluster>] day2                 # Configure OperatorHub, signatures, etc (run after load/sync/upgrade)
   aba [-d <cluster>] day2-virt            # Configure OCP Virtualization boot sources to use the mirror registry

@@ -23,6 +23,10 @@ Main commands:
   aba [-d <cluster>] terminal|term      # Interactive shell logged into the cluster (oc ready, bash completion)
 
 Other commands:
+  aba status                            # Show current milestone and next steps
+  aba status --all                      # Verbose status with per-cluster health checks
+  aba [-d mirror] status                # Mirror registry status summary
+  aba [-d <cluster>] status             # Single cluster health check
   aba clean                             # Clean up all generated files
   aba [-d cli] download                 # Download all required CLI installation files only
   aba [-d cli] install                  # Download and install all the CLI binaries into ~/bin
