@@ -11,7 +11,7 @@ if [ ! "$1" = "--exec" ]; then
 	verify-cluster-conf || exit 1
 
 	if [ ! "$CLUSTER_NAME" ]; then
-		scripts/cluster-config-check.sh
+		scripts/cluster-config-check.sh || exit 1
 		eval "$(scripts/cluster-config.sh "$@")" || exit 1
 	fi
 

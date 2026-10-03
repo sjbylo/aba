@@ -16,7 +16,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 		aba_info "Cluster config files missing -- nothing to delete"
 		exit 0
 	fi
-	scripts/cluster-config-check.sh
+	scripts/cluster-config-check.sh || exit 1
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
