@@ -1067,6 +1067,19 @@ oc whoami
 oc get co
 ```
 
+## Checking Status
+
+`aba status` shows where you are in the setup workflow and what to do next:
+
+```bash
+aba status                    # One-line milestone + next steps
+aba status --all              # Full verbose dump with per-cluster health
+aba -d mirror status          # Mirror registry summary (version, operators, images)
+aba -d mycluster status       # Single cluster health check (version, nodes, operators)
+```
+
+All status commands support `--shell` for machine-readable key=value output (see [FAQ](#q-can-i-get-machine-readable-output-from-aba-commands)).
+
 ## Adding Operators to the Mirror Registry
 
 ABA mirrors Operators alongside the OpenShift platform images. Operators are configured in `aba.conf` (or overridden per mirror in `mirror.conf`) using two variables:
@@ -2110,7 +2123,7 @@ eval "$(aba -d mirror transfer-info --shell)"
 echo "OCP version: $transfer_ocp_version"
 ```
 
-The `--shell` flag is currently supported by `upgrade --dry-run` and `transfer-info`.
+The `--shell` flag is currently supported by `status`, `mirror status`, `cluster status`, `upgrade --dry-run`, and `transfer-info`.
 
 ---
 
