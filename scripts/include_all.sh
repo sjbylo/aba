@@ -4006,6 +4006,21 @@ _run_oc_mirror_with_retry() {
 	local exit_history=""
 	aba_debug "Starting retry loop: try_tot=$try_tot"
 
+	# Pre-check: warn if port 55000 is already occupied (stale oc-mirror local registry)
+	local _precheck_pid
+	_precheck_pid=$(lsof -ti :55000 2>/dev/null) || true
+	if [ -n "$_precheck_pid" ]; then
+		local _age_sec="" _age_str="unknown"
+		_age_sec=$(ps -o etimes= -p "$_precheck_pid" 2>/dev/null | tr -d ' ') || true
+		if [ -n "$_age_sec" ]; then
+			local _m=$(( _age_sec / 60 )) _s=$(( _age_sec % 60 ))
+			_age_str="${_m}m${_s}s"
+		fi
+		aba_warn "Port 55000 is already in use by PID $_precheck_pid (age: $_age_str)." \
+			"A previous oc-mirror process may still be running or cleaning up." \
+			"If this causes failures, kill it manually:  kill $_precheck_pid"
+	fi
+
 	while [ $try -le $try_tot ]; do
 		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
@@ -4050,6 +4065,15 @@ _run_oc_mirror_with_retry() {
 
 		try=$(( try + 1 ))
 		if [ $try -le $try_tot ]; then
+			# Kill orphaned oc-mirror processes and free port 55000 (local registry).
+			# oc-mirror panics can leave the child registry process alive.
+			local _stale_pids
+			_stale_pids=$(lsof -ti :55000 2>/dev/null) || true
+			if [ -n "$_stale_pids" ]; then
+				aba_debug "Killing stale process(es) on port 55000: $_stale_pids"
+				kill $_stale_pids 2>/dev/null || true
+				sleep 1
+			fi
 			aba_warn "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
