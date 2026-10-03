@@ -328,7 +328,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*|*" status "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -1053,6 +1053,7 @@ for i in imgs:
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND output=shell"
 		upgrade_shell="--shell"
+		opt_shell="--shell"
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
 		opt_force="--force"
@@ -1325,6 +1326,18 @@ if [ "$cur_target" ]; then
 		transfer-primed|transfer)
 			$ABA_ROOT/scripts/transfer-primed.sh
 			exit
+		;;
+		status)
+			if [ "$PWD" = "$ABA_ROOT" ]; then
+				# Top-level: repo status
+				$ABA_ROOT/scripts/repo-status.sh ${opt_all:-} ${opt_shell:-}
+				exit
+			elif [ -f cluster.conf ]; then
+				# Inside a cluster dir
+				$ABA_ROOT/scripts/cluster-status.sh --dir "$PWD" ${opt_shell:-}
+				exit
+			fi
+			# Inside mirror dir — fall through to Make dispatch
 		;;
 		info)
 			$ABA_ROOT/scripts/cluster-info.sh
