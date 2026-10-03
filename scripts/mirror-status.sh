@@ -263,6 +263,9 @@ op)
 	aba_info "Mirror status:"
 	aba_info "  OCP:          ${local_ver_display}"
 	aba_info "  Registry:     ${_reg_display}"
+	if [ "$_mirror_installed" = "true" ] && [ "$_mirror_has_release" != "true" ]; then
+		aba_warn "  Release:      MISSING (v${_ver:-?} not found in registry)"
+	fi
 	if [ "$_op_count" -gt 0 ]; then
 		aba_info "  Operators (${_op_count}): ${_ops_display}"
 	else
