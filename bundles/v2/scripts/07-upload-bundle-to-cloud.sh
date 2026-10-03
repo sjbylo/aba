@@ -22,7 +22,8 @@ cd "$WORK_TEST_INSTALL/aba"
 # --- Generate README and helper scripts into WORK_BUNDLE_DIR ---
 # This runs for both dev and production builds (single code path).
 
-s=$(cd cli && echo $(ls -r *.gz) | sed "s/ /\\\n    - /g")
+s_primary=$(cd cli && echo $({ ls -1d openshift-install-*.gz 2>/dev/null; ls -1d openshift-client-*.gz 2>/dev/null; ls -1d oc-mirror*.gz 2>/dev/null; }) | sed "s/ /\\\n    - /g")
+s_secondary=$(cd cli && echo $(ls -1d *.gz | grep -v '^openshift-' | grep -v '^oc-mirror') | sed "s/ /\\\n    - /g")
 d=$(date -u)
 bundle_size=$(du -shc "$WORK_BUNDLE_DIR"/ocp_* 2>/dev/null | tail -1 | awk '{print $1}')
 [ -z "$bundle_size" ] && bundle_size="unknown"
@@ -32,7 +33,7 @@ aba_ver=$(cat "$REPO_ROOT/VERSION" 2>/dev/null)
 op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
 [ ! "$op_list" ] && op_list="  - No Operators!"
 
-sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
+sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
 
 # Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
 test_body=$(grep -v '^## ' "$WORK_TEST_LOG")
