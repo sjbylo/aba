@@ -616,7 +616,7 @@ if [ "$_osus_restarted" ]; then
 	fi
 fi
 
-aba_success "Day-2 configuration applied."
+aba_info "Day-2 configuration applied. Waiting for cluster to stabilize ..."
 
 # Day2 changes (IDMS, CA trust, ITMS) trigger CO reconciliation and MCP rolling restarts.
 # Wait for operators to settle so subsequent commands (e.g. day2-osus, upgrade) see a stable cluster.

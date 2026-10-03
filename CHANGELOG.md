@@ -1,4 +1,47 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.6...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.7...HEAD)
+
+---
+
+## [1.3.7](https://github.com/sjbylo/aba/releases/tag/v1.3.7) - 2026-10-03
+
+Unified status command, critical error-handling fix, and disconnected workflow improvements
+
+
+### Added
+
+- **`aba -d mirror status` command** — New unified mirror intelligence layer showing OCP version, registry, operators, ISC, and exclusion status in a compact summary. Supports human-readable, shell-parseable (`--shell`), and preflight-check (`--preflight`) modes.
+- **`aba status` command** — New top-level status showing a one-line milestone summary and actionable next steps. Supports `--all` for full verbose dump with per-cluster health, `--shell` for machine-readable output, and `aba -d <cluster> status` for single-cluster health checks. Fast (~2s) even on disconnected hosts.
+- **Pre-operation summaries for save/sync/load** — Each mirror operation now shows a one-liner summary of what it will do (OCP version, operator count, image breakdown) before starting.
+- **Save/sync preflight guard** — Interactive check before `aba save` and `aba sync` detects and warns about upgrade + `excl_platform` conflicts before work begins, not after.
+- **Config backup on load** — `aba load` now backs up ISC, digest ISC, metadata JSON, `aba.conf`, and `mirror.conf` to `data/.backup/` before unpacking the transfer archive.
+- **TUI: upgrade guard dialog** — When an upgrade requires release images but `excl_platform` is set, the TUI now offers a Yes/No dialog (default Yes) to include them, with a clear warning about upgrade failure if declined.
+- **TUI: image preview before adding** — Recommended image sets (OCP, Virt, RHOAI) now show the full list of images for review before adding them.
+- **Conditional upgrade edge detection** — Upgrade path validation now detects Cincinnati graph conditional edges (known risks) and reports risk names. TUI shows a confirmation dialog; CLI prints warnings.
+- **Pre-flight: stale registry directory detection** — Registry install now checks for leftover data directories with wrong ownership (container UID) before installing. Prevents cryptic Ansible PermissionError failures with a clear fix command.
+- **Mirror status: missing release image warning** — `aba -d mirror status` now warns when the expected release image is not found in the registry, catching the problem before cluster install fails with a 404.
+- **TUI: DISCO mode visual indicator** — Disconnected mode uses a cyan background to visually distinguish from connected mode (blue).
+
+### Changed
+
+- **Cleaner mirror output** — Save, sync, and load operations produce ~40% less output by combining duplicate lines, folding tool versions into attempt lines, and demoting redundant ISC generation details to debug level. All information is still available via `DEBUG_ABA=1`.
+- **TUI reset is lighter** — TUI "Reset" now uses `aba clean` (keeps CLI tools and saved images) instead of `aba reset --force` (factory wipe). Full factory reset is still available from the command line.
+- **TUI disconnected mode menu** — DISCO mode switch is split into separate menu items for clearer navigation, with mode-specific confirmation dialogs.
+- **TUI: context-sensitive Additional Images menu** — Menu items that don't apply when `images.conf` is empty (List, Remove, Delete, Include/Exclude toggle) are hidden until images are added.
+- **Auto-DNS messages are more descriptive** — DNS add/remove messages now mention "ABA auto-DNS via dnsmasq" and the specific config file path under `/etc/dnsmasq.d/`, so users understand where the records come from.
+- **TUI: clearer menu labels** — "Delete all images" → "Clear all images", "Add Recommended Images" → "Recommended Images". Mirror Payload help text now explains the transfer workflow for air-gapped environments.
+- **Removed ERR trap and show_error()** — The generic "Script error in command..." footer added noise without value. Real errors are reported by the failing commands or `aba_abort()`. `set -e` still exits with the correct exit code.
+
+### Fixed
+
+- **Sub-script failures silently ignored** — 27 scripts called sub-scripts without `|| exit 1` and without `set -e`, causing commands like `aba install` to continue after release image 404 errors and `aba upgrade` to proceed after failed day2 configuration.
+- **`aba load` hang on disconnected and bundle hosts** — The `exec > >(stdbuf -oL tee ...)` process substitution caused a deadlock: `echo -n` (no newline) through a line-buffered pipe never flushed, blocking `ask()` prompts forever with zero output. Removed all exec tee pipes; trace logging now uses direct `>>` append in logging functions.
+- **oc-mirror stale process on port 55000** — oc-mirror panics could leave orphaned child processes holding port 55000, causing subsequent runs to fail. Now detected before retry and cleaned up automatically.
+- **oc-mirror terminal animations missing** — Stdout going through a pipe made `isatty()` return false, so oc-mirror disabled spinners and progress bars. Now stdout goes straight to the terminal.
+- **RHOAI empty image list handling** — When a published RHOAI version has no additional images, the empty result is now cached correctly (zero-byte file) and the TUI shows an informational row instead of a misleading image count.
+- **ISC operator parsing reliability** — Replaced fragile awk-based ISC operator parsing with yaml-to-json + jq across all scripts (save, sync, load, bundle, TUI). Prevents misparsing when operator names resemble channel entries.
+- **TUI dialog paragraph breaks** — Multi-paragraph dialog messages now render correctly. Fixed a `printf -v` issue where literal `\n` sequences were converted to real newlines that dialog collapsed into single lines.
+- **TUI operator basket count** — Fixed stale operator count display when the basket is emptied, and empty selections now persist correctly.
+- **TUI ESC key responsiveness** — ESC key now responds in ~200ms instead of ~1 second. Reduced the ncurses escape sequence disambiguation delay from the default 1000ms.
 
 ---
 

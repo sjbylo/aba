@@ -571,6 +571,83 @@ cmd_deploy() {
 	rm -f "$_deploy_tar"
 	echo ""
 	echo "  Deploy complete."
+
+	# Store local deploy checksum for verify-code
+	local _deploy_cksum
+	_deploy_cksum=$(_source_checksum "$aba_root")
+	echo "$_deploy_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+}
+
+# --- verify-code: check source sync between workspace and pools --------------
+
+cmd_verify_code() {
+	local pool_list="$1"
+	local aba_root="$2"
+
+	echo ""
+	echo "  Code sync verification"
+	echo "  ─────────────────────────────────────────"
+
+	# Current workspace checksum (live computation, saves per-file md5s)
+	local _ws_cksum
+	_ws_cksum=$(_source_checksum "$aba_root")
+
+	# Last deploy info
+	local _deploy_cksum="" _deploy_time=""
+	if [ -f /tmp/e2e-last-deploy.meta ]; then
+		_deploy_cksum=$(awk '{print $1}' /tmp/e2e-last-deploy.meta)
+		_deploy_time=$(cut -d' ' -f2- /tmp/e2e-last-deploy.meta)
+	fi
+
+	# Workspace vs last deploy
+	if [ -z "$_deploy_cksum" ]; then
+		echo "  Workspace:   ${_ws_cksum:0:12}  (no deploy recorded)"
+	elif [ "$_ws_cksum" = "$_deploy_cksum" ]; then
+		echo "  Workspace:   ${_ws_cksum:0:12}  ✓ matches last deploy (${_deploy_time})"
+	else
+		echo "  Workspace:   ${_ws_cksum:0:12}  ✗ CHANGED since last deploy (${_deploy_time})"
+		# Show which workspace files changed (uncommitted, filtered to manifest paths)
+		local _dirty_files
+		_dirty_files=$(cd "$aba_root" && git diff --name-only HEAD 2>/dev/null | grep -E '^(scripts/|templates/|tui/|tools/|others/|test/|Makefile|aba$|install$|VERSION$)' || true)
+		if [ -n "$_dirty_files" ]; then
+			local _count
+			_count=$(echo "$_dirty_files" | wc -l)
+			echo "               ${_count} uncommitted file(s):"
+			echo "$_dirty_files" | while read -r f; do echo "                 $f"; done
+		fi
+	fi
+
+	echo ""
+
+	# Check each pool (live checksum: hashes the same files as the workspace)
+	local p _pool_cksum _target _user
+	for p in $pool_list; do
+		_export_pool_ssh_users "$p"
+		_user="${CON_SSH_USER}"
+		_target=$(_con_target "$p" "$_user")
+		printf "  con%-2s (%s):  " "$p" "$_user"
+
+		_pool_cksum=$(_remote_source_checksum "$_target") || _pool_cksum=""
+
+		if [ -z "$_pool_cksum" ]; then
+			echo "unreachable or ~/aba missing"
+		elif [ "$_pool_cksum" = "$_ws_cksum" ]; then
+			echo "${_pool_cksum:0:12}  ✓ matches workspace"
+		elif [ -n "$_deploy_cksum" ] && [ "$_pool_cksum" = "$_deploy_cksum" ]; then
+			echo "${_pool_cksum:0:12}  ✓ matches last deploy (workspace changed since)"
+		else
+			echo "${_pool_cksum:0:12}  ✗ DIFFERS from workspace"
+			# Show which files differ
+			local _pool_md5s
+			_pool_md5s=$(_remote_source_md5sums "$_target") || _pool_md5s=""
+			if [ -n "$_pool_md5s" ]; then
+				diff <(cat /tmp/e2e-source-md5sums) <(echo "$_pool_md5s") 2>/dev/null | \
+					grep '^[<>]' | sed 's/^[<>] [a-f0-9]*  //' | LC_ALL=C sort -u | \
+					while read -r f; do echo "                 $f"; done
+			fi
+		fi
+	done
+	echo ""
 }
 
 # --- Internal helpers --------------------------------------------------------

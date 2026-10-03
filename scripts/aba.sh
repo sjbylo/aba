@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.3.6
+ABA_VERSION=1.3.7
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260930211915
+ABA_BUILD=20261003182454
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -209,13 +209,15 @@ fi
 # Do not do this.  CWD must be the user proivided dir
 ##cd $ABA_ROOT
 
-# install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
+# install -q checks if ~/bin/aba is outdated vs scripts/aba.sh.
+# Returns 2 when it copied a new version → re-exec so the updated script runs.
+# Use 'exec' (not fork+exit) so the process replaces in-place: same PID,
+# same stdout, no orphaned tee/stdbuf children, no invisible nested output.
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
-	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
+	$ABA_ROOT/install -q   # Only aba itself should use the flag -q
 	if [ $? -eq 2 ]; then
 		export ABA_DO_NOT_UPDATE=1
-		$0 "$@"  # This means aba was updated and needs to be called again
-		exit
+		exec $0 "$@"
 	fi
 fi
 
@@ -250,22 +252,15 @@ chmod 600 "$ABA_TRACE_FILE"
 	echo "ABA_ROOT:  $ABA_ROOT"
 	echo "==="
 } >> "$ABA_TRACE_FILE"
-# Preserve original TTY fd for color/spinner detection (exec tee replaces fd 1 with a pipe)
+# Preserve original TTY fd for color/spinner detection
 if [ -t 1 ]; then
 	exec {ABA_TTY_FD}>&1
 	export ABA_TTY_FD
 fi
-# Duplicate stdout+stderr to the trace file for post-mortem debugging.
-# When stdout is piped (e.g. 'aba tar --out - | ssh ...'), only trace stderr
-# to avoid capturing binary tar data (which caused 29GB+ trace files).
-# Use stdbuf to force line-buffering on tee — without it, process substitution
-# replaces stdout with a pipe (block-buffered ~4KB), causing interactive prompts
-# (ask(), aba_info, etc.) to be invisible until the buffer fills.
-if [ -t 1 ]; then
-	exec > >(stdbuf -oL tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
-else
-	exec 2> >(tee -a "$ABA_TRACE_FILE" >&2)
-fi
+# Trace logging: aba_debug/aba_info/aba_warn/aba_abort append directly to the trace file
+# via >> (no pipes, no process substitution, no buffering issues).
+# Stdout and stderr go straight to the terminal — preserving interactive prompts,
+# terminal animations (oc-mirror spinners), and isatty() detection.
 
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
@@ -333,7 +328,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*|*" status "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -1058,6 +1053,7 @@ for i in imgs:
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND output=shell"
 		upgrade_shell="--shell"
+		opt_shell="--shell"
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
 		opt_force="--force"
@@ -1306,23 +1302,19 @@ if [ "$cur_target" ]; then
 			exit 1
 		;;
 		ssh)
-			trap - ERR  # No need for this anymore
 			$ABA_ROOT/scripts/ssh-rendezvous.sh ${opt_all:-} ${opt_masters:-} ${opt_workers:-} "$cmd"
 			exit 
 		;;
 		run)
-			trap - ERR  # No need for this anymore
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
 		bundle)
-			trap - ERR  # No need for this anymore
 			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_primed
 			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_primed
 			exit 
 		;;
 		bundle-primed)
-			trap - ERR
 			aba_debug "Running: aba bundle-primed"
 			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light --primed
 			exit
@@ -1334,6 +1326,18 @@ if [ "$cur_target" ]; then
 		transfer-primed|transfer)
 			$ABA_ROOT/scripts/transfer-primed.sh
 			exit
+		;;
+		status)
+			if [ "$PWD" = "$ABA_ROOT" ]; then
+				# Top-level: repo status
+				$ABA_ROOT/scripts/repo-status.sh ${opt_all:-} ${opt_shell:-}
+				exit
+			elif [ -f cluster.conf ]; then
+				# Inside a cluster dir
+				$ABA_ROOT/scripts/cluster-status.sh --dir "$PWD" ${opt_shell:-}
+				exit
+			fi
+			# Inside mirror dir — fall through to Make dispatch
 		;;
 		info)
 			$ABA_ROOT/scripts/cluster-info.sh
@@ -1400,7 +1404,6 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		upgrade)
-			trap - ERR
 			upgrade_args=()
 			[ "$upgrade_to" ] && upgrade_args+=(--to "$upgrade_to")
 			[ "$opt_force" ] && upgrade_args+=(--force)
@@ -1422,7 +1425,6 @@ if [ "$cur_target" ]; then
 			exit $_rc
 		;;
 		upgrade-mon)
-			trap - ERR
 			_mon_args=()
 			[ "$upgrade_to" ] && _mon_args+=(--to "$upgrade_to")
 			$ABA_ROOT/scripts/cluster-upgrade-mon.sh "${_mon_args[@]}"

@@ -1,7 +1,7 @@
 abinitio-runtime-operator Co>Operating System Runtime Operator stable
 aci-containers-operator Cisco ACI Containers Operator stable
 aic-operator AIC Operator alpha
-airlock-microgateway Airlock Microgateway 5.1
+airlock-microgateway Airlock Microgateway 5.2
 aiu-operator AIU Operator stable-v2.3
 alloydb-omni-operator-certified AlloyDB Omni Operator stable
 amd-gpu-operator amd-gpu-operator alpha
@@ -145,7 +145,7 @@ seawise-backup-operator Seawise Backup Dashboard alpha
 simplyblock-operator Simplyblock Operator alpha
 sn-operator StreamNative Operator alpha
 splunk-operator Splunk Operator stable
-spyre-operator IBM Spyre Operator stable-v1.3
+spyre-operator IBM Spyre Operator stable-v1.4
 sriov-fec SRIOV-FEC Operator for Intel vRAN Boost Accelerators stable
 stackable-airflow-operator Stackable Operator for Apache Airflow stable
 stackable-commons-operator Stackable Commons Operator stable

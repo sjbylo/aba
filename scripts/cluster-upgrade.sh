@@ -349,7 +349,7 @@ if [ ! "$upgrade_already_running" ]; then
 	# Run day2 to ensure IDMS, signatures, and catalog sources are current.
 	if [ ! "$opt_skip_day2" ]; then
 		aba_info "Running 'aba day2' to apply mirror resources, signatures, and catalog sources ..."
-		scripts/day2.sh
+		scripts/day2.sh || exit 1
 	else
 		aba_warn "--skip-day2 specified. Skipping day2 configuration — upgrade may fail without signatures or mirror configuration."
 	fi
@@ -462,7 +462,7 @@ if [ ! "$upgrade_already_running" ]; then
 			echo
 			aba_info "The 'cincinnati-operator' package is available in OperatorHub."
 			if ask "Install OSUS (OpenShift Update Service) now before upgrading (recommended)"; then
-				scripts/day2-config-osus.sh
+				scripts/day2-config-osus.sh || exit 1
 				osus_upstream=$(oc get clusterversion version \
 					-o jsonpath='{.spec.upstream}' 2>/dev/null) || true
 				if [ "$osus_upstream" ]; then

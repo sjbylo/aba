@@ -60,6 +60,7 @@ _usage() {
 	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
+	  run.sh verify-code [-p all]              Verify source code sync between workspace and pools
 	  run.sh list                              List available suites (dummy suites shown separately)
 	  run.sh destroy [-p all] [--no-clean]     Destroy pool VMs (cleans clusters/mirrors by default)
 	  run.sh attach conN                       Attach to runner tmux session on conN
@@ -225,7 +226,7 @@ _parse_args() {
 	# Step 1: Detect subcommand (first non-flag argument)
 	if [ $# -gt 0 ]; then
 		case "$1" in
-			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs|kill)
+			run|daemon|reschedule|deploy|restart|stop|start|status|verify|verify-code|list|destroy|attach|live|dash|logs|kill)
 				CLI_COMMAND="$1"; shift ;;
 		esac
 	fi
@@ -281,7 +282,7 @@ _parse_args() {
 
 	# Step 5: Validate command
 	case "${CLI_COMMAND:-}" in
-		run|reschedule|deploy|restart|stop|start|status|verify|list|destroy|live|dash) ;;
+		run|reschedule|deploy|restart|stop|start|status|verify|verify-code|list|destroy|live|dash) ;;
 		attach)
 			if [ -z "${CLI_ATTACH:-}" ]; then
 				echo "ERROR: attach requires a host (e.g. run.sh attach con1)" >&2
@@ -353,7 +354,7 @@ _resolve_pools() {
 # Readonly commands inherit state from last run.
 _is_readonly_cmd() {
 	case "${CLI_COMMAND:-}" in
-		status|live|dash|stop|attach|verify|start|deploy|reschedule|logs) return 0 ;;
+		status|live|dash|stop|attach|verify|verify-code|start|deploy|reschedule|logs) return 0 ;;
 		*) return 1 ;;
 	esac
 }

@@ -52,7 +52,8 @@ TUI2_TITLE_DISCO_MENU="Fully Disconnected – Actions"
 TUI2_TITLE_DISCO_INSTALL_REG="Install Registry"
 TUI2_TITLE_DISCO_LOAD="Load Images to Mirror"
 TUI2_TITLE_DISCO_VIEW_ISC="ImageSet Configuration (read-only from bundle)"
-TUI2_TITLE_DISCO_RESET="Reset to Connected Mode"
+TUI2_TITLE_DISCO_SWITCH_CONNO="Switch to Partially Disconnected Mode"
+TUI2_TITLE_DISCO_SWITCH_DIRECT="Switch to Fully Connected Mode"
 TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
 
 # =============================================================================
@@ -232,7 +233,7 @@ TUI2_STATUS_INSTALLED="\Z2(installed)\Zn"
 TUI2_STATUS_SYNCED="\Z2(synced)\Zn"
 TUI2_STATUS_SAVED="\Z2(saved)\Zn"
 TUI2_STATUS_LOADED="\Z2(loaded)\Zn"
-TUI2_STATUS_NOT_VERIFIED="\Z3(installed — not verified)\Zn"
+TUI2_STATUS_NOT_VERIFIED="\Z3(installed — no release image)\Zn"
 TUI2_STATUS_NO_MIRROR="\Z1[no mirror]\Zn"
 TUI2_STATUS_NO_INTERNET="\Z1[no internet]\Zn"
 TUI2_STATUS_INSTALL_REGISTRY="\Z1[install registry]\Zn"
@@ -390,7 +391,8 @@ TUI2_MSG_DIRECT_MENU="Install from internet (no mirror):"
 TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
-TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThis will switch the TUI to connected mode, which\nrequires internet access. ABA will sync images\ndirectly from the internet.\n\nYour mirror registry and clusters are not affected.\n\nContinue?"
+TUI2_MSG_DISCO_SWITCH_CONNO="Switch to Partially Disconnected mode?\n\nImages will be synced from the internet to a local\nmirror registry, then used to install OpenShift.\n\nAny existing mirror registries and clusters are not affected.\n\nContinue?"
+TUI2_MSG_DISCO_SWITCH_DIRECT="Switch to Fully Connected mode?\n\nOpenShift will be installed directly from the internet\nwithout using a mirror registry.\n\nAny existing mirror registries and clusters are not affected.\n\nContinue?"
 TUI2_MSG_DISCO_LIGHT="No image archive files found.\n\nIf you used 'light' mode to create the bundle,\ncopy the image archive file(s) (mirror_*.tar) from your\ntransfer media to:\n\n  %s/mirror/data/\n\nThen select 'Check again'."
 
 # =============================================================================
@@ -411,7 +413,7 @@ TUI2_MSG_BASKET_EMPTY="Selection is empty.\n\nUse 'Select Operator Sets' or 'Sea
 TUI2_MSG_BUNDLE_PATH_PROMPT="Create a portable bundle (tar) containing the ABA repo,\nCLI tools, registry installer, and container images.\n\nThis bundle can be transferred to a disconnected\nenvironment via USB or other media.\n\nEnter output path (version suffix added automatically):\n\nTip: For best results, use a USB drive or a separate\nfilesystem with plenty of free space."
 TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Bundle output and mirror data are on the same\ndisk (same filesystem). A full bundle would\nduplicate the image archives, requiring roughly\ndouble the space.\n\n\\ZbLight\\ZB: excludes image archives from the bundle.\nYou must transfer them separately and copy\nthem into mirror/data/ on the internal bastion.\n\n\\ZbFull\\ZB: everything in one file (needs more space).\n\nChoose \\ZbLight\\ZB if disk space is limited."
 
-TUI2_MSG_UPGRADE_NEEDS_RELEASE="Upgrade requires release images.\n\nRelease image exclusion (excl_platform) has been\nswitched off automatically so the upgrade target\nimages will be included."
+TUI2_MSG_UPGRADE_NEEDS_RELEASE="Upgrade to %s requires release images, but they\nare currently EXCLUDED (excl_platform=true in\naba.conf).\n\nInclude release images so the upgrade target\nimages will be available?\n\nIf you select No, the upgrade may fail on the\ndisconnected side."
 TUI2_MSG_EXCL_PLATFORM_OFFER="Release images for v%s are already in the\nmirror registry.\n\nExclude them from this save to reduce\ntransfer size?\n\n(Only new/changed operators will be saved)"
 
 # =============================================================================

@@ -251,9 +251,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.6.tar.gz
-tar xzf v1.3.6.tar.gz
-cd aba-1.3.6
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.7.tar.gz
+tar xzf v1.3.7.tar.gz
+cd aba-1.3.7
 ./install
 aba
 ```
@@ -261,7 +261,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.3.6 https://github.com/sjbylo/aba.git
+git clone --branch v1.3.7 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1067,6 +1067,19 @@ oc whoami
 oc get co
 ```
 
+## Checking Status
+
+`aba status` shows where you are in the setup workflow and what to do next:
+
+```bash
+aba status                    # One-line milestone + next steps
+aba status --all              # Full verbose dump with per-cluster health
+aba -d mirror status          # Mirror registry summary (version, operators, images)
+aba -d mycluster status       # Single cluster health check (version, nodes, operators)
+```
+
+All status commands support `--shell` for machine-readable key=value output (see [FAQ](#q-can-i-get-machine-readable-output-from-aba-commands)).
+
 ## Adding Operators to the Mirror Registry
 
 ABA mirrors Operators alongside the OpenShift platform images. Operators are configured in `aba.conf` (or overridden per mirror in `mirror.conf`) using two variables:
@@ -1142,6 +1155,20 @@ aba image remove <image:tag>           # Remove an image
 Images are stored in `images.conf` (next to `aba.conf`). You can also create a per-mirror `mirror/images.conf` for overrides — both files are merged at ISC generation time. Edit the files directly or use the `aba image` commands above.
 
 After adding images, run `aba -d mirror sync` (or `save`/`load`) to mirror them.
+
+### Excluding Image Categories (`excl_*`)
+
+Three boolean variables in `aba.conf` control which image categories are included in the ImageSetConfiguration:
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `excl_platform` | `false` | Exclude OCP platform/release images. Set to `true` to mirror only operators and additional images (e.g. operator-only updates to an air-gapped host that already has release images). |
+| `excl_operators` | `false` | Exclude operator images. |
+| `excl_additional` | `false` | Exclude additional images (`images.conf`). |
+
+These can also be set via CLI flags: `aba save --excl-platform`, `aba bundle --excl-platform`, etc.
+
+> **Caution:** With `excl_platform=true`, cluster installation is not possible — the TUI will show `[release image missing]` on the Install Cluster item. Leave all three at `false` (the default) unless you have a specific reason to exclude a category.
 
 [Back to top](#quick-start)
 
@@ -2096,7 +2123,7 @@ eval "$(aba -d mirror transfer-info --shell)"
 echo "OCP version: $transfer_ocp_version"
 ```
 
-The `--shell` flag is currently supported by `upgrade --dry-run` and `transfer-info`.
+The `--shell` flag is currently supported by `status`, `mirror status`, `cluster status`, `upgrade --dry-run`, and `transfer-info`.
 
 ---
 

@@ -160,7 +160,7 @@ if ! oc get catalogsource -n openshift-marketplace -o name 2>/dev/null | grep -q
 	aba_warn "No CatalogSources found in OperatorHub." \
 		"'aba day2' must run first to configure OperatorHub before OSUS can be installed."
 	if ask "Run 'aba day2' now"; then
-		scripts/day2.sh
+		scripts/day2.sh || exit 1
 	else
 		aba_abort "Cannot install OSUS without CatalogSources. Run 'aba day2' first."
 	fi

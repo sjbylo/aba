@@ -436,6 +436,13 @@ _mirror_install_remote() {
 # Pre-operation confirmation with OCP/operator summary + View ISC
 # =============================================================================
 
+# Stdout of mirror-status.sh --shell for the TUI to eval.
+# Provides mirror state, upgrade path validation, risks, etc.
+# Caller must eval the output to set local variables.
+_tui_mirror_status_shell() {
+	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/mirror-status.sh" --shell) 2>/dev/null || true
+}
+
 # Stdout of transfer-info.sh --shell for the TUI to eval.
 #
 # Default (no extra arg): if mirror/data/aba-transfer.tar exists, parse the ISC
@@ -549,6 +556,22 @@ _mirror_op_confirm() {
 	else
 		_summary+="Operators: none\n"
 	fi
+
+	# Upgrade path status from aba status (connected mode only, upgrade target set)
+	if [[ "$_TUI_MODE" != "DISCO" && -n "${_target:-}" ]]; then
+		local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
+		eval "$(_tui_mirror_status_shell)"
+		if [[ "$upgrade_path_conditional" == "true" ]]; then
+			_summary+="\n\\Z1Upgrade path has known risks:\\Zn\n"
+			local _r
+			for _r in $(echo "${upgrade_risks:-}" | tr ',' '\n'); do
+				[[ -n "$_r" ]] && _summary+="  - $_r\n"
+			done
+		elif [[ "$upgrade_path_exists" == "false" ]]; then
+			_summary+="\n\\Z1WARNING: No upgrade path available!\\Zn\n"
+		fi
+	fi
+
 	_summary+="\nContinue?"
 
 	# For "View ISC": show the ISC from the transfer tar if available
@@ -601,9 +624,16 @@ _ensure_platform_for_upgrade() {
 	[[ "$_excl" != "true" ]] && return 0
 	[[ -z "$_target" || "$_target" == "${ocp_version:-}" ]] && return 0
 
-	dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
-		--msgbox "$TUI2_MSG_UPGRADE_NEEDS_RELEASE" 0 0
-	tui_log "Guard: excl_platform auto-switched to false for upgrade to $_target"
+	local _msg="${TUI2_MSG_UPGRADE_NEEDS_RELEASE//%s/$_target}"
+
+	if dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
+		--yes-label "Yes" --no-label "No" \
+		--yesno "$_msg" 0 0; then
+		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+		tui_log "Guard: excl_platform switched to false for upgrade to $_target"
+	else
+		tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
+	fi
 }
 
 # =============================================================================
@@ -631,9 +661,7 @@ _offer_excl_platform_for_save() {
 	[[ "$_mirror_ver" != "${ocp_version:-}" ]] && return 1
 
 	# All conditions met: version unchanged, no new upgrade target
-	local _msg
-	# shellcheck disable=SC2059
-	printf -v _msg "$TUI2_MSG_EXCL_PLATFORM_OFFER" "${ocp_version:-}"
+	local _msg="${TUI2_MSG_EXCL_PLATFORM_OFFER//%s/${ocp_version:-}}"
 
 	dlg --backtitle "$(ui_backtitle)" --title "Exclude Release Images?" \
 		--yes-label "Exclude" --no-label "Include All" \
@@ -942,29 +970,32 @@ change your channel when selected." 0 0
 			continue
 		fi
 
-		# Validate upgrade path: source version must exist in the target channel graph.
-		local _path_diag
-		if _path_diag=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" 2>&1); then
-			: # path OK
-		else
-			# _path_diag is "src_ver|channel|lowest_ver" — parse pipe-delimited fields
-			local _src="${_path_diag%%|*}"            # first field (source version)
-			local _rest="${_path_diag#*|}"             # everything after first pipe
-			local _tgt_channel="${_rest%%|*}"          # second field (target channel)
-			local _lowest="${_rest##*|}"               # last field (lowest entry point)
-		local _hint=""
-			if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$_current_ver"; then
-				_hint="Upgrade to at least ${_lowest} first.\n\n"
-			else
-				_hint="Your version may not be in this channel yet. Try a different channel or target.\n\n"
-			fi
+		# Validate upgrade path (uses verify_upgrade_path_exists --shell).
+		local _path_shell
+		_path_shell=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" --shell 2>/dev/null) || true
+
+		if echo "$_path_shell" | grep -q 'REACHABLE=0'; then
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Not Available" --msgbox \
-			"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
-Version ${_current_ver} is not in channel ${_tgt_channel}.\n\
-Lowest entry point: ${_lowest:-unknown}\n\n\
-${_hint}\
+				"Cannot upgrade from ${_current_ver} to ${_target_ver}\n\
+on the ${_channel} channel.\n\n\
 Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_path/" 0 0
 			continue
+		elif echo "$_path_shell" | grep -q 'CONDITIONAL=1'; then
+			local _risks
+			_risks=$(echo "$_path_shell" | grep -oP 'RISKS=\K\S+')
+			local _risk_text=""
+			local _r
+			for _r in $(echo "${_risks:-}" | tr ',' '\n'); do
+				[[ -n "$_r" ]] && _risk_text+="  - $_r\n"
+			done
+			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Has Known Risks" \
+				--yes-label "Continue" --no-label "Cancel" \
+				--yesno "The upgrade path from ${_current_ver} to ${_target_ver}\nhas known risks:\n\n${_risk_text}\n\
+These are documented conditions that may affect\n\
+specific configurations. The upgrade will proceed\n\
+but review these risks before upgrading your cluster.\n\n\
+Continue with this target?" 0 0
+			[[ $? -ne 0 ]] && continue
 		fi
 
 		break
@@ -1228,12 +1259,12 @@ mirror_payload_menu() {
 
 		# Build context summary
 		local _op_count=0
-		if declare -p OP_BASKET &>/dev/null && [[ ${#OP_BASKET[@]} -gt 0 ]]; then
+		if declare -p OP_BASKET &>/dev/null; then
 			_op_count=${#OP_BASKET[@]}
 		else
 			local _isc_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 			if [[ -f "$_isc_file" ]]; then
-				_op_count=$(awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}' "$_isc_file")
+				_op_count=$(_isc_operator_count "$_isc_file")
 			fi
 		fi
 
@@ -1262,13 +1293,13 @@ mirror_payload_menu() {
 		fi
 
 		# Prepare Upgrade label
-		local _upg_label="Prepare Upgrade (beta)"
+		local _upg_label="Prepare Upgrade"
 		local _upg_target=""
 		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 			_upg_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		fi
 		if [[ -n "$_upg_target" && "$_upg_target" != "${ocp_version:-}" ]]; then
-			_upg_label="Prepare Upgrade (beta) [→ ${_upg_target}]"
+			_upg_label="Prepare Upgrade [→ ${_upg_target}]"
 		fi
 
 		local _payload_summary="OCP ${ocp_version:-?} ${ocp_channel:-}"
@@ -1311,7 +1342,13 @@ mirror_payload_menu() {
 			case "$rc" in
 				2)
 					show_help "Mirror Payload" \
-"Configure what gets mirrored. The imageset-config.yaml (ISC) is built from these settings.
+"Configure what gets mirrored — and transferred in air-gapped environments.
+
+The mirror payload defines which images (OCP release, operators, extras) will
+be synced to your mirror registry (connected) or saved to a tar for transfer
+across the air gap (disconnected).
+
+The imageset-config.yaml (ISC) is built automatically from these settings.
 
 • OCP Version / Channel — change the OCP version or update channel
 • Select Operators — choose which operators to include
@@ -1579,6 +1616,10 @@ Selected operators will be included in the ImageSet config."
 						9 50
 					local _nb_rc=$?
 					[[ $_nb_rc -ne 0 ]] && continue
+					# Persist the empty selection if it changed
+					if [[ "$_OP_BASKET_DIRTY" == "true" ]]; then
+						_persist_operator_basket
+					fi
 				fi
 				tui_log "Operator selection done with $basket_count operators"
 				# Check for companion image sets for newly added operator sets
@@ -1903,13 +1944,45 @@ _operator_view_basket() {
 # =============================================================================
 # Dumb consumer: calls core functions, renders dialog, passes choices back.
 
+# OpenShift AI published an image-set document with no additional images.
+# At most once per TUI session: selecting the operator and later opening
+# Recommended Images must not repeat the same warning.
+_tui_note_rhoai_no_images() {
+	local _ver="$1"
+	[[ "${_TUI_RHOAI_EMPTY_WARNED:-}" == "1" ]] && return 0
+	_TUI_RHOAI_EMPTY_WARNED=1
+	dlg --backtitle "$(ui_backtitle)" --title "OpenShift AI" \
+		--msgbox "OpenShift AI ${_ver} does not list any additional images,\nso there is nothing to add." 0 0
+}
+
 _tui_image_set_checklist() {
-	tui_log "Action: Add Recommended Images"
+	tui_log "Action: Recommended Images"
+
+	# Resolve the dynamic AI list once, so an intentional empty list is not
+	# shown as "~50 images" and is not offered as something to add.
+	# A set already written to images.conf stays on the menu so it can be removed.
+	local _ai_ver="" _ai_count="" _ai_resolved=false
+	if _image_set_is_dynamic ai 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Checking OpenShift AI image list..." 3 50
+		local _ai_res
+		if _ai_res=$(image_set_dynamic_resolve ai 2>/dev/null); then
+			_ai_resolved=true
+			_ai_ver="${_ai_res%%$'\t'*}"
+			_ai_count="${_ai_res##*$'\t'}"
+		fi
+	fi
 
 	# Read available sets from core
 	local _sets_raw _items=() _set_name _display _status _count _detail _state
 	while IFS=$'\t' read -r _set_name _display _status _count _detail; do
 		[[ -z "$_set_name" ]] && continue
+		if [[ "$_set_name" == "ai" && "$_ai_resolved" == true && "$_ai_count" -eq 0 && "$_status" != "added" ]]; then
+			continue
+		fi
+		if [[ "$_set_name" == "ai" && "$_ai_resolved" == true && "$_ai_count" -gt 0 && "$_status" != "added" ]]; then
+			_count="$_ai_count"
+		fi
 		_state="off"
 		[[ "$_status" == "added" ]] && _state="on"
 		local _label="$_display"
@@ -1920,7 +1993,13 @@ _tui_image_set_checklist() {
 		_items+=("$_set_name" "$_label" "$_state")
 	done < <(image_set_list)
 
+	# The AI operator is selected and this version publishes no extra images.
+	if [[ "$_ai_resolved" == true && "$_ai_count" -eq 0 && "${OP_SET_ADDED[ai]:-}" == "1" ]]; then
+		_tui_note_rhoai_no_images "$_ai_ver"
+	fi
+
 	if [[ ${#_items[@]} -eq 0 ]]; then
+		[[ "$_ai_resolved" == true && "$_ai_count" -eq 0 ]] && return
 		dlg --backtitle "$(ui_backtitle)" --msgbox "No image sets available." 0 0
 		return
 	fi
@@ -1981,39 +2060,76 @@ _tui_image_set_checklist() {
 	for _add_name in "${_to_add[@]}"; do
 		if _image_set_is_dynamic "$_add_name"; then
 			# Dynamic set (AI): auto-detect version, confirm
-			local _ver
+			local _ver _ocp_short
+			_ocp_short=$(_ver_minor "${ocp_version:-}")
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Detecting RHOAI version..." 3 40
 			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Could not detect RHOAI version.\n\nCheck internet connectivity and try again." 0 0
-				tui_log "Failed to detect RHOAI version for image set: $_add_name"
+					"Could not detect RHOAI version.\n\nThe rhods-operator was not found in the\nOCP ${_ocp_short} operator catalog." 0 0
+				tui_log "Failed to detect RHOAI version for image set: $_add_name (OCP $_ocp_short)"
 				_failed=true
 				continue
 			fi
-			# Fetch count for confirm
-			local _preview_count
+			# Fetch images for preview
+			local _preview_images _preview_count
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Fetching RHOAI $_ver image list from GitHub..." 3 55
-			_preview_count=$(fetch_rhoai_images "$_ver" 2>/dev/null | wc -l)
-			if [[ $_preview_count -eq 0 ]]; then
+			_preview_images=$(fetch_rhoai_images "$_ver" 2>/dev/null)
+			local _fetch_rc=$?
+			if [[ $_fetch_rc -ne 0 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Could not fetch RHOAI $_ver images from GitHub.\n\nCheck internet connectivity and try again." 0 0
 				tui_log "Failed to fetch RHOAI $_ver images"
 				_failed=true
 				continue
 			fi
-			# Confirm
+			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
+			if [[ $_preview_count -eq 0 ]]; then
+				_tui_note_rhoai_no_images "$_ver"
+				tui_log "RHOAI $_ver has no additional images"
+				continue
+			fi
+			# Confirm with image list
+			local _preview_msg="RHOAI $_ver — $_preview_count images:"
+			local _img_line _shown=0
+			while IFS= read -r _img_line; do
+				[[ -n "$_img_line" ]] || continue
+				_shown=$(( _shown + 1 ))
+				[[ $_shown -le 20 ]] && _preview_msg+="\\n  ${_img_line}"
+			done <<< "$_preview_images"
+			[[ $_preview_count -gt 20 ]] && _preview_msg+="\\n  ... and $(( _preview_count - 20 )) more"
+			_preview_msg+="\\n\\nAdd these images?"
 			dlg --backtitle "$(ui_backtitle)" --title "Add RHOAI Images" \
 				--yes-label "Add" --no-label "Skip" \
-				--yesno "Adding $_preview_count RHOAI $_ver additional images.\n\nThese images are required for Red Hat OpenShift AI\nin disconnected environments.\n\nContinue?" 0 0
+				--yesno "$_preview_msg" 0 0
 			if [[ $? -ne 0 ]]; then
 				tui_log "User skipped RHOAI image set"
 				continue
 			fi
 			_add_count=$(image_set_add "$_add_name" "$_ver" 2>/dev/null) || _add_count=0
 		else
+			# Static set: preview images before adding
+			local _preview_images _preview_count _display
+			_preview_images=$(_image_set_static_images "$_add_name") || _preview_images=""
+			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
+			_display=$(_image_set_display_name "$_add_name")
+			if [[ $_preview_count -gt 0 ]]; then
+				local _preview_msg="${_display} — $_preview_count images:\\n"
+				local _img_line
+				while IFS= read -r _img_line; do
+					[[ -n "$_img_line" ]] && _preview_msg+="\\n  ${_img_line}"
+				done <<< "$_preview_images"
+				_preview_msg+="\\n\\nAdd these images?"
+				dlg --backtitle "$(ui_backtitle)" --title "Add Image Set" \
+					--yes-label "Add" --no-label "Skip" \
+					--yesno "$_preview_msg" 0 0
+				if [[ $? -ne 0 ]]; then
+					tui_log "User skipped image set: $_add_name"
+					continue
+				fi
+			fi
 			_add_count=$(image_set_add "$_add_name" 2>/dev/null) || _add_count=0
 		fi
 		if [[ $_add_count -gt 0 ]]; then
@@ -2027,8 +2143,6 @@ _tui_image_set_checklist() {
 	[[ ${#_to_remove[@]} -gt 0 ]] && _summary+="Removed: ${_to_remove[*]}\n"
 	[[ -n "$_add_msg" ]] && _summary+="Added:\n$_add_msg"
 	if [[ -n "$_summary" ]]; then
-		_summary+="\nConfig will be regenerated."
-		dlg --backtitle "$(ui_backtitle)" --msgbox "$_summary" 0 0
 		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 	fi
 }
@@ -2054,6 +2168,22 @@ _tui_offer_companion_images() {
 	local _needed
 	_needed=$(image_set_companions_needed "${_new_sets[@]}" 2>/dev/null) || return
 	[[ -z "$_needed" ]] && return
+
+	# An empty OpenShift AI list is a normal result: say so once, and do not offer it.
+	if echo "$_needed" | grep -qx 'ai'; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Checking OpenShift AI image list..." 3 50
+		local _ai_res _ai_ver _ai_count
+		if _ai_res=$(image_set_dynamic_resolve ai 2>/dev/null); then
+			_ai_ver="${_ai_res%%$'\t'*}"
+			_ai_count="${_ai_res##*$'\t'}"
+			if [[ "$_ai_count" -eq 0 ]]; then
+				_tui_note_rhoai_no_images "$_ai_ver"
+				_needed=$(echo "$_needed" | grep -vx 'ai' || true)
+				[[ -z "$_needed" ]] && return
+			fi
+		fi
+	fi
 
 	# Build checklist: all companions pre-checked
 	local _items=() _set_name _display _status _count _detail
@@ -2099,14 +2229,15 @@ _tui_offer_companion_images() {
 		[[ -z "$_set_name" ]] && continue
 
 		if _image_set_is_dynamic "$_set_name"; then
-			local _ver
+			local _ver _ocp_short
+			_ocp_short=$(_ver_minor "${ocp_version:-}")
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Detecting RHOAI version..." 3 40
 			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Could not detect RHOAI version.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
-				tui_log "Failed to detect RHOAI version"
+					"Could not detect RHOAI version.\n\nThe rhods-operator was not found in the\nOCP ${_ocp_short} operator catalog.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
+				tui_log "Failed to detect RHOAI version (OCP $_ocp_short)"
 				continue
 			fi
 			dlg --backtitle "$(ui_backtitle)" --infobox \
@@ -2150,19 +2281,29 @@ mirror_manage_images() {
 			_incl_label="Additional Images: \Z2included\Zn"
 		fi
 
+		# Build menu dynamically: hide list/remove/delete/toggle/edit when empty
+		local _menu_items=()
+		if [[ $_count -gt 0 ]]; then
+			_menu_items+=("L" "List images")
+		fi
+		_menu_items+=("A" "Add image")
+		if [[ $_count -gt 0 ]]; then
+			_menu_items+=("R" "Remove image")
+			_menu_items+=("D" "Clear all images")
+		fi
+		_menu_items+=("S" "Recommended Images")
+		if [[ $_count -gt 0 ]]; then
+			_menu_items+=("X" "$_incl_label")
+		fi
+		_menu_items+=("E" "Edit images.conf")
+
 		dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
 			--menu "Extra container images included in the mirror payload.\nCurrently: $_count image(s) in images.conf\n" 0 0 0 \
-			"L" "List images" \
-			"A" "Add image" \
-			"R" "Remove image" \
-			"D" "Delete all images" \
-			"S" "Add Recommended Images" \
-			"X" "$_incl_label" \
-			"E" "Edit images.conf" \
+			"${_menu_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -2281,15 +2422,14 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					dlg --backtitle "$(ui_backtitle)" --msgbox "No images to delete." 0 0
 					continue
 				fi
-				dlg --backtitle "$(ui_backtitle)" --title "Delete All Images" \
-					--yes-label "Delete All" \
+				dlg --backtitle "$(ui_backtitle)" --title "Clear All Images" \
+					--yes-label "Clear All" \
 					--no-label "Cancel" \
 					--yesno "Remove all $_count image(s) from images.conf?\n\nThis cannot be undone." 0 0
 				if [[ $? -eq 0 ]]; then
 					> "$_img_file"
 					tui_kick_isconf_regen
 					tui_log "Deleted all images from images.conf"
-					dlg --backtitle "$(ui_backtitle)" --msgbox "All additional images removed.\nConfig will be regenerated." 0 0
 				fi
 				;;
 			S)

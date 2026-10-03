@@ -8,8 +8,6 @@
 # Design decisions:
 #   - NO 'set -e': dialog returns non-zero by design (1=Cancel, 2=Help, 3=Extra).
 #     Using set -e would crash the TUI on every Cancel/Back press.
-#   - ERR trap disabled: include_all.sh sets 'trap show_error ERR' which would
-#     also crash on dialog non-zero returns. We disable it after sourcing.
 #   - Single-letter tags as keyboard shortcuts (v1 pattern): pressing a letter
 #     jumps to that menu item (e.g. M=Mirror, B=Bundle, C=Configure).
 #     Tags are displayed left of the label for visual shortcut hints.
@@ -110,16 +108,16 @@ trap 'exit 0' HUP TERM INT
 # shellcheck disable=SC1091
 source scripts/include_all.sh
 
-# include_all.sh sets 'trap show_error ERR' which treats any non-zero return as
-# a fatal error. Since dialog returns 1 (Cancel/Back), 2 (Help), 3 (Extra/Next)
-# by design, the ERR trap must be disabled or every Back press crashes the TUI.
-trap - ERR
-
 # Suppress config drift warnings during startup splash screen.
 # tui-lib.sh runs normalize-mirror-conf at source time (top-level code, line ~333)
 # which triggers _state_override_mirror -> aba_warn. Must be set BEFORE sourcing.
 # ABA_SUPPRESS_WARNINGS is checked by aba_warn() in include_all.sh.
 export ABA_SUPPRESS_WARNINGS=1
+
+# Make ESC key responsive. Default ncurses ESCDELAY is 1000ms (waits to
+# disambiguate ESC from multi-byte sequences like arrow keys).  25ms is
+# effectively instant while still handling escape sequences reliably.
+export ESCDELAY=25
 
 # Source TUI v2 modules
 source "$ABA_ROOT/tui/v2/tui-strings2.sh"
@@ -656,7 +654,7 @@ _conno_main() {
 "Partially disconnected mode with a mirror registry. Full ABA workflow:
 
 Mirror:
-  • Mirror Payload — manage OCP version, operators, additional images, and upgrade targets
+  • Mirror Payload — configure what gets mirrored and transferred (version, operators, images)
   • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
 
@@ -785,6 +783,18 @@ Navigation:
 # Main Flow
 # =============================================================================
 
+# --- Pre-splash DISCO color: apply cyan before the splash screen renders ---
+# Full _detect_mode runs after the splash; this is a best-effort heuristic.
+# On disco hosts the background internet check fails almost instantly
+# (no route), so the run_once result is usually ready by now.
+if [[ "${_TUI_FORCE_MODE:-}" == "DISCO" ]] || [[ -f "$ABA_ROOT/.bundle" ]]; then
+	_tui_apply_mode_colors "DISCO"
+elif run_once -p -i "aba:check:internet" 2>/dev/null &&
+     ! run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'; then
+	# Internet check already finished and failed → likely DISCO
+	_tui_apply_mode_colors "DISCO"
+fi
+
 # --- Splash screen first (shown once per session, no blocking checks) ---
 _aba_ver=""
 [[ -f "$ABA_ROOT/VERSION" ]] && _aba_ver=$(<"$ABA_ROOT/VERSION")
@@ -874,6 +884,7 @@ fi
 
 # --- Detect mode (uses internet check result started during startup) ---
 _detect_mode
+_tui_apply_mode_colors
 
 tui_log "Final mode: $_TUI_MODE"
 
@@ -891,8 +902,10 @@ while :; do
 			disco_main || disco_rc=$?
 			if [[ $disco_rc -eq 2 ]]; then
 				_detect_mode
+				_tui_apply_mode_colors
 				continue
 			fi
+			[[ "$_TUI_MODE" != "DISCO" ]] && continue
 			break
 			;;
 		CONNO)

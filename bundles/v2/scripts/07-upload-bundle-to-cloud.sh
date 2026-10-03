@@ -12,32 +12,71 @@ int_down
 
 cd "$WORK_TEST_INSTALL/aba"
 
-# Dev-mode bundles must NEVER be uploaded to NAS (built from dev branch, not release-quality).
+# --- Assemble test log ---
+{
+	echo "## Test results for install bundle: $BUNDLE_NAME"
+	echo
+	cat "$WORK_BUNDLE_DIR_BUILD"/tests-06*.txt
+} > "$WORK_TEST_LOG"
+
+# --- Generate README and helper scripts into WORK_BUNDLE_DIR ---
+# This runs for both dev and production builds (single code path).
+
+s_primary=$(cd cli && echo $({ ls -1d openshift-install-*.gz 2>/dev/null; ls -1d openshift-client-*.gz 2>/dev/null; ls -1d oc-mirror*.gz 2>/dev/null; }) | sed "s/ /\\\n    - /g")
+s_secondary=$(cd cli && echo $(ls -1d *.gz | grep -v '^openshift-' | grep -v '^oc-mirror') | sed "s/ /\\\n    - /g")
+d=$(date -u)
+bundle_size=$(du -shc "$WORK_BUNDLE_DIR"/ocp_* 2>/dev/null | tail -1 | awk '{print $1}')
+[ -z "$bundle_size" ] && bundle_size="unknown"
+aba_ver=$(cat "$REPO_ROOT/VERSION" 2>/dev/null)
+[ -z "$aba_ver" ] && aba_ver="unknown"
+
+op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
+[ ! "$op_list" ] && op_list="  - No Operators!"
+
+sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
+
+# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
+test_body=$(grep -v '^## ' "$WORK_TEST_LOG")
+awk -v results="$test_body" '{
+	if ($0 == "<TEST_RESULTS>") print results
+	else print
+}' "$WORK_BUNDLE_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt.tmp" \
+	&& mv "$WORK_BUNDLE_DIR/README.txt.tmp" "$WORK_BUNDLE_DIR/README.txt"
+
+# Append operator list and imageset-config to README
+(
+	echo
+	echo "## List of Operators included in this install bundle:"
+	echo
+	echo "$op_list"
+	echo
+	echo "## The oc-mirror Image Set Config file used for this install bundle:"
+	echo
+	cat "$WORK_TEST_INSTALL/aba/mirror/data/imageset-config.yaml"
+) >> "$WORK_BUNDLE_DIR/README.txt"
+
+cp -v "$TEMPLATES_DIR/VERIFY.sh"  "$WORK_BUNDLE_DIR/"
+cp -v "$TEMPLATES_DIR/UNPACK.sh"  "$WORK_BUNDLE_DIR/"
+
+# Copy in the image set config file used
+cp "$WORK_TEST_INSTALL/aba/mirror/data/imageset-config.yaml" "$WORK_BUNDLE_DIR_BUILD"
+
+echo
+echo "Bundle contents in $WORK_BUNDLE_DIR:"
+ls -la "$WORK_BUNDLE_DIR"
+
+# --- Dev mode: stop here (no NAS upload) ---
 if [ "${BUNDLE_DEV_MODE:-}" = "1" ]; then
 	echo
 	echo "##########################################################################"
 	echo "DEV MODE: Bundle built from branch 'dev' — skipping NAS upload."
 	echo "          This bundle is for local testing only."
 	echo "##########################################################################"
-	echo
-
-	# Still assemble the test log for review
-	{
-		echo "## Test results for install bundle: $BUNDLE_NAME (DEV MODE — not uploaded)"
-		echo
-		cat "$WORK_BUNDLE_DIR_BUILD"/tests-06*.txt
-	} > "$WORK_TEST_LOG"
-
 	cat "$WORK_TEST_LOG"
 	exit 0
 fi
 
-# Assemble the final test log from per-phase results
-{
-	echo "## Test results for install bundle: $BUNDLE_NAME"
-	echo
-	cat "$WORK_BUNDLE_DIR_BUILD"/tests-06*.txt
-} > "$WORK_TEST_LOG"
+# --- Production: upload to cloud/NAS directory ---
 
 echo_step "Cluster installed ok, all tests passed. Building install bundle."
 
@@ -69,52 +108,14 @@ mkdir -p "$CLOUD_DIR_BUNDLE"
 } > "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING"
 mypause 60
 
-# Generate README with bundle version and list of install files
-s=$(cd cli && echo $(ls -r *.gz) | sed "s/ /\\\n    - /g")
-d=$(date -u)
-bundle_size=$(du -shc "$WORK_BUNDLE_DIR"/ocp_* 2>/dev/null | tail -1 | awk '{print $1}')
-[ -z "$bundle_size" ] && bundle_size="unknown"
-aba_ver=$(cat "$REPO_ROOT/VERSION" 2>/dev/null)
-[ -z "$aba_ver" ] && aba_ver="unknown"
-
-# Fetch list of available operators
-op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
-[ ! "$op_list" ] && op_list="  - No Operators!"
-
-# Create readme file from template
-sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$CLOUD_DIR_BUNDLE/README.txt"
-
-# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
-test_body=$(grep -v '^## ' "$WORK_TEST_LOG")
-awk -v results="$test_body" '{
-	if ($0 == "<TEST_RESULTS>") print results
-	else print
-}' "$CLOUD_DIR_BUNDLE/README.txt" > "$CLOUD_DIR_BUNDLE/README.txt.tmp" \
-	&& mv "$CLOUD_DIR_BUNDLE/README.txt.tmp" "$CLOUD_DIR_BUNDLE/README.txt"
-
-# Append operator list and imageset-config to README
-(
-	echo
-	echo "## List of Operators included in this install bundle:"
-	echo
-	echo "$op_list"
-	echo
-	echo "## The oc-mirror Image Set Config file used for this install bundle:"
-	echo
-	cat "$WORK_TEST_INSTALL/aba/mirror/data/imageset-config.yaml"
-) >> "$CLOUD_DIR_BUNDLE/README.txt"
-
-# Copy in the image set config file used
-cp "$WORK_TEST_INSTALL/aba/mirror/data/imageset-config.yaml" "$WORK_BUNDLE_DIR_BUILD"
-
 ls -l "$WORK_BUNDLE_DIR"/ocp_*
 
-# Copy the files into the cloud sync dir
+# Copy all bundle files (split archives, README, helpers, checksum) to cloud dir
 cp -v "$WORK_BUNDLE_DIR"/ocp_*		"$CLOUD_DIR_BUNDLE"
-
 cp -v "$WORK_BUNDLE_DIR/CHECKSUM.txt"	"$CLOUD_DIR_BUNDLE"
-cp -v "$TEMPLATES_DIR/VERIFY.sh"	"$CLOUD_DIR_BUNDLE"
-cp -v "$TEMPLATES_DIR/UNPACK.sh"	"$CLOUD_DIR_BUNDLE"
+cp -v "$WORK_BUNDLE_DIR/README.txt"	"$CLOUD_DIR_BUNDLE"
+cp -v "$WORK_BUNDLE_DIR/VERIFY.sh"	"$CLOUD_DIR_BUNDLE"
+cp -v "$WORK_BUNDLE_DIR/UNPACK.sh"	"$CLOUD_DIR_BUNDLE"
 
 echo
 echo "BUNDLE COMPLETE!"
