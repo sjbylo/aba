@@ -9,11 +9,13 @@
 
 ─── CONTENTS ──────────────────────────────────────────────────────────
 
-  - CLI tools:
-    - <CLIS>
+  - OpenShift binaries:
+    - <PRIMARY_CLIS>
   - Mirror registry installers:
       mirror/mirror-registry.tar.gz  (Quay)
       mirror/docker-reg-image.tgz   (Docker)
+  - Supporting tools:
+    - <SECONDARY_CLIS>
   - Operators included in this bundle (see list below)
   - Image set config: imageset-config.yaml (see below)
 
