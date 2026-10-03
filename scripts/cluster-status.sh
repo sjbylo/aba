@@ -58,8 +58,15 @@ _scan_cluster_dir() {
 	if [ -f "$_dir/.install-complete" ]; then
 		_status="installed"
 		_installed_count=$(( _installed_count + 1 ))
-	else
+	elif [ -d "$_dir/iso-agent-based" ]; then
+		_status="installing"
 		_installing_count=$(( _installing_count + 1 ))
+	elif [ -f "$_dir/.init" ]; then
+		_status="configured"
+		_configured_count=$(( _configured_count + 1 ))
+	else
+		_status="configured"
+		_configured_count=$(( _configured_count + 1 ))
 	fi
 
 	_cluster_count=$(( _cluster_count + 1 ))
@@ -71,6 +78,7 @@ _scan_cluster_dir() {
 _cluster_count=0
 _installed_count=0
 _installing_count=0
+_configured_count=0
 _clusters=()
 
 if [ -n "$_single_dir" ]; then
@@ -204,6 +212,7 @@ shell)
 	echo "cluster_count=$_cluster_count"
 	echo "cluster_installed_count=$_installed_count"
 	echo "cluster_installing_count=$_installing_count"
+	echo "cluster_configured_count=$_configured_count"
 	for _entry in "${_clusters[@]}"; do
 		IFS='|' read -r _dir _status _type _cname _bdomain <<< "$_entry"
 		_h="${_health_map[$_dir]:-}"
@@ -229,7 +238,7 @@ shell)
 		if [ $_cluster_count -eq 0 ]; then
 			aba_info "  No clusters configured"
 		else
-			aba_info "  Total: $_cluster_count  (installed: $_installed_count, installing: $_installing_count)"
+			aba_info "  Total: $_cluster_count  (installed: $_installed_count, installing: $_installing_count, configured: $_configured_count)"
 			echo
 
 			for _entry in "${_clusters[@]}"; do
