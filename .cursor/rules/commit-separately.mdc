@@ -1,0 +1,10 @@
+---
+description: Always commit unrelated changes separately
+alwaysApply: true
+---
+
+# Commit discipline
+
+- **Always commit unrelated changes separately** — never bundle fixes for different features/bugs into one commit.
+- When multiple changes are on disk, group them by topic and commit each group with its own message.
+- When the user says "commit and push", review what's changed and propose separate commits if the changes are unrelated.
