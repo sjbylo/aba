@@ -241,10 +241,11 @@ form_active_text_color = (WHITE,BLUE,ON)
 form_text_color = (BLACK,WHITE,OFF)
 EOF
 
-# Apply DISCO-mode color theme (darker background to visually distinguish)
+# Apply DISCO-mode color theme (black background to visually distinguish)
 _tui_apply_mode_colors() {
-	if [[ "$_TUI_MODE" == "DISCO" ]]; then
-		sed -i 's/^screen_color = .*/screen_color = (WHITE,CYAN,ON)/' "$_TUI_DIALOGRC"
+	local mode="${1:-$_TUI_MODE}"
+	if [[ "$mode" == "DISCO" ]]; then
+		sed -i 's/^screen_color = .*/screen_color = (WHITE,BLACK,ON)/' "$_TUI_DIALOGRC"
 	fi
 }
 
@@ -391,9 +392,11 @@ ui_backtitle() {
 	esac
 	local ver="${ocp_version:-}"
 	local ch="${ocp_channel:-}"
+	local host="${_TUI_SHORT_HOST:-$(hostname -s 2>/dev/null || echo '?')}"
+	_TUI_SHORT_HOST="$host"
 
 	# Build title progressively — only show sections with real data
-	local text="ABA TUI v2"
+	local text="ABA TUI v2  |  $host"
 	[ -n "$mode_display" ] && text="$text  |  $mode_display"
 	if [[ -n "$ch" && -n "$ver" ]]; then
 		local _tgt="${ocp_upgrade_to:-}"

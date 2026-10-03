@@ -783,6 +783,18 @@ Navigation:
 # Main Flow
 # =============================================================================
 
+# --- Pre-splash DISCO color: apply cyan before the splash screen renders ---
+# Full _detect_mode runs after the splash; this is a best-effort heuristic.
+# On disco hosts the background internet check fails almost instantly
+# (no route), so the run_once result is usually ready by now.
+if [[ "${_TUI_FORCE_MODE:-}" == "DISCO" ]] || [[ -f "$ABA_ROOT/.bundle" ]]; then
+	_tui_apply_mode_colors "DISCO"
+elif run_once -p -i "aba:check:internet" 2>/dev/null &&
+     ! run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'; then
+	# Internet check already finished and failed → likely DISCO
+	_tui_apply_mode_colors "DISCO"
+fi
+
 # --- Splash screen first (shown once per session, no blocking checks) ---
 _aba_ver=""
 [[ -f "$ABA_ROOT/VERSION" ]] && _aba_ver=$(<"$ABA_ROOT/VERSION")
