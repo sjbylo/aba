@@ -251,9 +251,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.6.tar.gz
-tar xzf v1.3.6.tar.gz
-cd aba-1.3.6
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.7.tar.gz
+tar xzf v1.3.7.tar.gz
+cd aba-1.3.7
 ./install
 aba
 ```
@@ -261,7 +261,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.3.6 https://github.com/sjbylo/aba.git
+git clone --branch v1.3.7 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba

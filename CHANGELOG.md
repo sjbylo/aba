@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.6...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.7...HEAD)
+
+---
+
+## [1.3.7](https://github.com/sjbylo/aba/releases/tag/v1.3.7) - 2026-10-03
+
+Unified status command, critical error-handling fix, and disconnected workflow improvements
+
 
 ### Added
 
