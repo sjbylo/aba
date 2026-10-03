@@ -206,9 +206,20 @@ for script in scripts/*.sh; do
             prev_line=0; prev_fn=""; continue
         fi
         # Check for consecutive same-function calls (within 2 source lines)
+        # Skip if intervening lines contain control flow (separate branches, loops)
         if [ "$prev_fn" = "$fn" ] && [ $((linenum - prev_line)) -le 2 ]; then
-            echo -e "  ${RED}$script:$linenum: consecutive '$fn' calls (combine with follow-up args)${NC}"
-            _lint_failed=1
+            _between_has_flow=0
+            if [ $((linenum - prev_line)) -eq 2 ]; then
+                _mid=$((prev_line + 1))
+                _mid_line=$(sed -n "${_mid}p" "$script")
+                if [[ "$_mid_line" =~ ^[[:space:]]*(done|fi|else|elif|esac|for|while|do|if|case)[^a-zA-Z_] ]]; then
+                    _between_has_flow=1
+                fi
+            fi
+            if [ $_between_has_flow -eq 0 ]; then
+                echo -e "  ${RED}$script:$linenum: consecutive '$fn' calls (combine with follow-up args)${NC}"
+                _lint_failed=1
+            fi
         fi
         prev_line=$linenum
         prev_fn="$fn"

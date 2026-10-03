@@ -3,7 +3,7 @@
 # TUI v2 — DISCO Mode (disconnected, bundle received)
 # =============================================================================
 # Action menu for disconnected hosts: install registry, load images,
-# configure/install cluster, Day-2, view ISC, reset to connected.
+# configure/install cluster, Day-2, view ISC, switch to connected.
 #
 # Usage: source tui/v2/tui-disco.sh
 
@@ -66,13 +66,12 @@ Then restart the TUI." 0 0
 	local _op_summary="Operators: none"
 	local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	if [[ -f "$_isc" ]]; then
-		local _op_names
-		_op_names=$(awk '/packages:/,0 { if (/^[[:space:]]*- name:/ && !/\"/) { sub(/.*- name: */, ""); sub(/ *#.*/, ""); print } }' "$_isc" | sort -u)
-		local _op_count
-		_op_count=$(echo "$_op_names" | grep -c '.' || true)
+		local _op_names _op_count
+		_op_names=$(_isc_operator_list "$_isc")
+		_op_count=$(_isc_operator_count "$_isc")
 		if [[ $_op_count -gt 0 ]]; then
 			local _op_list _op_short
-			_op_list=$(echo "$_op_names" | tr '\n' ', ' | sed 's/,$//')
+			_op_list=$(echo "$_op_names" | sed 's/,/, /g')
 			_op_short=$(echo "$_op_list" | cut -c1-60)
 			[[ ${#_op_list} -gt 60 ]] && _op_short="${_op_short}..."
 			_op_summary="Operators: ${_op_count} (${_op_short})"
@@ -172,7 +171,11 @@ disco_main() {
 		# operators-only archive (excl_platform=true) is a successful load
 		# even when the registry has no release image.
 		if mirror_available; then
-			reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
+			if _mirror_has_release_image; then
+				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
+			else
+				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_NOT_VERIFIED"
+			fi
 			reg_avail=false
 			local _last_action=""
 			_last_action="$(_mirror_last_action)"
@@ -386,11 +389,12 @@ disco_load_images() {
 }
 
 # =============================================================================
-# Reset to Connected Mode
+# Switch to Connected Mode
 # =============================================================================
 
 disco_reset() {
-	tui_log "DISCO: Reset to connected mode"
+	local _target_mode="${1:-CONNO}"
+	tui_log "DISCO: switching to $_target_mode mode"
 
 	# Pre-check: verify internet is reachable before offering the switch
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking internet connectivity..." 0 0
@@ -401,11 +405,20 @@ disco_reset() {
 		return 0
 	fi
 
+	local _switch_title _switch_msg
+	if [[ "$_target_mode" == "DIRECT" ]]; then
+		_switch_title="$TUI2_TITLE_DISCO_SWITCH_DIRECT"
+		_switch_msg="$TUI2_MSG_DISCO_SWITCH_DIRECT"
+	else
+		_switch_title="$TUI2_TITLE_DISCO_SWITCH_CONNO"
+		_switch_msg="$TUI2_MSG_DISCO_SWITCH_CONNO"
+	fi
+
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_RESET" \
+		dlg --backtitle "$(ui_backtitle)" --title "$_switch_title" \
 			--yes-label "$TUI2_BTN_SWITCH" \
 			--no-label "$TUI2_BTN_CANCEL" \
-			--yesno "$TUI2_MSG_DISCO_RESET_CONFIRM" 0 0
+			--yesno "$_switch_msg" 0 0
 		local rc=$?
 		case "$rc" in
 			0) break ;;  # Confirmed
@@ -415,9 +428,12 @@ disco_reset() {
 
 	# Remove bundle flag
 	rm -f "$ABA_ROOT/.bundle"
-	tui_log "Removed .bundle flag, switching to connected mode"
 
-	# Clear forced mode so re-detection works
+	# Set target mode directly
+	_TUI_MODE="$_target_mode"
+	_TUI_INET="yes"
 	_TUI_FORCE_MODE=""
-	return 2  # Special return code: re-detect mode
+	aba_podman_check_start
+	tui_log "Removed .bundle flag, switched to $_target_mode mode"
+	return 0
 }

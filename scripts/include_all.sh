@@ -84,7 +84,7 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
+    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
         tput sgr0
@@ -138,6 +138,9 @@ color_demo() {
 aba_info() {
 	[ ! "${INFO_ABA:-}" ] && return 0
 
+	# Append to trace file (terminal output is not tee'd)
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $*" >> "$ABA_TRACE_FILE" 2>/dev/null
+
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_white -n "[ABA] $@"
@@ -155,6 +158,9 @@ aba_info() {
 
 # Same as aba_info, but green
 aba_success() {
+	# Append to trace file
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $*" >> "$ABA_TRACE_FILE" 2>/dev/null
+
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_green -n "[ABA] $@"
@@ -190,16 +196,16 @@ aba_debug() {
     timestamp="$(date +%H:%M:%S)"
 
     if [ "${DEBUG_ABA:-}" ]; then
-        # Debug mode: write to terminal (stderr). The exec tee in aba.sh
-        # will also capture this into the trace file -- no direct write needed.
+        # Debug mode: write to terminal (stderr) and trace file
         [ "$TERM" ] && { tput el1 && tput cr; } >&2
         if (( newline )); then
             echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
         else
             echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
         fi
-    elif [ -n "${ABA_TRACE_FILE:-}" ] && [ -w "${ABA_TRACE_FILE:-}" ]; then
-        # Non-debug mode: write directly to trace file only (not visible on terminal)
+    fi
+    # Always append to trace file (stdout/stderr go direct to terminal, not tee'd)
+    if [ -n "${ABA_TRACE_FILE:-}" ] && [ -w "${ABA_TRACE_FILE:-}" ]; then
         if (( newline )); then
             echo "[ABA_DEBUG] ${timestamp}: $*" >> "$ABA_TRACE_FILE"
         else
@@ -239,6 +245,9 @@ aba_abort() {
 		echo_red "[ABA]        $line" >&2
 	done
 	echo >&2
+
+	# Append to trace file
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] Error: $main_msg ${_args[*]}" >> "$ABA_TRACE_FILE" 2>/dev/null
 
 	# Write error tag for structured detection by callers (TUI, scripts)
 	if [[ -n "$_tag" ]]; then
@@ -293,6 +302,8 @@ aba_warn() {
 
 	# Print main message
 	echo_$col $newline "[ABA] $prefix: $main_msg" >&2
+	# Append to trace file
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $prefix: $main_msg $*" >> "$ABA_TRACE_FILE" 2>/dev/null
 
 	#[ "$*" ] && newline=  # Note, '-n' only make sense for a single line
 
@@ -326,25 +337,6 @@ if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
 fi
 
 umask 077
-
-# Function to display an error message and the last executed command
-show_error() {
-	local exit_code=$?
-	local _safe_cmd="${BASH_COMMAND//-p \'*\'/-p \'***\'}"  # mask password args in error output
-	echo 
-	echo_red "Script error at $(date) in directory $PWD: " >&2
-	echo_red "Error occurred in command: '$_safe_cmd'" >&2
-	echo_red "Error code: $exit_code" >&2
-	echo >&2
-	echo "[ABA] Check the output above for clues. Fix the issue and re-run the same command -- it's safe to retry." >&2
-
-	exit $exit_code
-}
-
-# Set the trap to call the show_error function on ERR signal
-# "no-trap" argument suppresses the ERR trap (used by E2E framework)
-[ "${1:-}" != "no-trap" ] && trap 'show_error' ERR
-[ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 vm_name() {
 	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
@@ -1467,9 +1459,9 @@ ask() {
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
 	#echo
- 	echo_yellow -n "[ABA] $@? $yn_opts: "
+ 	echo_yellow -n "[ABA] $@? $yn_opts: " >&2
 	if [ "$ret_default" ]; then
-		echo_white "[default: $ret_default]"
+		echo_white "[default: $ret_default]" >&2
 		# ASK_OVERRIDE (-y flag): always proceed (like dnf -y)
 		# unless --auto-no explicitly blocks this specific prompt
 		if [ "$ret_default" = "-y" ]; then
@@ -2195,20 +2187,37 @@ verify_upgrade_path_exists() {
 	fi
 
 	# Phase 2: BFS — verify a path exists from current_ver to target_ver
+	# Checks both regular edges and conditionalEdges (which have known risks).
 	local bfs_result
 	bfs_result=$(echo "$graph_json" | python3 -c '
 import sys, json
 data = json.load(sys.stdin)
 nodes = {i: n["version"] for i, n in enumerate(data.get("nodes", []))}
 rev = {v: k for k, v in nodes.items()}
+
+# Build adjacency from regular edges
 adj = {}
 for e in data.get("edges", []):
     adj.setdefault(e[0], []).append(e[1])
+
+# Build adjacency from conditionalEdges (version-based, not index-based)
+cond_adj = {}
+cond_risks = {}
+for ce in data.get("conditionalEdges", []):
+    risks = [r.get("name", "") for r in ce.get("risks", [])]
+    for e in ce.get("edges", []):
+        s_ver, d_ver = e.get("from", ""), e.get("to", "")
+        s_idx, d_idx = rev.get(s_ver), rev.get(d_ver)
+        if s_idx is not None and d_idx is not None:
+            cond_adj.setdefault(s_idx, []).append(d_idx)
+            cond_risks[(s_idx, d_idx)] = risks
+
 src, tgt = rev.get(sys.argv[1]), rev.get(sys.argv[2])
 if src is None or tgt is None:
     print("REACHABLE=0 HOPS=0")
     sys.exit(0)
-# BFS with hop tracking (safety limit: 10 hops)
+
+# BFS on regular edges first
 visited = {src: 0}
 queue = [src]
 while queue:
@@ -2220,22 +2229,53 @@ while queue:
             visited[nb] = visited[n] + 1
             queue.append(nb)
             if nb == tgt:
-                print("REACHABLE=1 HOPS=%d" % visited[nb])
+                print("REACHABLE=1 HOPS=%d CONDITIONAL=0" % visited[nb])
                 sys.exit(0)
-# Not reachable — find nearest valid targets from source
-reachable = sorted([nodes[k] for k in visited if k != src])
+
+# BFS including conditional edges
+visited2 = {src: 0}
+queue2 = [src]
+used_cond = False
+while queue2:
+    n = queue2.pop(0)
+    if visited2[n] >= 10:
+        continue
+    for nb in adj.get(n, []) + cond_adj.get(n, []):
+        if nb not in visited2:
+            visited2[nb] = visited2[n] + 1
+            if (n, nb) in cond_risks:
+                used_cond = True
+            queue2.append(nb)
+            if nb == tgt:
+                # Collect risk names for the direct edge
+                edge_risks = cond_risks.get((n, nb), [])
+                print("REACHABLE=1 HOPS=%d CONDITIONAL=1 RISKS=%s" % (
+                    visited2[nb], ",".join(edge_risks) if edge_risks else "unknown"))
+                sys.exit(0)
+
+# Not reachable even with conditional edges
+reachable = sorted([nodes[k] for k in visited2 if k != src])
 print("REACHABLE=0 HOPS=0 TARGETS=%s" % ",".join(reachable))
 ' "$current_ver" "$target_ver" 2>/dev/null) || return 0
 
-	local reachable hops
+	local reachable hops conditional risks
 	reachable=$(echo "$bfs_result" | grep -oP 'REACHABLE=\K[01]')
 	hops=$(echo "$bfs_result" | grep -oP 'HOPS=\K[0-9]+')
+	conditional=$(echo "$bfs_result" | grep -oP 'CONDITIONAL=\K[01]')
+	risks=$(echo "$bfs_result" | grep -oP 'RISKS=\K\S+')
 
 	if [[ "$reachable" == "1" ]]; then
 		if [[ "$shell_mode" ]]; then
-			echo "REACHABLE=1 HOPS=${hops:-1} CHANNEL=${tgt_channel}"
+			echo "REACHABLE=1 HOPS=${hops:-1} CHANNEL=${tgt_channel} CONDITIONAL=${conditional:-0} RISKS=${risks:-}"
 		fi
-		if [[ "${hops:-1}" -ge 3 ]]; then
+		if [[ "${conditional:-0}" == "1" ]]; then
+			aba_warn "Upgrade path from $current_ver to $target_ver is available but has known risks:"
+			local _r
+			for _r in $(echo "${risks:-}" | tr ',' '\n'); do
+				[[ -n "$_r" ]] && aba_warn "  - $_r"
+			done
+			aba_warn "Proceeding anyway. Review risks before upgrading the cluster."
+		elif [[ "${hops:-1}" -ge 3 ]]; then
 			aba_warn "Upgrade path from $current_ver to $target_ver requires ${hops} intermediate versions."
 		fi
 		return 0
@@ -3858,6 +3898,35 @@ _oc_mirror_pin_catalogs_by_digest() {
 	fi
 }
 
+# --- ISC operator-parsing helpers (DRY -- shared by mirror-status.sh, etc.) ---
+#
+# Parse operator names from an ImageSet Configuration YAML using yaml2json + jq.
+
+# Usage: _isc_operator_list <isc-path>
+# Prints: comma-separated sorted operator names (empty string if none)
+_isc_operator_list() {
+	local _isc="${1:?Usage: _isc_operator_list <isc-path>}"
+	[ -f "$_isc" ] || return 0
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+		jq -r '[.mirror.operators[]?.packages[]?.name] | sort | join(",")' 2>/dev/null
+}
+
+# Usage: _isc_operator_count <isc-path>
+# Prints: integer count of operators (0 if none or file missing)
+_isc_operator_count() {
+	local _isc="${1:?Usage: _isc_operator_count <isc-path>}"
+	[ -f "$_isc" ] || { echo 0; return 0; }
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+		jq -r '[.mirror.operators[]?.packages[]?.name] | length' 2>/dev/null || echo 0
+}
+
+_isc_additional_count() {
+	local _isc="${1:?Usage: _isc_additional_count <isc-path>}"
+	[ -f "$_isc" ] || { echo 0; return 0; }
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+		jq -r '[.mirror.additionalImages[]?.name] | length' 2>/dev/null || echo 0
+}
+
 # --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
 #
 # Usage: _run_oc_mirror_with_retry <action> <try_tot> <oc_mirror_cmd>
@@ -3937,6 +4006,21 @@ _run_oc_mirror_with_retry() {
 	local exit_history=""
 	aba_debug "Starting retry loop: try_tot=$try_tot"
 
+	# Pre-check: warn if port 55000 is already occupied (stale oc-mirror local registry)
+	local _precheck_pid
+	_precheck_pid=$(lsof -ti :55000 2>/dev/null) || true
+	if [ -n "$_precheck_pid" ]; then
+		local _age_sec="" _age_str="unknown"
+		_age_sec=$(ps -o etimes= -p "$_precheck_pid" 2>/dev/null | tr -d ' ') || true
+		if [ -n "$_age_sec" ]; then
+			local _m=$(( _age_sec / 60 )) _s=$(( _age_sec % 60 ))
+			_age_str="${_m}m${_s}s"
+		fi
+		aba_warn "Port 55000 is already in use by PID $_precheck_pid (age: $_age_str)." \
+			"A previous oc-mirror process may still be running or cleaning up." \
+			"If this causes failures, kill it manually:  kill $_precheck_pid"
+	fi
+
 	while [ $try -le $try_tot ]; do
 		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
@@ -3947,7 +4031,7 @@ _run_oc_mirror_with_retry() {
 		if [ $try -gt 1 ]; then
 			aba_info "Attempt ($try/$try_tot). [timeout=${image_timeout}, parallel=${parallel_images}]"
 		else
-			aba_info -n "Attempt ($try/$try_tot)."
+			aba_info -n "Attempt ($try/$try_tot) using oc-mirror v$(oc_mirror_version)."
 			[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
 		fi
 		aba_info "Running: $cmd"
@@ -3981,6 +4065,15 @@ _run_oc_mirror_with_retry() {
 
 		try=$(( try + 1 ))
 		if [ $try -le $try_tot ]; then
+			# Kill orphaned oc-mirror processes and free port 55000 (local registry).
+			# oc-mirror panics can leave the child registry process alive.
+			local _stale_pids
+			_stale_pids=$(lsof -ti :55000 2>/dev/null) || true
+			if [ -n "$_stale_pids" ]; then
+				aba_debug "Killing stale process(es) on port 55000: $_stale_pids"
+				kill $_stale_pids 2>/dev/null || true
+				sleep 1
+			fi
 			aba_warn "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
@@ -4869,7 +4962,7 @@ ensure_quay_registry() {
 	run_once -q -w -i "$TASK_DL_QUAY_REG"
 
 	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
-	run_once -w -m "Installing mirror-registry" -i "$TASK_INST_QUAY_REG"
+	run_once -w -m "Installing mirror-registry binary" -i "$TASK_INST_QUAY_REG"
 }
 
 # Get error output from a task (helper for error messages)

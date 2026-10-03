@@ -14,8 +14,10 @@
 
 set -eo pipefail
 
-# is_version_greater lives here — used so a backwards min/max is not reported as an upgrade.
+# is_version_greater and _isc_operator_list/_isc_operator_count live here.
 source scripts/include_all.sh
+
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 _shell_mode=false
 _force_local=false
@@ -80,16 +82,7 @@ if [[ -f "$_isc_file" ]]; then
 		_upgrade_to="$_max_ver"
 	fi
 
-	# Extract operator package names from ISC YAML.
-	# Each package block has: "- name: op-name" then "channels:" then "- name: chan".
-	# Skip the channel "- name:" entries by tracking "channels:" sections.
-	_operators=$(awk '
-		/packages:/ { in_pkg=1; skip=0; next }
-		/catalog:/ { in_pkg=0 }
-		in_pkg && /channels:/ { skip=1; next }
-		in_pkg && skip && /- name:/ { skip=0; next }
-		in_pkg && /- name:/ { sub(/.*- name: */, ""); sub(/ *#.*/, ""); print }
-	' "$_isc_file" | sort | paste -sd, -) || true
+	_operators=$(_isc_operator_list "$_isc_file") || true
 	if [[ -n "$_operators" ]]; then
 		_operator_count=$(echo "$_operators" | tr ',' '\n' | wc -l)
 	fi
@@ -123,24 +116,24 @@ if [[ "$_shell_mode" == "true" ]]; then
 	echo "transfer_created=\"$_created\""
 else
 	if [[ "$_source" == "transfer" ]]; then
-		echo "Transfer config: $_transfer_tar"
+		aba_info "Transfer config: $_transfer_tar"
 	else
-		echo "No transfer config found. Showing local ISC."
+		aba_info "No transfer config found. Showing local ISC."
 	fi
 
 	local_ver="$_ocp_version"
 	if [[ -n "$_upgrade_to" ]]; then
 		local_ver="$_ocp_version → $_upgrade_to"
 	fi
-	echo "OCP: $local_ver ($_ocp_channel)"
+	aba_info "OCP: $local_ver ($_ocp_channel)"
 
 	if [[ $_operator_count -gt 0 ]]; then
-		echo "Operators ($_operator_count): $(echo "$_operators" | sed 's/,/, /g')"
+		aba_info "Operators ($_operator_count): $(echo "$_operators" | sed 's/,/, /g')"
 	else
-		echo "Operators: none"
+		aba_info "Operators: none"
 	fi
 
 	if [[ -n "${_created:-}" ]]; then
-		echo "Created: $_created"
+		aba_info "Created: $_created"
 	fi
 fi

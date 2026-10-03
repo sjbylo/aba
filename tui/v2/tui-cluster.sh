@@ -1973,14 +1973,17 @@ tui_advanced_menu() {
 				adv_items+=("X" "Switch to Partially Disconnected (mirror)")
 				;;
 			DISCO)
-				adv_items+=("X" "Switch to Connected Mode")
+				adv_items+=("X" "Switch to Partially Disconnected (mirror)")
+				adv_items+=("Y" "Switch to Fully Connected (direct)")
 				;;
 		esac
 		adv_items+=("" "──── Danger Zone ───────────────────")
 		if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
 			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
 		fi
-		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
+		if [[ "$_TUI_MODE" != "DISCO" ]]; then
+			adv_items+=("R" "Reset ABA (clean config and state)")
+		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
@@ -2002,12 +2005,14 @@ U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
-X/Z - Switch Mode: Manually switch between Connected, Partially\n\
+X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
     installation from scratch. All current cluster data is lost.\n\n\
-R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
-    returns ABA to its initial unpacked state. CANNOT BE UNDONE." 0 0
+R - Reset ABA: Cleans configuration and state files so you can\n\
+    reconfigure from scratch. Keeps downloaded CLI tools, mirror\n\
+    installers, and saved image archives. Use 'aba reset --force'\n\
+    from the command line for a full factory reset." 0 0
 			continue
 		fi
 
@@ -2022,9 +2027,9 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 		"R")
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 				--yes-label "Reset" --no-label "$TUI2_BTN_CANCEL" \
-				--yesno "Reset ABA to initial state?\n\nThis will remove ALL configuration, clusters, and mirror data.\nEquivalent to: aba reset --force\n\nThis action cannot be undone!" 0 0
+				--yesno "Reset ABA configuration?\n\nThis will clean configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
 			[[ $? -ne 0 ]] && continue
-			confirm_and_execute "aba reset --force" "Reset ABA"
+			confirm_and_execute "aba clean" "Reset ABA"
 			return 0
 			;;
 			"P")
@@ -2091,10 +2096,16 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 						return 0
 						;;
 					DISCO)
-						disco_reset
+						disco_reset "CONNO"
 						return $?
 						;;
 				esac
+				;;
+			"Y")
+				if [[ "$_TUI_MODE" == "DISCO" ]]; then
+					disco_reset "DIRECT"
+					return $?
+				fi
 				;;
 			"Z")
 				if [[ "$_TUI_MODE" == "CONNO" ]]; then
@@ -2146,7 +2157,7 @@ cluster_day2_menu() {
 			"L" "Cluster Login Terminal" \
 			"H" "SSH into Rendezvous Server" \
 			"" "──── Lifecycle ────────────────────" \
-			"U" "Upgrade cluster (beta)" \
+			"U" "Upgrade cluster" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
 			"" "──── Cleanup ──────────────────────" \

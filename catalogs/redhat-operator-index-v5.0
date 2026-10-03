@@ -22,6 +22,7 @@ cli-manager CLI Manager tech-preview
 cluster-observability-operator Cluster Observability Operator stable
 compliance-operator Compliance Operator stable
 container-security-operator Red Hat Quay Container Security Operator stable-3.17
+costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
 devspaces Red Hat OpenShift Dev Spaces stable
@@ -29,8 +30,11 @@ devworkspace-operator DevWorkspace Operator fast
 dpu-network-operator DPU Network Operator stable
 eap JBoss EAP stable
 fence-agents-remediation Fence Agents Remediation Operator stable
+file-integrity-operator File Integrity Operator stable
 job-set Job Set Operator stable-v1.0
 jws-operator WebServer alpha
+kernel-module-management-hub Kernel Module Management (Hub) stable
+kernel-module-management Kernel Module Management stable
 kiali-ossm Kiali Operator stable
 kubevirt-hyperconverged OpenShift Virtualization stable
 kueue-operator Red Hat build of Kueue stable-v1.4
@@ -64,6 +68,7 @@ odr-volsync-plugin-operator OpenShift DR VolSync Plugin Operator stable-4.22
 openshift-cert-manager-operator cert-manager Operator for Red Hat OpenShift stable-v1
 openshift-custom-metrics-autoscaler-operator Custom Metrics Autoscaler stable
 openshift-external-secrets-operator External Secrets Operator for Red Hat OpenShift stable-v1
+openshift-gitops-operator Red Hat OpenShift GitOps latest
 openshift-pipelines-operator-rh Red Hat OpenShift Pipelines latest
 openshift-secondary-scheduler-operator Secondary Scheduler Operator for Red Hat OpenShift stable
 opentelemetry-product Red Hat build of OpenTelemetry stable

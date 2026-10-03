@@ -39,9 +39,16 @@ curl -sfkIL google.com >/dev/null
 echo_step "Reset ..."
 
 rm -f "$V2_DIR/build.log"
-rm -rf "$WORK_DIR/aba"
-rm -rf "$WORK_TEST_INSTALL"
-rm -rf "$WORK_BUNDLE_DIR"
-#mkdir -p "$WORK_BUNDLE_DIR/build"  # Not needed, since we don't touch the marker from the Makefile anymore
+
+if [ "${BUNDLE_DEV_MODE:-}" = "1" ]; then
+	echo "DEV MODE: preserving work dirs for inspection"
+	echo "  $WORK_DIR/aba"
+	echo "  $WORK_TEST_INSTALL"
+	echo "  $WORK_BUNDLE_DIR"
+else
+	rm -rf "$WORK_DIR/aba"
+	rm -rf "$WORK_TEST_INSTALL"
+	rm -rf "$WORK_BUNDLE_DIR"
+fi
 
 echo_step "Done $0"

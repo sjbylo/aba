@@ -90,34 +90,25 @@ e2e_run "Save older (previous) version" "
     echo \"Older version: \$ocp_version\"
 "
 
-e2e_run "Resolve latest version as upgrade target" "
-    cd ~/aba &&
-    aba --channel fast --version latest &&
-    . aba.conf &&
-    echo \$ocp_version > /tmp/e2e-ocp-version-desired &&
-    echo \"Desired version: \$ocp_version\"
-"
-
-e2e_run "Validate older version is in upgrade graph" "
+e2e_run "Resolve upgrade pair from release metadata" "
     cd ~/aba && source scripts/include_all.sh &&
-    older=\$(< /tmp/e2e-ocp-version-older) &&
-    desired=\$(< /tmp/e2e-ocp-version-desired) &&
-    tgt_minor=\$(echo \$desired | cut -d. -f1-2) &&
-    if verify_upgrade_path_exists \"\$older\" \"\$desired\" fast; then
-        echo \"Upgrade path OK: \$older -> \$desired\"
-    else
-        echo \"WARNING: \$older not in fast-\$tgt_minor graph, searching for valid source ...\"
-        src_minor=\$(echo \$older | cut -d. -f1-2)
-        graph_json=\$(_fetch_graph_cached fast \$tgt_minor)
-        valid=\$(echo \"\$graph_json\" | jq -r '.nodes[].version' \
-            | grep \"^\$src_minor\\.\" | sort -rV | head -1)
-        if [ -z \"\$valid\" ]; then
-            echo \"FATAL: no \$src_minor.x version in fast-\$tgt_minor graph\"; exit 1
-        fi
-        echo \"Using \$valid instead of \$older\"
-        aba -v \$valid
-        echo \$valid > /tmp/e2e-ocp-version-older
-    fi
+    . aba.conf &&
+    major=\$(echo \$ocp_version | cut -d. -f1) &&
+    cur_minor_num=\$(echo \$ocp_version | cut -d. -f2) &&
+    tgt_minor=\"\${major}.\${cur_minor_num}\" &&
+    src_minor=\"\${major}.\$(( cur_minor_num - 1 ))\" &&
+    echo \"Strategy: proven minors \$src_minor.x -> \$tgt_minor.x (GA-2 -> GA-1)\" &&
+    desired=\$(fetch_all_versions fast \$tgt_minor 2>/dev/null | sort -rV | head -1) &&
+    [ -n \"\$desired\" ] || { echo \"FATAL: no versions in fast-\$tgt_minor\"; exit 1; } &&
+    upgrades=\$(curl -sf \"https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/fast-\$tgt_minor/release.txt\" \
+        | sed -n 's/^  Upgrades: //p' | tr ', ' '\\n' | grep .) &&
+    [ -n \"\$upgrades\" ] || { echo \"FATAL: no upgrade sources in release metadata for fast-\$tgt_minor\"; exit 1; } &&
+    older=\$(echo \"\$upgrades\" | grep \"^\$src_minor\\.\" | sort -rV | head -1) &&
+    [ -n \"\$older\" ] || { echo \"FATAL: no \$src_minor.x sources in release metadata for fast-\$tgt_minor\"; exit 1; } &&
+    echo \$older > /tmp/e2e-ocp-version-older &&
+    echo \$desired > /tmp/e2e-ocp-version-desired &&
+    aba --channel fast -v \$older &&
+    echo \"Resolved: \$older -> \$desired\"
 "
 
 e2e_run "Create mirror directory and mirror.conf" \
@@ -548,6 +539,28 @@ test_end
 test_begin "Upgrade: full chain (day2 + OSUS + upgrade)"
 
 e2e_wait_cluster_ready $SNO
+
+e2e_run "Accept admin ack gates (if any)" "
+    cd ~/aba &&
+    echo \"Reading admin-gates from openshift-config-managed (if any)\" &&
+    gates=\$(aba --dir $SNO run --cmd \
+        'oc get cm admin-gates -n openshift-config-managed -o jsonpath={.data}' 2>/dev/null \
+        | grep -oP '\"ack-[^\"]+\"' | tr -d '\"') || true &&
+    if [ -z \"\$gates\" ]; then
+        echo \"No admin gates found — nothing to ack\"
+    else
+        echo \"Gates found: \$gates\" &&
+        aba --dir $SNO run --cmd \
+            'oc -n openshift-config get cm admin-acks 2>/dev/null || oc -n openshift-config create cm admin-acks' &&
+        for key in \$gates; do
+            echo \"  Acking: \$key\"
+            aba --dir $SNO run --cmd \
+                \"oc -n openshift-config patch cm admin-acks --type merge -p '{\\\"data\\\":{\\\"'\$key'\\\":\\\"true\\\"}}'\" 2>/dev/null || true
+        done &&
+        echo \"Admin acks applied:\" &&
+        aba --dir $SNO run --cmd 'oc get cm admin-acks -n openshift-config -o yaml' 2>/dev/null || true
+    fi
+"
 
 e2e_run -r 5 2 -d 60 -m 300 "Full-chain upgrade (day2 + OSUS + trigger)" "
     cd ~/aba &&

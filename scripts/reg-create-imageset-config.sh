@@ -175,7 +175,11 @@ _resolve_operators_json() {
 		esac
 	}
 
-	aba_info "Adding operators to the image-set config file ..." >&2
+	# Build source label for the info line
+	local _src_parts=""
+	[ "$op_sets" ] && _src_parts="op_sets: $op_sets"
+	[ "$ops" ] && _src_parts="${_src_parts:+$_src_parts, }ops: $ops"
+	aba_info "Adding operators to the image-set config file [$_src_parts] ..." >&2
 
 	# Process operator sets
 	for _set_name in $(echo "$op_sets" | tr "," " "); do
@@ -203,7 +207,7 @@ _resolve_operators_json() {
 	fi
 
 	echo >&2
-	aba_success "Number of operators included: $_op_count" >&2
+	aba_debug "Number of operators included: $_op_count" >&2
 
 	# Build the JSON array of catalog objects
 	_build_catalog_json() {
@@ -311,13 +315,13 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 			_upath=$(compute_upgrade_path "$ocp_version" "$ocp_upgrade_to" "${ocp_channel}-${tgt_major}" 2>/dev/null) || true
 			export upgrade_path="${_upath:-}"
 			if [[ -n "$_upath" ]]; then
-				aba_info "Upgrade path: $_upath"
+				aba_debug "Upgrade path: $_upath"
 			fi
 		fi
 	fi
 
 	aba_info "Generating image set configuration: data/imageset-config.yaml ..."
-	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH' ..."
+	[ ! "$excl_platform" ] && aba_debug "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH'"
 
 	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version ocp_upgrade_to=$ocp_upgrade_to
 
@@ -330,7 +334,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	elif [ "$ops" ] || [ "$op_sets" ]; then
 		# For cross-minor upgrades, use the target version's catalog
 		if [ "${tgt_major:-}" ] && [ "$tgt_major" != "$ocp_ver_major" ]; then
-			aba_info "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major"
+			aba_debug "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major"
 		fi
 		json_operators_data=$(_resolve_operators_json "$_op_catalog_ver")
 		has_operators=true
@@ -371,15 +375,11 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	mv -f "$_tmp_isc" data/imageset-config.yaml
 	touch data/.created
 
-	if [ "$tgt_major" ]; then
-		aba_success "Image set config file created: mirror/data/imageset-config.yaml (upgrade: $ocp_version → $ocp_upgrade_to, $ocp_channel-$tgt_major, shortestPath, $ARCH)"
-	else
-		aba_success "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
-	fi
+	aba_success "Image set config file created: mirror/data/imageset-config.yaml"
 	[ ! "$ops" ] && [ ! "$op_sets" ] && \
 		aba_info "To add operators, set 'op_sets' or 'ops' in aba.conf, then re-run 'aba save' or 'aba sync'."
 	if [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
-		aba_info "For advanced customization, edit mirror/data/imageset-config.yaml directly (your edits will be preserved)."
+		aba_info "For advanced customization, edit this file directly (your edits will be preserved)."
 	fi
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"

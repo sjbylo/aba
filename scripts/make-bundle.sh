@@ -115,9 +115,7 @@ else
 		elif [ ! "${excl_platform:-}" ]; then
 			[[ "$_base" != *-rel* ]] && _base="$_base-rel"
 		fi
-		_op_count=0
-		[ -f mirror/data/imageset-config.yaml ] && \
-			_op_count=$(awk '/^  operators:/{o=1} o && /^    - name: /{c++} END{print c+0}' mirror/data/imageset-config.yaml 2>/dev/null) || _op_count=0
+		_op_count=$(_isc_operator_count mirror/data/imageset-config.yaml)
 		if [ "$_op_count" -gt 0 ] 2>/dev/null && [[ "$_base" != *op[0-9]* ]]; then
 			_base="$_base-op${_op_count}"
 		fi

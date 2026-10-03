@@ -62,7 +62,8 @@ DNSEOF
 systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		systemctl is-active --quiet dnsmasq 2>/dev/null || \
 			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
-		aba_info "DNS records added: api.${cluster_name}.${base_domain} → ${api_ip}, *.apps → ${apps_ip}"
+		aba_info "DNS records added for cluster ${cluster_name}.${base_domain} (ABA auto-DNS via dnsmasq, ${_conf})"
+		aba_info "  api.${cluster_name}.${base_domain} → ${api_ip}, *.apps.${cluster_name}.${base_domain} → ${apps_ip}"
 		;;
 
 	remove-cluster)
@@ -80,7 +81,7 @@ systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		$SUDO bash -c "rm -f '$_conf'; systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		systemctl is-active --quiet dnsmasq 2>/dev/null || \
 			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
-		aba_info "DNS records removed for cluster: ${local_name}.${local_domain}"
+		aba_info "DNS records removed for cluster ${local_name}.${local_domain} (ABA auto-DNS via dnsmasq, was ${_conf})"
 		;;
 
 	add-mirror)
@@ -107,7 +108,8 @@ DNSEOF
 systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		systemctl is-active --quiet dnsmasq 2>/dev/null || \
 			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
-		aba_info "DNS record added: ${reg_host} → ${mirror_ip}"
+		aba_info "DNS record added for mirror registry (ABA auto-DNS via dnsmasq, ${_conf})"
+		aba_info "  ${reg_host} → ${mirror_ip}"
 		;;
 
 	remove-mirror)
@@ -120,7 +122,7 @@ systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		$SUDO bash -c "rm -f '$_conf'; systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		systemctl is-active --quiet dnsmasq 2>/dev/null || \
 			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
-		aba_info "DNS record removed for mirror registry"
+		aba_info "DNS record removed for mirror registry (ABA auto-DNS via dnsmasq, was ${_conf})"
 		;;
 
 	check)

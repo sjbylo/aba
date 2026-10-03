@@ -458,6 +458,40 @@ exist for human browsing; scripts use helpers directly.
 
 ---
 
+## Status / Preflight
+
+Each domain (mirror, cluster) has a single status script that is the source
+of truth for all state queries and preflight checks. See ADR-014.
+
+### Modes
+
+| Mode | Flag | Output | Use case |
+|------|------|--------|----------|
+| Human | (default) | Formatted `[ABA]` summary | `aba -d mirror status` |
+| Shell | `--shell` | Sourceable key=value pairs | TUI, other scripts |
+| Preflight | `--preflight` | Interactive checks via `ask()` | Makefile dep for save/sync |
+
+Pattern follows `transfer-info.sh` (shell mode) and `ask()` conventions.
+
+### Makefile integration
+
+`status-preflight` is a PHONY dependency of mutating targets (`save`, `sync`),
+placed before `data/imageset-config.yaml` so preflight can fix config before
+ISC generation. Background ISC generation (TUI) targets the ISC directly and
+is unaffected.
+
+### Scripts
+
+| Script | Domain | Makefile |
+|--------|--------|----------|
+| `scripts/mirror-status.sh` | Mirror state + preflight | `mirror/Makefile` |
+| (future) `scripts/cluster-status.sh` | Cluster state | cluster Makefile |
+
+**Invariant**: All intelligence lives in the status script. The TUI and other
+consumers are dumb readers of `--shell` output.
+
+---
+
 ## Makefile Structure
 
 | Makefile | Location | Scope |
@@ -659,3 +693,6 @@ not mandatory for every script.
 - `[ABA]` prefix only on operational messages, not banners
 - Prefer `if ! cmd; then` over disabling `set -e` / ERR traps
 - Comments explain WHY, not WHAT
+- Scripts invoked by Makefile recipes must default `INFO_ABA=1` so
+  `aba_info`/`aba_warn` output works both via `aba` CLI and `make` directly:
+  `[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1`

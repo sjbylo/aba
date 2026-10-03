@@ -20,6 +20,19 @@ When managing E2E test pool VMs (con1-4, dis1-4), **always use `test/e2e/run.sh`
 | Verify pools healthy | `run.sh verify -p 1-4` | ad-hoc SSH probes |
 | Reclone pool VMs | `run.sh run -a -p 3 -R` | manual govc clone |
 
+## Daemon inject — NEVER manually stop/deploy/restart
+
+When a daemon is already running (check `run.sh status`), **just run the same `run.sh run` command**:
+
+```bash
+# This is ALL you need — even after code changes:
+run.sh run -a -p 1-4 --dev --loop --fresh -y
+```
+
+The daemon detects the inject, queues the suites, and deploys `--dev` code to each pool as it dispatches. **Do NOT** manually `stop → deploy → run` — that kills running suites, triggers slow cleanup, and wastes time.
+
+Only use `run.sh stop` / `run.sh kill` when the user explicitly asks to stop tests.
+
 ## Why
 
 `run.sh` handles VM discovery, power management, per-pool config, SSH user resolution, harness sync, lock management, and cleanup atomically. Bypassing it risks partial state, wrong SSH user, missed setup steps, or lock conflicts with the running dispatcher.

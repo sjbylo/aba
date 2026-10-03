@@ -169,6 +169,10 @@ detect_rhoai_version() {
 #   Download RHOAI image list from GitHub, extract additionalImages refs.
 #   Caches in ~/.aba/cache/rhoai/rhoai-<version>-images.txt.
 #   Outputs one image ref per line on stdout.
+#   A downloaded file with an empty additionalImages list is success and
+#   outputs nothing. That empty result is cached (zero-byte file) so the
+#   next call does not hit GitHub. Network failure and a body that is not
+#   an image-set document still return 1 and are not cached.
 # ---------------------------------------------------------------------------
 fetch_rhoai_images() {
 	local version="$1"
@@ -177,8 +181,9 @@ fetch_rhoai_images() {
 	mkdir -p "$_RHOAI_CACHE_DIR"
 	local cache_file="$_RHOAI_CACHE_DIR/rhoai-${version}-images.txt"
 
-	# Return cached if available
-	if [ -f "$cache_file" ] && [ -s "$cache_file" ]; then
+	# Present cache, including a zero-byte file: the list was resolved and
+	# it was empty on purpose.
+	if [ -f "$cache_file" ]; then
 		cat "$cache_file"
 		return 0
 	fi
@@ -189,17 +194,46 @@ fetch_rhoai_images() {
 	isc_content=$(curl -sL --connect-timeout 10 --max-time 60 "$url" 2>/dev/null) || return 1
 	[ -z "$isc_content" ] && return 1
 
+	# A real image-set document names the section even when it has no images.
+	# Anything else (404 page, HTML) is a failed fetch, not an empty list.
+	if ! printf '%s\n' "$isc_content" | grep -q 'additionalImages:'; then
+		return 1
+	fi
+
 	# Extract additionalImages - name: lines (strip leading whitespace and "- name: ")
 	local images
-	images=$(echo "$isc_content" \
+	images=$(printf '%s\n' "$isc_content" \
 		| awk '/additionalImages:/{p=1; next} p && /^[^ ]/{exit} p && /- name:/{print}' \
 		| sed 's/.*- name: *//' \
 		| sed 's/[[:space:]]*$//')
-	[ -z "$images" ] && return 1
 
-	# Cache and output
-	echo "$images" > "$cache_file"
-	echo "$images"
+	if [ -n "$images" ]; then
+		printf '%s\n' "$images" > "$cache_file"
+		printf '%s\n' "$images"
+	else
+		: > "$cache_file"
+	fi
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# image_set_dynamic_resolve <set_name>
+#   Resolve a dynamic image set (OpenShift AI).
+#   stdout: version<TAB>count
+#   count may be 0 when the published list is intentionally empty.
+#   Returns 1 when the version or the document could not be read.
+# ---------------------------------------------------------------------------
+image_set_dynamic_resolve() {
+	local set_name="$1"
+	_image_set_is_dynamic "$set_name" || return 1
+
+	local ver images count=0
+	ver=$(detect_rhoai_version) || return 1
+	images=$(fetch_rhoai_images "$ver") || return 1
+	if [ -n "$images" ]; then
+		count=$(printf '%s\n' "$images" | grep -c .) || count=0
+	fi
+	printf '%s\t%s\n' "$ver" "$count"
 }
 
 # ---------------------------------------------------------------------------
@@ -242,7 +276,8 @@ image_set_list() {
 #   Add an image set to images.conf. For static sets, reads the template.
 #   For AI, fetches from GitHub (auto-detects version if not provided).
 #   If the set already exists, replaces it (re-add = refresh).
-#   Outputs the number of images added on stdout.
+#   Outputs the number of images added on stdout (0 when the published
+#   list is empty — an existing block for that set is removed).
 #   Returns 1 on failure.
 # ---------------------------------------------------------------------------
 image_set_add() {
@@ -258,18 +293,27 @@ image_set_add() {
 	local detail=""
 
 	if _image_set_is_dynamic "$set_name"; then
-		# Dynamic set (AI): detect version if not provided
+		# Dynamic set (AI): detect version if not provided.
+		# An empty published list is success: nothing to write.
 		if [ -z "$version" ]; then
 			version=$(detect_rhoai_version) || return 1
 		fi
 		images=$(fetch_rhoai_images "$version") || return 1
+		if [ -z "$images" ]; then
+			# Refresh must drop a previous version's block. Leaving it
+			# would keep mirroring images this release no longer lists.
+			if _image_set_marker_exists "$set_name" "$img_file"; then
+				image_set_remove "$set_name" || true
+			fi
+			echo 0
+			return 0
+		fi
 		detail="rhoai-$version"
 	else
 		# Static set: read from template
 		images=$(_image_set_static_images "$set_name") || return 1
+		[ -z "$images" ] && return 1
 	fi
-
-	[ -z "$images" ] && return 1
 
 	# Remove existing marker block if present (re-add = replace)
 	if _image_set_marker_exists "$set_name" "$img_file"; then

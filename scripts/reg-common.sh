@@ -301,6 +301,18 @@ reg_setup_data_dir() {
 	else
 		reg_root_opts=""
 	fi
+
+	# Detect leftover data directory with wrong ownership (local installs only).
+	# A previous install creates files owned by the container UID (e.g. 1001).
+	# After uninstall, the directory may remain and the next install fails with
+	# PermissionError on subdirectories like quay-storage/uploads.
+	if [ -z "$reg_ssh_key" ] && [ -d "$reg_root" ] && \
+	   [ "$(find "$reg_root" -maxdepth 2 ! -user "$(id -u)" -print -quit 2>/dev/null)" ]; then
+		aba_abort \
+			"Registry data directory $reg_root contains files not owned by $(whoami) (UID $(id -u))." \
+			"Likely left over from a previous install (container UID)." \
+			"Fix with:  sudo rm -rf $reg_root"
+	fi
 }
 
 # --- reg_generate_password ----------------------------------------------------

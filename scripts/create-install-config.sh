@@ -232,7 +232,7 @@ fi
 # Check that the release image is available in the private registry
 if [ "$additional_trust_bundle" ] && [ "$image_content_sources" ]; then
 	scripts/create-containers-auth.sh --load || exit 1
-	scripts/verify-release-image.sh
+	scripts/verify-release-image.sh || exit 1
 fi
 
 # OCP 4.22+ CSI requires vSphere 8.0 U1+. Older vCenter still hosts the VMs;

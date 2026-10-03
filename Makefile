@@ -11,7 +11,7 @@ SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
 type     ?=		# cluster type (sno|compact|standard), empty = use existing or template default
 #light    ?=		# by def. do not create light install bundle
-MIRROR_CMDS := save load sync verify
+MIRROR_CMDS := save load sync verify status
 
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 

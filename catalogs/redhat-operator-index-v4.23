@@ -25,6 +25,7 @@ devworkspace-operator DevWorkspace Operator fast
 dpu-network-operator DPU Network Operator stable
 eap JBoss EAP stable
 fence-agents-remediation Fence Agents Remediation Operator stable
+file-integrity-operator File Integrity Operator stable
 jws-operator WebServer alpha
 kernel-module-management-hub Kernel Module Management (Hub) stable
 kernel-module-management Kernel Module Management stable

@@ -1919,3 +1919,21 @@ the ISC's `data/.created`.
 - `scripts/include_all.sh`: shared `aba_file_is_user_managed()` helper
 - `test/` and `test/e2e/examples/`: update all `.example` files
 - `test/func/test-tui-v2-04-isconf.sh`: may need updates for label checks
+
+## Clean up cluster install output (like save/sync/load cleanup)
+
+The `aba -d <cluster> install` output is ~49 [ABA] lines from ~10 scripts in the Make chain.
+Duplication and noise identified:
+
+1. **Release image sha256 printed twice** — "Extracting openshift-install from release-image: @sha256" then "Release image is available at @sha256"
+2. **Empty `[ABA]` lines** — blank lines with just the prefix (around install-config generation)
+3. **"Showing existing values in cluster.conf:"** — header with no visible content
+4. **CLI extraction verbose** — 3 lines for oc/openshift-install/butane, could be 1 summary
+5. **DNS checked twice** — DNS record existence check at config validation AND again in preflight
+6. **Consider a cluster-status.sh** — similar to mirror-status.sh, unified status/preflight for cluster operations
+
+Scripts involved: check-cluster-installed.sh, create-cluster-conf.sh, create-install-config.sh,
+create-agent-config.sh, preflight-check.sh, generate-image.sh, vmw-*.sh/kvm-*.sh,
+wait-agent-up.sh, monitor-install.sh
+
+Reference: mirror save/sync/load cleanup (commit 55c22607) for the pattern to follow.

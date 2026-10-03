@@ -221,13 +221,20 @@ do
 			exit 1
 		fi
 
-		# Run cleanup after each successful bundle (separate target)
-		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" clean; then
-			echo "WARNING: cleanup failed for $bundle_name -- next run's 00-setup.sh will retry" >&2
+		# Run cleanup after each successful bundle (separate target).
+		# In dev mode, skip marker cleanup so work dirs stay inspectable.
+		if [ "${BUNDLE_DEV_MODE:-}" != "1" ]; then
+			if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" clean; then
+				echo "WARNING: cleanup failed for $bundle_name -- next run's 00-setup.sh will retry" >&2
+			fi
+		else
+			echo "DEV MODE: skipping marker cleanup — work dirs preserved"
 		fi
 
 		echo "=== Bundle $bundle_name completed at $(date) ==="
-		read -p "Press Enter to continue to the next bundle..."
+		if [ "${BUNDLE_DEV_MODE:-}" == "1" ]; then
+			read -p "Press Enter to continue to the next bundle..."
+		fi
 	done
 done
 
