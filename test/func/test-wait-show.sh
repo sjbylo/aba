@@ -48,13 +48,15 @@ else
 	test_fail "expected timeout"
 fi
 
-# 5) Success before deadline (counter in current shell)
-WAIT_COUNT=0
-if aba_wait_show "flip" 1 15 "WAIT_COUNT=\$((WAIT_COUNT+1)); [ \"\$WAIT_COUNT\" -ge 5 ]"; then
+# 5) Success before deadline (file-based counter — aba_wait_show runs in subshell)
+_wait_counter=$(mktemp)
+echo 0 > "$_wait_counter"
+if aba_wait_show "flip" 1 15 'n=$(cat '"$_wait_counter"'); n=$((n+1)); echo $n > '"$_wait_counter"'; [ "$n" -ge 5 ]'; then
 	test_pass "returns 0 when check succeeds before max_sec"
 else
 	test_fail "expected success before timeout"
 fi
+rm -f "$_wait_counter"
 
 # 6) Invalid args
 if aba_wait_show "bad" x 10 "true" 2>/dev/null; then
