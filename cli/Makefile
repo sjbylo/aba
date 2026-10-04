@@ -372,16 +372,14 @@ $(openshift_install_file):
 # Logic:
 #   - EC (engineering candidate): use the exact dev-preview path for that version
 #     (EC builds may bundle an oc-mirror with unreleased features needed for that EC)
-#   - OCP 5.x (non-EC): use stable-5.0 (first stable 5.x channel)
-#   - OCP 4.x (non-EC): use stable-4.22 (tested, known-good)
+#   - All other versions (4.x, 5.x, ...): use stable-4.22 (tested, known-good).
+#     oc-mirror is published only under the 4.x client tree, even for OCP 5+.
 #   - No version set: fall back to stable-4.22 (safe default for --no-version path)
 #
 # When a new oc-mirror version is tested and validated, bump the pin here.
 ifneq ($(ocp_version),)
   ifneq ($(findstring -ec.,$(ocp_version)),)
     oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp-dev-preview/$(ocp_version)
-  else ifeq ($(ocp_major),5)
-    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v5/$(arch)/clients/ocp/stable-5.0
   else
     oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
   endif
