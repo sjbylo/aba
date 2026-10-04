@@ -9,6 +9,25 @@ description: >-
 # Test ABA
 
 Systematic testing of ABA CLI commands, TUI, and scripts.
+Covers functional tests, CLI verification, TUI smoke testing, and regression tests.
+
+## Code change permissions
+
+| Code area | Permission | Notes |
+|---|---|---|
+| `test/func/*`, `test/e2e/*` | **Freely modifiable** | Create, edit, delete tests without asking |
+| `scripts/`, `tui/`, `templates/`, `Makefile*` | **Ask user first** | Only fix if bug is obvious AND under 5 lines. Otherwise report the bug |
+| `build/pre-commit-checks.sh` | **Ask user first** | Lint/check changes need approval |
+| `ai/*` | **Freely modifiable** | Notes, plans, bullets |
+
+When a test reveals a bug in ABA core:
+1. **Always** write the regression test first (in `test/func/`)
+2. **Report** the bug with reproduction steps
+3. **Only fix** ABA core code if the user says so, or if it's trivially obvious (typo, wrong variable name, off-by-one) AND under 5 lines
+
+When a test itself is broken or flaky:
+- Fix the test freely — no permission needed
+- Document why it was flaky in a code comment
 
 ## Test hosts
 
@@ -20,7 +39,13 @@ Systematic testing of ABA CLI commands, TUI, and scripts.
 
 SSH: `ssh -F ~/.aba/ssh.conf <host> "..."`
 
-## Phase 1: Run existing tests (baseline)
+Any fixed or changed code can be deployed to remote hosts before testing:
+```bash
+scp -F ~/.aba/ssh.conf scripts/repo-status.sh scripts/cluster-status.sh disco.example.com:aba/scripts/
+scp -F ~/.aba/ssh.conf tui/v2/*.sh disco.example.com:aba/tui/v2/
+```
+
+## Phase 1: Run existing functional tests (baseline)
 
 Always start here. Establish what passes before changing anything.
 
@@ -32,36 +57,36 @@ test/func/run-all-tests.sh --unit
 test/func/run-all-tests.sh --all
 ```
 
-Record results. Do NOT fix pre-existing failures without user permission.
-Pre-existing failures are NOT bugs you introduced — note them and move on.
+Record results. Pre-existing failures are NOT bugs you introduced — note them and move on.
 
-## Phase 2: Targeted CLI testing
+## Phase 2: CLI testing on bastion and disco
 
-Test specific commands on relevant hosts. Verify:
-- Exit code (0 for success, non-zero for expected failures)
-- Output contains expected keys/strings
-- No unexpected warnings or errors on stderr
+Test commands on relevant hosts. Verify exit code, output content, and no unexpected errors.
 
-### Status commands
+### Status commands (bastion)
 
 ```bash
-# Bastion
-aba status                          # milestone + next steps
-aba status --all                    # verbose + cluster health
-aba status --shell                  # k=v output, verify all keys present
-aba -d mirror status
-aba -d mirror status --shell
-aba -d <cluster> status             # pick a real installed cluster
-
-# Disco (via SSH)
-ssh disco "cd ~/aba && aba status"                # should complete in <3s
-ssh disco "cd ~/aba && aba status --shell"
+aba status                            # milestone + next steps
+aba status --all                      # verbose + cluster health
+aba status --shell                    # k=v output, all keys present
+aba -d mirror status                  # mirror summary
+aba -d mirror status --shell          # mirror k=v
+aba -d <cluster> status               # pick a real installed cluster
 ```
 
-### Help text
+### Status commands (disco, via SSH)
 
 ```bash
-aba --help | grep -q "status"       || echo "FAIL: status missing from help"
+ssh disco "cd ~/aba && aba status"                    # <3s
+ssh disco "cd ~/aba && aba status --shell"
+ssh disco "cd ~/aba && aba -d mirror status"
+ssh disco "cd ~/aba && time bash scripts/repo-status.sh"   # verify <3s
+```
+
+### Help text verification
+
+```bash
+aba --help | grep -q "status"        || echo "FAIL: status missing from main help"
 aba mirror --help | grep -q "status" || echo "FAIL: status missing from mirror help"
 aba cluster --help | grep -q "status" || echo "FAIL: status missing from cluster help"
 ```
@@ -69,51 +94,50 @@ aba cluster --help | grep -q "status" || echo "FAIL: status missing from cluster
 ### Edge cases
 
 ```bash
-# Run status from wrong directory
-cd /tmp && aba status               # should handle gracefully
-# Status with no aba.conf
-# Status with missing pull secret
+cd /tmp && aba status                 # from wrong directory — should not crash
 ```
 
 ## Phase 3: TUI smoke test via tmux
 
-Launch TUI in tmux, send keystrokes, capture pane output.
+Launch TUI in tmux, navigate with keystrokes, capture pane output.
+
+### Bastion (CONNO mode)
 
 ```bash
-# On bastion
+tmux kill-session -t tui-test 2>/dev/null
 tmux new-session -d -s tui-test "cd ~/aba && abatui"
-sleep 4
-tmux capture-pane -t tui-test -p    # verify splash screen
+sleep 5
 
-# Check header has hostname
-tmux capture-pane -t tui-test -p | grep -q "$(hostname -s)" \
-    || echo "FAIL: hostname not in header"
+# Verify splash screen
+tmux capture-pane -t tui-test -p > /tmp/tui-splash.txt
+grep -q "ABA TUI v2" /tmp/tui-splash.txt || echo "FAIL: no TUI header"
+grep -q "$(hostname -s)" /tmp/tui-splash.txt || echo "FAIL: hostname not in header"
 
 # Navigate past splash
 tmux send-keys -t tui-test Enter
 sleep 3
-tmux capture-pane -t tui-test -p    # verify main menu
+tmux capture-pane -t tui-test -p > /tmp/tui-menu.txt
+# Verify main menu appeared (look for menu items)
 
-# Exit cleanly
+# Exit
 tmux send-keys -t tui-test Escape
 sleep 1
-tmux send-keys -t tui-test Enter    # confirm exit
+tmux send-keys -t tui-test Tab Enter   # confirm exit
+sleep 1
 tmux kill-session -t tui-test 2>/dev/null
 ```
 
-For DISCO TUI testing, deploy code first:
-```bash
-scp -F ~/.aba/ssh.conf tui/v2/*.sh disco.example.com:aba/tui/v2/
-```
+### Disco (DISCO mode)
 
-Then repeat via SSH + tmux on disco. Verify:
-- Black background (check dialogrc: `grep screen_color /tmp/dialogrc-v2.*`)
+Deploy code first, then test via SSH + tmux. Verify:
+- Black background: `ssh disco "cat /tmp/dialogrc-v2.* 2>/dev/null | grep screen_color"`
+  Expected: `screen_color = (WHITE,BLACK,ON)`
 - "Fully Disconnected" in header
-- Hostname in header
+- Short hostname in header
 
 ## Phase 4: Write regression tests
 
-When a bug is found and fixed, write a test in `test/func/`.
+When a bug is found, write a test in `test/func/`.
 
 ### Test file conventions
 
@@ -123,14 +147,14 @@ When a bug is found and fixed, write a test in `test/func/`.
 - Print test name at start
 - Exit 0 on pass, non-zero on fail
 - No side effects (don't modify repo state, use temp dirs)
-- Must work without network (for unit tests) or document if network needed
+- Must work without network for unit tests
 
 ### Template
 
 ```bash
 #!/bin/bash
 # Test: <one-line description>
-# Regression test for: <link to bug or commit>
+# Regression test for: <commit or bug description>
 
 cd "$(dirname "$0")/../.."
 source scripts/include_all.sh 2>/dev/null
@@ -139,65 +163,63 @@ echo "Test: <description>"
 
 failed=0
 
-# --- Test case 1 ---
+# --- Test case ---
 if <condition>; then
-    echo "✓ PASS: <what was verified>"
+	echo "✓ PASS: <what was verified>"
 else
-    echo "✗ FAIL: <what went wrong>"
-    failed=1
+	echo "✗ FAIL: <what went wrong>"
+	failed=1
 fi
-
-# --- Test case 2 ---
-# ...
 
 exit $failed
 ```
 
 ### Register the test
 
-Add the test to `test/func/run-all-tests.sh`:
-- Fast, no-network tests → `unit_tests` array
+Add to `test/func/run-all-tests.sh`:
+- Fast, no-network → `unit_tests` array
 - Slow or network-dependent → `integration_tests` array
 
-### Regression test ideas for common bug patterns
+### Regression test ideas
 
 | Bug pattern | Test approach |
 |---|---|
-| Sub-script failure not propagated | Create a script that calls a failing sub-script, verify parent exits non-zero |
-| Wrong namespace in wait loop | Grep test scripts for hardcoded namespace vs `$NS` variable |
-| Status command slow on disco | Time the command, assert <3s (integration test on disco) |
-| Missing key in --shell output | Parse output, verify all documented keys are present |
-| Config edge case | Create temp dir with broken config, run command, verify error message |
-| Help text missing new command | Grep help files for expected strings |
+| Sub-script failure not propagated | Script calls failing sub-script, verify parent exits non-zero |
+| Wrong namespace in wait loop | Grep test scripts for hardcoded namespace vs `$NS` |
+| Status slow on disco | Time the command, assert <3s |
+| Missing key in --shell output | Parse output, verify all documented keys present |
+| Help text missing command | Grep help files for expected strings |
+| `$ABA_ROOT` leak | Existing test: `test-aba-root-only-in-aba-sh.sh` |
 
-## Phase 5: Performance checks
+## Phase 5: Performance and pre-commit
 
 ```bash
 # Status performance on disco (should be <3s)
 ssh disco "cd ~/aba && time bash scripts/repo-status.sh" 2>&1
 
-# Pre-commit checks (should pass)
+# Pre-commit checks (should pass clean)
 build/pre-commit-checks.sh --skip-version
 ```
 
 ## Reporting
 
-After testing, summarize:
+After testing, summarize in this format:
 
 ```
 ## Test Results
 
-**Baseline**: X/Y unit tests passed, A/B integration tests passed
-**CLI tests**: all status variants verified on bastion + disco
-**TUI**: splash OK, header OK, navigation OK
-**Regressions written**: N new tests added
-**Issues found**: (list any)
+**Baseline**: X/Y unit passed, A/B integration passed
+**CLI**: status variants verified on bastion + disco
+**TUI**: splash OK, header OK, menu OK
+**Regressions written**: N new tests
+**Bugs found**: (list with severity)
+**Bugs fixed**: (list, only if permitted and trivial)
 ```
 
 ## When to use this skill
 
-- Before a release (comprehensive: phases 1-5)
-- After fixing a bug (phase 4: write regression test, phase 1: run suite)
-- After changing CLI output (phase 2: verify output)
-- After TUI changes (phase 3: smoke test)
-- Periodically (phase 1: maintain baseline)
+- **Before a release**: all 5 phases
+- **After fixing a bug**: phase 4 (write test) → phase 1 (run suite)
+- **After CLI output changes**: phase 2
+- **After TUI changes**: phase 3
+- **Periodically**: phase 1 to maintain baseline
