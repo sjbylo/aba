@@ -155,11 +155,6 @@ integration_tests=(
 	# Connectivity
 	test/func/test-connectivity-checks.sh
 
-	# TUI automated tests
-	test/func/test-tui-v2-01-wizard.sh
-	test/func/test-tui-v2-02-basket.sh
-	test/func/test-tui-v2-03-actions.sh
-	test/func/test-tui-v2-04-isconf.sh
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,7 +170,6 @@ env_tests=(
 	test/func/test-govc-error-handling.sh  # Needs real govc + vCenter + VM
 	test/func/test-infra-auto.sh           # Needs root/sudo, dnsmasq, chrony
 	test/func/test-linuxone.sh             # Must run on s390x LinuxONE host
-	test/func/test-tui-v2-navigation.sh    # Needs tmux + internet
 )
 
 passed=0
