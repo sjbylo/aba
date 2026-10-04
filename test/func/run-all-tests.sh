@@ -59,6 +59,7 @@ unit_tests=(
 	test/func/test-reg-stale-report.sh
 	test/func/test-extra-clis.sh
 	test/func/test-catalog-index-format.sh
+	test/func/test-status-shell-keys.sh
 )
 
 # Integration tests (slow, may download)
