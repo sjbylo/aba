@@ -626,14 +626,26 @@ _ensure_platform_for_upgrade() {
 
 	local _msg="${TUI2_MSG_UPGRADE_NEEDS_RELEASE//%s/$_target}"
 
-	if dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
+	local _rc=0
+	dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
+		--colors \
 		--yes-label "Yes" --no-label "No" \
-		--yesno "$_msg" 0 0; then
-		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
-		tui_log "Guard: excl_platform switched to false for upgrade to $_target"
-	else
-		tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
-	fi
+		--extra-button --extra-label "Disable Upgrade" \
+		--yesno "$_msg" 0 0 || _rc=$?
+
+	case $_rc in
+		0)	# Yes — include release images
+			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+			tui_log "Guard: excl_platform switched to false for upgrade to $_target"
+			;;
+		3)	# Extra — disable upgrade target
+			replace-value-conf -n ocp_upgrade_to -v "" -f "$ABA_ROOT/aba.conf"
+			tui_log "Guard: ocp_upgrade_to cleared (upgrade disabled)"
+			;;
+		*)	# No — keep as-is
+			tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
+			;;
+	esac
 }
 
 # =============================================================================

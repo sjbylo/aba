@@ -131,7 +131,6 @@ integration_tests=(
 	# CLI download pipeline
 	test/func/test-cli-download-wait.sh
 	test/func/test-cli-download-pipeline.sh
-	test/func/test-bg-download-fg-make-race.sh
 	test/func/test-download-before-install-race.sh
 	test/func/test-download-install-race.sh
 
@@ -143,18 +142,9 @@ integration_tests=(
 	test/func/test-extract-catalog-index.sh
 	test/func/test-isc-generation.sh
 	test/func/test-show-ops.sh
-	test/func/test-aba-root-cleanup.sh
-
-	# Mirror save workflow
-	test/func/test-mirror-save-workflow.sh
 
 	# Bundle
 	test/func/test-bundle-tar-output.sh
-	test/func/test-bundle-mode-background-extraction.sh
-
-	# Connectivity
-	test/func/test-connectivity-checks.sh
-
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -163,6 +153,14 @@ integration_tests=(
 # Run only with explicit: run-all-tests.sh --env
 # ─────────────────────────────────────────────────────────────────────────────
 env_tests=(
+	# Destructive: deletes real ~/bin tools, run_once state, or modifies core scripts
+	test/func/test-bundle-mode-background-extraction.sh  # Deletes ~/bin/{oc,oc-mirror,...}, .bundle
+	test/func/test-bg-download-fg-make-race.sh           # Deletes ~/bin/govc, cli tarballs
+	test/func/test-mirror-save-workflow.sh                # Deletes ~/bin/oc-mirror, mirror data
+	test/func/test-aba-root-cleanup.sh                    # Clears .index/ and catalog state
+	test/func/test-connectivity-checks.sh                 # sed -i on real scripts/include_all.sh
+
+	# Requires special infrastructure (real VMs, remote hosts, root, tmux, s390x)
 	test/func/test-e2e-framework.sh        # Deploys/stops real E2E pool VMs
 	test/func/test-e2e-cleanup.sh          # Installs registry on conN, cleans clusters
 	test/func/test-docker-registry.sh      # Installs real Docker registry on conN

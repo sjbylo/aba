@@ -1698,7 +1698,7 @@ _require_podman() {
 	# If still running, show "Please wait..." until it completes
 	if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"Verifying podman connectivity...\n\nPlease wait." 5 45
+			"Verifying podman...\n\nPlease wait." 5 45
 	fi
 
 	# Block until result is available
