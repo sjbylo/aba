@@ -293,6 +293,70 @@ op)
 	if [ -n "$_last_action" ]; then
 		aba_info "  Last action:  ${_last_action}${_last_action_at:+ (${_last_action_at})}"
 	fi
+
+	# Archive size: total of mirror_*.tar + aba-transfer.tar
+	_tar_total=0
+	_tar_count=0
+	for _tf in data/mirror_*.tar data/aba-transfer.tar; do
+		[ -f "$_tf" ] || continue
+		_tar_total=$(( _tar_total + $(stat -c %s "$_tf" 2>/dev/null || echo 0) ))
+		_tar_count=$(( _tar_count + 1 ))
+	done
+	if [ "$_tar_count" -gt 0 ]; then
+		if [ "$_tar_total" -ge 1073741824 ]; then
+			_tar_display="$(( _tar_total / 1073741824 ))GB"
+		else
+			_tar_display="$(( _tar_total / 1048576 ))MB"
+		fi
+		aba_info "  Archives:     ${_tar_count} file(s), ${_tar_display}"
+	fi
+
+	# Transfer bundle check: warn if mirror_*.tar exists but aba-transfer.tar is missing
+	if ls data/mirror_*.tar >/dev/null 2>&1 && [ ! -f data/aba-transfer.tar ]; then
+		aba_warn "  Transfer:     aba-transfer.tar missing (needed on disconnected side)"
+	fi
+
+	# Disk space warning on data/ partition
+	_data_dir="data"
+	[ -d "$_data_dir" ] || _data_dir="."
+	_avail_kb=$(df -k "$_data_dir" 2>/dev/null | awk 'NR==2 {print $4}')
+	if [ "${_avail_kb:-0}" -gt 0 ] && [ "$_avail_kb" -lt 20971520 ]; then
+		_avail_gb=$(( _avail_kb / 1048576 ))
+		aba_warn "  Disk space:   ${_avail_gb}GB free (under data/) — may need more for save/load"
+	fi
+
+	# Detect unloaded archives: any mirror_*.tar newer than the last load?
+	if [ "$_last_action" = "load" ] && [ -n "$_last_action_at" ]; then
+		_load_epoch=$(date -d "$_last_action_at" +%s 2>/dev/null || echo 0)
+		_has_new_tar=""
+		for _tf in data/mirror_*.tar; do
+			[ -f "$_tf" ] || continue
+			_tf_epoch=$(stat -c %Y "$_tf" 2>/dev/null || echo 0)
+			if [ "$_tf_epoch" -gt "$_load_epoch" ]; then
+				_has_new_tar=1
+				break
+			fi
+		done
+		if [ "$_has_new_tar" ]; then
+			aba_info "  New archives: detected (copied after last load)"
+			aba_info "  Next step:    aba -d mirror load"
+		fi
+	fi
+
+	# Day2 reminder: after a load, installed clusters may need day2
+	if [ "$_last_action" = "load" ] && [ -n "$_last_action_at" ]; then
+		_load_epoch=${_load_epoch:-$(date -d "$_last_action_at" +%s 2>/dev/null || echo 0)}
+		_clusters_need_day2=""
+		for _cd in ../*; do
+			[ -d "$_cd" ] && [ -f "$_cd/.install-complete" ] || continue
+			_ic_epoch=$(stat -c %Y "$_cd/.install-complete" 2>/dev/null || echo 0)
+			[ "$_ic_epoch" -lt "$_load_epoch" ] && _clusters_need_day2="${_clusters_need_day2:+$_clusters_need_day2, }$(basename "$_cd")"
+		done
+		if [ -n "$_clusters_need_day2" ]; then
+			aba_info "  Clusters:     may need day2: $_clusters_need_day2"
+		fi
+	fi
+
 	echo
 	;;
 esac
