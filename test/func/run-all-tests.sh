@@ -1,6 +1,14 @@
 #!/bin/bash
 # Test runner - runs all functional tests and reports results
-# Usage: test/func/run-all-tests.sh [--unit|--integration|--all]
+#
+# Usage: test/func/run-all-tests.sh [--unit|--integration|--all|--env]
+#
+#   --unit          Fast tests, no downloads, no side effects
+#   --integration   Slower tests, may download files, still safe
+#   --all           Unit + integration (default) -- safe to run anytime
+#   --env           Tests requiring special environment (E2E pools, remote
+#                   hosts, root/sudo, tmux, s390x). NEVER run automatically
+#                   -- these touch real infrastructure.
 
 cd "$(dirname "$0")/../.."
 
@@ -42,38 +50,132 @@ run_test() {
 	fi
 }
 
-# Unit tests (fast, no downloads)
+# ─────────────────────────────────────────────────────────────────────────────
+# UNIT TESTS — fast, no downloads, no network, no side effects
+# ─────────────────────────────────────────────────────────────────────────────
 unit_tests=(
+	# Architecture / lint
 	test/func/test-no-aba-root-in-registry-scripts.sh
+	test/func/test-aba-root-only-in-aba-sh.sh
+	test/func/test-symlinks-exist.sh
+	test/func/test-preflight-check.sh
+	test/func/test-externalized-targets.sh
+
+	# Core functions
+	test/func/test-aba-wait-show.sh
+	test/func/test-ask-function.sh
+	test/func/test-try-cmd.sh
+	test/func/test-replace-value-conf.sh
+	test/func/test-password-handling.sh
+	test/func/test-flock-behavior.sh
+	test/func/test-stderr-capture.sh
+
+	# run_once subsystem
 	test/func/test-run-once-task-consistency.sh
 	test/func/test-run-once-failed-cleanup.sh
-	test/func/test-symlinks-exist.sh
-	test/func/test-aba-root-only-in-aba-sh.sh
-	test/func/test-wait-show.sh
-	test/func/test-resource-pool-resolution.sh
+	test/func/test-run-once-reliability.sh
+	test/func/test-run-once-ttl.sh
+	test/func/test-run-once-ttl-race.sh
+	test/func/test-run-once-parallel-validation.sh
+	test/func/test-run-once-validation-cwd-mismatch.sh
+	test/func/test-run-once-validation-reread-race.sh
+	test/func/test-run-once-waiting-message.sh
+	test/func/test-run-once-wait-start-race.sh
+	test/func/test-self-heal-validation.sh
+
+	# Config / normalize
+	test/func/test-normalize-conf-pipeline.sh
+	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh
-	test/func/test-replace-value-conf.sh
+	test/func/test-resource-pool-resolution.sh
+
+	# Cluster / VM
+	test/func/test-cluster-readiness.sh
+	test/func/test-vip-collision.sh
+	test/func/test-agent-wait-skip.sh
+	test/func/test-make-regen-install-config.sh
+	test/func/test-vm-power-helpers.sh
+	test/func/test-vm-provider.sh
+	test/func/test-vmw-kvm-verify.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
-	test/func/test-primed-bundle-scenarios.sh
+
+	# Mirror / registry
 	test/func/test-reg-stale-report.sh
-	test/func/test-extra-clis.sh
+	test/func/test-state-management.sh
+
+	# Bundle / backup
+	test/func/test-primed-bundle-scenarios.sh
+	test/func/test-backup-repo-dir-name.sh
+	test/func/test-bundle-sort-order.sh
+	test/func/test-transfer-primed.sh
+	test/func/test-deploy-primed.sh
+
+	# Day2 / operators
+	test/func/test-day2-connected-cluster.sh
+	test/func/test-day2-waves.sh
+	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
+
+	# Status / CLI
 	test/func/test-status-shell-keys.sh
+
+	# CLI tools
+	test/func/test-extra-clis.sh
 )
 
-# Integration tests (slow, may download)
+# ─────────────────────────────────────────────────────────────────────────────
+# INTEGRATION TESTS — may download files, use podman, take minutes; still safe
+# ─────────────────────────────────────────────────────────────────────────────
 integration_tests=(
-	test/func/test-aba-root-cleanup.sh
-	test/func/test-bundle-tar-output.sh
-	test/func/test-mirror-save-workflow.sh
+	# CLI download pipeline
 	test/func/test-cli-download-wait.sh
-	test/func/test-e2e-framework.sh
+	test/func/test-cli-download-pipeline.sh
+	test/func/test-bg-download-fg-make-race.sh
+	test/func/test-download-before-install-race.sh
+	test/func/test-download-install-race.sh
+
+	# Catalog / ISC
+	test/func/test-catalog-helpers.sh
+	test/func/test-catalog-canary.sh
+	test/func/test-catalog-temp-cleanup.sh
+	test/func/test-download-catalog-simple.sh
+	test/func/test-extract-catalog-index.sh
+	test/func/test-isc-generation.sh
+	test/func/test-show-ops.sh
+	test/func/test-aba-root-cleanup.sh
+
+	# Mirror save workflow
+	test/func/test-mirror-save-workflow.sh
+
+	# Bundle
+	test/func/test-bundle-tar-output.sh
+	test/func/test-bundle-mode-background-extraction.sh
+
+	# Connectivity
+	test/func/test-connectivity-checks.sh
+
+	# TUI automated tests
 	test/func/test-tui-v2-01-wizard.sh
 	test/func/test-tui-v2-02-basket.sh
 	test/func/test-tui-v2-03-actions.sh
 	test/func/test-tui-v2-04-isconf.sh
-	test/func/test-catalog-temp-cleanup.sh
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENVIRONMENT TESTS — require special infrastructure, NEVER run in --all
+# These touch real VMs, remote hosts, or need root/sudo/tmux/s390x.
+# Run only with explicit: run-all-tests.sh --env
+# ─────────────────────────────────────────────────────────────────────────────
+env_tests=(
+	test/func/test-e2e-framework.sh        # Deploys/stops real E2E pool VMs
+	test/func/test-e2e-cleanup.sh          # Installs registry on conN, cleans clusters
+	test/func/test-docker-registry.sh      # Installs real Docker registry on conN
+	test/func/test-reg-uninstall-idempotent.sh  # Must run ON conno.example.com
+	test/func/test-govc-error-handling.sh  # Needs real govc + vCenter + VM
+	test/func/test-infra-auto.sh           # Needs root/sudo, dnsmasq, chrony
+	test/func/test-linuxone.sh             # Must run on s390x LinuxONE host
+	test/func/test-tui-v2-navigation.sh    # Needs tmux + internet
 )
 
 passed=0
@@ -87,46 +189,46 @@ echo ""
 echo "Working directory: $PWD"
 echo "Test mode: $mode"
 
-# Run unit tests
-if [ "$mode" = "--unit" ] || [ "$mode" = "--all" ]; then
+run_category() {
+	local label="$1"
+	shift
+	local -n tests_ref=$1
+
 	echo ""
 	echo "┌────────────────────────────────────────────────────────┐"
-	echo "│  UNIT TESTS (fast)                                     │"
+	printf "│  %-55s│\n" "$label"
 	echo "└────────────────────────────────────────────────────────┘"
-	
-	for test in "${unit_tests[@]}"; do
+
+	for test in "${tests_ref[@]}"; do
 		if [ -f "$test" ]; then
 			if run_test "$test"; then
-				((passed++))
+				passed=$(( passed + 1 ))
 			else
-				((failed++))
+				failed=$(( failed + 1 ))
 			fi
 		else
 			echo -e "${YELLOW}⊘ SKIPPED${NC}: $test (not found)"
-			((skipped++))
+			skipped=$(( skipped + 1 ))
 		fi
 	done
+}
+
+# Run unit tests
+if [ "$mode" = "--unit" ] || [ "$mode" = "--all" ]; then
+	run_category "UNIT TESTS (fast, no side effects)" unit_tests
 fi
 
 # Run integration tests
 if [ "$mode" = "--integration" ] || [ "$mode" = "--all" ]; then
+	run_category "INTEGRATION TESTS (may take several minutes)" integration_tests
+fi
+
+# Run environment-specific tests (only when explicitly requested)
+if [ "$mode" = "--env" ]; then
 	echo ""
-	echo "┌────────────────────────────────────────────────────────┐"
-	echo "│  INTEGRATION TESTS (may take several minutes)         │"
-	echo "└────────────────────────────────────────────────────────┘"
-	
-	for test in "${integration_tests[@]}"; do
-		if [ -f "$test" ]; then
-			if run_test "$test"; then
-				((passed++))
-			else
-				((failed++))
-			fi
-		else
-			echo -e "${YELLOW}⊘ SKIPPED${NC}: $test (not found)"
-			((skipped++))
-		fi
-	done
+	echo -e "${YELLOW}⚠  WARNING: Environment tests touch real infrastructure (E2E pools, remote hosts).${NC}"
+	echo -e "${YELLOW}   Only run these when no E2E tests are active and the target hosts are available.${NC}"
+	run_category "ENVIRONMENT TESTS (real infrastructure)" env_tests
 fi
 
 # Summary
@@ -151,4 +253,3 @@ else
 	echo -e "${RED}╚════════════════════════════════════════════════════════════╝${NC}"
 	exit 1
 fi
-
