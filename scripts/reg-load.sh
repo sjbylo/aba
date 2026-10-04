@@ -187,7 +187,7 @@ aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port reg_path=$reg_
 
 # Can the registry mirror already be reached?
 # Support both Quay and Docker registries with different health endpoints
-aba_info "Probing mirror registry at $reg_url"
+aba_debug "Probing mirror registry at $reg_url"
 
 if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
 	aba_debug "Quay registry detected and accessible"
