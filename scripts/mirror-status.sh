@@ -152,7 +152,7 @@ preflight)
 		aba_warn "Upgrade target set (${_ver} → ${_upgrade_to}) but release images are excluded." \
 			"The upgrade will fail without release images."
 		if ask "Include release images"; then
-			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+			replace-value-conf -n excl_platform -v "false" -f "../aba.conf"
 			_excl_platform=false
 			aba_info "Enabled release images in aba.conf (excl_platform=false)."
 			aba_info "Regenerating ImageSet configuration..."

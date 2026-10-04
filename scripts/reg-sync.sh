@@ -79,7 +79,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	if [ "${excl_platform:-}" = "true" ]; then
 		aba_warn "Upgrade target set (${ocp_upgrade_to}) but excl_platform=true — release images would be missing." \
 			"Switching excl_platform=false in aba.conf to include release images."
-		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+		replace-value-conf -n excl_platform -v "false" -f "../aba.conf"
 		excl_platform=false
 	fi
 fi
