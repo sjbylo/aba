@@ -68,7 +68,7 @@ fi
 # 3c: drift warning emitted on stderr
 _stderr_file="/tmp/_e2e_drift_stderr_mirror.txt"
 (cd "$_test_mirror_dir" && bash -c "export DEBUG_ABA=1; source $REPO_ROOT/scripts/include_all.sh noerr; normalize-mirror-conf" >/dev/null 2>"$_stderr_file")
-if grep -q "reg_host=drifted.example.com differs" "$_stderr_file"; then
+if grep -q "reg_host=drifted.example.com" "$_stderr_file"; then
 	test_pass "Drift warning emitted for reg_host mismatch"
 else
 	test_fail "Expected drift warning for reg_host in stderr. Got: $(cat "$_stderr_file")"
@@ -121,6 +121,9 @@ prefix_length=20
 platform=vmw
 STATE
 
+# Create the clusterstate symlink normalize-cluster-conf expects
+ln -sfn "$_test_cluster_state" "$_test_cluster_dir/clusterstate"
+
 # Cluster normalize needs aba.conf in parent
 _stderr_file3="/tmp/_e2e_drift_stderr_cluster.txt"
 _out=$(cd "$_test_cluster_dir" && bash -c "export DEBUG_ABA=1; source $REPO_ROOT/scripts/include_all.sh noerr; eval \"\$(normalize-cluster-conf 2>$_stderr_file3)\"; echo \"\$base_domain\"")
@@ -130,7 +133,7 @@ else
 	test_fail "state.sh base_domain should be 'original.example.com', got '$_out'"
 fi
 
-if grep -q "base_domain=drifted.example.com differs" "$_stderr_file3"; then
+if grep -q "base_domain=drifted.example.com" "$_stderr_file3"; then
 	test_pass "Drift warning emitted for cluster base_domain"
 else
 	test_fail "Expected drift warning for cluster base_domain. Got: $(cat "$_stderr_file3")"

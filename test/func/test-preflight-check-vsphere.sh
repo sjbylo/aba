@@ -923,10 +923,10 @@ _reset_path_state
 export VC=
 unset GOVC_DATACENTER GOVC_CLUSTER
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-banner=$(grep -c '^OK: vSphere: ESXi detected' "$_smoke_out" || true)
-ds_ok=$(grep -c "^OK: vSphere: datastore '/ha-datacenter/datastore/" "$_smoke_out" || true)
-net_ok=$(grep -c "^OK: vSphere: network '/ha-datacenter/network/" "$_smoke_out" || true)
-priv_skip=$(grep -c 'ESXi detected, skipping vCenter privilege scope checks' "$_smoke_out" || true)
+banner=$(grep -c '^OK: ESXi: direct host detected' "$_smoke_out" || true)
+ds_ok=$(grep -c "^OK: ESXi: datastore '/ha-datacenter/datastore/" "$_smoke_out" || true)
+net_ok=$(grep -c "^OK: ESXi: network '/ha-datacenter/network/" "$_smoke_out" || true)
+priv_skip=$(grep -c 'skipping vCenter privilege scope checks' "$_smoke_out" || true)
 cluster_probe=$(grep -c "cluster '/" "$_smoke_out" || true)
 rp_probe=$(grep -c 'resource pool' "$_smoke_out" || true)
 if [ "$banner" -eq 1 ] && [ "$ds_ok" -eq 1 ] && [ "$net_ok" -eq 1 ] && [ "$priv_skip" -eq 1 ] && [ "$cluster_probe" -eq 0 ] && [ "$rp_probe" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
@@ -941,9 +941,9 @@ _reset_path_state
 export VC=
 unset GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATASTORE GOVC_NETWORK GOVC_DATACENTER GOVC_CLUSTER
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-err_count=$(grep -c '^ERROR: vSphere: required field' "$_smoke_out" || true)
-dc_err=$(grep -c "^ERROR: vSphere: required field 'GOVC_DATACENTER'" "$_smoke_out" || true)
-cluster_err=$(grep -c "^ERROR: vSphere: required field 'GOVC_CLUSTER'" "$_smoke_out" || true)
+err_count=$(grep -c '^ERROR: ESXi: required field' "$_smoke_out" || true)
+dc_err=$(grep -c "^ERROR: ESXi: required field 'GOVC_DATACENTER'" "$_smoke_out" || true)
+cluster_err=$(grep -c "^ERROR: ESXi: required field 'GOVC_CLUSTER'" "$_smoke_out" || true)
 if [ "$err_count" -eq 5 ] && [ "$dc_err" -eq 0 ] && [ "$cluster_err" -eq 0 ] && [ "$_preflight_errors" -eq 5 ]; then
 	test_pass "Path CC: ESXi missing fields -> 5 ERROR lines, DC/Cluster not required"
 else
@@ -957,8 +957,8 @@ export VC=
 unset GOVC_DATACENTER GOVC_CLUSTER
 export GOVC_NETWORK=Missing
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-err_line=$(grep -c "^ERROR: vSphere: network '/ha-datacenter/network/Missing' not found" "$_smoke_out" || true)
-warn_label=$(grep -c "^WARN: vSphere: network '/ha-datacenter/network/Missing' not found" "$_smoke_out" || true)
+err_line=$(grep -c "^ERROR: ESXi: network '/ha-datacenter/network/Missing' not found" "$_smoke_out" || true)
+warn_label=$(grep -c "^WARN: ESXi: network '/ha-datacenter/network/Missing' not found" "$_smoke_out" || true)
 if [ "$err_line" -eq 1 ] && [ "$warn_label" -eq 0 ] && [ "$_preflight_errors" -eq 1 ]; then
 	test_pass "Path DD: ESXi bad network -> ERROR-labelled line + errors=1 (no Warning mislabel)"
 else

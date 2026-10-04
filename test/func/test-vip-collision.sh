@@ -85,10 +85,10 @@ _test_vip() {
 	starting_ip=$starting_ip
 	num_masters=$num_masters
 	num_workers=$num_workers
-	machine_network=${machine_network:-10.0.0.0}
-	prefix_length=${prefix_length:-20}
-	next_hop_address=${next_hop_address:-10.0.0.1}
-	dns_servers=${dns_servers:-10.0.1.8}
+	machine_network=10.0.0.0
+	prefix_length=20
+	next_hop_address=10.0.0.1
+	dns_servers=10.0.1.8
 	hostPrefix=23
 	mac_prefix=00:50:56:2x:xx:
 	master_prefix=master
@@ -256,8 +256,8 @@ _test_auto_alloc() {
 	num_workers=$num_workers
 	machine_network=$machine_net
 	prefix_length=$prefix_len
-	next_hop_address=${next_hop_address:-10.0.0.1}
-	dns_servers=${dns_servers:-10.0.1.8}
+	next_hop_address=10.0.0.1
+	dns_servers=10.0.1.8
 	hostPrefix=23
 	mac_prefix=00:50:56:2x:xx:
 	master_prefix=master

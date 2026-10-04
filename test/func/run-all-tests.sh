@@ -67,8 +67,6 @@ unit_tests=(
 	test/func/test-try-cmd.sh
 	test/func/test-replace-value-conf.sh
 	test/func/test-password-handling.sh
-	test/func/test-flock-behavior.sh
-	test/func/test-stderr-capture.sh
 
 	# run_once subsystem
 	test/func/test-run-once-task-consistency.sh

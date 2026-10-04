@@ -57,12 +57,17 @@ CONF
 
 # Create the full marker chain so make sees everything as up-to-date.
 # Makefile dependency order (each must be newer than its prerequisites):
-#   .init → cluster.conf/mirror.conf → install-config.yaml → ISO
+#   .init → cluster.conf/mirror.conf → .resolve-vips → .infra-dns →
+#   install-config.yaml → .preflight-done → ISO
 # Use current timestamps with sleep to guarantee ordering.
 # Must be newer than real files like /home/steve/bin/openshift-install.
 touch "$CLUSTER/.init"
 sleep 0.2
 touch "$CLUSTER/mirror.conf" "$CLUSTER/cluster.conf" "$CLUSTER/.cli"
+sleep 0.2
+touch "$CLUSTER/.resolve-vips"
+sleep 0.2
+touch "$CLUSTER/.infra-dns"
 sleep 0.2
 touch "$CLUSTER/install-config.yaml" "$CLUSTER/agent-config.yaml" "$CLUSTER/.preflight-done"
 sleep 0.2
@@ -141,6 +146,10 @@ touch "$CLUSTER/.init"
 sleep 0.2
 touch "$CLUSTER/vmware.conf" "$CLUSTER/mirror.conf" "$CLUSTER/cluster.conf" "$CLUSTER/.cli"
 sleep 0.2
+touch "$CLUSTER/.resolve-vips"
+sleep 0.2
+touch "$CLUSTER/.infra-dns"
+sleep 0.2
 touch "$CLUSTER/install-config.yaml" "$CLUSTER/agent-config.yaml" "$CLUSTER/.preflight-done"
 sleep 0.2
 touch "$CLUSTER/iso-agent-based/agent.$(uname -m).iso"
@@ -217,6 +226,10 @@ rm -f "$CLUSTER/.auto-agent-up" "$CLUSTER/.autopoweroff" "$CLUSTER/.autoupload" 
 touch "$CLUSTER/.init"
 sleep 0.2
 touch "$CLUSTER/mirror.conf" "$CLUSTER/cluster.conf" "$CLUSTER/.cli"
+sleep 0.2
+touch "$CLUSTER/.resolve-vips"
+sleep 0.2
+touch "$CLUSTER/.infra-dns"
 sleep 0.2
 touch "$CLUSTER/install-config.yaml" "$CLUSTER/agent-config.yaml" "$CLUSTER/.preflight-done"
 sleep 0.2
