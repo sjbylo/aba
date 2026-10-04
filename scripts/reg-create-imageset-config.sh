@@ -310,7 +310,11 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 			fi
 
-			aba_info "Upgrade mode: $ocp_version → $ocp_upgrade_to (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+			if [ "${excl_platform:-}" ]; then
+				aba_debug "Upgrade target set ($ocp_version → $ocp_upgrade_to) but release images excluded"
+			else
+				aba_info "Upgrade mode: $ocp_version → $ocp_upgrade_to (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+			fi
 
 			_upath=$(compute_upgrade_path "$ocp_version" "$ocp_upgrade_to" "${ocp_channel}-${tgt_major}" 2>/dev/null) || true
 			export upgrade_path="${_upath:-}"
