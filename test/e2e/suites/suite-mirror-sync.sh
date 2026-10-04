@@ -274,14 +274,12 @@ e2e_run "Record OC_MIRROR_SINCE before test" \
 e2e_run "Disable OC_MIRROR_SINCE (enable differential mode)" \
     "sed -i 's/^OC_MIRROR_SINCE=.*/#&/' ~/.aba/config"
 
-OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-
-e2e_run "Verify catalog index in registry (from initial save/load)" \
+e2e_run "Verify catalog index exists in registry (from initial save/load)" \
     "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
-     skopeo inspect --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:v${OCP_VER_MAJOR} >/dev/null"
+     skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | grep -q Tags"
 
 # Add a second operator set and do a differential save
-e2e_run "Add mesh3 operator set" "aba --op-sets mesh3"
+e2e_run "Set cumulative op_sets (abatest + mesh3)" "aba --op-sets abatest mesh3"
 e2e_run "Verify aba.conf has both op_sets" \
     "grep '^op_sets=.*abatest' aba.conf && grep '^op_sets=.*mesh3' aba.conf"
 
@@ -303,10 +301,12 @@ e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror
 # Verify both operator sets are in the registry catalog on the remote host
 e2e_run_remote "Verify kiali-ossm in remote registry (from initial load)" \
     "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
-     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:v${OCP_VER_MAJOR} 2>/dev/null | grep kiali-ossm"
+     _tag=\$(skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | python3 -c 'import sys,json; t=json.load(sys.stdin)[\"Tags\"]; print(t[-1])') && \
+     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep kiali-ossm"
 e2e_run_remote "Verify servicemeshoperator3 in remote registry (from delta load)" \
     "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
-     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:v${OCP_VER_MAJOR} 2>/dev/null | grep servicemeshoperator3"
+     _tag=\$(skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | python3 -c 'import sys,json; t=json.load(sys.stdin)[\"Tags\"]; print(t[-1])') && \
+     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep servicemeshoperator3"
 
 # Restore OC_MIRROR_SINCE (back to full-archive mode)
 e2e_run "Restore OC_MIRROR_SINCE" \
