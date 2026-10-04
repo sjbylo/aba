@@ -769,9 +769,11 @@ normalize-cluster-conf()
 	elif [ -s cluster.conf ]; then
 		# Legacy format — derive image_source from old keys
 		local _ic _mn
-		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+		# Optional legacy keys. A missing line makes grep exit 1; with pipefail
+		# that aborts this function under set -e and drops cluster_name.
+		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs) || true
 		[[ "$_ic" == "none" ]] && _ic=""
-		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs) || true
 		_mn=${_mn:-mirror}
 		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
 			_is="$_ic"
@@ -1102,7 +1104,7 @@ _state_override_cluster() {
 	source "$_state"
 
 	for _field in $_status; do
-		_sval="${!_field}"
+		_sval="${!_field:-}"
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
@@ -1144,7 +1146,7 @@ _state_override_mirror() {
 	source "$_state"
 
 	for _field in $_status; do
-		_sval="${!_field}"
+		_sval="${!_field:-}"
 		[ -z "$_sval" ] && continue
 		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
