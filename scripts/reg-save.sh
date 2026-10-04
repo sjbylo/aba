@@ -31,7 +31,7 @@ require_internet_and_pull_secret
 
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
 _verify_versions="v${ocp_version}"
-[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
+[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && [ "${excl_platform:-}" != "true" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
 aba_info "Verifying release image availability for ${_verify_versions} ..."
 if ! verify_release_version_exists "$ocp_version"; then
 	aba_abort \
