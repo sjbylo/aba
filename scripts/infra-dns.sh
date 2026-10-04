@@ -37,20 +37,19 @@ case "${1:-}" in
 		[ -z "$base_domain" ] && aba_abort "infra-dns.sh add-cluster: base_domain not set in cluster.conf"
 
 		# Determine IPs for DNS records.
-		# verify-config.sh runs before this script (Makefile dependency order)
-		# and populates api_vip/ingress_vip in cluster.conf (from DNS or
-		# auto-allocation).  We just read them here.
-		# SNO: starting_ip serves as both api and apps.
-		if [ "${api_vip:-}" ] && [ "${ingress_vip:-}" ]; then
-			api_ip="$api_vip"
-			apps_ip="$ingress_vip"
-		elif [ "${num_masters:-1}" = "1" ] && [ "${num_workers:-0}" = "0" ] && [ "${starting_ip:-}" ]; then
-			# SNO: single node uses starting_ip for everything
+		# .resolve-vips runs first and fills api_vip/ingress_vip for a multi-node
+		# cluster. SNO ignores those fields: both names point at starting_ip.
+		# verify-config.sh runs after this script and checks the records.
+		if [ "${num_masters:-}" = "1" ] && [ "${num_workers:-0}" = "0" ]; then
+			[ -n "${starting_ip:-}" ] || aba_abort "infra-dns.sh add-cluster: starting_ip is not set for single-node cluster."
 			api_ip="$starting_ip"
 			apps_ip="$starting_ip"
+		elif [ "${api_vip:-}" ] && [ "${ingress_vip:-}" ]; then
+			api_ip="$api_vip"
+			apps_ip="$ingress_vip"
 		else
 			aba_abort "infra-dns.sh add-cluster: api_vip and ingress_vip not set in cluster.conf." \
-				"Run 'aba verify' first, or set VIPs explicitly in cluster.conf."
+				"Set api_vip and ingress_vip in cluster.conf."
 		fi
 
 		_conf="/etc/dnsmasq.d/aba-${cluster_name}.${base_domain}.conf"
