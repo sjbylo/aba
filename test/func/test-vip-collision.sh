@@ -22,12 +22,13 @@ source scripts/include_all.sh
 _pass=0
 _fail=0
 _total=0
-_test_dirs=()
+
+# All test dirs live under a single tmpdir — one rm cleans everything,
+# even if the test is interrupted.
+_test_tmpdir=$(mktemp -d)
 
 _cleanup() {
-	for d in "${_test_dirs[@]}"; do
-		[ -d "$d" ] && rm -rf "$d"
-	done
+	rm -rf "$_test_tmpdir"
 }
 trap _cleanup EXIT
 
@@ -63,17 +64,19 @@ _test_vip() {
 	_total=$(( _total + 1 ))
 
 	local cname="viptest$_total"
-	local cdir="$ABA_ROOT/$cname"
+	local cdir="$_test_tmpdir/$cname"
 
 	# Clean up any previous run
 	[ -d "$cdir" ] && rm -rf "$cdir"
-	_test_dirs+=("$cdir")
 
 	# Create a proper cluster dir via make init (sets up symlinks)
 	mkdir -p "$cdir"
 	cd "$cdir"
-	ln -fs ../templates/Makefile.cluster Makefile
-	make -s init 2>/dev/null || true
+	ln -fs "$ABA_ROOT/templates/Makefile.cluster" Makefile
+	ln -fs "$ABA_ROOT/scripts" scripts
+	ln -fs "$ABA_ROOT/templates" templates
+	ln -fs "$ABA_ROOT/cli" cli
+	ln -fs "$ABA_ROOT/aba.conf" "$_test_tmpdir/aba.conf"
 
 	# Write cluster.conf with the test values
 	source <(normalize-aba-conf)
@@ -235,15 +238,17 @@ _test_auto_alloc() {
 	_total=$(( _total + 1 ))
 
 	local cname="autotest$_total"
-	local cdir="$ABA_ROOT/$cname"
+	local cdir="$_test_tmpdir/$cname"
 
 	[ -d "$cdir" ] && rm -rf "$cdir"
-	_test_dirs+=("$cdir")
 
 	mkdir -p "$cdir"
 	cd "$cdir"
-	ln -fs ../templates/Makefile.cluster Makefile
-	make -s init 2>/dev/null || true
+	ln -fs "$ABA_ROOT/templates/Makefile.cluster" Makefile
+	ln -fs "$ABA_ROOT/scripts" scripts
+	ln -fs "$ABA_ROOT/templates" templates
+	ln -fs "$ABA_ROOT/cli" cli
+	ln -fs "$ABA_ROOT/aba.conf" "$_test_tmpdir/aba.conf"
 
 	source <(normalize-aba-conf)
 	cat > cluster.conf <<-EOF
