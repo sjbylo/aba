@@ -63,7 +63,11 @@ _test_dir=$(mktemp -d)
 cat > "$_test_dir/cluster.conf" <<-EOF
 cluster_name=testcluster
 base_domain=example.com
+num_masters=1
+num_workers=0
 starting_ip=10.99.99.99
+api_vip=10.0.1.50
+ingress_vip=10.0.1.51
 EOF
 
 (cd "$_test_dir" && $OLDPWD/scripts/infra-dns.sh add-cluster)
@@ -132,6 +136,8 @@ _bf_dir=$(mktemp -d -p "$PWD" backfill-XXXXXX)
 cat > "$_bf_dir/cluster.conf" <<-EOF
 cluster_name=backfilltest
 base_domain=example.com
+num_masters=1
+num_workers=0
 starting_ip=10.77.77.77
 EOF
 touch "$_bf_dir/.infra-dns"
