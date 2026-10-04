@@ -582,8 +582,8 @@ test_begin "Incremental: mesh operators"
 # (op_set A was loaded earlier via the initial bundle; now adding op_set B).
 # ABA's ISC generator (imagesetconf) must produce a config that includes BOTH
 # old and new operators so oc-mirror's diskToMirror can rebuild the catalog.
-e2e_run "Add mesh operator set via CLI" "aba --op-sets mesh3"
-e2e_run "Verify aba.conf has cumulative op_sets" \
+e2e_run "Set cumulative op_sets (abatest + mesh3)" "aba --op-sets abatest mesh3"
+e2e_run "Verify aba.conf has both op_sets" \
     "grep '^op_sets=.*abatest' aba.conf && grep '^op_sets=.*mesh3' aba.conf"
 
 e2e_run "Regenerate ISC with all operators (ABA CLI flow)" \
