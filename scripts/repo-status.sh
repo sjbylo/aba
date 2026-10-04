@@ -163,7 +163,7 @@ for _d in */cluster.conf; do
 		_cluster_dirs+=("$_dir")
 		_cluster_configured_dirs+=("$_dir")
 	elif [ -f "$_dir/cluster.conf" ]; then
-		# Has cluster.conf but no .init — configured only
+		# Has cluster.conf but no .init — cleaned, ready to rebuild
 		_cluster_count=$(( _cluster_count + 1 ))
 		_cluster_configured=$(( _cluster_configured + 1 ))
 		_cluster_configured_dirs+=("$_dir")
