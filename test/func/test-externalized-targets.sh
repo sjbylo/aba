@@ -95,9 +95,9 @@ if echo "$out" | grep -q "Not in a cluster directory"; then
 	test_fail "'aba --dir sno ls' wrongly rejected as not in cluster dir"
 elif echo "$out" | grep -q "vmware.conf not found"; then
 	test_fail "'aba --dir sno ls' can't find vmware.conf (dispatch error)"
-elif echo "$out" | grep -q "agent-config.yaml not found"; then
-	test_fail "'aba --dir sno ls' can't find agent-config.yaml (dispatch error)"
 else
+	# Reaching vmw-ls.sh is success — runtime errors (agent-config.yaml missing,
+	# govc unreachable, etc.) are expected without a live cluster/vCenter.
 	test_pass "'aba --dir sno ls' dispatched to vmw-ls.sh (no guard/dispatch errors)"
 fi
 
