@@ -639,7 +639,7 @@ _ensure_platform_for_upgrade() {
 			tui_log "Guard: excl_platform switched to false for upgrade to $_target"
 			;;
 		3)	# Extra — disable upgrade target
-			replace-value-conf -n ocp_upgrade_to -v "" -f "$ABA_ROOT/aba.conf"
+			replace-value-conf -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 			tui_log "Guard: ocp_upgrade_to cleared (upgrade disabled)"
 			;;
 		*)	# No — keep as-is
@@ -1046,8 +1046,6 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	replace-value-conf -q -n ocp_upgrade_to -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
 	ocp_upgrade_to="$_target_ver"
 
-	_ensure_platform_for_upgrade
-
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
 		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to refresh)" 0 0
@@ -1056,6 +1054,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	local rc=0
 	case "$_upg_method" in
 		1)
+			_ensure_platform_for_upgrade
 			if ! mirror_available; then
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then upgrade images will be synced.\n\nContinue?" 0 0
@@ -1075,6 +1074,7 @@ Next steps:\n\n\
 			fi
 			;;
 		2)
+			_ensure_platform_for_upgrade
 			confirm_and_execute \
 				"aba --dir mirror --upgrade-to $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}"

@@ -150,16 +150,8 @@ preflight)
 	# Interactive checks -- fix blocking issues using ask()
 	if [ "$_upgrade_needs_platform" = "true" ]; then
 		aba_warn "Upgrade target set (${_ver} → ${_upgrade_to}) but release images are excluded." \
-			"The upgrade will fail without release images."
-		if ask "Include release images"; then
-			replace-value-conf -n excl_platform -v "false" -f "../aba.conf"
-			_excl_platform=false
-			aba_info "Enabled release images in aba.conf (excl_platform=false)."
-			aba_info "Regenerating ImageSet configuration..."
-			scripts/reg-create-imageset-config.sh -f 1
-		else
-			aba_warn "Continuing WITHOUT release images. The upgrade may fail on the disconnected side."
-		fi
+			"The upgrade will fail without release images on the disconnected side." \
+			"To fix: set excl_platform=false in aba.conf, or clear ocp_upgrade_to in mirror.conf."
 	fi
 	;;
 

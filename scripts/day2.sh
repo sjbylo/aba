@@ -210,6 +210,8 @@ $(cat "$regcreds_dir/rootCA.pem")"
 		aba_abort "Timed out patching cluster trust CA (3 min)"
 	fi
 
+	aba_info "Waiting for cluster to accept the new registry CA before continuing ..."
+
 	_day2_imagestream_available() {
 		aba_debug "Running: oc get imagestream"
 		oc get imagestream >/dev/null 2>&1
