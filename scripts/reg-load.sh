@@ -113,9 +113,8 @@ _transfer_meta_chan=""
 # --- Guard: warn if transfer tar is missing (user may have copied only mirror_*.tar) ---
 if [ ! -f "$_transfer_tar" ]; then
 	aba_warn "No aba-transfer.tar found alongside mirror_*.tar archives." \
-		"This file contains the matching config and metadata." \
-		"Ensure you copied ALL *.tar files from mirror/data/." \
-		"Continuing with existing local ISC."
+		"Using the existing local ISC (data/imageset-config.yaml)." \
+		"To use the connected side's ISC, re-copy all *.tar files from mirror/data/."
 fi
 
 if [ -f "$_transfer_tar" ]; then
@@ -123,16 +122,25 @@ if [ -f "$_transfer_tar" ]; then
 
 	_backup_configs
 
+	# Detect user-edited ISC: if ISC is newer than .created, the user has
+	# customized it on this (disconnected) side. Skip extracting the ISC
+	# from the transfer tar so the user's version is preserved.
+	_tar_exclude=""
+	if [ -f "data/imageset-config.yaml" ] && [ -f "data/.created" ] \
+	   && [ "data/imageset-config.yaml" -nt "data/.created" ]; then
+		aba_warn "Local ISC has been edited — preserving your version."
+		_tar_exclude="--exclude=mirror/data/imageset-config.yaml --exclude=mirror/data/imageset-config-digest.yaml"
+	fi
+
 	# Drop leftovers from a prior load before unpack. Non-upgrade transfer tars
 	# omit metadata (and sometimes the digest ISC); tar xf will not remove
 	# pre-existing files, so a stale aba-transfer-metadata.json would be
 	# validated against the newly unpacked digest ISC (false checksum mismatch).
-	rm -f data/aba-transfer-metadata.json \
-		data/imageset-config.yaml \
-		data/imageset-config-digest.yaml
+	rm -f data/aba-transfer-metadata.json
+	[ -z "$_tar_exclude" ] && rm -f data/imageset-config.yaml data/imageset-config-digest.yaml
 
 	# Unpack from aba root (CWD is mirror/, aba root is ..)
-	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
+	if ! ( cd .. && tar xf "mirror/$_transfer_tar" $_tar_exclude ); then
 		aba_abort "Failed to unpack transfer config ($_transfer_tar)." \
 			"The file may be corrupt. Re-copy mirror/data/*.tar from the connected host."
 	fi

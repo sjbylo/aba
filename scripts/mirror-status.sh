@@ -256,7 +256,9 @@ op)
 	_isc_display="not found"
 	if [ "$_isc_exists" = "true" ]; then
 		_isc_display="data/imageset-config.yaml"
-		[ "$_isc_user_managed" = "true" ] && _isc_display="$_isc_display (user-managed)"
+		if [ "$_isc_user_managed" = "true" ]; then
+			_isc_display="$_isc_display (user-edited, preserved on load)"
+		fi
 	fi
 
 	echo
