@@ -577,43 +577,25 @@ test_end
 # ============================================================================
 test_begin "Incremental: mesh operators"
 
-e2e_run "Add mesh operator set" "aba --op-sets mesh3"
+# Use ABA's real CLI flow: add mesh3 op_set → regenerate ISC → save → transfer → load.
+# This tests the actual user workflow for adding a second batch of operators
+# (op_set A was loaded earlier via the initial bundle; now adding op_set B).
+# ABA's ISC generator (imagesetconf) must produce a config that includes BOTH
+# old and new operators so oc-mirror's diskToMirror can rebuild the catalog.
+e2e_run "Add mesh operator set via CLI" "aba --op-sets mesh3"
+e2e_run "Verify aba.conf has cumulative op_sets" \
+    "grep '^op_sets=.*abatest' aba.conf && grep '^op_sets=.*mesh3' aba.conf"
 
-# Simulate user waiting for background catalog downloads to complete.
-# In normal use, 'aba save' / 'aba sync' run catalogs-wait automatically via
-# Makefile dependencies (imageset-config.yaml depends on catalogs-download
-# catalogs-wait).  Here we call it explicitly because this test manually reads
-# values from the generated catalog YAML to build a custom imageset config --
-# the same thing a user would do by consulting the catalog reference file.
-OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-e2e_run "Wait for catalog downloads" "make -sC mirror catalogs-wait"
-e2e_run "Verify catalog YAML exists" \
-    "test -s mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
-e2e_run "Verify servicemeshoperator3 in catalog" \
-    "grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
-
-# Save+Load config: ALL operators (old + new) so the archive is self-contained.
-# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators
-# not in the archive cause oc-mirror to reach upstream (fails on disconnected
-# hosts).  No platform section -- oc-mirror v2 errors with "no release images
-# found" when platform is present but the delta tar has no release images.
-# oc-mirror only saves the delta since the last mirrorToDisk, so including
-# already-mirrored operators (kiali-ossm) adds negligible overhead.
-e2e_run "Create config with all operators for save+load" \
-    "cat > mirror/data/imageset-config.yaml <<EOF
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
-mirror:
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
-    packages:
-\$(grep -A2 'name: kiali-ossm\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
-\$(grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
-EOF"
-e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
+e2e_run "Regenerate ISC with all operators (ABA CLI flow)" \
+    "aba -d mirror imagesetconf"
+e2e_diag "Show generated ISC" "cat mirror/data/imageset-config.yaml"
+e2e_run "Verify ISC has kiali-ossm (from abatest)" \
+    "grep 'kiali-ossm' mirror/data/imageset-config.yaml"
+e2e_run "Verify ISC has servicemeshoperator3 (from mesh3)" \
+    "grep 'servicemeshoperator3' mirror/data/imageset-config.yaml"
 
 e2e_snapshot_file "mesh-save" "mirror/data/imageset-config.yaml"
-e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
+e2e_run -r 3 2 "Save mesh operator images (ABA CLI)" "aba -d mirror save --retry"
 
 e2e_run "Transfer archive to internal bastion" \
     "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
@@ -626,11 +608,13 @@ e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror
 e2e_run_remote "Apply day2 config (mesh operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"
 
-# Verify previously loaded operators survived the incremental load.
-# oc-mirror rebuilds the catalog index during load; a partial config would
-# silently drop operators not listed (see ai/OC-MIRROR-INTERNALS.md).
-e2e_poll_remote 180 15 "Verify kiali-ossm still in OperatorHub after mesh load" \
+# Verify BOTH operator sets are available on disco after incremental load.
+# This is the key test: did the cumulative ISC (abatest + mesh3) produce
+# an archive that preserved the original operators AND added the new ones?
+e2e_poll_remote 180 15 "Verify kiali-ossm in OperatorHub (from initial load)" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^kiali-ossm"
+e2e_poll_remote 180 15 "Verify servicemeshoperator3 in OperatorHub (from mesh3 load)" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^servicemeshoperator3"
 
 test_end
 

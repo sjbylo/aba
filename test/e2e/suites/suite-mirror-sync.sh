@@ -41,6 +41,7 @@ plan_tests \
     "Quay-ng: remote install, verify, uninstall" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
+    "Differential: incremental operator save/load" \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
     "Bare-metal: ISO simulation" \
@@ -256,6 +257,62 @@ e2e_run "Verify no active --remove-signatures in config" \
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*'"
+
+test_end
+
+# ============================================================================
+# 6b. Differential save/load: incremental operator transfer
+# ============================================================================
+# Tests oc-mirror's differential mode (no --since): add operator B after
+# operator A was already saved+loaded, transfer only the delta, and verify
+# both operators are present in the registry on the remote host.
+test_begin "Differential: incremental operator save/load"
+
+e2e_run "Record OC_MIRROR_SINCE before test" \
+    "grep '^OC_MIRROR_SINCE' ~/.aba/config || echo 'OC_MIRROR_SINCE not set'"
+
+e2e_run "Disable OC_MIRROR_SINCE (enable differential mode)" \
+    "sed -i 's/^OC_MIRROR_SINCE=.*/#&/' ~/.aba/config"
+
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+
+e2e_run "Verify catalog index in registry (from initial save/load)" \
+    "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     skopeo inspect --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:v${OCP_VER_MAJOR} >/dev/null"
+
+# Add a second operator set and do a differential save
+e2e_run "Add mesh3 operator set" "aba --op-sets mesh3"
+e2e_run "Verify aba.conf has both op_sets" \
+    "grep '^op_sets=.*abatest' aba.conf && grep '^op_sets=.*mesh3' aba.conf"
+
+e2e_run "Regenerate ISC with all operators" "aba -d mirror imagesetconf"
+e2e_run "Verify ISC has kiali-ossm" "grep 'kiali-ossm' mirror/data/imageset-config.yaml"
+e2e_run "Verify ISC has servicemeshoperator3" "grep 'servicemeshoperator3' mirror/data/imageset-config.yaml"
+
+e2e_run -r 3 2 "Differential save (no --since, delta only)" \
+    "aba -d mirror save --retry"
+
+e2e_run "Transfer delta archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove local archives" "rm -f mirror/data/mirror_*.tar"
+
+e2e_run_remote -r 3 2 "Load delta archive on remote host" \
+    "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
+
+# Verify both operator sets are in the registry catalog on the remote host
+e2e_run_remote "Verify kiali-ossm in remote registry (from initial load)" \
+    "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:v${OCP_VER_MAJOR} 2>/dev/null | grep kiali-ossm"
+e2e_run_remote "Verify servicemeshoperator3 in remote registry (from delta load)" \
+    "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:v${OCP_VER_MAJOR} 2>/dev/null | grep servicemeshoperator3"
+
+# Restore OC_MIRROR_SINCE (back to full-archive mode)
+e2e_run "Restore OC_MIRROR_SINCE" \
+    "sed -i 's/^#OC_MIRROR_SINCE=/OC_MIRROR_SINCE=/' ~/.aba/config"
+# Reset op_sets back to just abatest for remaining tests
+e2e_run "Reset op_sets to abatest" "aba --op-sets abatest"
 
 test_end
 
