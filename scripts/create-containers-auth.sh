@@ -24,6 +24,24 @@ fi
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
+# auths is a map keyed by registry host. The pull secret replaces that host
+# and leaves every other host and every other top-level key. Merging the same
+# secret again does not add entries.
+merge_container_auth() {
+	local src="$1" dest="$2" tmp
+	mkdir -p "$(dirname "$dest")"
+	if [ ! -s "$dest" ]; then
+		cp "$src" "$dest"
+		return 0
+	fi
+	tmp=$(mktemp "$(dirname "$dest")/.auth.XXXXXX")
+	if ! jq -s '.[0] * .[1]' "$dest" "$src" > "$tmp"; then
+		rm -f "$tmp"
+		aba_abort "Failed to merge container auth into $dest"
+	fi
+	mv "$tmp" "$dest"
+}
+
 if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then
 		aba_abort "Error: pull_secret_file not defined in aba.conf"
@@ -43,33 +61,33 @@ if [ -s $regcreds_dir/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Merge the two files
 	jq -s '.[0] * .[1]' $regcreds_dir/pull-secret-mirror.json $pull_secret_file > $regcreds_dir/pull-secret-full.json
 
-	# Copy into place 
-	aba_debug "Copying $regcreds_dir/pull-secret-full.json to ~/.docker/config.json and ~/.containers/auth.json"
-	cp $regcreds_dir/pull-secret-full.json ~/.docker/config.json
-	cp $regcreds_dir/pull-secret-full.json ~/.containers/auth.json
+	# Merge into place. Existing registry logins stay; the same host is replaced.
+	aba_debug "Merging $regcreds_dir/pull-secret-full.json into ~/.docker/config.json and ~/.containers/auth.json"
+	merge_container_auth "$regcreds_dir/pull-secret-full.json" ~/.docker/config.json
+	merge_container_auth "$regcreds_dir/pull-secret-full.json" ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Copying $regcreds_dir/pull-secret-full.json to $XDG_RUNTIME_DIR/containers/auth.json" 
-		cp $regcreds_dir/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json || true
+		aba_debug "Merging $regcreds_dir/pull-secret-full.json into $XDG_RUNTIME_DIR/containers/auth.json"
+		merge_container_auth "$regcreds_dir/pull-secret-full.json" "$XDG_RUNTIME_DIR/containers/auth.json" || true
 	fi
 
 # If the mirror creds are available add them also
 elif [ -s $regcreds_dir/pull-secret-mirror.json ]; then
-	aba_debug "Copying $regcreds_dir/pull-secret-mirror.json to ~/.docker/config.json and ~/.containers/auth.json"
-	cp $regcreds_dir/pull-secret-mirror.json ~/.docker/config.json
-	cp $regcreds_dir/pull-secret-mirror.json ~/.containers/auth.json
+	aba_debug "Merging $regcreds_dir/pull-secret-mirror.json into ~/.docker/config.json and ~/.containers/auth.json"
+	merge_container_auth "$regcreds_dir/pull-secret-mirror.json" ~/.docker/config.json
+	merge_container_auth "$regcreds_dir/pull-secret-mirror.json" ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Copying $regcreds_dir/pull-secret-mirror.json to $XDG_RUNTIME_DIR/containers/auth.json" 
-		cp $regcreds_dir/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
+		aba_debug "Merging $regcreds_dir/pull-secret-mirror.json into $XDG_RUNTIME_DIR/containers/auth.json"
+		merge_container_auth "$regcreds_dir/pull-secret-mirror.json" "$XDG_RUNTIME_DIR/containers/auth.json" || true
 	fi
 
 # Only use the Red Hat pull secret file
 elif [ -s $pull_secret_file ]; then
-	aba_debug "Copying $pull_secret_file to ~/.docker/config.json and ~/.containers/auth.json"
-	cp $pull_secret_file ~/.docker/config.json
-	cp $pull_secret_file ~/.containers/auth.json  
+	aba_debug "Merging $pull_secret_file into ~/.docker/config.json and ~/.containers/auth.json"
+	merge_container_auth "$pull_secret_file" ~/.docker/config.json
+	merge_container_auth "$pull_secret_file" ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Copying $pull_secret_file to $XDG_RUNTIME_DIR/containers/auth.json" 
-		cp $pull_secret_file $XDG_RUNTIME_DIR/containers/auth.json || true
+		aba_debug "Merging $pull_secret_file into $XDG_RUNTIME_DIR/containers/auth.json"
+		merge_container_auth "$pull_secret_file" "$XDG_RUNTIME_DIR/containers/auth.json" || true
 	fi
 
 else
