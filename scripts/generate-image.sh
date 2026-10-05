@@ -3,6 +3,17 @@
 
 source scripts/include_all.sh
 
+# cp into an existing directory nests a second copy inside it. Replace the
+# backup so auth.backup matches the auth directory just written.
+backup_auth_dir() {
+	local src="$1" dest="$2"
+	rm -rf "$dest"
+	cp -rp "$src" "$dest"
+}
+
+# Tests source this file to call backup_auth_dir. Do not build an ISO.
+[ "${BASH_SOURCE[0]}" != "$0" ] && return 0
+
 ensure_openshift_install
 
 aba_debug "Starting: $0 $*"
@@ -115,7 +126,7 @@ aba_debug "ISO generation completed successfully"
 #$openshift_install_mirror agent create pxe-files --dir $ASSETS_DIR
 
 aba_info "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
-cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
+backup_auth_dir "$ASSETS_DIR/auth" "$ASSETS_DIR/auth.backup"
 
 # Add NTP config to ignition, if needed
 # Note that the built in 'additionalNTPSources' feature is not available for all latest ocp versions, so we use this still:
