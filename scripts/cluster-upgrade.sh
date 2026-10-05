@@ -62,15 +62,17 @@ source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
 source <(normalize-mirror-conf)
 
-# Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
-scripts/create-containers-auth.sh --load >/dev/null
-
 # Preflight: kubeconfig (prefer externalized state, fall back to local)
+# Check this before writing container auth, so a missing cluster does not
+# rewrite ~/.docker/config.json.
 KUBECONFIG=$(cluster_kubeconfig)
 if [ -z "$KUBECONFIG" ]; then
 	aba_abort "kubeconfig not found. Expected at ~/.aba/clusters/$cluster_name.$base_domain/kubeconfig or iso-agent-based/auth/kubeconfig"
 fi
 export KUBECONFIG
+
+# Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
+scripts/create-containers-auth.sh --load >/dev/null
 
 ensure_oc
 

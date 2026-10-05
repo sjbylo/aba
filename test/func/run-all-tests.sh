@@ -93,6 +93,7 @@ unit_tests=(
 	test/func/test-vlan-bond-prefix.sh
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
+	test/func/test-install-stamp.sh
 	test/func/test-agent-wait-skip.sh
 	test/func/test-make-regen-install-config.sh
 	test/func/test-vm-power-helpers.sh
