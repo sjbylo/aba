@@ -46,13 +46,12 @@ declare -A wait_for_exit_reasons=(
     [8]="Interrupted"
 )
 
-if [ $ret -ne 0 ]; then
-	# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c), for that we don't want to show any errors. 
-	if [ $ret -ne 8 ]; then
-		echo_red "[ABA] Something went wrong with the bootstrap.  Fix the problem and try again!" >&2
-		[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
+# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c). Stay quiet, but
+# exit non-zero so Make does not create .bootstrap-complete.
+if ! exit_unless_install_finished "$ret"; then
+	echo_red "[ABA] Something went wrong with the bootstrap.  Fix the problem and try again!" >&2
+	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 
-		exit $ret
-	fi
+	exit $ret
 fi
 
