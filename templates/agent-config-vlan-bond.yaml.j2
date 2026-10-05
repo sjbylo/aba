@@ -48,7 +48,7 @@ hosts:
             enabled: true
             address:
               - ip: {{ arr_ips[hostcnt + ip_offset] }}
-                prefix-length: 24
+                prefix-length: {{ prefix_length }}
             dhcp: false
         - name: bond0 
           type: bond 
