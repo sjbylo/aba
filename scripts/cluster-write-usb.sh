@@ -10,6 +10,21 @@
 
 source scripts/include_all.sh
 
+# Usual system-disk names. USB_DEVICE is the documented override, so a name
+# the operator set on purpose is not refused.
+usb_system_disk_refused() {
+	local dev="$1"
+	# Operator already named the device. The abort text says this is the override.
+	[ -n "${USB_DEVICE:-}" ] && return 1
+	case "$dev" in
+		/dev/sda|/dev/nvme0n1|/dev/vda) return 0 ;;
+	esac
+	return 1
+}
+
+# Tests source this file to call usb_system_disk_refused. Do not touch a device.
+[ "${BASH_SOURCE[0]}" != "$0" ] && return 0
+
 source <(normalize-cluster-conf)
 
 ARCH=$(uname -m)
@@ -65,12 +80,10 @@ fi
 [ -b "$usb_dev" ] || aba_abort "Not a block device: $usb_dev"
 
 # Safety: refuse to write to anything that looks like a system disk
-case "$usb_dev" in
-	/dev/sda|/dev/nvme0n1|/dev/vda)
-		aba_abort "Refusing to write to $usb_dev (looks like a system disk)." \
-			"Use USB_DEVICE=<dev> to override if you are certain."
-		;;
-esac
+if usb_system_disk_refused "$usb_dev"; then
+	aba_abort "Refusing to write to $usb_dev (looks like a system disk)." \
+		"Use USB_DEVICE=<dev> to override if you are certain."
+fi
 
 dev_size=$(lsblk -b -d -n -o SIZE "$usb_dev" 2>/dev/null || echo "unknown")
 dev_model=$(lsblk -d -n -o MODEL "$usb_dev" 2>/dev/null | xargs || echo "unknown")
