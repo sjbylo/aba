@@ -39,6 +39,15 @@ distribute_macs() {
 
 	ports=$(( ${#mac_array[@]} / nodes ))
 
+	# A short list divides to 0 ports. The loop below uses that as a modulus.
+	# An empty list is left for the missing-field checks later in this script.
+	if [ "$ports" -eq 0 ]; then
+		if [ "${#mac_array[@]}" -gt 0 ]; then
+			aba_abort "Too few MAC addresses (${#mac_array[@]}) for $nodes nodes"
+		fi
+		return 0
+	fi
+
 	# Distribute MACs column-wise
 	for ((i=0; i<${#mac_array[@]}; i++)); do
 		pidx=$(( i % ports ))
@@ -96,10 +105,22 @@ echo "$CP_MAC_ADDRS" | grep -q "null" && CP_MAC_ADDRS=
 echo export CP_MAC_ADDRS=\"$CP_MAC_ADDRS\"
 
 CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
-PORTS_PER_NODE=$(expr ${#CP_MAC_ADDRS_ARRAY[@]} / $CP_REPLICAS)
-echo export PORTS_PER_NODE=\"$PORTS_PER_NODE\"
-
-distribute_macs "$CP_MAC_ADDRS" $CP_REPLICAS "CP_"
+# 0 is set, so the missing-count check below does not see it. expr would divide by it.
+if [ "$CP_REPLICAS" = 0 ]; then
+	aba_abort "Control Plane replica count .controlPlane.replicas must be at least 1"
+fi
+# A missing count is reported below. expr also exits 1 when the quotient is 0,
+# which used to stop the script before that message or the short-list message.
+if [ "$CP_REPLICAS" ]; then
+	PORTS_PER_NODE=$(expr ${#CP_MAC_ADDRS_ARRAY[@]} / $CP_REPLICAS) || [ "$PORTS_PER_NODE" = "0" ]
+	if [ "${#CP_MAC_ADDRS_ARRAY[@]}" -gt 0 ] && [ "$PORTS_PER_NODE" -eq 0 ]; then
+		aba_abort "Too few MAC addresses (${#CP_MAC_ADDRS_ARRAY[@]}) for $CP_REPLICAS nodes"
+	fi
+	if [ "$PORTS_PER_NODE" -gt 0 ]; then
+		echo export PORTS_PER_NODE=\"$PORTS_PER_NODE\"
+		distribute_macs "$CP_MAC_ADDRS" "$CP_REPLICAS" "CP_"
+	fi
+fi
 
 ### CP_MAC_ADDR=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress'`
 ### echo "$CP_MAC_ADDR" | grep -q "null" && CP_MAC_ADDR=
@@ -120,7 +141,7 @@ echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
 err=
 
-if [ $WORKER_REPLICAS -ne 0 ]; then
+if [ -n "$WORKER_REPLICAS" ] && [ "$WORKER_REPLICAS" -ne 0 ]; then
 	WORKER_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .hostname')
 	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
 	echo export WORKER_NAMES=\"$WORKER_NAMES\"
@@ -154,7 +175,7 @@ echo export ASSETS_DIR=$ASSETS_DIR
 [ ! "$CP_IP_ADDRESSES" ] && echo_red "Control Plane ip addresses .hosts[].role.master.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2  && err=1
 [ ! "$WORKER_REPLICAS" ] && echo_red "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
 
-if [ $WORKER_REPLICAS -ne 0 ]; then
+if [ -n "$WORKER_REPLICAS" ] && [ "$WORKER_REPLICAS" -ne 0 ]; then
 	# basic checks
 	[ ! "$WORKER_NAMES" ] && echo_red ".hosts[].role.worker.hostname missing in $ACONF" >&2 && err=1
 	[ ! "$WKR_MAC_ADDRS" ] && echo_red ".hosts[].role.worker.interfaces[].macAddress missing in $ACONF" >&2 && err=1
