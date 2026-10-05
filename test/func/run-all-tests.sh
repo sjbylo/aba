@@ -100,6 +100,7 @@ unit_tests=(
 	test/func/test-container-auth-merge.sh
 	test/func/test-image-digest.sh
 	test/func/test-reg-port.sh
+	test/func/test-day2-ntp-order.sh
 	test/func/test-agent-wait-skip.sh
 	test/func/test-make-regen-install-config.sh
 	test/func/test-vm-power-helpers.sh
