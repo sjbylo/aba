@@ -96,25 +96,35 @@ else
 		_try_api=$(( _start_int - 2 ))
 		_try_ing=$(( _start_int - 1 ))
 
+		# Candidates only. A VIP that is already a valid IP must stay.
+		_new_api=""
+		_new_ing=""
 		if [ "$_try_api" -gt "$_net_int" ] && [ "$_try_ing" -lt "$_net_end" ]; then
-			api_vip=$(int_to_ip "$_try_api")
-			ingress_vip=$(int_to_ip "$_try_ing")
+			_new_api=$(int_to_ip "$_try_api")
+			_new_ing=$(int_to_ip "$_try_ing")
 		else
 			# "Before" wraps out of subnet — place after last node (+10 gap)
 			_after_api=$(( _start_int + _node_count + 10 ))
 			_after_ing=$(( _start_int + _node_count + 11 ))
 			if [ "$_after_ing" -lt "$_net_end" ]; then
-				api_vip=$(int_to_ip "$_after_api")
-				ingress_vip=$(int_to_ip "$_after_ing")
+				_new_api=$(int_to_ip "$_after_api")
+				_new_ing=$(int_to_ip "$_after_ing")
 			else
 				aba_abort "Cannot auto-allocate VIPs: no room in subnet $machine_network/$prefix_length." \
 					"Set api_vip and ingress_vip explicitly in cluster.conf."
 			fi
 		fi
 
+		if ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; }; then
+			api_vip="$_new_api"
+			replace-value-conf -n api_vip -v "$api_vip" cluster.conf
+		fi
+		if ! { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
+			ingress_vip="$_new_ing"
+			replace-value-conf -n ingress_vip -v "$ingress_vip" cluster.conf
+		fi
+
 		aba_info "Auto-allocated VIPs: api_vip=$api_vip, ingress_vip=$ingress_vip (ABA-managed DNS)"
-		replace-value-conf -n api_vip -v "$api_vip" cluster.conf
-		replace-value-conf -n ingress_vip -v "$ingress_vip" cluster.conf
 
 	elif ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; }; then
 		# api_vip not set — try to back-fill from DNS
