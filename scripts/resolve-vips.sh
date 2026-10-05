@@ -39,6 +39,11 @@ fi
 
 _is_ip='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
 
+# dig +short can print a CNAME and then several addresses. The VIP is the first IPv4 line.
+first_ipv4() {
+	printf '%s\n' "$1" | grep -m1 -E "$_is_ip" || true
+}
+
 # If both VIPs are already set as valid IPs, skip DNS discovery
 if { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; } && \
    { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
@@ -128,10 +133,11 @@ else
 
 	elif ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; }; then
 		# api_vip not set — try to back-fill from DNS
-		if [ "$actual_ip_of_api" ] && echo "$actual_ip_of_api" | grep -q -E "$_is_ip"; then
-			aba_info "Resolved $cl_api_domain → $actual_ip_of_api (saved to $cluster_name/cluster.conf)"
-			replace-value-conf -q -n api_vip -v "$actual_ip_of_api" cluster.conf
-			api_vip=$actual_ip_of_api
+		_api_ip=$(first_ipv4 "$actual_ip_of_api")
+		if [ "$_api_ip" ]; then
+			aba_info "Resolved $cl_api_domain → $_api_ip (saved to $cluster_name/cluster.conf)"
+			replace-value-conf -q -n api_vip -v "$_api_ip" cluster.conf
+			api_vip=$_api_ip
 		else
 			aba_abort "Missing DNS record $cl_api_domain" \
 				"Create DNS records for api.$cluster_name.$base_domain or set api_vip in cluster.conf."
@@ -140,10 +146,11 @@ else
 
 	# Resolve ingress_vip (may already be set from auto-allocation above)
 	if ! { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
-		if [ "$actual_ip_of_ingress" ] && echo "$actual_ip_of_ingress" | grep -q -E "$_is_ip"; then
-			aba_info "Resolved $cl_ingress_domain → $actual_ip_of_ingress (saved to $cluster_name/cluster.conf)"
-			replace-value-conf -q -n ingress_vip -v "$actual_ip_of_ingress" cluster.conf
-			ingress_vip=$actual_ip_of_ingress
+		_ingress_ip=$(first_ipv4 "$actual_ip_of_ingress")
+		if [ "$_ingress_ip" ]; then
+			aba_info "Resolved $cl_ingress_domain → $_ingress_ip (saved to $cluster_name/cluster.conf)"
+			replace-value-conf -q -n ingress_vip -v "$_ingress_ip" cluster.conf
+			ingress_vip=$_ingress_ip
 		else
 			aba_abort "Missing DNS record $cl_ingress_domain!" \
 				"Create DNS records for *.apps.$cluster_name.$base_domain or set ingress_vip in cluster.conf."
