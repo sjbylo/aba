@@ -287,26 +287,18 @@ e2e_run "Regenerate ISC with all operators" "aba -d mirror imagesetconf"
 e2e_run "Verify ISC has kiali-ossm" "grep 'kiali-ossm' mirror/data/imageset-config.yaml"
 e2e_run "Verify ISC has servicemeshoperator3" "grep 'servicemeshoperator3' mirror/data/imageset-config.yaml"
 
-e2e_run -r 3 2 "Differential save (no --since, delta only)" \
-    "aba -d mirror save --retry"
-
-e2e_run "Transfer delta archive to internal bastion" \
-    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
-e2e_run -q "Remove local archives" "rm -f mirror/data/mirror_*.tar"
-
-e2e_run_remote -r 3 2 "Load delta archive on remote host" \
-    "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
+e2e_run -r 3 2 "Differential save and load (delta only, pushes to remote registry)" \
+    "aba -d mirror save load --retry"
 
 # Verify both operator sets are in the registry catalog on the remote host
-e2e_run_remote "Verify kiali-ossm in remote registry (from initial load)" \
-    "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+e2e_run "Verify kiali-ossm in remote registry (from initial load)" \
+    "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
      _tag=\$(skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | python3 -c 'import sys,json; t=json.load(sys.stdin)[\"Tags\"]; print(t[-1])') && \
-     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep kiali-ossm"
-e2e_run_remote "Verify servicemeshoperator3 in remote registry (from delta load)" \
-    "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     oc-mirror list operators --v2 --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep kiali-ossm"
+e2e_run "Verify servicemeshoperator3 in remote registry (from delta load)" \
+    "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
      _tag=\$(skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | python3 -c 'import sys,json; t=json.load(sys.stdin)[\"Tags\"]; print(t[-1])') && \
-     oc-mirror list operators --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep servicemeshoperator3"
+     oc-mirror list operators --v2 --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep servicemeshoperator3"
 
 # Restore OC_MIRROR_SINCE (back to full-archive mode)
 e2e_run "Restore OC_MIRROR_SINCE" \
