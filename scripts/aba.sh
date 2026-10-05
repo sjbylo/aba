@@ -476,15 +476,15 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				touch "$_img_file"
 				_added=0
 				for _img in "$@"; do
-					# Basic syntax: registry/repo (with optional tag or digest)
-					# e.g. quay.io/ns/img:tag, registry.redhat.io/ubi9/ubi@sha256:abc...
-					if ! echo "$_img" | grep -qE '^[a-zA-Z0-9][-a-zA-Z0-9.]*(/[-a-zA-Z0-9._]+)+(:[a-zA-Z0-9][-a-zA-Z0-9._]*|@sha256:[0-9a-fA-F]+)?$'; then
+					# Basic syntax: registry/repo (with optional tag or 64-hex sha256 digest)
+					# e.g. quay.io/ns/img:tag, registry.redhat.io/ubi9/ubi@sha256:<64 hex digits>
+					if ! echo "$_img" | grep -qE '^[a-zA-Z0-9][-a-zA-Z0-9.]*(/[-a-zA-Z0-9._]+)+(:[a-zA-Z0-9][-a-zA-Z0-9._]*|@sha256:[0-9a-fA-F]{64})?$'; then
 						aba_abort "Invalid image reference: $_img" \
 							"Expected format: registry/repo/image:tag  or  registry/repo/image@sha256:digest" \
 							"Examples:" \
 							"  registry.redhat.io/ubi9/ubi:latest" \
 							"  quay.io/openshift/hello-openshift:1.2.0" \
-							"  registry.redhat.io/rhel9/support-tools@sha256:abc123..."
+							"  registry.redhat.io/rhel9/support-tools@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 					fi
 					# Skip if already present (exact match)
 					if grep -qxF "$_img" "$_img_file" 2>/dev/null; then
