@@ -843,6 +843,21 @@ image_source_mirror_name() {
 	echo "${image_source:-mirror}"
 }
 
+# openshift-install wait-for status.
+# 0: finished, caller continues.
+# 8: Ctrl-C. Exit quietly with 8 so Make does not stamp success.
+# other: return 1; the caller prints the error and exits with that status.
+exit_unless_install_finished() {
+	local ret=$1
+	if [ "$ret" -eq 0 ]; then
+		return 0
+	fi
+	if [ "$ret" -eq 8 ]; then
+		exit 8
+	fi
+	return 1
+}
+
 # -----------------------------------------------------------------------------
 # IP Address Math Helpers (pure bash, no external dependencies)
 # -----------------------------------------------------------------------------
