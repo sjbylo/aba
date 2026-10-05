@@ -17,6 +17,21 @@ verify-cluster-conf || exit 1
 
 scripts/cli-install-all.sh --wait oc butane
 
+# Check the API before writing chrony files. A down cluster used to leave new
+# .bu and yaml files behind and then abort.
+aba_info "Accessing the cluster ..."
+
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
+
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
+
+exec_cmd="oc whoami"
+aba_debug "Running: $exec_cmd"
+$exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
+
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -133,19 +148,6 @@ fi
 
 butane .99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
-
-aba_info "Accessing the cluster ..."
-
-if [ ! "$KUBECONFIG" ]; then
-	_kc=$(cluster_kubeconfig 2>/dev/null)
-	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
-fi
-
-cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
-
-exec_cmd="oc whoami"
-aba_debug "Running: $exec_cmd"
-$exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 warn_if_cluster_unstable
 
