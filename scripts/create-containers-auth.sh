@@ -1,5 +1,7 @@
-#!/bin/bash 
+#!/bin/bash
 # Find the available pull secrets and place them in the right locations: ~/.docker ~/.containers
+
+set -eo pipefail
 
 source scripts/include_all.sh
 
@@ -7,7 +9,6 @@ aba_debug "Starting: $0 $*"
 
 public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
 [ "$1" = "--load" ] && public_pull_secret_file_needed= && shift
-
 
 umask 077
 
@@ -42,7 +43,7 @@ merge_container_auth() {
 	mv "$tmp" "$dest"
 }
 
-if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
+if [ "$public_pull_secret_file_needed" ] && [ ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then
 		aba_abort "Error: pull_secret_file not defined in aba.conf"
 	fi
@@ -54,44 +55,27 @@ fi
 
 aba_debug "Ensuring dirs exist: ~/.docker ~/.containers $XDG_RUNTIME_DIR/containers"
 mkdir -p ~/.docker ~/.containers
-[[ "$XDG_RUNTIME_DIR" == /* ]] && mkdir -p $XDG_RUNTIME_DIR/containers
+[[ "$XDG_RUNTIME_DIR" == /* ]] && mkdir -p "$XDG_RUNTIME_DIR/containers"
 
-# If the Red Hat creds are available merge them 
-if [ -s $regcreds_dir/pull-secret-mirror.json -a -s $pull_secret_file ]; then
-	# Merge the two files
-	jq -s '.[0] * .[1]' $regcreds_dir/pull-secret-mirror.json $pull_secret_file > $regcreds_dir/pull-secret-full.json
-
-	# Merge into place. Existing registry logins stay; the same host is replaced.
-	aba_debug "Merging $regcreds_dir/pull-secret-full.json into ~/.docker/config.json and ~/.containers/auth.json"
-	merge_container_auth "$regcreds_dir/pull-secret-full.json" ~/.docker/config.json
-	merge_container_auth "$regcreds_dir/pull-secret-full.json" ~/.containers/auth.json
-	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Merging $regcreds_dir/pull-secret-full.json into $XDG_RUNTIME_DIR/containers/auth.json"
-		merge_container_auth "$regcreds_dir/pull-secret-full.json" "$XDG_RUNTIME_DIR/containers/auth.json" || true
-	fi
-
-# If the mirror creds are available add them also
-elif [ -s $regcreds_dir/pull-secret-mirror.json ]; then
-	aba_debug "Merging $regcreds_dir/pull-secret-mirror.json into ~/.docker/config.json and ~/.containers/auth.json"
-	merge_container_auth "$regcreds_dir/pull-secret-mirror.json" ~/.docker/config.json
-	merge_container_auth "$regcreds_dir/pull-secret-mirror.json" ~/.containers/auth.json
-	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Merging $regcreds_dir/pull-secret-mirror.json into $XDG_RUNTIME_DIR/containers/auth.json"
-		merge_container_auth "$regcreds_dir/pull-secret-mirror.json" "$XDG_RUNTIME_DIR/containers/auth.json" || true
-	fi
-
-# Only use the Red Hat pull secret file
-elif [ -s $pull_secret_file ]; then
-	aba_debug "Merging $pull_secret_file into ~/.docker/config.json and ~/.containers/auth.json"
-	merge_container_auth "$pull_secret_file" ~/.docker/config.json
-	merge_container_auth "$pull_secret_file" ~/.containers/auth.json
-	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Merging $pull_secret_file into $XDG_RUNTIME_DIR/containers/auth.json"
-		merge_container_auth "$pull_secret_file" "$XDG_RUNTIME_DIR/containers/auth.json" || true
-	fi
-
+# Pick the best available auth source:
+#   mirror + Red Hat → merge both into a combined file
+#   mirror only      → use mirror creds
+#   Red Hat only     → use Red Hat pull secret
+if [ -s "$regcreds_dir/pull-secret-mirror.json" ] && [ -s "$pull_secret_file" ]; then
+	jq -s '.[0] * .[1]' "$regcreds_dir/pull-secret-mirror.json" "$pull_secret_file" > "$regcreds_dir/pull-secret-full.json"
+	_auth_src="$regcreds_dir/pull-secret-full.json"
+elif [ -s "$regcreds_dir/pull-secret-mirror.json" ]; then
+	_auth_src="$regcreds_dir/pull-secret-mirror.json"
+elif [ -s "$pull_secret_file" ]; then
+	_auth_src="$pull_secret_file"
 else
-	echo 
-	aba_abort "Aborting! Pull secret file(s) missing: '$pull_secret_file', '${regcreds_display:-regcreds}/pull-secret-mirror.json' and/or '${regcreds_display:-regcreds}/pull-secret-full.json'" >&2 
+	aba_abort "Pull secret file(s) missing: '$pull_secret_file', '${regcreds_display:-regcreds}/pull-secret-mirror.json' and/or '${regcreds_display:-regcreds}/pull-secret-full.json'"
 fi
 
+aba_debug "Merging $_auth_src into ~/.docker/config.json and ~/.containers/auth.json"
+merge_container_auth "$_auth_src" ~/.docker/config.json
+merge_container_auth "$_auth_src" ~/.containers/auth.json
+if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
+	aba_debug "Merging $_auth_src into $XDG_RUNTIME_DIR/containers/auth.json"
+	merge_container_auth "$_auth_src" "$XDG_RUNTIME_DIR/containers/auth.json" || true
+fi
