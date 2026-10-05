@@ -90,6 +90,7 @@ unit_tests=(
 	# Cluster / VM
 	test/func/test-cluster-readiness.sh
 	test/func/test-vip-collision.sh
+	test/func/test-vip-dig-line.sh
 	test/func/test-vlan-bond-prefix.sh
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
