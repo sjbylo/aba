@@ -234,6 +234,8 @@ _test_auto_alloc() {
 	local expect_fail="${8:-0}"      # 1=expect abort, 0=expect auto-alloc
 	local expect_api="${9:-}"        # expected api_vip (empty = just check non-empty)
 	local expect_ing="${10:-}"       # expected ingress_vip
+	local preset_api="${11:-}"       # VIP already set before resolve (empty = unset)
+	local preset_ing="${12:-}"
 
 	_total=$(( _total + 1 ))
 
@@ -254,8 +256,8 @@ _test_auto_alloc() {
 	cat > cluster.conf <<-EOF
 	cluster_name=$cname
 	base_domain=${domain:-example.com}
-	api_vip=
-	ingress_vip=
+	api_vip=$preset_api
+	ingress_vip=$preset_ing
 	starting_ip=$starting_ip
 	num_masters=$num_masters
 	num_workers=$num_workers
@@ -350,6 +352,11 @@ _test_auto_alloc "auto-alloc: fallback to after (starting_ip near bottom)" \
 # after: 10.0.0.2+5+10=10.0.0.17, ing=10.0.0.18
 _test_auto_alloc "auto-alloc: fallback to after (starting_ip=.2)" \
 	10.0.0.2  3 2  10.0.0.0 20  1  0  10.0.0.17  10.0.0.18
+
+# One VIP already set must stay. Only the empty one is filled.
+# starting_ip=10.0.1.201 on 10.0.0.0/20 → candidates api=10.0.1.199 ing=10.0.1.200
+_test_auto_alloc "auto-alloc: keep set api_vip, fill ingress only" \
+	10.0.1.201  3 2  10.0.0.0 20  1  0  10.0.1.50  10.0.1.200  10.0.1.50
 
 # --- No ABA-managed DNS → should abort ---
 _test_auto_alloc "auto-alloc: abort when external DNS (no dnsmasq marker)" \
