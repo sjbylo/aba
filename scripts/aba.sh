@@ -722,7 +722,7 @@ for i in imgs:
 	elif [ "$1" = "--reg-port" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[[ "$2" =~ ^[0-9]+$ ]] || aba_abort "invalid port '$2' -- must be a number"
+		valid_port "$2" || aba_abort "invalid port '$2' -- must be 1-65535"
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_port -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
