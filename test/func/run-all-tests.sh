@@ -91,10 +91,12 @@ unit_tests=(
 	test/func/test-cluster-readiness.sh
 	test/func/test-vip-collision.sh
 	test/func/test-vip-dig-line.sh
+	test/func/test-cluster-config-counts.sh
 	test/func/test-vlan-bond-prefix.sh
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
 	test/func/test-install-stamp.sh
+	test/func/test-oc-mirror-url.sh
 	test/func/test-container-auth-merge.sh
 	test/func/test-agent-wait-skip.sh
 	test/func/test-make-regen-install-config.sh
