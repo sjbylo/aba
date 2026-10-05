@@ -687,6 +687,12 @@ normalize-mirror-conf()
 	fi
 }
 
+# TCP port. 1 through 65535, the same range the TUI already uses.
+valid_port() {
+	[[ "$1" =~ ^[0-9]+$ ]] || return 1
+	[[ "$1" -ge 1 && "$1" -le 65535 ]] || return 1
+}
+
 verify-mirror-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	# If the file exists and is empty?
@@ -697,6 +703,11 @@ verify-mirror-conf() {
 
 	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	[ ! "$reg_host" ] && echo_red "Error: reg_host value is missing in mirror.conf" >&2 && ret=1
+
+	if [ "$reg_port" ] && ! valid_port "$reg_port"; then
+		aba_abort "reg_port is invalid in mirror.conf [$reg_port]" \
+			"A registry port is an integer from 1 to 65535."
+	fi
 
 	####[ ! "$reg_ssh_user" ] && echo_red "Error: reg_ssh_user not defined!" >&2 && ret=1   # This should never happen as the user name (whoami) is added above if its empty.
 
