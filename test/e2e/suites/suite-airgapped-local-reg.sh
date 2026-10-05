@@ -587,7 +587,7 @@ e2e_run "Verify aba.conf has both op_sets" \
     "grep '^op_sets=.*abatest' aba.conf && grep '^op_sets=.*mesh3' aba.conf"
 
 e2e_run "Regenerate ISC with all operators (ABA CLI flow)" \
-    "aba -d mirror imagesetconf"
+    "aba --force -d mirror imagesetconf"
 e2e_diag "Show generated ISC" "cat mirror/data/imageset-config.yaml"
 e2e_run "Verify ISC has kiali-ossm (from abatest)" \
     "grep 'kiali-ossm' mirror/data/imageset-config.yaml"
