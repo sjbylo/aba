@@ -48,7 +48,10 @@ if [ ! -f "$reg_root/auth/admin-password" ]; then
 	fi
 fi
 
-# Create Quadlet unit file for systemd-managed container
+# Create Quadlet unit file for systemd-managed container.
+# serve records -hostname in the token realm URL. The port has to be there,
+# or clients request tokens from 443 instead of $reg_port. init rejects a
+# hostname that contains a port, so only the serve command gets host:port.
 mkdir -p "$_QUADLET_DIR"
 cat > "$_QUADLET_FILE" <<-EOF
 [Unit]
@@ -59,7 +62,7 @@ After=network-online.target
 Image=$_QUAY_NG_IMAGE
 Volume=${reg_root}:/data:Z
 PublishPort=${reg_port}:8443
-Exec=serve -data-dir /data -hostname $reg_host -addr :8443
+Exec=serve -data-dir /data -hostname $reg_hostport -addr :8443
 
 [Install]
 WantedBy=default.target
@@ -98,11 +101,34 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
 
+# /v2/ answers 401 with a bearer challenge. The password is accepted only by
+# the token realm, so curl -u against /v2/ itself never succeeds.
+_quay_ng_v2_ok() {
+	local url="$1"
+	local hdr code realm service token
+	hdr=$(curl -k -sS -D- -o /dev/null --connect-timeout 3 "$url/v2/" 2>/dev/null) || return 1
+	code=$(printf '%s\n' "$hdr" | awk 'BEGIN{c=""} /^HTTP/{c=$2} END{print c}')
+	if [ "$code" = "200" ]; then
+		return 0
+	fi
+	realm=$(printf '%s\n' "$hdr" | sed -n 's/.*[Bb]earer realm="\([^"]*\)".*/\1/p' | head -1)
+	service=$(printf '%s\n' "$hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p' | head -1)
+	if [ -z "$realm" ] || [ -z "$service" ]; then
+		return 1
+	fi
+	token=$(curl -k -fsS --connect-timeout 3 -u "$reg_user:$reg_pw" \
+		"${realm}?service=${service}" 2>/dev/null | sed -n 's/.*"token":"\([^"]*\)".*/\1/p') || return 1
+	if [ -z "$token" ]; then
+		return 1
+	fi
+	curl -k -fsS --connect-timeout 3 -o /dev/null \
+		-H "Authorization: Bearer $token" "$url/v2/"
+}
+
 # Verify connectivity (wait briefly for TLS listener to be ready)
 _verify_ok=""
 for i in $(seq 1 10); do
-	if curl -k -fsSL --connect-timeout 3 "$reg_url/v2/" \
-		-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+	if _quay_ng_v2_ok "$reg_url"; then
 		_verify_ok=1
 		break
 	fi
@@ -112,8 +138,7 @@ done
 if [ ! "$_verify_ok" ]; then
 	_local_ips=$(hostname -I 2>/dev/null | xargs)
 	_localhost_ok="no"
-	curl -k -fsSL --connect-timeout 10 "https://localhost:$reg_port/v2/" \
-		-u "$reg_user:$reg_pw" >/dev/null 2>&1 && _localhost_ok="yes"
+	_quay_ng_v2_ok "https://localhost:$reg_port" && _localhost_ok="yes"
 
 	aba_abort \
 		"Registry installed but not reachable via FQDN." \
