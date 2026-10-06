@@ -499,12 +499,13 @@ _direct_version() {
 		return
 	fi
 
-	# Build menu items
+	# Build menu items. "Current" is only offered when that version is on this channel.
 	local _has_current=false
 	if [[ -n "${ocp_version:-}" ]] &&
 	   [[ "$ocp_version" != "$latest" ]] &&
 	   [[ "$ocp_version" != "${previous:-}" ]] &&
-	   [[ "$ocp_version" != "${older:-}" ]]; then
+	   [[ "$ocp_version" != "${older:-}" ]] &&
+	   verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
 		_has_current=true
 	fi
 
@@ -604,9 +605,9 @@ _direct_version() {
 • Latest: most recent release in the channel
 • Previous: one release back (good for stability)
 • Older: two releases back
-• Manual: enter specific version (x.y, x.y.z, or x.y.z-rc.N)
+• Manual: enter a version that exists on this channel (x.y, x.y.z, or x.y.z-rc.N)
 
-Pre-release versions (e.g. 4.22.0-rc.1) can be entered manually."
+A pre-release (rc or ec) is accepted only when this channel lists it. That is the candidate channel."
 			DIALOG_RC="repeat"
 			;;
 		3)

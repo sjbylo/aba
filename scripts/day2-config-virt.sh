@@ -57,6 +57,9 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
+scripts/progress-plan.sh day2-virt
+aba_progress "START|virt_access"
+
 if ! image_source_is_mirror; then
 	aba_info "This cluster connects directly to the internet (image_source=$image_source)."
 	aba_info "Boot sources are auto-imported from public registries — no configuration needed."
@@ -94,6 +97,9 @@ if ! oc get hyperconverged kubevirt-hyperconverged -n openshift-cnv >/dev/null 2
 fi
 
 aba_info "Configuring OpenShift Virtualization boot sources to use mirror registry ($reg_host:$reg_port) ..."
+
+aba_progress "DONE|virt_access"
+aba_progress "START|virt_config"
 
 _mirror_base="${reg_host}:${reg_port}${reg_path}"
 _os_images_ns="openshift-virtualization-os-images"
@@ -275,6 +281,9 @@ oc patch hyperconverged kubevirt-hyperconverged -n openshift-cnv \
 
 aba_success "HyperConverged CR patched."
 
+aba_progress "DONE|virt_config"
+aba_progress "START|virt_verify"
+
 # ---------------------------------------------------------------------------
 # Step 4: Verify
 # ---------------------------------------------------------------------------
@@ -306,4 +315,5 @@ else
 fi
 
 echo
+aba_progress "DONE|virt_verify"
 aba_success "OpenShift Virtualization boot source configuration completed successfully."

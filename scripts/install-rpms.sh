@@ -28,14 +28,22 @@ do
 done
 
 if [ "$rpms_to_install" ]; then
+	# PLAN is emitted by _plan-* Makefile target (scripts/progress-plan.sh)
+	# Use different IDs for internal vs external RPMs so the progress
+	# dialog can track them separately when both run (e.g. fresh sync).
+	_rpms_id="rpms_ext"
+	[ "$1" = "internal" ] && _rpms_id="rpms_int"
+	aba_progress "START|$_rpms_id"
 	aba_info "Installing required rpm packages:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2
 	if ! $SUDO dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
+		aba_progress "FAIL|$_rpms_id"
 		echo_red "Warning: an error occurred during rpm installation. See the logs at .dnf-install.log." >&2
 		echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" >&2
 		echo_magenta "$rpms_to_install" >&2
 
 		exit 1
 	fi
+	aba_progress "DONE|$_rpms_id"
 fi
 
 exit 0

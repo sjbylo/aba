@@ -62,6 +62,9 @@ source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
 source <(normalize-mirror-conf)
 
+scripts/progress-plan.sh cluster-upgrade
+aba_progress "START|ug_preflight"
+
 # Preflight: kubeconfig (prefer externalized state, fall back to local)
 # Check this before writing container auth, so a missing cluster does not
 # rewrite ~/.docker/config.json.
@@ -350,9 +353,12 @@ if [ ! "$upgrade_already_running" ]; then
 
 	# Run day2 to ensure IDMS, signatures, and catalog sources are current.
 	if [ ! "$opt_skip_day2" ]; then
+		aba_progress "DONE|ug_preflight"
+		aba_progress "START|ug_day2"
 		aba_info "Running 'aba day2' to apply mirror resources, signatures, and catalog sources ..."
 		scripts/day2.sh || exit 1
 	else
+		aba_progress "DONE|ug_preflight"
 		aba_warn "--skip-day2 specified. Skipping day2 configuration — upgrade may fail without signatures or mirror configuration."
 	fi
 
@@ -534,6 +540,8 @@ if [ ! "$upgrade_already_running" ]; then
 	fi
 
 	# Execute upgrade (retry once if the cluster needs time to settle)
+	aba_progress "DONE|ug_day2"
+	aba_progress "START|ug_trigger"
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
 	_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
@@ -552,6 +560,9 @@ if [ ! "$upgrade_already_running" ]; then
 
 	aba_success "Upgrade command accepted by cluster"
 fi
+
+aba_progress "DONE|ug_trigger"
+aba_progress "START|ug_progress"
 
 # Wait for the upgrade to actually start (Progressing=True).
 # The cluster may take a while before it begins (e.g. signature
@@ -622,6 +633,7 @@ cv_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2
 
 echo
 if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
+	aba_progress "DONE|ug_progress"
 	aba_success "Upgrade complete! Cluster is now at version $target_ver"
 	oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 	echo
@@ -629,6 +641,7 @@ if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
 	exit 0
 fi
 
+aba_progress "DONE|ug_progress"
 aba_success "Upgrade $current_ver → $target_ver is in progress!"
 echo
 oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null

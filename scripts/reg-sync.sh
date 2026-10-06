@@ -11,6 +11,10 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# PLANs are emitted by _plan-sync Makefile target (scripts/progress-plan.sh)
+
+aba_progress "START|preflight"
+
 try_tot=1  # def. value
 #[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
 [ "$1" ] && [ $1 -gt 0 ] && try_tot=$(( $1 + 1 )) && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
@@ -30,6 +34,9 @@ aba_debug "Configuration validated"
 # Pre-flight: verify internet access and pull secret before proceeding.
 # Pass mirror-specific pull secret as fallback for hosts without a global pull secret.
 require_internet_and_pull_secret "$regcreds_dir/pull-secret-mirror.json"
+
+aba_progress "DONE|preflight"
+aba_progress "START|versions"
 
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
 _verify_versions="v${ocp_version}"
@@ -85,12 +92,18 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 fi
 
 # Be sure a download has started ..
+aba_progress "DONE|versions"
+aba_progress "START|tools"
+
 aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
 	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 aba_debug "oc-mirror is ready"
+
+aba_progress "DONE|tools"
+aba_progress "START|registry"
 
 # Check for mirror-specific pull secret override
 pull_secret_mirror_file=pull-secret-mirror.json
@@ -136,16 +149,14 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
+aba_progress "DONE|registry"
+aba_progress "START|sync"
+
 scripts/mirror-status.sh op=sync
 
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
-# Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
-if [ -s ./reg-uninstall.sh ]; then
-	aba_warn \
-		"Ensure there is enough disk space under $reg_root." \
-		"This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
-fi
+aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
 
 # NOTE: that the cache is always used *except* for mirror-to-mirror (sync) workflows, where it is not used! See reg-save.sh and reg-load.sh.
 # Set TMPDIR path (defer mkdir to just before oc-mirror needs it)
@@ -163,8 +174,12 @@ _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd" || _sync_rc=$?
 echo "$_sync_rc" > .oc-mirror-exit-code
 
 if [ $_sync_rc -ne 0 ]; then
+	aba_progress "FAIL|sync"
 	exit $_sync_rc
 fi
+
+aba_progress "DONE|sync"
+aba_progress "START|finalize"
 
 # After successful sync: update state.sh with mirror facts.
 # mirror_ocp_version tracks what's actually in the mirror (highest synced version).
@@ -193,6 +208,8 @@ if [ -d "data/working-dir/cluster-resources" ]; then
 	cp -a "data/working-dir/cluster-resources" "$_cs_archive_dir"
 	aba_debug "Archived cluster-resources to $_cs_archive_dir"
 fi
+
+aba_progress "DONE|finalize"
 
 echo
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then

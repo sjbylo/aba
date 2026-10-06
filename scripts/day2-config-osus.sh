@@ -18,6 +18,9 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
+scripts/progress-plan.sh day2-osus
+aba_progress "START|osus_access"
+
 scripts/cli-install-all.sh --wait oc
 
 # Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
@@ -188,6 +191,9 @@ _osus_catalog=$(oc get packagemanifests cincinnati-operator -o jsonpath='{.statu
 #####################
 aba_info -n "Adding cluster ingress CA cert to the CA trust bundle ... "
 
+aba_progress "DONE|osus_access"
+aba_progress "START|osus_operator"
+
 ingress_cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d)"
 echo "$ingress_cert" > .openshift-ingress.cacert.pem
 ingress_cert_json="$(echo "$ingress_cert" | sed ':a;N;$!ba;s/\n/\\n/g')"   # Replace all new-lines with '\n'
@@ -274,6 +280,9 @@ fi
 #####################
 aba_info "Deploying OpenShift Update Service ..."
 
+aba_progress "DONE|osus_operator"
+aba_progress "START|osus_deploy"
+
 graph_image=$reg_host:$reg_port$reg_path/openshift/graph-image:latest
 release_repo=$reg_host:$reg_port$reg_path/openshift/release-images
 
@@ -350,6 +359,9 @@ oc patch clusterversion version -p $PATCH --type merge
 aba_success "Update Service configuration applied."
 aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."
 
+aba_progress "DONE|osus_deploy"
+aba_progress "START|osus_stabilize"
+
 # OSUS install patches CA, proxy, and upstream — triggers CO reconciliation.
 # Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
 aba_wait_show "Ensuring cluster operators are stable after OSUS changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
@@ -358,4 +370,5 @@ if ! mcp_is_updated; then
 	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
 
+aba_progress "DONE|osus_stabilize"
 aba_success "Update Service configuration completed successfully."

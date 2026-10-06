@@ -1805,7 +1805,8 @@ Run 'Configure OperatorHub' (aba day2) to set up:\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
 		if [[ $? -eq 0 ]]; then
-			confirm_and_execute "aba --dir $cl_name day2" "Configure OperatorHub: $fqdn"
+			_exec_with_progress "aba --dir $cl_name day2 --yes" "Configure OperatorHub: $fqdn"
+			[[ $? -eq 2 ]] && confirm_and_execute "aba --dir $cl_name day2" "Configure OperatorHub: $fqdn"
 		fi
 	fi
 
@@ -1889,7 +1890,8 @@ Run 'Configure OperatorHub' (aba day2) to set up:\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
 		if [[ $? -eq 0 ]]; then
-			confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $_fqdn"
+			_exec_with_progress "aba --dir $_cl day2 --yes" "Configure OperatorHub: $_fqdn"
+			[[ $? -eq 2 ]] && confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $_fqdn"
 		fi
 	fi
 }
@@ -2076,7 +2078,10 @@ R - Reset ABA: Cleans configuration and state files so you can\n\
 					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Uninstall the mirror registry on: ${_unreg_host}\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
-				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				_exec_with_progress "aba --dir mirror uninstall --yes" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				if [ $? -eq 2 ]; then
+					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				fi
 				;;
 			"F")
 				cluster_monitor
@@ -2227,7 +2232,15 @@ _day2_run() {
 		return 1
 	fi
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER $target" "Day-2: $target"
+	local _cmd="aba --dir $SELECTED_CLUSTER $target"
+	local _title="Day-2: $target"
+
+	# Try progress dialog first; falls back to confirm_and_execute if the
+	# script doesn't emit PLAN events (returns 2).
+	_exec_with_progress "$_cmd --yes" "$_title"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" && rc=$?
+	return $rc
 }
 
 _day2_run_osus() {
@@ -2629,7 +2642,10 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 			for _cv in "${_conditional[@]}"; do [[ "$_cv" == "$choice" ]] && _is_conditional=1 && break; done
 			[[ "$_is_conditional" ]] && _cmd="$_cmd --allow-not-recommended"
 			[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
-			confirm_and_execute "$_cmd" \
+			_exec_with_progress "$_cmd --yes" \
+				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
+			local _rc=$?
+			[[ $_rc -eq 2 ]] && confirm_and_execute "$_cmd" \
 				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
 			return
 		else
@@ -2662,7 +2678,10 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 		_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 		local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $target_ver"
 		[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
-		confirm_and_execute "$_cmd" \
+		_exec_with_progress "$_cmd --yes" \
+			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
+		local _rc=$?
+		[[ $_rc -eq 2 ]] && confirm_and_execute "$_cmd" \
 			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
 		return
 	done
@@ -2682,7 +2701,11 @@ _day2_shutdown() {
 		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER shutdown --wait" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
+	local _cmd="aba --dir $SELECTED_CLUSTER shutdown --wait"
+	_exec_with_progress "$_cmd --yes" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display" && rc=$?
+	return $rc
 }
 
 # --- Graceful Cluster Startup ---
@@ -2701,7 +2724,10 @@ _day2_startup() {
 		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	_exec_with_progress "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display" && rc=$?
+	return $rc
 }
 
 # --- Refresh (recreate VMs, trigger new install) ---

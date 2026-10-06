@@ -827,6 +827,19 @@ mirror_available() {
 	[[ -f "$ABA_ROOT/mirror/.available" ]]
 }
 
+# Run mirror install (with progress) as a standalone step.
+# Used by TUI paths that detect "mirror not installed" and need to install
+# before sync/load.  Running install separately avoids the Makefile prerequisite
+# chain from delaying PLAN events past the 5-second progress timeout.
+# Returns 0 on success, non-zero on failure or user cancel.
+_tui_install_mirror() {
+	local _label="${1:-Install Mirror}"
+	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "$_label" _invalidate_mirror_cache && rc=$?
+	return $rc
+}
+
 # Check if the mirror has been verified (release image present in registry).
 # Uses the background run_once task — non-blocking, returns cached result.
 # Returns 0 (true) if verified, 1 (false) if not yet verified or failed.
@@ -905,7 +918,8 @@ Cluster $_fqdn uses this mirror.\n\n\
 Run Day-2 now to apply changes\n\
 (new operators, updated release image, etc.)?" 0 0
 		if [[ $? -eq 0 ]]; then
-			confirm_and_execute "aba --dir ${_clusters[0]} day2" "Configure OperatorHub: $_fqdn"
+			_exec_with_progress "aba --dir ${_clusters[0]} day2 --yes" "Configure OperatorHub: $_fqdn"
+			[[ $? -eq 2 ]] && confirm_and_execute "aba --dir ${_clusters[0]} day2" "Configure OperatorHub: $_fqdn"
 		fi
 		return 0
 	fi
@@ -1041,7 +1055,8 @@ Run 'Configure OperatorHub' (aba day2) to set up:\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
 			if [[ $? -eq 0 ]]; then
-				confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
+				_exec_with_progress "aba --dir $dir day2 --yes" "Configure OperatorHub: $_fqdn"
+				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
 			fi
 		fi
 	done
@@ -1630,7 +1645,7 @@ tui_install_cluster_gate() {
 					--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
 				_rc=$?
 				if [[ $_rc -eq 0 ]]; then
-					if _mirror_config_review && mirror_sync; then
+					if _mirror_config_review && _tui_install_mirror "Install Mirror" && mirror_sync; then
 						cluster_install_flow
 						return 3
 					fi
@@ -1656,7 +1671,7 @@ tui_install_cluster_gate() {
 					--yesno "No mirror registry installed.\n\nA mirror with loaded images is required to install a cluster.\n\nInstall the registry and load images now?" 0 0
 				_rc=$?
 				if [[ $_rc -eq 0 ]]; then
-					if _mirror_config_review && disco_load_images; then
+					if _mirror_config_review && _tui_install_mirror "Install Mirror" && disco_load_images; then
 						cluster_install_flow
 						return 3
 					fi

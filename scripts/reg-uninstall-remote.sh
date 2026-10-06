@@ -39,6 +39,8 @@ fi
 
 if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
 
+	aba_progress "START|uninst_remove"
+
 	# mirror-registry binary and supporting files live alongside reg_root
 	_mirror_dir="$(dirname "$reg_root")"
 
@@ -47,7 +49,10 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 	if [ -z "$_stale" ]; then
 		aba_info "$vendor registry already gone on $reg_host -- clearing local state"
 		reg_close_firewall --ssh
+		aba_progress "DONE|uninst_remove"
+		aba_progress "START|uninst_cleanup"
 		reg_finish_uninstall "Remote $vendor" "already uninstalled"
+		aba_progress "DONE|uninst_cleanup"
 		exit 0
 	fi
 
@@ -91,16 +96,22 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 
 			aba_info "Running: mirror-registry uninstall on $reg_host ..."
 			_uninst_rc=0
-			$_ssh "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?
+			if reg_ask_delete_data "$reg_root"; then
+				$_ssh "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?
+			else
+				$_ssh "cd $_mirror_dir && printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opts" || _uninst_rc=$?
+			fi
 
 			_stale=$(reg_stale_report quay "$_ssh")
 			if [ -n "$_stale" ]; then
 				if [ "$_uninst_rc" -ne 0 ]; then
+					aba_progress "FAIL|uninst_remove"
 					aba_abort \
 						"Quay mirror-registry uninstall failed on $reg_host (exit=$_uninst_rc) and left stale state:" \
 						"$_stale" \
 						"Investigate the uninstall failure above. Do not force-clean past an aba failure."
 				fi
+				aba_progress "FAIL|uninst_remove"
 				aba_abort \
 					"mirror-registry uninstall reported success but left stale state on $reg_host:" \
 					"$_stale" \
@@ -113,10 +124,13 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 		docker)
 			aba_info "Uninstalling Docker registry on remote host $reg_host ..."
 			$_ssh "podman rm -f registry 2>/dev/null" || true
-			reg_rm_data_dir docker "$reg_root" "$_ssh"
+			if reg_ask_delete_data "$reg_root"; then
+				reg_rm_data_dir docker "$reg_root" "$_ssh"
+			fi
 
 			_stale=$(reg_stale_report docker "$_ssh")
 			if [ -n "$_stale" ]; then
+				aba_progress "FAIL|uninst_remove"
 				aba_abort \
 					"Docker registry uninstall left stale state on $reg_host:" \
 					"$_stale" \
@@ -132,10 +146,13 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 				rm -f ~/.config/containers/systemd/quay.container; \
 				systemctl --user daemon-reload 2>/dev/null" || \
 				aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
-			reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
+			if reg_ask_delete_data "$reg_root"; then
+				reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
+			fi
 
 			_stale=$(reg_stale_report "$_QUAY_NG_VENDOR" "$_ssh")
 			if [ -n "$_stale" ]; then
+				aba_progress "FAIL|uninst_remove"
 				aba_abort \
 					"$_QUAY_NG_VENDOR registry uninstall left stale state on $reg_host:" \
 					"$_stale" \
@@ -148,8 +165,12 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 			;;
 	esac
 
+	aba_progress "DONE|uninst_remove"
+	aba_progress "START|uninst_cleanup"
+
 	reg_close_firewall --ssh
 	reg_finish_uninstall "Remote $vendor" "uninstall successful"
+	aba_progress "DONE|uninst_cleanup"
 	exit 0
 fi
 

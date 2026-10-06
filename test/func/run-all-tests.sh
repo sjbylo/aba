@@ -111,6 +111,7 @@ unit_tests=(
 
 	# Mirror / registry
 	test/func/test-reg-stale-report.sh
+	test/func/test-reg-generate-password.sh
 	test/func/test-state-management.sh
 
 	# Bundle / backup
@@ -125,9 +126,15 @@ unit_tests=(
 	test/func/test-day2-waves.sh
 	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
+	test/func/test-estimate-isc-size.sh
+	test/func/test-mirror-disk-space.sh
+	test/func/test-additional-image-sizes.sh
 
 	# Status / CLI
 	test/func/test-status-shell-keys.sh
+
+	# Progress events
+	test/func/test-progress-events.sh
 
 	# CLI tools
 	test/func/test-extra-clis.sh

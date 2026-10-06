@@ -32,6 +32,11 @@ if ! image_source_is_mirror; then
 	exit 0
 fi
 
+# Progress: declare all steps upfront for TUI progress dialog
+scripts/progress-plan.sh day2
+
+aba_progress "START|access"
+
 scripts/cli-install-all.sh --wait oc
 
 aba_info "Accessing the cluster ..."
@@ -43,7 +48,7 @@ if [ ! "$KUBECONFIG" ]; then
 fi
 
 # Fast fail if cluster API is unreachable
-cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
+cluster_api_reachable "$KUBECONFIG" || { aba_progress "FAIL|access"; aba_abort "Cluster API is not reachable. Is the cluster running?"; }
 
 aba_debug "Running: oc whoami --request-timeout=20s"
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
@@ -55,12 +60,15 @@ if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 
 		aba_debug "Running: oc whoami --request-timeout=20s (after login)"
 		if ! oc whoami --request-timeout='20s' >/dev/null; then
+			aba_progress "FAIL|access"
 			aba_abort "Unable to log into the cluster" 
 		fi
 	fi
 fi
 
 warn_if_cluster_unstable
+
+aba_progress "DONE|access"
 
 # Restart OSUS pod early if graph-image was updated since the pod started.
 # oc-mirror creates updateService.yaml when it builds/updates the graph-image.
@@ -96,6 +104,8 @@ aba_info "- Install any CatalogSources found under working-dir/cluster-resources
 aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
 aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/ directory."
 echo
+
+aba_progress "START|credentials"
 
 # Ensure the cluster's global pull secret includes mirror registry credentials.
 # ABA-installed clusters already have these from install-config, but imported
@@ -141,6 +151,8 @@ else
 	aba_info "Assuming internet connection (e.g. proxy) in use, not disabling default catalog sources"
 fi
 
+aba_progress "DONE|credentials"
+aba_progress "START|trustca"
 
 # Workaround: https://access.redhat.com/solutions/5514331
 # Fixes 'Imagestream openshift/oauth-proxy x509 certificate signed by unknown authority'
@@ -207,6 +219,7 @@ $(cat "$regcreds_dir/rootCA.pem")"
 	}
 
 	if ! aba_wait_show "Patching cluster trust CA" 5 180 _day2_patch_additional_ca; then
+		aba_progress "FAIL|trustca"
 		aba_abort "Timed out patching cluster trust CA (3 min)"
 	fi
 
@@ -218,6 +231,7 @@ $(cat "$regcreds_dir/rootCA.pem")"
 	}
 
 	if ! aba_wait_show "Waiting for imagestream API" 5 180 _day2_imagestream_available; then
+		aba_progress "FAIL|trustca"
 		aba_abort "Timed out waiting for imagestream API (3 min)"
 	fi
 
@@ -227,6 +241,7 @@ $(cat "$regcreds_dir/rootCA.pem")"
 	}
 
 	if ! aba_wait_show "Waiting for oauth-proxy imagestream" 5 180 _day2_oauth_proxy_available; then
+		aba_progress "FAIL|trustca"
 		aba_abort "Timed out waiting for oauth-proxy imagestream (3 min)"
 	fi
 
@@ -242,6 +257,7 @@ $(cat "$regcreds_dir/rootCA.pem")"
 		}
 
 		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 360 _day2_oauth_proxy_recreated; then
+			aba_progress "FAIL|trustca"
 			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (6 min)"
 		fi
 	else
@@ -251,6 +267,8 @@ $(cat "$regcreds_dir/rootCA.pem")"
 else
 	aba_info "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
 fi
+
+aba_progress "DONE|trustca"
 
 apply_custom_manifests() {
 	# Apply user-provided custom manifests from day2-custom-manifests/ in cluster folder.
@@ -385,6 +403,8 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	_our_host="${reg_host}:${reg_port}"
 	_our_host_short="${reg_host%%.*}"
 
+	aba_progress "START|resources"
+
 	# Apply any idms/itms files created by oc-mirror v2.
 	# Detect name collisions: if an existing resource with the same name points
 	# to a different registry, suffix ours to avoid overwriting the other mirror's entries.
@@ -421,6 +441,9 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			aba_warn "no such file: $f"
 		fi
 	done
+
+	aba_progress "DONE|resources"
+	aba_progress "START|catalogs"
 
 	# Apply any CatalogSource files created by oc-mirror v2
 	cs_file_list=$(ls $working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
@@ -557,12 +580,15 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		fi
 	done
 
-	[ "$cs_failed" = "1" ] && aba_abort "One or more CatalogSources failed to become READY. Check the errors above."
+	[ "$cs_failed" = "1" ] && aba_progress "FAIL|catalogs" && aba_abort "One or more CatalogSources failed to become READY. Check the errors above."
 
 	aba_info "Showing status of all CatalogSource resources:"
 	exec_cmd="oc get CatalogSource -A"
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd
+
+	aba_progress "DONE|catalogs"
+	aba_progress "START|signatures"
 
 	sig_file=$working_dir/signature-configmap-merged.json
 	[ -s "$sig_file" ] || sig_file=$working_dir/cluster-resources/signature-configmap.json
@@ -580,7 +606,12 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	else
 		aba_info "No Signature files found in $working_dir/cluster-resources" >&2
 	fi
+
+	aba_progress "DONE|signatures"
 else
+	aba_progress "DONE|resources"
+	aba_progress "DONE|catalogs"
+	aba_progress "DONE|signatures"
 	# FIXME: Only show warning IF the mirror has been used for this cluster
 	aba_warn "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
 	aba_warn -p IMPORTANT \
@@ -597,8 +628,12 @@ fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071
 
+aba_progress "START|manifests"
+
 # Apply user-provided custom manifests (if any)
 apply_custom_manifests
+
+aba_progress "DONE|manifests"
 
 # If we restarted the OSUS pod at the start, verify it's ready before finishing.
 # The pod rebuilt in parallel with the day2 work above, so this wait is usually short.
@@ -618,6 +653,8 @@ if [ "$_osus_restarted" ]; then
 	fi
 fi
 
+aba_progress "START|stabilize"
+
 aba_info "Day-2 configuration applied. Waiting for cluster to stabilize ..."
 
 # Day2 changes (IDMS, CA trust, ITMS) trigger CO reconciliation and MCP rolling restarts.
@@ -629,6 +666,8 @@ aba_wait_show "Ensuring cluster operators are stable after day2 changes (Ctrl-C 
 if ! mcp_is_updated; then
 	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
+
+aba_progress "DONE|stabilize"
 
 aba_success "Day-2 configuration completed successfully."
 

@@ -1,6 +1,5 @@
 #!/bin/bash
 # preflight.sh — Preflight checks (PHONY target, always runs)
-
 source "$(dirname "$0")/progress.sh"
 
 aba_progress "START|preflight"

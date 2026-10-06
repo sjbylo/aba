@@ -14,6 +14,9 @@ for _arg in "$@"; do
 done
 [ "$1" = "wait=1" ] && wait=1 && shift
 
+scripts/progress-plan.sh cluster-shutdown
+aba_progress "START|sd_preflight"
+
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
@@ -124,6 +127,9 @@ fi
 aba_info "Never power down a cluster for an extended period without taking a fresh etcd snapshot first!"
 echo
 ask "Gracefully shut down the cluster" || exit 1
+
+aba_progress "DONE|sd_preflight"
+aba_progress "START|sd_shutdown"
 
 aba_info "Cluster ready for graceful shutdown! Logging full output to $logfile ..." 2>&1 | tee -a $logfile
 
@@ -287,6 +293,8 @@ _shutdown_all_nodes_off() {
 }
 
 # Only wait for power-off if platform supports it (VMware or KVM)
+aba_progress "DONE|sd_shutdown"
+aba_progress "START|sd_poweroff"
 if [ "$wait" ] && ! { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	aba_info "--wait: bare-metal has no hypervisor to query power state — cannot wait for power-off"
 fi
@@ -312,6 +320,7 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	fi
 fi
 
+aba_progress "DONE|sd_poweroff"
 aba_success "Cluster shutdown completed successfully."
 
 exit 0

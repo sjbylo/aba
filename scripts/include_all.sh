@@ -169,6 +169,15 @@ aba_success() {
 	fi
 }
 
+# TUI progress reporting.
+# No-op unless the TUI sets ABA_PROGRESS_FIFO before launching the command.
+# Events: PLAN|id|text, START|id, DONE|id, FAIL|id, ERROR|id|msg,
+#          DETAIL|msg, NEXT|msg, ABORT|msg, PROMPT|msg, PROMPT_DONE
+aba_progress() {
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] || return 0
+	printf '%s\n' "$*" >> "$ABA_PROGRESS_FIFO"
+}
+
 echo_warn() {
 	if [ "$1" = "-n" ]; then
 		shift
@@ -2187,11 +2196,6 @@ verify_upgrade_path_exists() {
 
 	local tgt_channel="${channel}-${tgt_minor}"
 
-	# Pre-release targets only exist in candidate channel
-	if [[ "$target_ver" == *-rc.* || "$target_ver" == *-ec.* ]]; then
-		tgt_channel="candidate-${tgt_minor}"
-	fi
-
 	local graph_json
 	graph_json=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null) || return 0
 
@@ -2565,10 +2569,8 @@ verify_release_version_exists() {
 	local minor="${ver%.*}"                                 # 4.22.2 → 4.22
 	[[ "$ver" == *-* ]] && minor="${ver%%-*}" && minor="${minor%.*}"  # 4.22.0-rc.1 → 4.22
 
-	# Pre-release versions (rc/ec) only exist in candidate channel
-	if [[ "$ver" == *-rc.* || "$ver" == *-ec.* ]]; then
-		channel="candidate"
-	fi
+	# Check the channel the caller asked for. An rc on stable must fail here,
+	# or the TUI will save it and oc-mirror will find no release.
 
 	local all_versions
 	all_versions=$(_fetch_graph_cached "$channel" "$minor" 2>/dev/null | jq -r '.nodes[].version' 2>/dev/null) || return 1

@@ -352,14 +352,18 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 		tui_log "Saving mirror config: host=$m_host port=$m_port vendor=$m_vendor"
 		replace-value-conf -q -n reg_ssh_user -v "" -f "$mcf"
 		replace-value-conf -q -n reg_ssh_key -v "" -f "$mcf"
-		confirm_and_execute "aba --dir mirror install" "Install Local Mirror" _invalidate_mirror_cache
-		return $?
+		_exec_with_progress "aba --dir mirror install --yes" "Install Local Mirror" _invalidate_mirror_cache
+		local rc=$?
+		[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "Install Local Mirror" _invalidate_mirror_cache && rc=$?
+		return $rc
 	else
 		tui_log "Saving mirror config: host=$m_host ssh=$m_ssh_user key=$m_ssh_key vendor=$m_vendor"
 		replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$mcf"
 		replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$mcf"
-		confirm_and_execute "aba --dir mirror install" "Install Remote Mirror" _invalidate_mirror_cache
-		return $?
+		_exec_with_progress "aba --dir mirror install --yes" "Install Remote Mirror" _invalidate_mirror_cache
+		local rc=$?
+		[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "Install Remote Mirror" _invalidate_mirror_cache && rc=$?
+		return $rc
 	fi
 }
 
@@ -468,6 +472,7 @@ _tui_transfer_info_shell() {
 # Returns 0 if confirmed, 1 if cancelled.
 _mirror_op_confirm() {
 	local title="$1"
+	local _disk_op="${2:-}"
 	local _ver _chan _target _op_count _op_preview _isc_for_view
 	local _from_transfer=false
 
@@ -557,10 +562,14 @@ _mirror_op_confirm() {
 		_summary+="Operators: none\n"
 	fi
 
+	# Size increase vs free disk, and the upgrade-path flags, from one status call.
+	local disk_save_summary="" disk_sync_summary="" disk_load_summary=""
+	local disk_save_short=false disk_sync_short=false disk_load_short=false
+	local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
+	eval "$(_tui_mirror_status_shell)"
+
 	# Upgrade path status from aba status (connected mode only, upgrade target set)
 	if [[ "$_TUI_MODE" != "DISCO" && -n "${_target:-}" ]]; then
-		local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
-		eval "$(_tui_mirror_status_shell)"
 		if [[ "$upgrade_path_conditional" == "true" ]]; then
 			_summary+="\n\\Z1Upgrade path has known risks:\\Zn\n"
 			local _r
@@ -569,6 +578,20 @@ _mirror_op_confirm() {
 			done
 		elif [[ "$upgrade_path_exists" == "false" ]]; then
 			_summary+="\n\\Z1WARNING: No upgrade path available!\\Zn\n"
+		fi
+	fi
+
+	local _disk_line="" _disk_short=false
+	case "$_disk_op" in
+		save) _disk_line=$disk_save_summary; _disk_short=$disk_save_short ;;
+		sync) _disk_line=$disk_sync_summary; _disk_short=$disk_sync_short ;;
+		load) _disk_line=$disk_load_summary; _disk_short=$disk_load_short ;;
+	esac
+	if [[ -n "$_disk_line" ]]; then
+		if [[ "$_disk_short" == true ]]; then
+			_summary+="\n\\Z1${_disk_line}\\Zn\n"
+		else
+			_summary+="\n${_disk_line}\n"
 		fi
 	fi
 
@@ -704,15 +727,17 @@ mirror_save() {
 		run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 	fi
 
-	_mirror_op_confirm "$TUI2_LABEL_SAVE" || {
+	_mirror_op_confirm "$TUI2_LABEL_SAVE" save || {
 		if [[ "$_tmp_excl" == "true" ]]; then
 			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 			tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 		fi
 		return 1
 	}
-	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE"
+	local _cmd="aba --dir mirror save$(_tui_oc_mirror_retry_suffix)"
+	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_SAVE"
 	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SAVE" && rc=$?
 
 	if [[ "$_tmp_excl" == "true" ]]; then
 		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
@@ -1060,6 +1085,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then upgrade images will be synced.\n\nContinue?" 0 0
 				[[ $? -ne 0 ]] && return 1
 				_mirror_config_review || return 1
+				_tui_install_mirror "Install Mirror" || return 1
 			fi
 			confirm_and_execute \
 				"aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
@@ -1109,9 +1135,13 @@ To upgrade a disconnected cluster:\n\n\
 mirror_sync() {
 	tui_log "Action: Sync Images"
 	_ensure_platform_for_upgrade
-	_mirror_op_confirm "$TUI2_LABEL_SYNC" || return 1
-	confirm_and_execute "aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache
+	_mirror_op_confirm "$TUI2_LABEL_SYNC" sync || return 1
+	local _cmd="aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)"
+	# Try progress dialog first; falls back to confirm_and_execute if the
+	# script doesn't emit PLAN events (returns 2).
+	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache
 	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache && rc=$?
 	[[ $rc -eq 0 ]] && _offer_day2_after_mirror_update
 	return $rc
 }
@@ -2689,5 +2719,8 @@ Continue with full bundle?" 0 0
 	[[ -n "$light_flag" ]] && cmd="$cmd $light_flag"
 	[[ -n "$force_flag" ]] && cmd="$cmd $force_flag"
 
-	confirm_and_execute "$cmd" "Create Install Bundle"
+	_exec_with_progress "$cmd --yes" "Create Install Bundle"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$cmd" "Create Install Bundle" && rc=$?
+	return $rc
 }

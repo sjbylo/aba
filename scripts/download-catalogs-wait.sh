@@ -54,11 +54,18 @@ fi
 _skip_val=""
 [[ "$_have_all" == true ]] && _skip_val="-S"
 
+# Only emit progress when catalogs actually need downloading (not just a cache hit)
+# PLAN is emitted by _plan-sync Makefile target (scripts/progress-plan.sh)
+if [[ "$_have_all" != true ]]; then
+	aba_progress "START|catalogs_dl"
+fi
+
 for _ver in "${_versions_to_wait[@]}"; do
 	for catalog in redhat-operator certified-operator community-operator; do
 		task_id="catalog:${_ver}:${catalog}"
 
 		if ! run_once $_skip_val -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then
+			[[ "$_have_all" != true ]] && aba_progress "FAIL|catalogs_dl"
 			error_output=$(run_once -e -i "$task_id" | head -20)
 			aba_abort "Failed to download ${catalog} catalog for OCP ${_ver}" \
 				"Error details from download task:" \
@@ -66,5 +73,7 @@ for _ver in "${_versions_to_wait[@]}"; do
 		fi
 	done
 done
+
+[[ "$_have_all" != true ]] && aba_progress "DONE|catalogs_dl"
 
 aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]}"

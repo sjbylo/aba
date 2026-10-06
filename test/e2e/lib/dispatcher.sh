@@ -394,9 +394,11 @@ _find_free_pool() {
 			unset '_pool_cooldown_until[$_p]'
 			_export_pool_ssh_users "$_p"
 			if _essh "$(_con_target "$_p")" "true"; then
-				local _has_sess=""
-				_has_sess=$(_tmux_has_session "$_p") || _has_sess=""
-				[ "$_has_sess" = "yes" ] && continue
+				# Trust _busy_pools as the authority.  Tmux sessions from
+				# external processes, stale leftovers, or live-pane monitors
+				# must not block dispatch.  The startup scan
+				# (_detect_running_and_completed) already populates
+				# _busy_pools for suites surviving a daemon restart.
 				echo "$_p"
 				return 0
 			fi

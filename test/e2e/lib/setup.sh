@@ -33,10 +33,10 @@ _e2e_delete_leftover_cluster_remote() {
 }
 
 # Source other libs if not already loaded
-if ! type remote_exec >/dev/null; then
+if ! type remote_exec &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
 fi
-if ! type configure_internal_bastion >/dev/null; then
+if ! type configure_internal_bastion &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/pool-ops.sh"
 fi
 

@@ -290,15 +290,21 @@ e2e_run "Verify ISC has servicemeshoperator3" "grep 'servicemeshoperator3' mirro
 e2e_run -r 3 2 "Differential save and load (delta only, pushes to remote registry)" \
     "aba -d mirror save load --retry"
 
-# Verify both operator sets are in the registry catalog on the remote host
+# Verify both operator sets are in the registry catalog.
+# Check ALL tags — oc-mirror may push a new tag per save/load cycle and
+# the latest tag might not contain the full cumulative catalog.
 e2e_run "Verify kiali-ossm in remote registry (from initial load)" \
     "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
-     _tag=\$(skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | python3 -c 'import sys,json; t=json.load(sys.stdin)[\"Tags\"]; print(t[-1])') && \
-     oc-mirror list operators --v2 --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep kiali-ossm"
+     _base=\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index && \
+     for _t in \$(skopeo list-tags --tls-verify=false docker://\$_base | python3 -c 'import sys,json; [print(t) for t in json.load(sys.stdin)[\"Tags\"]]'); do \
+       oc-mirror list operators --v2 --catalog \${_base}:\$_t 2>/dev/null | grep -q kiali-ossm && exit 0; \
+     done; echo 'kiali-ossm not found in any catalog tag'; exit 1"
 e2e_run "Verify servicemeshoperator3 in remote registry (from delta load)" \
     "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
-     _tag=\$(skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | python3 -c 'import sys,json; t=json.load(sys.stdin)[\"Tags\"]; print(t[-1])') && \
-     oc-mirror list operators --v2 --catalog \${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index:\$_tag 2>/dev/null | grep servicemeshoperator3"
+     _base=\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index && \
+     for _t in \$(skopeo list-tags --tls-verify=false docker://\$_base | python3 -c 'import sys,json; [print(t) for t in json.load(sys.stdin)[\"Tags\"]]'); do \
+       oc-mirror list operators --v2 --catalog \${_base}:\$_t 2>/dev/null | grep -q servicemeshoperator3 && exit 0; \
+     done; echo 'servicemeshoperator3 not found in any catalog tag'; exit 1"
 
 # Restore OC_MIRROR_SINCE (back to full-archive mode)
 e2e_run "Restore OC_MIRROR_SINCE" \

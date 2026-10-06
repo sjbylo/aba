@@ -36,6 +36,8 @@ flowchart TD
   Make. The `aba` CLI is convenience; Make is the foundation.
 - **TUI** (`tui/v2/abatui2.sh`): Interactive wizard. Sources `include_all.sh` but
   must never call `aba_abort` or `exit` from functions (kills the dialog UI).
+  Long-running commands can use `_exec_with_progress()` for structured
+  multi-step display (see ADR-016).
 
 ### Dispatch: Make-backed vs script-backed
 
@@ -489,6 +491,49 @@ is unaffected.
 
 **Invariant**: All intelligence lives in the status script. The TUI and other
 consumers are dumb readers of `--shell` output.
+
+---
+
+## TUI Progress Dialog
+
+Long-running workflows (mirror save/sync/load, cluster install) display
+structured multi-step progress via `dialog --mixedgauge`. See ADR-016.
+
+### How it works
+
+Scripts call `aba_progress()` to emit events (PLAN, START, DONE, FAIL, etc.)
+to a FIFO. The TUI reads the FIFO in a single-process event loop — no state
+files, no background reader, no races. The command runs in a real PTY
+(`pty-run.py`) so it gets full terminal behavior; output is captured to a log
+for the "View Output" feature.
+
+### Adding progress to a workflow
+
+1. **Makefile**: Add a PHONY `_plan-<target>` prerequisite that emits PLAN events:
+   ```makefile
+   _plan-save:
+   	@scripts/plan.sh save
+
+   save: _plan-save .init .rpmsext status-preflight data/imageset-config.yaml
+   ```
+
+2. **Script**: Call `aba_progress` at phase boundaries:
+   ```bash
+   aba_progress "START|mirror"
+   # ... do the work ...
+   aba_progress "DONE|mirror"
+   ```
+
+3. **TUI**: Call `_exec_with_progress "command" "Title"` instead of
+   `_exec_in_tui`.
+
+`aba_progress()` is a no-op when `ABA_PROGRESS_FIFO` is unset (CLI mode).
+PHONY `_plan` targets only write to the FIFO — no filesystem side effects,
+no-op without the FIFO.
+
+**Invariant**: Progress reporting must never change the behavior of a command.
+A workflow must produce identical results whether or not `ABA_PROGRESS_FIFO`
+is set.
 
 ---
 
