@@ -119,8 +119,8 @@ _resolve_operators_json() {
 			"Cannot add required operators to the image-set config file!" \
 			"Your options are:" \
 			"- Refresh any existing catalog files by running: 'cd $PWD; rm -f .index/redhat-operator-index-v${catalog_ver}*' and try again." \
-			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
-			"- Re-download the operator catalog:  aba catalog" \
+			"- run 'aba show-operators --refresh' to download the catalog file again." \
+			"- Re-download the operator catalog:  aba show-operators --refresh" \
 			"- Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'"
 	fi
 
