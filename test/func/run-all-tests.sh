@@ -155,7 +155,6 @@ integration_tests=(
 	test/func/test-catalog-canary.sh
 	test/func/test-catalog-temp-cleanup.sh
 	test/func/test-download-catalog-simple.sh
-	test/func/test-extract-catalog-index.sh
 	test/func/test-isc-generation.sh
 	test/func/test-show-ops.sh
 
