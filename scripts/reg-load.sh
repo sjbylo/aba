@@ -33,6 +33,9 @@ aba_debug "try_tot=$try_tot"
 
 umask 077
 
+# PLANs are emitted by _plan-load Makefile target (scripts/progress-plan.sh)
+aba_progress "START|ld_preflight"
+
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
@@ -190,6 +193,9 @@ aba_debug "oc-mirror is ready"
 export reg_url=https://$reg_host:$reg_port
 aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port reg_path=$reg_path"
 
+aba_progress "DONE|ld_preflight"
+aba_progress "START|ld_registry"
+
 # Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
 [ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host" && aba_debug "Adjusted no_proxy=$no_proxy"
 
@@ -244,12 +250,10 @@ scripts/mirror-status.sh op=load
 
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 
-# Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
-if [ -s ./reg-uninstall.sh ]; then
-	aba_warn \
-		"Ensure there is enough disk space under $reg_root." \
-		"This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
-fi
+aba_progress "DONE|ld_registry"
+aba_progress "START|ld_load"
+
+aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
 
 # Now using data_dir so reg_root=$data_dir/quay-install
 # Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
@@ -292,8 +296,12 @@ _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd" || _load_rc=$?
 echo "$_load_rc" > .oc-mirror-exit-code
 
 if [ $_load_rc -ne 0 ]; then
+	aba_progress "FAIL|ld_load"
 	exit $_load_rc
 fi
+
+aba_progress "DONE|ld_load"
+aba_progress "START|ld_finalize"
 
 # After successful load: update state.sh with the loaded version.
 # state.sh is the authoritative record of what the mirror actually contains.
@@ -342,6 +350,8 @@ if [ ! -f data/.isc-pinned ]; then
 	touch data/.created
 fi
 rm -f ../.bundle data/.isc-pinned
+
+aba_progress "DONE|ld_finalize"
 
 echo
 

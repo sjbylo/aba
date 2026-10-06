@@ -14,14 +14,16 @@ aba_debug "Starting: $0 $*"
 # run_once caches failures, so a bare --wait after a transient network error
 # returns the stale error instantly.  Reset + backoff lets curl re-attempt.
 _wait_for_cli_downloads() {
+	aba_progress "START|bnd_cli_wait"
 	local _max=3
 	for (( _try=1; _try<=_max; _try++ )); do
 		if scripts/cli-download-all.sh --wait >&2; then
 			# Optional convenience CLIs (warn-and-continue — not required by ABA)
 			cli_download_extra_clis --wait >&2
+			aba_progress "DONE|bnd_cli_wait"
 			return 0
 		fi
-		[ $_try -lt $_max ] || { aba_info "CLI download failed after $_max attempts." >&2; return 1; }
+		[ $_try -lt $_max ] || { aba_progress "FAIL|bnd_cli_wait"; aba_info "CLI download failed after $_max attempts." >&2; return 1; }
 		aba_info "CLI download failed (attempt $_try/$_max), resetting and retrying in 30s ..." >&2
 		scripts/cli-download-all.sh --reset >&2
 		sleep 30
@@ -78,6 +80,9 @@ aba_debug "Normalizing and verifying aba.conf"
 source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
+
+scripts/progress-plan.sh bundle
+aba_progress "START|bnd_preflight"
 
 # Warn if release images are excluded — bundle can't install a cluster
 if [ "${excl_platform:-}" ]; then
@@ -215,6 +220,9 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "Stdout mode: streaming tar bundle to stdout"
 	aba_info "Downloading binary data." >&2  # Must use stderr channel here
 
+	aba_progress "DONE|bnd_preflight"
+	aba_progress "START|bnd_save"
+
 	aba_debug "Calling: make -s -C mirror save retry=2"
 	make -s -C mirror save retry=2 >&2 	|| exit 1
 	aba_debug "Mirror save completed successfully"
@@ -225,6 +233,8 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "All CLI tarballs downloaded"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
+	aba_progress "DONE|bnd_save"
+	aba_progress "START|bnd_pack"
 	aba_debug "Calling: make -s tar out=- $with_clusters"
 	make -s tar out=- $with_clusters   # Be sure the output of this command is ONLY tar output!
 
@@ -252,6 +262,8 @@ if [ "$light_bundle" ]; then
 
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
+	aba_progress "DONE|bnd_preflight"
+	aba_progress "START|bnd_save"
 	aba_debug "Calling: make -s -C mirror save retry=2"
 	make -s -C mirror save retry=2				# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
@@ -262,9 +274,12 @@ if [ "$light_bundle" ]; then
 	aba_debug "All CLI tarballs downloaded"
 	
 	rm -f "$bundle_dest_file"
+	aba_progress "DONE|bnd_save"
+	aba_progress "START|bnd_pack"
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file $with_clusters"
 	make -s tarrepo out="$bundle_dest_file" $with_clusters			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
+	aba_progress "DONE|bnd_pack"
 else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
 	aba_debug "Creating FULL bundle (including image-set archives)"
@@ -290,6 +305,8 @@ else
 
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
+	aba_progress "DONE|bnd_preflight"
+	aba_progress "START|bnd_save"
 	aba_debug "Calling: make -s -C mirror save retry=2"
 	make -s -C mirror save retry=2		    		# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
@@ -300,9 +317,12 @@ else
 	aba_debug "All CLI tarballs downloaded"
 
 	rm -f "$bundle_dest_file"
+	aba_progress "DONE|bnd_save"
+	aba_progress "START|bnd_pack"
 	aba_debug "Calling: make tar out=$bundle_dest_file $with_clusters"
 	make -s tar out="$bundle_dest_file" $with_clusters	   		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
+	aba_progress "DONE|bnd_pack"
 fi
 
 aba_debug "Bundle creation completed, exiting successfully"

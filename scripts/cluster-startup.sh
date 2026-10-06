@@ -7,6 +7,9 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-cluster-conf)
 
+scripts/progress-plan.sh cluster-startup
+aba_progress "START|su_power"
+
 # Resolve kubeconfig (prefer externalized state under ~/.aba/, fall back to local)
 _kc=$(cluster_kubeconfig)
 if [ -z "$_kc" ]; then
@@ -61,6 +64,16 @@ if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 fi
 
 OC="oc --kubeconfig $KUBECONFIG"
+
+aba_progress "DONE|su_power"
+aba_progress "START|su_nodes"
+
+# Auth check — abort immediately if we can't authenticate (expired certs, bad creds, etc.)
+aba_debug "Running: $OC whoami --request-timeout=10s"
+if ! $OC whoami --request-timeout='10s' >/dev/null 2>/dev/null; then
+	aba_abort "Cannot authenticate to cluster at $server_url" \
+		"If certificates have expired, see: https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/backup_and_restore/control-plane-backup-and-restore#dr-recovering-expired-certs"
+fi
 
 _cluster_startup_oc_get_nodes() {
 	exec_cmd="$OC get nodes"
@@ -144,6 +157,9 @@ fi
 if all_nodes_ready; then
 	aba_success "All nodes are ready!"
 fi
+
+aba_progress "DONE|su_nodes"
+aba_progress "START|su_ready"
 exec_cmd="$OC get nodes"
 aba_debug "Running: $exec_cmd"
 $exec_cmd
@@ -198,6 +214,7 @@ if [ -z "$_console_ok" ]; then
 	fi
 fi
 
+aba_progress "DONE|su_ready"
 aba_success "Cluster startup completed successfully."
 
 exit 0

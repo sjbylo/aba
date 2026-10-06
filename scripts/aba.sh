@@ -618,7 +618,15 @@ for i in imgs:
 		# ver should now be x.y.z or x.y.z-prerelease format (guaranteed by early validation)
 
 		# Warn if pre-release version
-		_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use." 
+		_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use."
+
+		# Same graph check save/sync use. Do not store a version the channel does not list.
+		if ! verify_release_version_exists "$ver" "$chan"; then
+			aba_abort \
+				"Release version $ver not found in '$chan' channel (arch: ${ARCH:-amd64})." \
+				"A pre-release (rc or ec) is published on the candidate channel." \
+				"Use 'aba ocp-versions' to list available versions."
+		fi
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 

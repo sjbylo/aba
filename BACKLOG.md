@@ -33,6 +33,51 @@ Issues or Pull Requests.
 
 ---
 
+## Uninstall: keep the mirror data directory unless the user asks to delete it
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-10-06
+
+**Problem:** `aba uninstall` removes the registry and then deletes its data directory. That directory is the mirror: often hundreds of GB of images. One confirmation today means the images are gone. Putting the same vendor back means downloading them again.
+
+**Root cause:** Docker and Quay NG call `reg_rm_data_dir`, which is `rm -rf` of the vendor root. Quay delegates the wipe to `mirror-registry uninstall`, which removes `quay-install` including `quay-storage` and `sqlite-storage`. Afterwards `reg_stale_report` treats "the data directory still exists" as a failed uninstall, so the directory is not allowed to remain on purpose.
+
+The three vendors do not share a directory. Each lives under `data_dir`:
+
+- Quay: `quay-install`
+- Docker: `docker-reg`
+- Quay NG: `quay-ng`
+
+A leftover Docker directory does not block a new Quay install, or the reverse. It only uses disk. Reusing images means reinstalling the **same** vendor and leaving that vendor's directory in place.
+
+**Proposed fix:** After the registry process is stopped, ask whether to delete the data directory:
+
+```
+ask -n --auto-yes "Delete the registry data at <reg_root>"
+```
+
+Enter means no. A non-interactive run (`ask=false`, or `aba -y`) deletes, so automation and the test pools still get a clean host.
+
+If the user keeps the directory, uninstall still succeeds when the container and the port are gone. "Directory still exists" is no longer a stale-state failure.
+
+Reinstall then has to honor what is already on disk:
+
+- **Docker.** Mount the existing `docker-reg/data` again. The blobs are in that directory, so the images come back. Keep `registry.crt` when its name matches `reg_host`. The htpasswd file is rewritten from the current user and password, and the new pull secret matches that password. Clients that still have the old pull secret must be given the new one.
+- **Quay NG.** `init` is skipped when `quay-ng/auth/admin-password` already exists, so the old database, certificate, and password stay. A newly generated password will not log in. Read the password from that data directory and use it. Run `init` again only when the hostname changed, because the certificate was created for the hostname used the first time.
+- **Quay.** Do not `chown` the tree to the login user. Quay's own files are owned by the container user, and the database will not start if those owners change. The early check in `reg_setup_data_dir` that aborts on container-owned files must allow a complete leftover Quay tree. Keep `quay-storage` and `sqlite-storage` and run `mirror-registry install` on that same `quayRoot`. That is the path that keeps the images. A full `mirror-registry uninstall` deletes those directories, so there is nothing left to repair afterwards.
+
+**Workaround:** Copy the vendor directory aside before `aba uninstall`, then move it back. For Quay, copying after uninstall is too late: `mirror-registry uninstall` has already removed it.
+
+**Files likely affected:**
+
+- `scripts/reg-uninstall-docker.sh`, `scripts/reg-uninstall-quay-ng.sh`, `scripts/reg-uninstall-quay.sh`, `scripts/reg-uninstall-remote.sh`: ask, and skip the wipe when the answer is no
+- `scripts/reg-common.sh`: `reg_stale_report` and the ownership check in `reg_setup_data_dir`
+- `scripts/reg-install-quay-ng.sh`: reuse the stored password; re-init only when the hostname changed
+- `scripts/reg-install-docker.sh`: already remounts `docker-reg/data` and rewrites htpasswd; confirm that path once uninstall can leave the directory behind
+
+---
+
 ## Bundle without release images: warn the user
 
 **Severity:** MEDIUM
@@ -1919,6 +1964,70 @@ the ISC's `data/.created`.
 - `scripts/include_all.sh`: shared `aba_file_is_user_managed()` helper
 - `test/` and `test/e2e/examples/`: update all `.example` files
 - `test/func/test-tui-v2-04-isconf.sh`: may need updates for label checks
+
+## Post-sync/load: offer to run day2 on selected clusters
+
+**Severity:** MEDIUM — reduces manual steps after every sync/load
+**Status:** Planned
+**Added:** 2026-10-06
+
+**Problem:** After `aba sync` or `aba load`, the "Configure OperatorHub" dialog
+lists all installed clusters using this mirror and tells the user to run
+`aba day2` on each one. The user must dismiss the dialog, then manually run
+`aba --dir <cluster> day2` for each cluster — tedious when 5-7 clusters exist.
+
+**Proposed fix:**
+
+### TUI path
+Replace the static msgbox with an interactive checklist of clusters.
+The user selects which clusters to update, then ABA runs `aba day2`
+on each selected cluster sequentially (with progress):
+
+```
+┌─────────── Configure OperatorHub ──────────────┐
+│                                                 │
+│ Mirror updated. Select clusters to configure:   │
+│                                                 │
+│ [X] sno.example.com                             │
+│ [X] ocp.example.com                             │
+│ [X] mesh1.example.com                           │
+│ [ ] demo2.example.com                           │
+│                                                 │
+│         < Run Day-2 >    < Skip >               │
+└─────────────────────────────────────────────────┘
+```
+
+All clusters pre-selected by default. User deselects any they want to skip.
+"Run Day-2" iterates the selected list, running `aba --dir <cluster> day2`
+for each one (with progress dialog per cluster, or a combined progress view).
+"Skip" dismisses — same as current behavior.
+
+### CLI path
+After sync/load completes, prompt interactively (unless `--yes`):
+
+```
+[ABA] Run 'aba day2' on these clusters? [Y/n]:
+  - sno.example.com
+  - ocp.example.com
+  - mesh1.example.com
+```
+
+With `--yes`: auto-run on all clusters without prompting.
+
+### Architecture
+- Cluster discovery via `clusters_using_mirror()` (see "Cluster-mirror
+  auto-actions" backlog item — prerequisite)
+- All iteration and day2 invocation logic in ABA core, not TUI
+- TUI is a dumb consumer: calls core, shows checklist, reports results
+
+**Files likely affected:**
+- `scripts/reg-sync.sh` / `scripts/reg-load.sh`: post-action hook
+- `scripts/include_all.sh`: `clusters_using_mirror()` (prerequisite)
+- `tui/v2/tui-lib.sh`: replace `_offer_day2_after_mirror_update()` msgbox
+  with checklist + sequential day2 runner
+- `tui/v2/tui-mirror.sh`: wire new flow into sync/load completion
+
+---
 
 ## Clean up cluster install output (like save/sync/load cleanup)
 

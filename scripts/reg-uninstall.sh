@@ -27,6 +27,8 @@ if [ -s "$regcreds_dir/state.sh" ]; then
 			"The registry itself will not be modified."
 	fi
 
+	# PLANs are emitted by _plan-uninstall Makefile target (scripts/progress-plan.sh)
+
 	if [ "$reg_ssh_key" ]; then
 		exec scripts/reg-uninstall-remote.sh "$reg_vendor" "$@"
 	else
@@ -129,7 +131,9 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				aba_info "Removing Docker registry container and data on $reg_host ..."
 				$_ssh "podman rm -f registry" || \
 					aba_warn "Remote Docker cleanup returned non-zero (container may not have existed)"
-				reg_rm_data_dir docker "$reg_root" "$_ssh"
+				if reg_ask_delete_data "$reg_root"; then
+					reg_rm_data_dir docker "$reg_root" "$_ssh"
+				fi
 				# Verify container is gone
 				if $_ssh "podman ps -a --format '{{.Names}}'" 2>/dev/null | grep -q '^registry$'; then
 					aba_abort "Failed to remove Docker registry container on $reg_host"
@@ -137,7 +141,11 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				;;
 			quay)
 				ensure_quay_registry
-				cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
+				if reg_ask_delete_data "$reg_root"; then
+					cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
+				else
+					cmd="printf 'n\n' | ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user -k \"$reg_ssh_key\" $reg_root_opt"
+				fi
 				aba_info "Running command: $cmd"
 				$cmd || exit 1
 				;;
@@ -149,11 +157,15 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 					rm -f ~/.config/containers/systemd/quay.container; \
 					systemctl --user daemon-reload 2>/dev/null" || \
 					aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
-				reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
+				if reg_ask_delete_data "$reg_root"; then
+					reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
+				fi
 
 				# Post-uninstall assertions
 				_stale=""
-				$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				if [ -z "${REG_KEEP_DATA:-}" ]; then
+					$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				fi
 				$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
 				$_ssh "systemctl --user is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
 				if [ -n "$_stale" ]; then
@@ -174,11 +186,17 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^registry$'; then
 					aba_abort "Failed to remove Docker registry container"
 				fi
-				reg_rm_data_dir docker "$reg_root"
+				if reg_ask_delete_data "$reg_root"; then
+					reg_rm_data_dir docker "$reg_root"
+				fi
 				;;
 			quay)
 				ensure_quay_registry
-				cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
+				if reg_ask_delete_data "$reg_root"; then
+					cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
+				else
+					cmd="printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opt"
+				fi
 				aba_info "Running command: $cmd"
 				$cmd || exit 1
 				;;
@@ -190,11 +208,15 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				[ -f "$HOME/.config/containers/systemd/quay.container" ] && \
 					rm -f "$HOME/.config/containers/systemd/quay.container"
 				systemctl --user daemon-reload 2>/dev/null || true
-				reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
+				if reg_ask_delete_data "$reg_root"; then
+					reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
+				fi
 
 				# Post-uninstall assertions
 				_stale=""
-				[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				if [ -z "${REG_KEEP_DATA:-}" ] && [ -d "$reg_root" ]; then
+					_stale+="  reg_root ($reg_root) still exists"$'\n'
+				fi
 				ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
 				systemctl --user is-active quay.service &>/dev/null && _stale+="  quay.service still active"$'\n'
 				if [ -n "$_stale" ]; then

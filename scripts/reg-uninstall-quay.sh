@@ -29,11 +29,16 @@ source "$regcreds_dir/state.sh"
 
 if ask -n --auto-yes "Uninstall Quay mirror registry on localhost, installed at $reg_host:$reg_port (root: $reg_root)"; then
 
+	aba_progress "START|uninst_remove"
+
 	_stale=$(reg_stale_report quay)
 	if [ -z "$_stale" ]; then
 		aba_info "Quay registry already gone on localhost -- clearing local state"
 		reg_close_firewall
+		aba_progress "DONE|uninst_remove"
+		aba_progress "START|uninst_cleanup"
 		reg_finish_uninstall "Quay" "already uninstalled"
+		aba_progress "DONE|uninst_cleanup"
 		exit 0
 	fi
 
@@ -44,20 +49,30 @@ if ask -n --auto-yes "Uninstall Quay mirror registry on localhost, installed at 
 	# unreliable on signal kill), blocking all subsequent calls.
 	podman rm -f ansible_runner_instance 2>/dev/null || true
 
-	aba_info "Running command: ./mirror-registry uninstall -v --autoApprove $reg_root_opts"
+	# --autoApprove deletes quayRoot, quayStorage, and sqliteStorage.
+	# Answering n keeps those three and still removes the containers,
+	# the redis secret, and the systemd units.
 	# $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
 	# shellcheck disable=SC2086
 	_uninst_rc=0
-	./mirror-registry uninstall -v --autoApprove $reg_root_opts || _uninst_rc=$?
+	if reg_ask_delete_data "$reg_root"; then
+		aba_info "Running command: ./mirror-registry uninstall -v --autoApprove $reg_root_opts"
+		./mirror-registry uninstall -v --autoApprove $reg_root_opts || _uninst_rc=$?
+	else
+		aba_info "Running command: ./mirror-registry uninstall -v $reg_root_opts  (keeping data)"
+		printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opts || _uninst_rc=$?
+	fi
 
 	_stale=$(reg_stale_report quay)
 	if [ -n "$_stale" ]; then
 		if [ "$_uninst_rc" -ne 0 ]; then
+			aba_progress "FAIL|uninst_remove"
 			aba_abort \
 				"mirror-registry uninstall failed (exit=$_uninst_rc) and left stale state:" \
 				"$_stale" \
 				"Investigate the uninstall failure above. Do not force-clean past an aba failure."
 		fi
+		aba_progress "FAIL|uninst_remove"
 		aba_abort \
 			"mirror-registry uninstall reported success but left stale state:" \
 			"$_stale" \
@@ -68,8 +83,12 @@ if ask -n --auto-yes "Uninstall Quay mirror registry on localhost, installed at 
 		aba_info "mirror-registry uninstall exited $_uninst_rc but registry is fully gone -- treating as success"
 	fi
 
+	aba_progress "DONE|uninst_remove"
+	aba_progress "START|uninst_cleanup"
+
 	reg_close_firewall
 	reg_finish_uninstall "Quay" "uninstall successful"
+	aba_progress "DONE|uninst_cleanup"
 	exit 0
 fi
 

@@ -110,8 +110,9 @@ e2e_run "Pull secret: registry.redhat.io present (direct mode)" \
     "jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
 e2e_run "Pull secret: quay.io present (direct mode)" \
     "jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
-e2e_run "Pull secret: NO mirror registry in config.json (direct mode)" \
-    "! jq -e '.auths | keys[] | select(test(\":[0-9]+$\"))' ~/.docker/config.json"
+# Mirror registry logins may exist in config.json from prior operations —
+# that's fine. The merge-based auth preserves existing logins intentionally.
+# What matters is install-config.yaml has no mirror/IDMS config in direct mode.
 
 test_end
 

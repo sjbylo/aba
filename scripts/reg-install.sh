@@ -28,6 +28,9 @@ if [ "$vendor" = "existing" ]; then
 	exit 0
 fi
 
+# PLANs are emitted by _plan-install Makefile target (scripts/progress-plan.sh)
+aba_progress "START|reg_config"
+
 # Dispatch: remote (SSH) or local
 if [ "$reg_ssh_key" ]; then
 	exec scripts/reg-install-remote.sh "$vendor" "$@"

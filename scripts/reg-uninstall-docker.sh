@@ -29,11 +29,16 @@ REGISTRY_NAME="registry"
 
 if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 
+	aba_progress "START|uninst_remove"
+
 	_stale=$(reg_stale_report docker)
 	if [ -z "$_stale" ]; then
 		aba_info "Docker registry already gone on localhost -- clearing local state"
 		reg_close_firewall
+		aba_progress "DONE|uninst_remove"
+		aba_progress "START|uninst_cleanup"
 		reg_finish_uninstall "Docker" "already uninstalled"
+		aba_progress "DONE|uninst_cleanup"
 		exit 0
 	fi
 
@@ -44,12 +49,18 @@ if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_p
 		aba_info "Registry container '$REGISTRY_NAME' not found (already stopped)."
 	fi
 
-	reg_rm_data_dir docker "$reg_root"
+	if reg_ask_delete_data "$reg_root"; then
+		reg_rm_data_dir docker "$reg_root"
+	fi
 
 	reg_close_firewall
 
+	aba_progress "DONE|uninst_remove"
+	aba_progress "START|uninst_cleanup"
+
 	_stale=$(reg_stale_report docker)
 	if [ -n "$_stale" ]; then
+		aba_progress "FAIL|uninst_cleanup"
 		aba_abort \
 			"Docker registry uninstall left stale state:" \
 			"$_stale" \
@@ -57,6 +68,7 @@ if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_p
 	fi
 
 	reg_finish_uninstall "Docker" "uninstall successful"
+	aba_progress "DONE|uninst_cleanup"
 	exit 0
 fi
 

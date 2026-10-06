@@ -79,7 +79,7 @@ _release_pool_locks() {
 trap _release_pool_locks EXIT
 
 case "$CLI_COMMAND" in
-	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy|logs|kill)
+	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|verify-code|destroy|logs|kill)
 		;;
 	run)
 		# Skip locks when not daemonized: the foreground process will either

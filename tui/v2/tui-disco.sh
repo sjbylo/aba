@@ -300,7 +300,7 @@ Navigation:
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 						--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be loaded.\n\nContinue?" 0 0
 					if [[ $? -eq 0 ]]; then
-						_mirror_config_review && disco_load_images
+						_mirror_config_review && _tui_install_mirror "Install Mirror" && disco_load_images
 					fi
 				else
 					disco_load_images
@@ -381,9 +381,11 @@ disco_load_images() {
 		done
 	fi
 
-	_mirror_op_confirm "$TUI2_LABEL_LOAD" || return 1
-	confirm_and_execute "aba --dir mirror load$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache
+	_mirror_op_confirm "$TUI2_LABEL_LOAD" load || return 1
+	local _cmd="aba --dir mirror load$(_tui_oc_mirror_retry_suffix)"
+	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache
 	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache && rc=$?
 	[[ $rc -eq 0 ]] && _offer_day2_after_mirror_update
 	return $rc
 }

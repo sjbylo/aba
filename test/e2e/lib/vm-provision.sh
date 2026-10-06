@@ -18,10 +18,10 @@
 _E2E_LIB_DIR_VMPROV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh >/dev/null; then
+if ! type _wait_for_ssh &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMPROV/remote.sh"
 fi
-if ! type pool_domain >/dev/null; then
+if ! type pool_domain &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMPROV/config-helpers.sh"
 fi
 

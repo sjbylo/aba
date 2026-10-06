@@ -9,15 +9,15 @@
 _E2E_LIB_DIR_VMNET="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh >/dev/null; then
+if ! type _wait_for_ssh &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMNET/remote.sh"
 fi
-if ! type pool_domain >/dev/null; then
+if ! type pool_domain &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMNET/config-helpers.sh"
 fi
 
 # VLAN IPs per clone (set via config.env)
-if ! declare -p VM_CLONE_VLAN_IPS >/dev/null; then
+if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null; then
 	declare -A VM_CLONE_VLAN_IPS=()
 fi
 

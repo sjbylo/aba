@@ -28,11 +28,16 @@ _SERVICE_NAME="quay.service"
 
 if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 
+	aba_progress "START|uninst_remove"
+
 	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR")
 	if [ -z "$_stale" ]; then
 		aba_info "$_QUAY_NG_VENDOR registry already gone on localhost -- clearing local state"
 		reg_close_firewall
+		aba_progress "DONE|uninst_remove"
+		aba_progress "START|uninst_cleanup"
 		reg_finish_uninstall "$_QUAY_NG_VENDOR" "already uninstalled"
+		aba_progress "DONE|uninst_cleanup"
 		exit 0
 	fi
 
@@ -49,12 +54,18 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_h
 		systemctl --user daemon-reload 2>/dev/null || true
 	fi
 
-	reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
+	if reg_ask_delete_data "$reg_root"; then
+		reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
+	fi
 
 	reg_close_firewall
 
+	aba_progress "DONE|uninst_remove"
+	aba_progress "START|uninst_cleanup"
+
 	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR")
 	if [ -n "$_stale" ]; then
+		aba_progress "FAIL|uninst_cleanup"
 		aba_abort \
 			"$_QUAY_NG_VENDOR registry uninstall left stale state:" \
 			"$_stale" \
@@ -62,6 +73,7 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_h
 	fi
 
 	reg_finish_uninstall "$_QUAY_NG_VENDOR" "uninstall successful"
+	aba_progress "DONE|uninst_cleanup"
 	exit 0
 fi
 

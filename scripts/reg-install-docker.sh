@@ -7,6 +7,9 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_load_config
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
+
 reg_detect_existing
 reg_check_fqdn
 reg_setup_data_dir docker
@@ -20,6 +23,14 @@ REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
 ask "Install Docker registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
+aba_progress "DONE|reg_env"
+aba_progress "START|reg_firewall"
+
+reg_open_firewall
+
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_download"
+
 aba_info "Installing Docker registry on localhost ..."
 
 # Pre-load Docker registry image from tarball (for air-gapped environments)
@@ -27,6 +38,9 @@ if [ -f docker-reg-image.tgz ]; then
 	aba_info "Loading Docker registry image from docker-reg-image.tgz ..."
 	podman load -i docker-reg-image.tgz
 fi
+
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
 
 mkdir -p "$REGISTRY_DATA_DIR" "$REGISTRY_CERTS_DIR" "$REGISTRY_AUTH_DIR"
 
@@ -118,7 +132,8 @@ else
 	fi
 fi
 
-reg_open_firewall
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_postcfg"
 
 # Save credentials and state BEFORE the connectivity check, so the user
 # can recover with 'aba verify' or 'aba uninstall' if networking fails.
@@ -133,6 +148,9 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To verify:    cd $PWD && aba verify
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
+
+aba_progress "DONE|reg_postcfg"
+aba_progress "START|reg_verify"
 
 # Verify connectivity after saving state.
 # Report diagnostic facts without guessing the cause — network setups vary widely
@@ -161,3 +179,5 @@ if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
 		"" \
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi
+
+aba_progress "DONE|reg_verify"

@@ -1,7 +1,60 @@
 #!/bin/bash
 # demo.sh — ABA TUI Progress Dialog Demo (Make-based, menu-driven)
 #
-# Architecture:
+# Demonstrates the progress architecture that will be ported to ABA's TUI.
+#
+# ─── Key design decisions ───────────────────────────────────────────
+#
+# 1. SEPARATION OF CONCERNS — each _plan-* target only knows its OWN steps.
+#    _plan-install emits install PLANs.  _plan-sync emits sync PLANs.
+#    When "make sync" triggers install as a dependency, _plan-install fires
+#    first (it's a prereq of install), then _plan-sync fires later.
+#    The dialog GROWS as new PLANs arrive — two visible batches.
+#
+# 2. CONSISTENCY — _plan-install is ALWAYS a prereq of install.
+#    The TUI just calls "make install" or "make sync".  No need to
+#    manually chain "_plan-install install" from the caller.
+#
+# 3. OVER-GENEROUS PLANs — every step that MIGHT run is declared.
+#    Steps that don't actually execute (Make skips them, or the script
+#    has a conditional path) never get START/DONE events.
+#    At the end, _sweep_skipped() marks them as "Skipped".
+#
+# 4. PLAN ORDER = EXECUTION ORDER — the PLAN list must match the order
+#    Make will actually execute the steps.  Auto-complete marks
+#    predecessors of the active step.  If PLAN order is wrong,
+#    a not-yet-run step gets marked "Skipped" prematurely, then
+#    flips to "In Progress" when it actually starts (confusing).
+#    Example: preflight is a Make prereq (runs before sync-images.sh),
+#    so its PLAN must come before catalogs_dl (which is inside
+#    sync-images.sh).
+#
+# 5. REAL-TIME Skipped vs Succeeded — auto-complete checks _real_done[]
+#    to decide the label.  If a step got real FIFO events (START/DONE),
+#    it's "Succeeded".  If not, it's "Skipped" — immediately, not just
+#    at the end.  This avoids showing "Succeeded" for steps that never
+#    ran (the user would see a misleading label until the sweep).
+#
+# 6. LATE PLANs — a PLAN can arrive AFTER its START/DONE events.
+#    This happens when Make runs a script (emits START/DONE) before
+#    the plan target fires (emits PLAN).  Example: .rpmsint runs
+#    before _plan-sync fires.  The engine handles this: _text[] is
+#    used as the dedup key (not _status[]), so the step is added to
+#    _order even if it already has a status.
+#
+# 7. set -e SAFETY — never use "[ test ] && action" as the last command
+#    in a function or case branch.  If the test is false, && returns 1,
+#    and set -e kills the script.  Always use "if [ test ]; then ... fi".
+#    Same class of bug as (( var++ )) crashing when var is 0.
+#
+# 8. BACKGROUND TASKS — a step can be In Progress while later steps also
+#    progress (e.g. CLI download running in parallel with sync).
+#    The masking algorithm handles this by finding the LAST step with
+#    real activity (the "frontier") and only masking steps BEYOND it.
+#    This replaces the old "mask below first active" algorithm, which
+#    would hide sequential progress when a background step was active.
+#
+# ─── Architecture ───────────────────────────────────────────────────
 #
 #   ┌──────────────────────────────────────────────────────┐
 #   │                      demo.sh (this script)           │
@@ -9,14 +62,12 @@
 #   │  ┌──────────┐    ┌────────────┐    ┌──────────────┐  │
 #   │  │  dialog   │    │ FIFO drain │    │ PTY (python) │  │
 #   │  │  menu /   │◄───│ in-memory  │    │              │  │
-#   │  │ mixedgauge│    │ arrays     │    │  make save   │  │
+#   │  │ mixedgauge│    │ arrays     │    │  make target │  │
 #   │  └──────────┘    └─────▲──────┘    │  stdout→file │  │
 #   │                        │           │  FIFO→events │  │
 #   │                        │           └──────┬───────┘  │
 #   │                        └──────────────────┘          │
 #   └──────────────────────────────────────────────────────┘
-#
-# Flow:  Menu → select workflow → progress dialog → outcome → Menu
 
 set -eo pipefail
 
@@ -47,12 +98,25 @@ export ABA_PROGRESS_FIFO="$progress_fifo"
 export ABA_DEMO_TMP="$tmpdir"
 
 # ─── In-memory state (reset between workflows) ───
-declare -A _status _text
+#
+# _order[]     — step IDs in display order (arrival order of PLANs)
+# _text[]      — human-readable label per step ID (also used as dedup key)
+# _status[]    — dialog status code per step ID (see mixedgauge codes below)
+# _real_done[] — tracks which steps got REAL FIFO events (START/DONE/FAIL)
+#                Empty = step was auto-completed or never ran.
+#                Used by auto-complete to decide Skipped vs Succeeded,
+#                and by _sweep_skipped() at the end.
+# _exit_code   — exit code from the Make process.  Non-zero = crash.
+#                Used to distinguish a graceful FAIL (script emits FAIL event)
+#                from an unexpected crash (syntax error, command not found, etc.)
+declare -A _status _text _real_done
 declare -a _order _errors _details _nexts
 _prompt_msg=""
 _abort=""
 _aba_exited=0
+_exit_code=0
 _done=0
+_interrupted=0
 
 script_pid=""
 tail_pid=""
@@ -98,10 +162,25 @@ _parse_event() {
 		[ "$id" != "$_tail" ] && arg1=${_tail#*|}
 	fi
 	case "$event" in
-		PLAN)        _order+=("$id"); _text[$id]="$arg1"; _status[$id]="9" ;;
-		START)       _status[$id]="77" ;;
-		DONE)        _status[$id]="0" ;;
-		FAIL)        _status[$id]="1" ;;
+		PLAN)
+			# Dedup: _text[] is the "already planned" flag.
+			# A PLAN can arrive AFTER START/DONE for the same ID (late PLAN).
+			# This happens when Make runs a script before its plan target fires.
+			# In that case, _status[] is already set but _text[] is empty.
+			# We add to _order and set _text, but keep the existing status.
+			if [ -z "${_text[$id]:-}" ]; then
+				_order+=("$id")
+				_text[$id]="$arg1"
+				# Only set initial N/A status if no START/DONE has arrived yet.
+				# Use if/then — NOT "[ ] && cmd" which returns 1 under set -e.
+				if [ -z "${_status[$id]:-}" ]; then
+					_status[$id]="9"
+				fi
+			fi
+			;;
+		START)       [ "${_status[$id]:-9}" != "0" ] && _status[$id]="77"; _real_done[$id]="started" ;;
+		DONE)        _status[$id]="0"; _real_done[$id]="done" ;;
+		FAIL)        _status[$id]="1"; _real_done[$id]="fail" ;;
 		ERROR)       _errors+=("${arg1:-$id}") ;;
 		DETAIL)      _details+=("${arg1:-$id}") ;;
 		NEXT)        _nexts+=("${arg1:-$id}") ;;
@@ -116,12 +195,15 @@ _drain_events() {
 	while read -t 0.01 -r -u 8 _line; do
 		_parse_event "$_line"
 	done
+	# Detect process exit and drain any final buffered events
 	if [ "$_aba_exited" -eq 0 ] && ! kill -0 "$script_pid" 2>/dev/null; then
 		_aba_exited=1
 		while read -t 0.2 -r -u 8 _line; do
 			_parse_event "$_line"
 		done
-		wait "$script_pid" 2>/dev/null || true
+		# Capture exit code — non-zero means the Make process crashed
+		_exit_code=0
+		wait "$script_pid" 2>/dev/null || _exit_code=$?
 		_done=1
 	fi
 }
@@ -130,24 +212,54 @@ _drain_events() {
 # Progress display
 # ============================================================
 
+# dialog --mixedgauge status codes:
+#   0  = Succeeded (green checkmark)
+#   1  = Failed
+#   2  = Passed
+#   3  = Completed
+#   4  = Checked
+#   5  = Done
+#   6  = Skipped
+#   7  = In Progress
+#   8  = (blank)
+#   9  = N/A
+#  -NNN = percentage bar (negative number = percentage)
+
 draw_progress() {
+	local _title="$1"
 	local args=() total=0 done_count=0 id text status
-	local _past_pending=0
+	local _idx=0
+
+	# Find the last step with a non-N/A status (the "frontier").
+	# Everything after the frontier is masked as N/A.
+	# This replaces the old "mask everything below first active" algorithm,
+	# which broke when a background task was In Progress above the main
+	# sequential flow.  A background step (In Progress at position 2)
+	# alongside sequential work (In Progress at position 6) is fine —
+	# only steps beyond the last real activity get masked.
+	local _last_real_idx=-1 _scan=0
+	for id in "${_order[@]}"; do
+		status="${_status[$id]:-9}"
+		if [ "$status" != "9" ]; then
+			_last_real_idx=$_scan
+		fi
+		_scan=$((_scan + 1))
+	done
 
 	for id in "${_order[@]}"; do
 		text="${_text[$id]:-$id}"
 		status="${_status[$id]:-9}"
-		[ "$status" = "77" ] && status="9"
-		# Mask everything below the first pending step as N/A.
-		# Ensures fill-in animation always flows top-to-bottom.
-		if [ "$_past_pending" -eq 1 ]; then
+		# 77 = "just received START" — display as 7 (In Progress)
+		[ "$status" = "77" ] && status="7"
+		# Mask steps beyond the frontier as N/A
+		if [ "$_idx" -gt "$_last_real_idx" ]; then
 			status="9"
-		elif [ "$status" = "9" ]; then
-			_past_pending=1
 		fi
 		args+=("$text" "$status")
 		total=$((total + 1))
-		case "$status" in 0|3|5) done_count=$((done_count + 1)) ;; esac
+		# Count Succeeded, Completed, Done, and Skipped toward progress %
+		case "$status" in 0|3|5|6) done_count=$((done_count + 1)) ;; esac
+		_idx=$((_idx + 1))
 	done
 
 	[ "$total" -eq 0 ] && return
@@ -160,9 +272,14 @@ draw_progress() {
 		_subtitle="\n  ⚠  ABA needs input — press [O] to answer\n"
 	fi
 
-	dialog --title " ABA Mirror Save " \
+	# Dynamic height: 8 rows for chrome + 1 per step, min 18.
+	# Needed because the dialog grows when sync PLANs arrive after install.
+	local _height=$(( ${#_order[@]} + 8 ))
+	[ "$_height" -lt 18 ] && _height=18
+
+	dialog --title " $_title " \
 		--mixedgauge "$_subtitle" \
-		18 56 "$pct" \
+		$_height 56 "$pct" \
 		"${args[@]}" < /dev/null 2>/dev/null || true
 }
 
@@ -202,8 +319,21 @@ show_output() {
 }
 
 # ============================================================
-# Auto-complete — one skipped predecessor per call
+# Auto-complete — fill in predecessors of the active step
 # ============================================================
+#
+# When a step gets START (status 77), all pending predecessors (status 9)
+# above it in _order must have already been processed by Make.
+# This function marks ONE such predecessor per call, using _real_done[]
+# to decide the label:
+#
+#   _real_done[id] is set  → step got real START/DONE → "Succeeded" (0)
+#   _real_done[id] is empty → step never ran          → "Skipped"   (6)
+#
+# This gives the user immediate correct feedback — no misleading
+# "Succeeded" for steps that were skipped.  The old approach (always
+# mark Succeeded, sweep to Skipped at the end) showed wrong labels
+# during execution.
 
 _auto_complete_one() {
 	local _first_pending="" id ps
@@ -214,22 +344,60 @@ _auto_complete_one() {
 				[ -z "$_first_pending" ] && _first_pending="$id"
 				;;
 			77)
+				# Found the first active step.  Fill in one predecessor.
 				if [ -n "$_first_pending" ]; then
-					_status[$_first_pending]="0"
+					if [ -n "${_real_done[$_first_pending]:-}" ]; then
+						_status[$_first_pending]="0"
+					else
+						_status[$_first_pending]="6"
+					fi
 					return 0
 				fi
+				# No pending predecessors — just promote 77→7
 				_status[$id]="7"
 				return 0
 				;;
-			7|0|1)
+			7|0|1|6)
 				if [ -n "$_first_pending" ]; then
-					_status[$_first_pending]="0"
+					if [ -n "${_real_done[$_first_pending]:-}" ]; then
+						_status[$_first_pending]="0"
+					else
+						_status[$_first_pending]="6"
+					fi
 					return 0
 				fi
 				;;
 		esac
 	done
 	return 1
+}
+
+# ============================================================
+# Skipped sweep — final pass after command exits
+# ============================================================
+#
+# After the Make command finishes, any step that:
+#   - has status 0 (auto-completed as Succeeded) or 9 (still N/A)
+#   - has NO entry in _real_done[] (never got a real FIFO event)
+# is changed to status 6 (Skipped).
+#
+# This catches steps that were auto-completed during execution but
+# never actually ran.  In most cases, auto-complete already set them
+# to Skipped (via _real_done check).  The sweep is a safety net for
+# edge cases like steps that were never predecessors of any active step.
+
+_sweep_skipped() {
+	local id ps _any=0
+	for id in "${_order[@]}"; do
+		ps="${_status[$id]:-9}"
+		if [ -z "${_real_done[$id]:-}" ]; then
+			if [ "$ps" = "9" ] || [ "$ps" = "0" ]; then
+				_status[$id]="6"
+				_any=1
+			fi
+		fi
+	done
+	return $(( 1 - _any ))
 }
 
 # ============================================================
@@ -271,7 +439,6 @@ show_error() {
 		done
 	fi
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
-	# Loop: View Output → output → back to this dialog. OK exits.
 	while dialog --title " ✗ Error " \
 		--yes-label "View Output" \
 		--no-label "OK" \
@@ -293,7 +460,7 @@ show_stopped() {
 
 show_success() {
 	dialog --title " ✓ Complete " \
-		--msgbox "\n  All steps completed successfully!\n\n  Make drove the workflow with real marker files.\n  Cached targets were auto-completed by the TUI.\n  Progress was delivered via a separate FIFO.\n" \
+		--msgbox "\n  All steps completed successfully!\n\n  PHONY Make target emitted all PLANs upfront.\n  Skipped steps were swept at the end.\n  Each script only emitted START/DONE.\n" \
 		13 56 || true
 }
 
@@ -304,6 +471,7 @@ show_success() {
 _reset_state() {
 	_status=()
 	_text=()
+	_real_done=()
 	_order=()
 	_errors=()
 	_details=()
@@ -311,7 +479,9 @@ _reset_state() {
 	_prompt_msg=""
 	_abort=""
 	_aba_exited=0
+	_exit_code=0
 	_done=0
+	_interrupted=0
 	# Drain any leftover FIFO data from previous run
 	local _line
 	while read -t 0.05 -r -u 8 _line; do :; done
@@ -323,11 +493,28 @@ _setup_workdir() {
 	mkdir -p "$work_dir"
 	ln -sf "$DEMO_DIR/Makefile" "$work_dir/Makefile"
 	ln -sfn "$DEMO_DIR/scripts" "$work_dir/scripts"
-	# Pre-create marker files for cached mode (Make skips these targets)
-	if [ "$mode" != "fresh" ]; then
-		mkdir -p "$work_dir/data"
-		touch "$work_dir/.init" "$work_dir/.rpmsext" "$work_dir/data/imageset-config.yaml"
-	fi
+	# Pre-create marker files based on mode.
+	# "cached" = prereqs exist, Make skips their recipes.
+	# "fresh"  = nothing exists, Make builds everything.
+	case "$mode" in
+		fresh)
+			# Nothing cached — all Make prereqs will run
+			;;
+		cached)
+			# Prereqs cached — install-rpms.sh etc. are skipped by Make
+			mkdir -p "$work_dir/data"
+			touch "$work_dir/.init" "$work_dir/.rpmsext" "$work_dir/.rpmsint"
+			touch "$work_dir/data/imageset-config.yaml"
+			;;
+		cached-installed)
+			# All prereqs + registry installed (.available exists)
+			# _plan-install checks .available and emits nothing → no install PLANs
+			mkdir -p "$work_dir/data"
+			touch "$work_dir/.init" "$work_dir/.rpmsext" "$work_dir/.rpmsint"
+			touch "$work_dir/.available"
+			touch "$work_dir/data/imageset-config.yaml"
+			;;
+	esac
 	: > "$output_log"
 }
 
@@ -337,16 +524,22 @@ _setup_workdir() {
 
 show_menu() {
 	local _choice
-	_choice=$(dialog --title " ABA TUI Demo " \
+	_choice=$(dialog --title " ABA TUI Progress Demo " \
 		--cancel-label "Exit" \
-		--menu "\n  Real Makefile · PHONY _plan · PTY · FIFO progress\n" \
-		18 64 6 \
-		"quick"   "Success — fast, no prompts" \
-		"prompt"  "Success — with interactive prompt" \
-		"error"   "Error — catalog fails (rich error dialog)" \
-		"abort"   "Abort — user says No at prompt" \
-		"full"    "Full — real oc-mirror + prompt (slow)" \
-		"fresh"   "Fresh build — all Make targets run" \
+		--menu "\n  PHONY _plan targets · Skipped sweep · PTY + FIFO\n" \
+		24 66 12 \
+		"install"       "Install registry (cached — RPMs skipped)" \
+		"install-fresh" "Install registry (fresh — all steps run)" \
+		"sync"          "Sync images (cached — RPMs & catalogs skipped)" \
+		"sync-catalogs" "Sync images (catalogs need downloading)" \
+		"sync-bg"       "Sync + background CLI download (parallel)" \
+		"save"          "Save images (cached, no prompt)" \
+		"save-prompt"   "Save images (with interactive prompt)" \
+		"save-error"    "Save images (fails during save step)" \
+		"sync-crash"    "Sync crash (script dies, no FAIL event)" \
+		"uninstall"     "Uninstall registry (all steps run)" \
+		"fresh-all"     "Sync (mirror not installed — installs first)" \
+		"fresh-bg"      "Sync fresh + background CLI download" \
 		3>&1 1>&2 2>&3) || _choice="quit"
 	printf '%s' "$_choice"
 }
@@ -356,29 +549,108 @@ show_menu() {
 # ============================================================
 
 run_workflow() {
-	local mode="$1"
+	local scenario="$1"
 
 	_reset_state
 
-	# Fresh mode = no cached marker files
-	local _wdir_mode="cached"
-	[ "$mode" = "fresh" ] && _wdir_mode="fresh"
-	_setup_workdir "$_wdir_mode"
-
-	# Set env vars for each test flow
-	unset SIMULATE_FAIL SKIP_ASK SKIP_OC_MIRROR
-	case "$mode" in
-		quick)  export SKIP_ASK=1 SKIP_OC_MIRROR=1 ;;
-		prompt) export SKIP_OC_MIRROR=1 ;;
-		error)  export SKIP_ASK=1 SKIP_OC_MIRROR=1 SIMULATE_FAIL=1 ;;
-		abort)  export SKIP_OC_MIRROR=1 ;;
-		full)   ;;
-		fresh)  ;;
+	# Parse scenario into make target + env + workdir mode.
+	# The TUI just calls "make <target>" — _plan-* targets are Make prereqs,
+	# so the TUI never needs to chain them manually.
+	local make_target="" wdir_mode="cached" title="" envs=""
+	case "$scenario" in
+		install)
+			make_target="install"
+			wdir_mode="cached"
+			title="Install Mirror"
+			;;
+		install-fresh)
+			make_target="install"
+			wdir_mode="fresh"
+			title="Install Mirror"
+			envs="FORCE_RPM_INSTALL=1"
+			;;
+		sync)
+			make_target="sync"
+			wdir_mode="cached-installed"
+			title="Sync Images to Mirror"
+			envs="SKIP_OC_MIRROR=1"
+			;;
+		sync-catalogs)
+			make_target="sync"
+			wdir_mode="cached-installed"
+			title="Sync Images to Mirror"
+			envs="SKIP_OC_MIRROR=1 FORCE_CATALOG_DOWNLOAD=1"
+			;;
+		sync-bg)
+			# Sync with a real run_once download running in parallel.
+			# "Download CLI tools" stays In Progress beside the sync steps.
+			# "Wait for CLI tools" is the run_once -w at the end.
+			# The frontier mask leaves the background row visible while
+			# later steps are also in progress.
+			make_target="sync"
+			wdir_mode="cached-installed"
+			title="Sync Images to Mirror"
+			envs="SKIP_OC_MIRROR=1 SIMULATE_BG_DOWNLOAD=1"
+			;;
+		save)
+			make_target="save"
+			wdir_mode="cached"
+			title="Save Images"
+			envs="SKIP_ASK=1 SKIP_OC_MIRROR=1"
+			;;
+		save-prompt)
+			make_target="save"
+			wdir_mode="cached"
+			title="Save Images"
+			envs="SKIP_OC_MIRROR=1"
+			;;
+		save-error)
+			make_target="save"
+			wdir_mode="cached"
+			title="Save Images"
+			envs="SKIP_ASK=1 SKIP_OC_MIRROR=1 SIMULATE_FAIL=1"
+			;;
+		sync-crash)
+			# Unexpected crash: oc-mirror (or any tool) dies with no FAIL event.
+			# The TUI detects non-zero exit, marks the active step as Failed,
+			# and shows an error dialog pointing to the output log.
+			make_target="sync"
+			wdir_mode="cached-installed"
+			title="Sync Images to Mirror"
+			envs="SKIP_OC_MIRROR=1 SIMULATE_CRASH=1"
+			;;
+		uninstall)
+			make_target="uninstall"
+			wdir_mode="cached-installed"
+			title="Uninstall Mirror"
+			;;
+		fresh-all)
+			# Sync on a fresh system — Make resolves install as a dependency.
+			# _plan-install fires first (install PLANs), install runs,
+			# then _plan-sync fires (sync PLANs) and the dialog grows.
+			# Title is just "Sync" — the TUI doesn't predict dependencies.
+			# The install steps appearing in the dialog tell the user what's happening.
+			make_target="sync"
+			wdir_mode="fresh"
+			title="Sync Images to Mirror"
+			envs="FORCE_RPM_INSTALL=1 FORCE_CATALOG_DOWNLOAD=1 SKIP_OC_MIRROR=1"
+			;;
+		fresh-bg)
+			# Fresh sync + background CLI download — both features together.
+			# Install PLANs arrive first, then sync PLANs (with bg download steps).
+			# The bg task runs in parallel with sequential sync work.
+			make_target="sync"
+			wdir_mode="fresh"
+			title="Sync Images to Mirror"
+			envs="FORCE_RPM_INSTALL=1 FORCE_CATALOG_DOWNLOAD=1 SKIP_OC_MIRROR=1 SIMULATE_BG_DOWNLOAD=1"
+			;;
 	esac
 
-	# Launch Make in a real PTY
-	python3 "$DEMO_DIR/pty-run.py" --input-fifo "$input_fifo" "$output_log" \
-		make -C "$work_dir" save &
+	_setup_workdir "$wdir_mode"
+
+	# Launch Make in a real PTY with scenario-specific env vars
+	eval "$envs python3 \"$DEMO_DIR/pty-run.py\" --input-fifo \"$input_fifo\" \"$output_log\" \
+		make -C \"$work_dir\" $make_target &"
 	script_pid=$!
 
 	# Wait for PLAN events before first draw
@@ -392,15 +664,50 @@ run_workflow() {
 	# Main event loop
 	while true; do
 		_drain_events
-		draw_progress
+		draw_progress "$title"
+
+		[ "$_interrupted" -eq 1 ] && break
 
 		if [ "$_done" -eq 1 ]; then
+			# Process exited.  Auto-complete any lagging predecessors.
 			while _auto_complete_one; do
-				draw_progress
+				draw_progress "$title"
 				sleep 0.2
 			done
-			sleep 0.8
-			draw_progress
+
+			# Crash detection: if the process exited non-zero and no step
+			# emitted FAIL, this is an unexpected crash (syntax error, segfault,
+			# set -e, etc.).  Mark the last active step as Failed and add a
+			# generic error pointing to the output log.
+			# Must run HERE (main shell), not inside finish_outcome which runs
+			# in a subshell $(...) — array changes would be lost.
+			if [ "$_exit_code" -ne 0 ]; then
+				local _has_fail=0 _last_active="" _cid _cst
+				for _cid in "${_order[@]}"; do
+					_cst="${_status[$_cid]:-9}"
+					case "$_cst" in
+						1) _has_fail=1 ;;
+						7|77) _last_active="$_cid" ;;
+					esac
+				done
+				if [ "$_has_fail" -eq 0 ] && [ -n "$_last_active" ]; then
+					_status[$_last_active]="1"
+					_real_done[$_last_active]="fail"
+					if [ "${#_errors[@]}" -eq 0 ]; then
+						_errors+=("${_text[$_last_active]:-$_last_active} failed (exit code $_exit_code)")
+						_nexts+=("Check the live output for details")
+					fi
+				fi
+			fi
+
+			# Final sweep: mark steps that were PLANned but never ran
+			if _sweep_skipped; then
+				draw_progress "$title"
+				sleep 1.5
+			fi
+			sleep 0.5
+
+			draw_progress "$title"
 			case "$(finish_outcome)" in
 				error)   show_error ;;
 				abort)   show_abort ;;
@@ -410,16 +717,20 @@ run_workflow() {
 			break
 		fi
 
+		# During execution: auto-complete one predecessor per loop iteration
+		# (animated fill-in, one step at a time)
 		if _auto_complete_one; then
 			sleep 0.2
 			continue
 		fi
 
+		# If the running script is waiting for input, show a prompt dialog
 		if [ -n "$_prompt_msg" ]; then
 			handle_prompt "$_prompt_msg" || break
 			continue
 		fi
 
+		# Poll for user keypresses (O=output view, Q=quit)
 		if read -rsn1 -t 0.4 key; then
 			case "$key" in
 				o|O) show_output ;;
@@ -441,7 +752,7 @@ run_workflow() {
 while true; do
 	choice=$(show_menu)
 	case "$choice" in
-		quick|prompt|error|abort|full|fresh)
+		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|sync-crash|uninstall|fresh-all|fresh-bg)
 			run_workflow "$choice" ;;
 		quit|"")
 			break ;;

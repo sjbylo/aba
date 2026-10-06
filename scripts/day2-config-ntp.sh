@@ -10,6 +10,9 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
+scripts/progress-plan.sh day2-ntp
+aba_progress "START|ntp_access"
+
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
@@ -151,6 +154,9 @@ butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
 warn_if_cluster_unstable
 
+aba_progress "DONE|ntp_access"
+aba_progress "START|ntp_apply"
+
 # Check if MachineConfig would change anything before applying.
 # oc diff: exit 0=no change, exit 1=diff found, exit >1=error.
 _mc_changed=0
@@ -233,6 +239,9 @@ if [ "$_mc_changed" -eq 1 ]; then
 fi
 
 raw_targets=($ntp_servers)
+
+aba_progress "DONE|ntp_apply"
+aba_progress "START|ntp_verify"
 
 # Get list of Node IPs before potential reboot.
 aba_debug "Running: oc get nodes -owide --no-headers"
@@ -358,4 +367,5 @@ if ! mcp_is_updated; then
 	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
 
+aba_progress "DONE|ntp_verify"
 aba_success "NTP configuration completed successfully."

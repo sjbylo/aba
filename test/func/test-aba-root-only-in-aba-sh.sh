@@ -34,16 +34,23 @@ echo "=== Testing: \$ABA_ROOT usage is restricted to aba.sh and TUI only ==="
 echo
 
 # Allowed files (exceptions to the rule)
+# aba.sh is the CLI entry point; tui/ files are sourced by abatui2.sh
+# and legitimately need $ABA_ROOT for cross-directory access.
 ALLOWED_FILES=(
 	"scripts/aba.sh"
-	"tui/v2/abatui2.sh"
+)
+
+# Allowed patterns: any file under tui/ or scripts/tui-* (TUI helpers)
+ALLOWED_PATTERNS=(
+	"tui/"
+	"scripts/tui-"
 )
 
 # Find all shell scripts that contain $ABA_ROOT
 # Exclude comments that are just explaining the variable (e.g., "# Note: aba.sh changes to $ABA_ROOT...")
 violators=()
 while IFS= read -r file; do
-	# Skip if it's an allowed file
+	# Skip if it's an allowed file or matches an allowed pattern
 	is_allowed=0
 	for allowed in "${ALLOWED_FILES[@]}"; do
 		if [[ "$file" == "$allowed" ]]; then
@@ -51,6 +58,14 @@ while IFS= read -r file; do
 			break
 		fi
 	done
+	if [[ $is_allowed -eq 0 ]]; then
+		for pattern in "${ALLOWED_PATTERNS[@]}"; do
+			if [[ "$file" == $pattern* ]]; then
+				is_allowed=1
+				break
+			fi
+		done
+	fi
 	
 	if [[ $is_allowed -eq 0 ]]; then
 		# Check if the file has actual $ABA_ROOT usage (not just comments)
@@ -58,7 +73,7 @@ while IFS= read -r file; do
 			violators+=("$file")
 		fi
 	fi
-done < <(grep -l '\$ABA_ROOT' scripts/*.sh tui/*.sh 2>/dev/null || true)
+done < <(grep -rl '\$ABA_ROOT' scripts/*.sh tui/v2/*.sh 2>/dev/null || true)
 
 # Report results
 if [[ ${#violators[@]} -eq 0 ]]; then
@@ -72,7 +87,7 @@ if [[ ${#violators[@]} -eq 0 ]]; then
 		fi
 	done
 	echo
-	test_pass "Architecture rule enforced: \$ABA_ROOT only in aba.sh and TUI"
+	test_pass "Architecture rule enforced: \$ABA_ROOT only in aba.sh and TUI files"
 else
 	echo -e "${RED}✗ FAIL: Unauthorized \$ABA_ROOT usage detected!${NC}"
 	echo

@@ -302,16 +302,19 @@ reg_setup_data_dir() {
 		reg_root_opts=""
 	fi
 
-	# Detect leftover data directory with wrong ownership (local installs only).
-	# A previous install creates files owned by the container UID (e.g. 1001).
-	# After uninstall, the directory may remain and the next install fails with
-	# PermissionError on subdirectories like quay-storage/uploads.
+	# Quay's installer chmods the storage tree as the login user (`file: recurse`).
+	# Blob and sqlite files are owned by the container's host UID, so that chmod
+	# fails with PermissionError unless we give the tree back first. The sqlite
+	# mount uses :U, which returns the database to the container when it starts.
 	if [ -z "$reg_ssh_key" ] && [ -d "$reg_root" ] && \
 	   [ "$(find "$reg_root" -maxdepth 2 ! -user "$(id -u)" -print -quit 2>/dev/null)" ]; then
-		aba_abort \
-			"Registry data directory $reg_root contains files not owned by $(whoami) (UID $(id -u))." \
-			"Likely left over from a previous install (container UID)." \
-			"Fix with:  sudo rm -rf $reg_root"
+		aba_info "Preparing existing registry data at $reg_root for reinstall ..."
+		if ! $SUDO chown -R "$(id -un):$(id -gn)" "$reg_root"; then
+			aba_abort \
+				"Registry data at $reg_root has files owned by the container user, and chown failed." \
+				"The installer cannot reuse that tree until those files belong to $(whoami)." \
+				"Fix with:  sudo chown -R $(whoami) $reg_root"
+		fi
 	fi
 }
 
@@ -319,6 +322,38 @@ reg_setup_data_dir() {
 # Generate a random password if reg_pw is empty or unset.
 # Sets: reg_pw
 reg_generate_password() {
+	local _saved _saved_user _saved_pw _ng_pw _stored_pw
+	_saved="${reg_root:-}/.aba-reuse-creds"
+	_ng_pw="${reg_root:-}/auth/admin-password"
+	# Quay stores the user in its database. A new random password does not replace it.
+	# Docker rewrites htpasswd, so an explicit new password is allowed to win.
+	# quay-ng keeps the password in auth/admin-password and skips init when that file exists.
+	if [ -s "$_saved" ]; then
+		_saved_user=$(sed -n "s/^reg_user='\(.*\)'/\1/p" "$_saved" | head -1)
+		_saved_pw=$(sed -n "s/^reg_pw='\(.*\)'/\1/p" "$_saved" | head -1)
+	fi
+	if [ -f "${reg_root}/sqlite-storage/quay_sqlite.db" ] && [ -n "$_saved_pw" ]; then
+		if [ "$reg_pw" ] && [ "$reg_pw" != "$_saved_pw" ]; then
+			aba_warn "Using the Quay login saved with the data directory. The existing database user is unchanged."
+		fi
+		[ -n "$_saved_user" ] && reg_user="$_saved_user"
+		reg_pw="$_saved_pw"
+		aba_info "Reusing the Quay login saved with the data directory."
+	elif [ -s "$_ng_pw" ]; then
+		_stored_pw=$(cat "$_ng_pw")
+		if [ -n "$_stored_pw" ]; then
+			if [ "$reg_pw" ] && [ "$reg_pw" != "$_stored_pw" ]; then
+				aba_warn "Using the quay-ng login stored with the data directory. The existing database user is unchanged."
+			fi
+			[ -n "$_saved_user" ] && reg_user="$_saved_user"
+			reg_pw="$_stored_pw"
+			aba_info "Reusing the quay-ng login stored with the data directory."
+		fi
+	elif [ ! "$reg_pw" ] && [ -n "$_saved_pw" ]; then
+		[ -n "$_saved_user" ] && reg_user="$_saved_user"
+		reg_pw="$_saved_pw"
+		aba_info "Reusing the registry login saved with the data directory."
+	fi
 	if [ ! "$reg_pw" ]; then
 		reg_pw=$(openssl rand -base64 12)
 		aba_info "Generated random registry password."
@@ -575,6 +610,24 @@ _reg_probe_set() {
 	esac
 }
 
+# --- reg_ask_delete_data ------------------------------------------------------
+# Ask whether to delete the registry data directory.
+# Interactive default is no (keep the images). Automation deletes:
+# ask=false, or aba -y, via --auto-yes.
+# Sets REG_KEEP_DATA=1 when the directory is kept, so the stale probe does
+# not treat that directory as a failed cleanup.
+# Returns 0 if the caller should delete the directory.
+reg_ask_delete_data() {
+	local dir=$1
+	if ask -n --auto-yes "Delete the mirror data"; then
+		REG_KEEP_DATA=
+		return 0
+	fi
+	REG_KEEP_DATA=1
+	aba_info "Keeping the mirror data at $dir"
+	return 1
+}
+
 # --- reg_rm_data_dir ----------------------------------------------------------
 # Remove registry data directory, using sudo only for vendors that need it.
 # Docker and quay-ng use rootless podman (all files user-owned); quay v2 uses
@@ -621,8 +674,11 @@ reg_stale_report() {
 	# even under pipefail (rightmost non-zero wins).
 	case "$vendor" in
 		quay)
-			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
-				stale+="  reg_root ($reg_root) still exists"$'\n'
+			# A kept data directory is the mirror, not a failed cleanup.
+			if [ -z "${REG_KEEP_DATA:-}" ]; then
+				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+					stale+="  reg_root ($reg_root) still exists"$'\n'
+			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
 			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE 'quay-app|quay-redis|quay-postgres'" "quay containers" && \
@@ -631,16 +687,20 @@ reg_stale_report() {
 				stale+="  redis_pass podman secret still exists"$'\n'
 			;;
 		docker)
-			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
-				stale+="  reg_root ($reg_root) still exists"$'\n'
+			if [ -z "${REG_KEEP_DATA:-}" ]; then
+				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+					stale+="  reg_root ($reg_root) still exists"$'\n'
+			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
 			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -q '^registry$'" "registry container" && \
 				stale+="  registry container still present"$'\n'
 			;;
 		"$_QUAY_NG_VENDOR"|quay-ng)
-			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
-				stale+="  reg_root ($reg_root) still exists"$'\n'
+			if [ -z "${REG_KEEP_DATA:-}" ]; then
+				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+					stale+="  reg_root ($reg_root) still exists"$'\n'
+			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
 			# systemctl is-active: 0 + "active" = present; 3/"inactive" = gone.
@@ -669,6 +729,14 @@ reg_stale_report() {
 reg_finish_uninstall() {
 	local vendor="$1"
 	local msg="${2:-uninstall successful}"
+
+	# The data directory is staying. Remember the login, because Quay will
+	# not apply a newly generated password to a user that already exists.
+	if [ -n "${REG_KEEP_DATA:-}" ] && [ -n "${reg_root:-}" ] && [ -d "$reg_root" ] && [ -n "${reg_pw:-}" ]; then
+		printf "reg_user='%s'\nreg_pw='%s'\n" "$reg_user" "$reg_pw" > "$reg_root/.aba-reuse-creds"
+		chmod 600 "$reg_root/.aba-reuse-creds"
+		aba_info "Saved the registry login in $reg_root/.aba-reuse-creds for the next install."
+	fi
 
 	rm -rf "${regcreds_dir:?}/"*
 	aba_success "${vendor} registry ${msg}"

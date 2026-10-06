@@ -20,6 +20,16 @@
 #     page) to prevent dialog resize flicker.
 
 printf 'Initializing ABA TUI v2...\n'
+
+# Abort early if the filesystem is full (avoids scattered "No space left" errors)
+if ! _tui_tmpcheck=$(mktemp 2>/dev/null); then
+	printf '\n\033[31mError: Cannot create temporary files — disk may be full.\033[0m\n'
+	printf 'Free some disk space and try again.\n\n'
+	df -h / /tmp 2>/dev/null
+	exit 1
+fi
+rm -f "$_tui_tmpcheck"
+
 printf '  [ ] Loading modules\n'
 printf '  [ ] Checking mirror\n'
 printf '  [ ] Checking packages\n'
@@ -122,6 +132,7 @@ export ESCDELAY=25
 # Source TUI v2 modules
 source "$ABA_ROOT/tui/v2/tui-strings2.sh"
 source "$ABA_ROOT/tui/v2/tui-lib.sh"
+source "$ABA_ROOT/tui/v2/tui-progress.sh"
 source "$ABA_ROOT/tui/v2/tui-mirror.sh"
 source "$ABA_ROOT/tui/v2/tui-cluster.sh"
 source "$ABA_ROOT/tui/v2/tui-disco.sh"
@@ -722,7 +733,7 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
 				if [[ $? -eq 0 ]]; then
-					_mirror_config_review && mirror_sync
+					_mirror_config_review && _tui_install_mirror "Install Mirror" && mirror_sync
 				fi
 			else
 				mirror_sync
