@@ -35,7 +35,7 @@ ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
 
-uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a CentOS Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # Handle --aba-version early (before sudo check)
 if [ "$1" = "--aba-version" -o "$1" = "version" ]; then
@@ -1772,7 +1772,7 @@ fi
 			"  $ERROR_DETAILS" \
 			"" \
 			"Ensure you have Internet access to download the required images." \
-			"To get started with ABA run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
+			"To get started with ABA run it on a connected workstation/laptop with Fedora, RHEL or CentOS Stream and try again." \
 			"" \
 			"Required sites:                                Other sites:" \
 			"   mirror.openshift.com                           docker.io" \
