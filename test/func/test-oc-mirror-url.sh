@@ -11,7 +11,8 @@ fail=0
 # Extract the URL that make would use for oc-mirror.rhel9.tar.gz
 _url_for() {
 	local ver="$1" maj="$2"
-	make -sC cli -n download-oc-mirror ocp_version="$ver" ocp_major="$maj" 2>&1 \
+	# -B forces rebuild even if target exists, -n dry-run only
+	make -sC cli -Bn download-oc-mirror ocp_version="$ver" ocp_major="$maj" 2>&1 \
 		| grep "Downloading.*oc-mirror.rhel9" | head -1 | sed 's/.*Downloading //'
 }
 
