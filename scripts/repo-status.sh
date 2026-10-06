@@ -226,7 +226,7 @@ shell)
 
 		echo
 		aba_info "  Mirror"
-		aba_info "    Registry:     $([ "$_mirror_installed" = "true" ] && echo "installed" || echo "not installed")"
+		aba_info "    Registry:         $([ "$_mirror_installed" = "true" ] && echo "installed" || echo "not installed")"
 		aba_info "    Quay installer:   $([ "$_reg_installer_quay" = "true" ] && echo "available" || echo "not found")"
 		aba_info "    Docker installer: $([ "$_reg_installer_docker" = "true" ] && echo "available" || echo "not found")"
 		aba_info "    Saved archives:   $([ "$_saved_archives" = "true" ] && echo "yes" || echo "none")"
