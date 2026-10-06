@@ -38,11 +38,8 @@ _orig_verify_conf=$(grep '^verify_conf=' aba.conf 2>/dev/null | head -1 \
 	| sed 's/^verify_conf=//; s/[[:space:]].*//; s/#.*//')
 
 _restore_verify_conf() {
-	if [ -n "${_orig_verify_conf:-}" ]; then
-		replace-value-conf -n verify_conf -v "$_orig_verify_conf" -f aba.conf
-	else
-		replace-value-conf -n verify_conf -v "all" -f aba.conf
-	fi
+	local _val="${_orig_verify_conf:-all}"
+	replace-value-conf -n verify_conf -v "$_val" -f aba.conf 2>/dev/null || true
 }
 trap '_restore_verify_conf; _cleanup' EXIT
 
