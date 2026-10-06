@@ -135,11 +135,15 @@ direct_wizard() {
 
 	local step="pull_secret"
 	local _ver_short=""
+	local _has_back=false
 
 	while :; do
 		case "$step" in
 		pull_secret)
 			if _direct_pull_secret; then
+				# Back button on channel only if pull_secret dialog was shown
+				# (auto-skip sets DIALOG_RC="next" without showing any dialog)
+				[[ "${DIALOG_RC:-}" != "next" ]] && _has_back=true
 				# Start redhat-operator catalog ASAP (uses core task IDs)
 				"$ABA_ROOT/scripts/create-containers-auth.sh" >>"$_TUI_LOG_FILE" 2>&1 || true
 				local _ps_ver=""
@@ -164,10 +168,15 @@ direct_wizard() {
 			fi
 			;;
 		channel)
-			_direct_channel
+			_direct_channel "$( $_has_back && echo back )"
 			case "$DIALOG_RC" in
 				next) step="version" ;;
-				back) return 1 ;;  # Exit wizard (pull secret already valid — no step to go back to)
+				back)
+					if $_has_back; then
+						step="pull_secret"
+					fi
+					# No back step — ignore (stay on channel)
+					;;
 				repeat) ;;  # Stay on channel
 				*) return 1 ;;
 			esac
@@ -349,6 +358,7 @@ _print_pull_secret_instructions() {
 }
 
 # --- Channel Selection ---
+# Args: $1 = "back" to show Back button, empty to hide it
 _direct_channel() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: channel"
@@ -360,11 +370,16 @@ _direct_channel() {
 	candidate) _default_tag=c ;;
 	esac
 
+	local _back_args=()
+	if [[ "${1:-}" == "back" ]]; then
+		_back_args=(--extra-button --extra-label "$TUI2_BTN_BACK")
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CHANNEL" \
 		--default-item "$_default_tag" \
 		--default-button ok \
 		--no-cancel \
-		--extra-button --extra-label "$TUI2_BTN_BACK" \
+		"${_back_args[@]}" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
 		--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
