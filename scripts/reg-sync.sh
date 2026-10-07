@@ -11,7 +11,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-# PLANs are emitted by _plan-sync Makefile target (scripts/progress-plan.sh)
+# PLANs are emitted by _progress_plan-sync Makefile target (scripts/progress-plan.sh)
 
 aba_progress "START|preflight"
 
