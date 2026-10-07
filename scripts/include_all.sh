@@ -266,6 +266,9 @@ aba_abort() {
 
 	sleep 1
 
+	# Emit structured error for TUI progress dialog
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "ERROR|$main_msg"
+
 	exit 1
 }
 
@@ -1510,7 +1513,10 @@ ask() {
 		[ "$effective" = "n" ] && return 1
 		return 0
 	fi
+	# TUI mode: notify the progress dialog so it shows a yes/no prompt
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "PROMPT|$*|$def_response"
 	read $timer yn
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "PROMPT_DONE"
 
 	# Empty input = use default
 	if [ ! "$yn" ]; then
@@ -4632,9 +4638,17 @@ check_release_image() {
 
 	# --- Quay path: both return 401 with Basic, need Bearer token exchange ---
 	# A successful token exchange proves credentials are valid (no separate /v2/ check needed).
+	# Parse the service name from the actual WWW-Authenticate header — quay-ng may
+	# advertise a service without a port even when the registry runs on a non-standard
+	# port (e.g. port-mapped containers).  Always hit the known-reachable registry
+	# endpoint for the token exchange, not the realm URL (which may point to port 443).
 	if [ "$_p1_code" = "401" ]; then
-		local _token_url="https://$reg_host:$reg_port/v2/auth?service=$reg_host:$reg_port&scope=repository:$_repo:pull"
-		aba_debug "Running: curl -s $_curl_opts -u <redacted> $_token_url"
+		local _bearer_svc _token_url _challenge_hdr
+		_challenge_hdr=$(curl -k -sS -D- -o /dev/null --connect-timeout 3 "$_v2_url" 2>/dev/null)
+		_bearer_svc=$(printf '%s\n' "$_challenge_hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p' | head -1)
+		[ -z "$_bearer_svc" ] && _bearer_svc="$reg_host:$reg_port"
+		_token_url="https://$reg_host:$reg_port/v2/auth?service=${_bearer_svc}&scope=repository:$_repo:pull"
+		aba_debug "Bearer challenge: service=$_bearer_svc token_url=$_token_url"
 		local _token
 		_token=$(curl -s $_curl_opts \
 			-u "$_userpass" \

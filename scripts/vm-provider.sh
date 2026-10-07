@@ -104,8 +104,10 @@ _vm_list_names() {
 vm_start() {
 	local scope=${1:-all} name
 	vm_exists_any || return 1
-	_vm_list_names "$scope"
-	ask "Start the above virtual machine(s)" || return 1
+	local _names
+	_names=$(_vm_list_names "$scope")
+	echo "$_names"
+	ask "Start virtual machine(s): $_names" || return 1
 	for name in $(_vm_hosts "$scope"); do
 		vmp_power_on "$(_vm_full_name "$name")"
 	done
@@ -120,9 +122,11 @@ vm_stop() {
 	# Nothing to stop if no VMs are running
 	vm_on_any || return 0
 	if [ "${ask:-}" ]; then
+		local _names
+		_names=$(_vm_list_names "$scope")
 		echo
-		_vm_list_names "$scope"
-		ask "Stop the above virtual machine(s)" || return 1
+		echo "$_names"
+		ask "Stop virtual machine(s): $_names" || return 1
 	fi
 	for name in $(_vm_hosts "$scope"); do
 		vmp_power_off "$(_vm_full_name "$name")"

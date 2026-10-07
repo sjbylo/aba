@@ -13,6 +13,7 @@ Options:
   -U, --reg-ssh-user <string>          # Username to use to access the remote host via ssh.
   -u, --reg-user string                # The username used to access the registry (default is 'init').
       --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
+      --delete-data                    # Delete registry data directory during uninstall (default: keep).
       --reg-path <string>              # The path to store images inside the mirror registry.
       --vendor <auto|quay|docker>      # Registry type: auto (default), quay, or docker.
       --reg-port <number>              # Port of the mirror registry (default 8443).

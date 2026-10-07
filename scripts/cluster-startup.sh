@@ -13,6 +13,10 @@ aba_progress "START|su_power"
 # Resolve kubeconfig (prefer externalized state under ~/.aba/, fall back to local)
 _kc=$(cluster_kubeconfig)
 if [ -z "$_kc" ]; then
+	aba_progress "FAIL|su_power"
+	aba_progress "ERROR|Cluster not installed"
+	aba_progress "DETAIL|Cannot find kubeconfig"
+	aba_progress "NEXT|Run 'aba clean; aba' to install this cluster"
 	aba_abort "Cluster not installed! Cannot find kubeconfig. Try running 'aba clean; aba' to install this cluster!"
 fi
 export KUBECONFIG="$_kc"
@@ -28,6 +32,17 @@ _cluster_startup_api_up() {
 	curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null
 }
 
+# Retry VM start during the API wait for transient hypervisor failures
+# (e.g. VMs were mid-shutdown when power-on was first attempted).
+_has_vms=
+_cluster_startup_wait_api() {
+	_cluster_startup_api_up && return 0
+	if [ "$_has_vms" ]; then
+		aba -y start >/dev/null 2>&1 || true
+	fi
+	return 1
+}
+
 # Check for bare-metal installation (no hypervisor config)
 if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
@@ -41,23 +56,35 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 			aba_info "Aborted. Power on the servers and re-run 'aba startup' to uncordon nodes."
 			exit 0
 		elif [ "$_wait_rc" -ne 0 ]; then
+			aba_progress "FAIL|su_power"
+			aba_progress "ERROR|Cluster API not available at $server_url after 20 min"
+			aba_progress "NEXT|Power on all servers and try again"
 			aba_abort "Cluster API not available at $server_url after 20 min. Power on all servers and try again."
 		fi
 	fi
 else
+	_has_vms=1
 	aba_info Starting cluster $cluster_name ...
-	aba start
+	if ! aba start; then
+		aba_info "Aborted. Power on VMs with 'aba start' and re-run 'aba startup'."
+		aba_progress "DONE|su_power"
+		exit 0
+	fi
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
 if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 	aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 	_wait_rc=0
-	aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 600 _cluster_startup_api_up || _wait_rc=$?
+	aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 600 _cluster_startup_wait_api || _wait_rc=$?
 	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 		aba_info "Aborted. Re-run 'aba startup' to uncordon nodes and complete startup."
 		exit 0
 	elif [ "$_wait_rc" -ne 0 ]; then
+		aba_progress "FAIL|su_power"
+		aba_progress "ERROR|Cluster API not available at $server_url after 10 min"
+		aba_progress "NEXT|Check that VMs are powered on: aba ls"
+		aba_progress "NEXT|Check cluster health"
 		aba_abort "Cluster API not available at $server_url after 10 min." \
 			"Check that VMs are powered on ('aba ls') and the cluster is healthy."
 	fi
@@ -66,11 +93,16 @@ fi
 OC="oc --kubeconfig $KUBECONFIG"
 
 aba_progress "DONE|su_power"
-aba_progress "START|su_nodes"
+aba_progress "START|su_api"
 
 # Auth check — abort immediately if we can't authenticate (expired certs, bad creds, etc.)
 aba_debug "Running: $OC whoami --request-timeout=10s"
-if ! $OC whoami --request-timeout='10s' >/dev/null 2>/dev/null; then
+if ! _oc_err=$($OC whoami --request-timeout='10s' 2>&1 >/dev/null); then
+	[ -n "$_oc_err" ] && echo "$_oc_err" >&2
+	aba_progress "FAIL|su_api"
+	aba_progress "ERROR|Cannot authenticate to cluster at $server_url"
+	[ -n "$_oc_err" ] && aba_progress "DETAIL|$_oc_err"
+	aba_progress "NEXT|Check if cluster certificates have expired"
 	aba_abort "Cannot authenticate to cluster at $server_url" \
 		"If certificates have expired, see: https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/backup_and_restore/control-plane-backup-and-restore#dr-recovering-expired-certs"
 fi
@@ -85,6 +117,10 @@ _cluster_startup_oc_get_nodes() {
 aba_debug "Running: $OC get nodes"
 if ! $OC get nodes; then
 	if ! aba_wait_show "Waiting for oc get nodes" 3 120 _cluster_startup_oc_get_nodes; then
+		aba_progress "FAIL|su_api"
+		aba_progress "ERROR|Cluster API not responding after 2 min"
+		aba_progress "NEXT|Check that VMs are powered on: aba ls"
+		aba_progress "NEXT|Check cluster health"
 		aba_abort "Cluster API not responding after 2 min. Check 'aba ls' and cluster health."
 	fi
 fi
@@ -104,9 +140,18 @@ done
 
 aba_info Cluster $cluster_name nodes:
 aba_debug "Running: $OC get nodes"
-if ! $OC get nodes; then
+if ! _oc_err=$($OC get nodes 2>&1); then
+	[ -n "$_oc_err" ] && echo "$_oc_err" >&2
+	aba_progress "FAIL|su_api"
+	aba_progress "ERROR|Failed to access the cluster"
+	[ -n "$_oc_err" ] && aba_progress "DETAIL|$_oc_err"
 	aba_abort "Failed to access the cluster!"
+else
+	echo "$_oc_err"
 fi
+
+aba_progress "DONE|su_api"
+aba_progress "START|su_nodes"
 
 uncordon_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC adm uncordon ${node}; done; }
 
@@ -147,6 +192,9 @@ check_and_approve_csrs() {
 pid=$!
 trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_rc' EXIT
 
+aba_progress "DONE|su_nodes"
+
+aba_progress "START|su_nodes_ready"
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
 	if ! aba_wait_show "Waiting for all nodes Ready (Ctrl-C to skip)" 10 600 all_nodes_ready; then
@@ -158,11 +206,8 @@ if all_nodes_ready; then
 	aba_success "All nodes are ready!"
 fi
 
-aba_progress "DONE|su_nodes"
-aba_progress "START|su_ready"
-exec_cmd="$OC get nodes"
-aba_debug "Running: $exec_cmd"
-$exec_cmd
+aba_progress "DONE|su_nodes_ready"
+
 aba_info "Note the certificate expiration date of this cluster ($cluster_name):"
 aba_debug "Running: $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer"
 echo_yellow $($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
@@ -180,6 +225,7 @@ _cluster_startup_cos_ready() {
 	$OC get co --no-headers | awk '{print $3,$5}' | grep -v '^True False$' | wc -l | grep -q '^0$'
 }
 
+aba_progress "START|su_console"
 _console_ok=""
 if ! curl -skL "$console" | grep -q 'Red Hat OpenShift'; then
 	aba_success "The cluster will complete startup and become fully available shortly!"
@@ -194,11 +240,14 @@ else
 	aba_success "Cluster console is accessible at $console"
 	_console_ok=1
 fi
+aba_progress "DONE|su_console"
 
+aba_progress "START|su_cos"
 if ! _cluster_startup_cos_ready; then
 	aba_info "Waiting for all cluster operators ..."
 	if ! aba_wait_show "Waiting for all cluster operators (Ctrl-C to skip)" 5 300 _cluster_startup_cos_ready; then
 		aba_info "Not all cluster operators are available yet. The cluster may still be settling."
+		aba_progress "DONE|su_cos"
 		exit 0
 	fi
 fi
@@ -214,7 +263,7 @@ if [ -z "$_console_ok" ]; then
 	fi
 fi
 
-aba_progress "DONE|su_ready"
+aba_progress "DONE|su_cos"
 aba_success "Cluster startup completed successfully."
 
 exit 0
