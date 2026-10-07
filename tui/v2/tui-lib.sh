@@ -1730,13 +1730,21 @@ _require_podman() {
 	if ! aba_podman_check_wait; then
 		local _err="${PODMAN_CHECK_ERROR//$'\n'/\\n}"
 		dlg --backtitle "$(ui_backtitle)" --title "Podman Preflight Warning" \
-			--yes-label "Continue" --no-label "Back" \
-			--extra-button --extra-label "Retry" \
-			--yesno "Podman preflight check failed:\n\n${_err}\n\nThis may not affect your workflow if the required\nregistries are accessible.\n\nContinue anyway?" 0 0
+			--cancel-label "$TUI2_BTN_BACK" \
+			--no-tags \
+			--menu "Podman preflight check failed:\n\n${_err}\n\nThis may not affect your workflow if the required\nregistries are accessible." 0 0 0 \
+			"continue" "Continue anyway" \
+			"retry"    "Retry the podman check" \
+			2>"$_TUI_TMP"
 		local _rc=$?
-		case "$_rc" in
-			0) _PODMAN_WARN_DISMISSED=1; return 0 ;;
-			3)
+		if [[ $_rc -ne 0 ]]; then
+			return 1
+		fi
+		local _choice
+		_choice=$(<"$_TUI_TMP")
+		case "$_choice" in
+			continue) _PODMAN_WARN_DISMISSED=1; return 0 ;;
+			retry)
 				run_once -r -i "aba:preflight:podman" 2>/dev/null || true
 				aba_podman_check_start
 				_require_podman

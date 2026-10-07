@@ -2074,13 +2074,18 @@ R - Reset ABA: Cleans configuration and state files so you can\n\
 				local _unreg_host
 				_unreg_host=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_host")
 				[[ -z "$_unreg_host" ]] && _unreg_host="localhost"
+				local _delete_data=""
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
-					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
-					--yesno "Uninstall the mirror registry on: ${_unreg_host}\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
+					--ok-label "Uninstall" --cancel-label "$TUI2_BTN_CANCEL" \
+					--separate-output \
+					--checklist "Uninstall the mirror registry on: ${_unreg_host}\n\nThe registry service will be stopped and removed.\nThe data directory is preserved by default (images survive for reinstall).\n\nOptional:" 0 0 1 \
+					"delete-data" "Also delete the data directory (images will be lost)" off \
+					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && continue
-				_exec_with_progress "aba --dir mirror uninstall --yes" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				grep -q 'delete-data' "$_TUI_TMP" && _delete_data="--delete-data"
+				_exec_with_progress "aba --dir mirror uninstall --yes${_delete_data:+ $_delete_data}" "Uninstall Mirror Registry" _invalidate_mirror_cache
 				if [ $? -eq 2 ]; then
-					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry" _invalidate_mirror_cache
+					confirm_and_execute "aba --dir mirror uninstall${_delete_data:+ $_delete_data}" "Uninstall Mirror Registry" _invalidate_mirror_cache
 				fi
 				;;
 			"F")
@@ -2724,7 +2729,7 @@ _day2_startup() {
 		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	_exec_with_progress "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	_exec_with_progress "aba --dir $SELECTED_CLUSTER startup --yes" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
 	local rc=$?
 	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display" && rc=$?
 	return $rc

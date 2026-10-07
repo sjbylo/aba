@@ -652,21 +652,34 @@ _ensure_platform_for_upgrade() {
 	local _rc=0
 	dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
 		--colors \
-		--yes-label "Yes" --no-label "No" \
-		--extra-button --extra-label "Disable Upgrade" \
-		--yesno "$_msg" 0 0 || _rc=$?
+		--cancel-label "$TUI2_BTN_CANCEL" \
+		--no-tags \
+		--menu "$_msg\n\nChoose an action:" 0 0 0 \
+		"include"  "Include release images (recommended)" \
+		"keep"     "Keep as-is" \
+		"disable"  "Disable upgrade target" \
+		2>"$_TUI_TMP" || _rc=$?
 
 	case $_rc in
-		0)	# Yes — include release images
-			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
-			tui_log "Guard: excl_platform switched to false for upgrade to $_target"
+		0)
+			local _choice
+			_choice=$(<"$_TUI_TMP")
+			case $_choice in
+				include)
+					replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+					tui_log "Guard: excl_platform switched to false for upgrade to $_target"
+					;;
+				disable)
+					replace-value-conf -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+					tui_log "Guard: ocp_upgrade_to cleared (upgrade disabled)"
+					;;
+				keep)
+					tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
+					;;
+			esac
 			;;
-		3)	# Extra — disable upgrade target
-			replace-value-conf -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
-			tui_log "Guard: ocp_upgrade_to cleared (upgrade disabled)"
-			;;
-		*)	# No — keep as-is
-			tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
+		*)	# Cancel
+			tui_log "Guard: user cancelled release images dialog"
 			;;
 	esac
 }
@@ -2522,15 +2535,15 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 
 # =============================================================================
 # Ensure offline prerequisites (CLI tools + registry installers)
+# Used by the DISCO-switch path — downloads everything needed before
+# the host goes "offline".  NOT used by bundle (aba bundle handles its own).
 # =============================================================================
 
 _ensure_offline_prereqs() {
 	tui_log "Ensuring offline prerequisites are downloaded..."
 
-	# Refresh ocp_version in case user changed it mid-session
 	source <(normalize-aba-conf) 2>/dev/null
 
-	# Peek using the SAME per-tool IDs that ABA core uses
 	local need_download=false
 	run_once -p -i "cli:download:openshift-install:${ocp_version}" 2>/dev/null || need_download=true
 	run_once -p -i "$TASK_DL_QUAY_REG" 2>/dev/null || need_download=true
@@ -2540,20 +2553,18 @@ _ensure_offline_prereqs() {
 		return 0
 	fi
 
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PREPARING" \
+	dlg --backtitle "$(ui_backtitle)" --title "Preparing" \
 		--infobox "Downloading offline files (CLI tools + registry installers)...\n\nPlease wait." 0 0
 
-	# cli-download-all.sh uses per-tool run_once IDs (cli:download:<tool>[:<ver>])
-	# Close flock fd so child processes don't inherit and hold the TUI lock
 	if ! bash -lc "cd '$ABA_ROOT' && scripts/cli-download-all.sh --wait" {ABA_TUI_FLOCK_FD}>&- >>"$_TUI_LOG_FILE" 2>&1; then
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
+		dlg --backtitle "$(ui_backtitle)" --title "Download Failed" \
 			--msgbox "Failed to download CLI tools.\n\nCheck internet connectivity and try again." 0 0
 		return 1
 	fi
 
 	if ! run_once -q -w -i "$TASK_DL_QUAY_REG" -- \
 		"${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1; then
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
+		dlg --backtitle "$(ui_backtitle)" --title "Download Failed" \
 			--msgbox "Failed to download registry installers.\n\nCheck internet connectivity and try again." 0 0
 		return 1
 	fi
@@ -2568,8 +2579,6 @@ _ensure_offline_prereqs() {
 
 mirror_create_bundle() {
 	tui_log "Action: Create Install Bundle"
-
-	_ensure_offline_prereqs || return 1
 
 	# OCP line from local yaml (Save/Sync/bundle), not from a leftover transfer tar.
 	source <(normalize-aba-conf) 2>/dev/null
@@ -2664,14 +2673,19 @@ mirror_create_bundle() {
 		_mount_point=$(df --output=target "$output_dir" 2>/dev/null | tail -1)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
-			--yes-label "$TUI2_BTN_LIGHT_BUNDLE" \
-			--no-label "$TUI2_BTN_FULL_BUNDLE" \
-			--extra-button --extra-label "$TUI2_BTN_BACK" \
-			--yesno "$TUI2_MSG_BUNDLE_LIGHT_CONFIRM" 0 0
+			--cancel-label "$TUI2_BTN_BACK" \
+			--no-tags \
+			--menu "Bundle output and mirror data are on the same disk.\nA full bundle duplicates image archives, requiring\nroughly double the space.\n\n  Light  — excludes image archives (transfer separately)\n  Full   — everything in one file (needs more disk space)\n\nChoose bundle type:" 0 0 0 \
+			"light" "Light" \
+			"full"  "Full" \
+			2>"$_TUI_TMP"
 		local _bundle_rc=$?
-		if [[ $_bundle_rc -eq 3 || $_bundle_rc -eq 255 ]]; then
+		if [[ $_bundle_rc -ne 0 ]]; then
 			return 1
-		elif [[ $_bundle_rc -eq 0 ]]; then
+		fi
+		local _bundle_type
+		_bundle_type=$(<"$_TUI_TMP")
+		if [[ "$_bundle_type" == "light" ]]; then
 			light_flag="--light"
 		else
 			# Full bundle on same device — warn only if free space is low
@@ -2696,23 +2710,21 @@ Continue with full bundle?" 0 0
 	if ls "$ABA_ROOT"/mirror/data/mirror_*.tar >/dev/null 2>&1; then
 		local _bundle_data_choice=""
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
-			--yes-label "Start Fresh" \
-			--no-label "Incremental" \
-			--extra-button --extra-label "$TUI2_BTN_BACK" \
-			--yesno "Previous image data found.\n\n\
-\\ZbStart Fresh\\ZB: delete existing data and re-download\neverything (recommended).\n\n\
-\\ZbIncremental\\ZB: only download what changed since\nlast time (faster, but may be incomplete).\n\n\
-\\ZbStart Fresh\\ZB is recommended to ensure a\ncomplete bundle." 0 0
+			--cancel-label "$TUI2_BTN_BACK" \
+			--no-tags \
+			--menu "Previous image data found.\n\n  Start Fresh    — delete existing data and re-download everything\n  Incremental  — only download what changed since last time\n\nChoose how to proceed:" 0 0 0 \
+			"fresh"       "Start Fresh (recommended)" \
+			"incremental" "Incremental (faster)" \
+			2>"$_TUI_TMP"
 		local choice_rc=$?
-		case $choice_rc in
-			0) force_flag="--force"
-			   tui_log "Bundle: starting fresh (--force)"
-			   _bundle_data_choice="rebuild" ;;
-			1) tui_log "Bundle: incremental update (reusing existing data)"
-			   _bundle_data_choice="reuse" ;;
+		[[ $choice_rc -ne 0 ]] && return 1
+		_bundle_data_choice=$(<"$_TUI_TMP")
+		case $_bundle_data_choice in
+			fresh) force_flag="--force"
+			       tui_log "Bundle: starting fresh (--force)" ;;
+			incremental) tui_log "Bundle: incremental update (reusing existing data)" ;;
 			*) return 1 ;;
 		esac
-		[[ -z "$_bundle_data_choice" ]] && return 1
 	fi
 
 	local cmd="aba bundle --out \"$bundle_path\""
