@@ -79,6 +79,7 @@ _tp_cleanup() {
 	_tp_tail_pid=""
 	_tp_script_pid=""
 	rm -rf "${_tp_tmpdir:?}" 2>/dev/null || true
+	rm -rf "$(dirname "${BASH_SOURCE[0]}")/__pycache__" 2>/dev/null || true
 	_tp_tmpdir=""
 }
 

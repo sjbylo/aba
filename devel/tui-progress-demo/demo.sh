@@ -130,6 +130,7 @@ cleanup() {
 	exec 7>&- 2>/dev/null || true
 	wait 2>/dev/null || true
 	rm -rf "$tmpdir" || true
+	rm -rf "$DEMO_DIR/__pycache__" || true
 	[ -n "$_saved_stty" ] && stty "$_saved_stty" 2>/dev/null || true
 	stty sane 2>/dev/null || true
 	tput cnorm 2>/dev/null || true
