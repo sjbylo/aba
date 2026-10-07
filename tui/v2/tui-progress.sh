@@ -27,8 +27,8 @@ _TUI_PROGRESS_LOADED=1
 # Internal state — reset per workflow run
 # ============================================================
 
-declare -A _tp_status _tp_text _tp_real_done
-declare -a _tp_order _tp_errors _tp_details _tp_nexts
+declare -A _tp_status _tp_text _tp_real_done _tp_weight
+declare -a _tp_order _tp_errors _tp_details _tp_nexts _tp_failed
 _tp_prompt_msg=""
 _tp_abort=""
 _tp_aba_exited=0
@@ -86,10 +86,12 @@ _tp_reset_state() {
 	_tp_status=()
 	_tp_text=()
 	_tp_real_done=()
+	_tp_weight=()
 	_tp_order=()
 	_tp_errors=()
 	_tp_details=()
 	_tp_nexts=()
+	_tp_failed=()
 	_tp_prompt_msg=""
 	_tp_abort=""
 	_tp_aba_exited=0
@@ -122,8 +124,15 @@ _tp_parse_event() {
 			# In that case, _tp_status[] is already set but _tp_text[] is empty.
 			# We add to _tp_order and set _tp_text, but keep the existing status.
 			if [ -z "${_tp_text[$id]:-}" ]; then
+				# arg1 is "text" or "text|weight" — split on last |
+				local _plan_text="${arg1%|*}" _plan_weight="${arg1##*|}"
+				# If no weight field, text==weight (no | separator)
+				if [ "$_plan_text" = "$_plan_weight" ]; then
+					_plan_weight=1
+				fi
 				_tp_order+=("$id")
-				_tp_text[$id]="$arg1"
+				_tp_text[$id]="$_plan_text"
+				_tp_weight[$id]="$_plan_weight"
 				# Only set initial N/A status if no START/DONE has arrived yet.
 				# Use if/then — NOT "[ ] && cmd" which returns 1 under set -e.
 				if [ -z "${_tp_status[$id]:-}" ]; then
@@ -133,7 +142,7 @@ _tp_parse_event() {
 			;;
 		START)       [ "${_tp_status[$id]:-9}" != "0" ] && _tp_status[$id]="77"; _tp_real_done[$id]="started" ;;
 		DONE)        _tp_status[$id]="0"; _tp_real_done[$id]="done" ;;
-		FAIL)        _tp_status[$id]="1"; _tp_real_done[$id]="fail" ;;
+		FAIL)        _tp_status[$id]="1"; _tp_real_done[$id]="fail"; _tp_failed+=("${_tp_text[$id]:-$id}") ;;
 		ERROR)       _tp_errors+=("${arg1:-$id}") ;;
 		DETAIL)      _tp_details+=("${arg1:-$id}") ;;
 		NEXT)        _tp_nexts+=("${arg1:-$id}") ;;
@@ -177,7 +186,8 @@ _tp_dlg() {
 
 _tp_draw() {
 	local _title="$1"
-	local args=() total=0 done_count=0 id text status
+	local _subtitle_override="${2:-}"
+	local args=() total=0 done_weight=0 total_weight=0 id text status
 	local _idx=0
 
 	# Find the last step with a non-N/A status (the "frontier").
@@ -203,25 +213,31 @@ _tp_draw() {
 		if [ "$_idx" -gt "$_last_real_idx" ]; then
 			status="9"
 		fi
+		# Custom label: "No-op" instead of dialog's built-in "Skipped"
+		[ "$status" = "6" ] && status="No-op"
 		args+=("$text" "$status")
 		total=$((total + 1))
-		# Count Succeeded, Completed, Done, and Skipped toward progress %
-		case "$status" in 0|3|5|6) done_count=$((done_count + 1)) ;; esac
+		# Accumulate weighted progress for completed steps
+		local _w="${_tp_weight[$id]:-1}"
+		case "$status" in 0|3|5|6|No-op) done_weight=$((done_weight + _w)) ;; esac
+		total_weight=$((total_weight + _w))
 		_idx=$((_idx + 1))
 	done
 
 	[ "$total" -eq 0 ] && return
 
 	local pct=0
-	[ "$total" -gt 0 ] && pct=$((done_count * 100 / total))
+	[ "$total_weight" -gt 0 ] && pct=$((done_weight * 100 / total_weight))
 
-	local _subtitle="\n  [O] Live output  ·  [Q] Back\n"
-	if [ -n "$_tp_prompt_msg" ]; then
-		_subtitle="\n  ⚠  ABA needs input — press [O] to answer\n"
+	local _subtitle="\n       < Output (Space) >        < Quit (Q) >\n"
+	if [ -n "$_subtitle_override" ]; then
+		_subtitle="$_subtitle_override"
+	elif [ -n "$_tp_prompt_msg" ]; then
+		_subtitle="\n     ⚠  ABA needs input — press < Output (Space) >\n"
 	fi
 
-	# Dynamic height: 8 rows for chrome + 1 per step, min 18
-	local _height=$(( ${#_tp_order[@]} + 8 ))
+	# Dynamic height: 10 rows for chrome (title, subtitle, progress bar) + 1 per step, min 18
+	local _height=$(( ${#_tp_order[@]} + 10 ))
 	[ "$_height" -lt 18 ] && _height=18
 
 	_tp_dlg --title " $_title " \
@@ -305,10 +321,18 @@ _tp_sweep_skipped() {
 # ============================================================
 
 _tp_handle_prompt() {
-	local prompt="$1" rc=0
+	local _raw="$1" rc=0
+	# Extract default from "question|y" or "question|n" format
+	local _prompt="${_raw%|*}"
+	local _default="${_raw##*|}"
+	# If no separator, prompt is the full string
+	[ "$_prompt" = "$_raw" ] && _prompt="$_raw" && _default=""
 
-	_tp_dlg --title " ABA " --yes-label "Yes" --no-label "No" \
-		--yesno "\n$prompt" 8 56 || rc=$?
+	local _default_flag=""
+	[ "$_default" = "n" ] && _default_flag="--defaultno"
+
+	_tp_dlg --title " ABA " --yes-label "Yes" --no-label "No" $_default_flag \
+		--yesno "\n$_prompt" 0 0 || rc=$?
 	case "$rc" in
 		0) printf 'y\r' > "$_tp_input_fifo" ;;
 		1) printf 'n\r' > "$_tp_input_fifo" ;;
@@ -357,11 +381,18 @@ _tp_finish_outcome() {
 }
 
 _tp_show_error() {
-	local _msg="\n" line
-	[ "${#_tp_errors[@]}" -eq 0 ] && _msg="\n  A step failed.\n"
-	for line in "${_tp_errors[@]}"; do
-		_msg="${_msg}  ERROR: ${line}\n"
+	local _title="${1:-Error}"
+	local _msg="\n" line id
+
+	# Show which step(s) failed
+	for line in "${_tp_failed[@]}"; do
+		_msg="${_msg}  Failed: ${line}\n"
 	done
+
+	# Show only the first ERROR (the most specific/tailored one).
+	# aba_abort auto-emits ERROR, so duplicates are expected — first wins.
+	[ "${#_tp_errors[@]}" -eq 0 ] && _msg="${_msg}\n  A step failed.\n"
+	[ "${#_tp_errors[@]}" -gt 0 ] && _msg="${_msg}\n  ERROR: ${_tp_errors[0]}\n"
 	if [ "${#_tp_details[@]}" -gt 0 ]; then
 		_msg="${_msg}\n"
 		for line in "${_tp_details[@]}"; do
@@ -375,28 +406,71 @@ _tp_show_error() {
 		done
 	fi
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
-	while _tp_dlg --title " ✗ Error " \
+	while _tp_dlg --title " ${_title}: Error " \
 		--yes-label "View Output" \
 		--no-label "OK" \
 		--yesno "$_msg" \
-		18 64; do
+		0 0; do
 		_tp_show_output
 	done
 }
 
 _tp_show_abort() {
+	local _title="${1:-ABA}"
 	local _why="${_tp_abort:-Aborted.}"
-	_tp_dlg --title " Aborted " --msgbox "\n  $_why\n" 8 60 || true
+	_tp_dlg --title " ${_title}: Aborted " --msgbox "\n  $_why\n" 8 60 || true
 }
 
 _tp_show_stopped() {
-	_tp_dlg --title " Stopped " \
+	local _title="${1:-ABA}"
+	_tp_dlg --title " ${_title}: Stopped " \
 		--msgbox "\n  Stopped before all steps finished.\n" 8 56 || true
 }
 
 _tp_show_success() {
-	_tp_dlg --title " ✓ Complete " \
-		--msgbox "\n  All steps completed successfully!\n" 8 56 || true
+	local _title="${1:-ABA}"
+	local _body id text status _label _color _pad
+	local _max_len=34
+
+	# Build colored status text from the step arrays
+	_body="\n"
+	for id in "${_tp_order[@]}"; do
+		text="${_tp_text[$id]:-$id}"
+		status="${_tp_status[$id]:-9}"
+		case "$status" in
+			0)  _label=" Succeeded "; _color="\\Z2" ;;
+			1)  _label="  Failed   "; _color="\\Z1" ;;
+			6)  _label="   No-op   "; _color="\\Z2" ;;
+			7)  _label="In Progress"; _color="\\Z5" ;;
+			9)  _label="    N/A    "; _color="" ;;
+			*)  _label="$status"; _color="" ;;
+		esac
+		_pad=$(( _max_len - ${#text} ))
+		[ "$_pad" -lt 1 ] && _pad=1
+		if [ -n "$_color" ]; then
+			_body="${_body}  ${text}$(printf '%*s' "$_pad" '')${_color}[${_label}]\\Zn\n"
+		else
+			_body="${_body}  ${text}$(printf '%*s' "$_pad" '')[${_label}]\n"
+		fi
+	done
+	_body="${_body}\n  \\Z2✓  All steps completed successfully.\\Zn\n "
+
+	local _height=$(( ${#_tp_order[@]} + 8 ))
+	[ "$_height" -lt 14 ] && _height=14
+
+	local _default_btn=""
+	while true; do
+		local _rc=0
+		_tp_dlg --colors $_default_btn \
+			--title " $_title " \
+			--yes-label "Done" --no-label "Output" \
+			--yesno "$_body" \
+			"$_height" 56 || _rc=$?
+		case "$_rc" in
+			0|255) break ;;
+			1) _default_btn="--defaultno"; _tp_show_output ;;
+		esac
+	done
 }
 
 # ============================================================
@@ -453,7 +527,7 @@ _exec_with_progress() {
 	_tp_script_pid=$!
 
 	# Show immediate feedback while waiting for the command to emit PLAN events
-	_tp_dlg --title " $title " --infobox "\n  Starting ..." 5 30 2>/dev/null || true
+	_tp_dlg --title " $title " --infobox "\n  One moment please ..." 5 30 2>/dev/null || true
 
 	# Wait for PLAN events before first draw (10s timeout — aba.sh startup takes ~4s)
 	local _wait=100
@@ -503,6 +577,7 @@ _exec_with_progress() {
 				if [ "$_has_fail" -eq 0 ] && [ -n "$_last_active" ]; then
 					_tp_status[$_last_active]="1"
 					_tp_real_done[$_last_active]="fail"
+					_tp_failed+=("${_tp_text[$_last_active]:-$_last_active}")
 					if [ "${#_tp_errors[@]}" -eq 0 ]; then
 						_tp_errors+=("${_tp_text[$_last_active]:-$_last_active} failed (exit code $_tp_exit_code)")
 						_tp_nexts+=("Check the live output for details")
@@ -519,10 +594,10 @@ _exec_with_progress() {
 
 			_tp_draw "$title"
 			case "$(_tp_finish_outcome)" in
-				error)   _tp_show_error; _rc=1 ;;
-				abort)   _tp_show_abort; _rc=1 ;;
-				stopped) _tp_show_stopped; _rc=1 ;;
-				*)       _tp_show_success; _rc=0 ;;
+				error)   _tp_show_error "$title"; _rc=1 ;;
+				abort)   _tp_show_abort "$title"; _rc=1 ;;
+				stopped) _tp_show_stopped "$title"; _rc=1 ;;
+				*)       _tp_show_success "$title"; _rc=0 ;;
 			esac
 			break
 		fi
@@ -537,9 +612,9 @@ _exec_with_progress() {
 			continue
 		fi
 
-		if read -rsn1 -t 0.4 key; then
+		if IFS= read -rsn1 -t 0.4 key; then
 			case "$key" in
-				o|O) _tp_show_output ;;
+				o|O|' ') _tp_show_output ;;
 				q|Q) break ;;
 			esac
 		fi
