@@ -101,34 +101,10 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
 
-# /v2/ answers 401 with a bearer challenge. The password is accepted only by
-# the token realm, so curl -u against /v2/ itself never succeeds.
-_quay_ng_v2_ok() {
-	local url="$1"
-	local hdr code realm service token
-	hdr=$(curl -k -sS -D- -o /dev/null --connect-timeout 3 "$url/v2/" 2>/dev/null) || return 1
-	code=$(printf '%s\n' "$hdr" | awk 'BEGIN{c=""} /^HTTP/{c=$2} END{print c}')
-	if [ "$code" = "200" ]; then
-		return 0
-	fi
-	realm=$(printf '%s\n' "$hdr" | sed -n 's/.*[Bb]earer realm="\([^"]*\)".*/\1/p' | head -1)
-	service=$(printf '%s\n' "$hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p' | head -1)
-	if [ -z "$realm" ] || [ -z "$service" ]; then
-		return 1
-	fi
-	token=$(curl -k -fsS --connect-timeout 3 -u "$reg_user:$reg_pw" \
-		"${realm}?service=${service}" 2>/dev/null | sed -n 's/.*"token":"\([^"]*\)".*/\1/p') || return 1
-	if [ -z "$token" ]; then
-		return 1
-	fi
-	curl -k -fsS --connect-timeout 3 -o /dev/null \
-		-H "Authorization: Bearer $token" "$url/v2/"
-}
-
 # Verify connectivity (wait briefly for TLS listener to be ready)
 _verify_ok=""
 for i in $(seq 1 10); do
-	if _quay_ng_v2_ok "$reg_url"; then
+	if reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
 		_verify_ok=1
 		break
 	fi
@@ -138,7 +114,7 @@ done
 if [ ! "$_verify_ok" ]; then
 	_local_ips=$(hostname -I 2>/dev/null | xargs)
 	_localhost_ok="no"
-	_quay_ng_v2_ok "https://localhost:$reg_port" && _localhost_ok="yes"
+	reg_check_v2_auth "https://localhost:$reg_port" "$reg_user" "$reg_pw" && _localhost_ok="yes"
 
 	aba_abort \
 		"Registry installed but not reachable via FQDN." \
