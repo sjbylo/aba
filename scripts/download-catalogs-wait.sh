@@ -55,7 +55,7 @@ _skip_val=""
 [[ "$_have_all" == true ]] && _skip_val="-S"
 
 # Only emit progress when catalogs actually need downloading (not just a cache hit)
-# PLAN is emitted by _plan-sync Makefile target (scripts/progress-plan.sh)
+# PLAN is emitted by _progress_plan-sync Makefile target (scripts/progress-plan.sh)
 if [[ "$_have_all" != true ]]; then
 	aba_progress "START|catalogs_dl"
 fi

@@ -28,7 +28,7 @@ do
 done
 
 if [ "$rpms_to_install" ]; then
-	# PLAN is emitted by _plan-* Makefile target (scripts/progress-plan.sh)
+	# PLAN is emitted by _progress_plan-* Makefile target (scripts/progress-plan.sh)
 	# Use different IDs for internal vs external RPMs so the progress
 	# dialog can track them separately when both run (e.g. fresh sync).
 	_rpms_id="rpms_ext"

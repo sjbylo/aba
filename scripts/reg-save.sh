@@ -19,7 +19,7 @@ aba_debug "try_tot=$try_tot"
 
 umask 077
 
-# PLANs are emitted by _plan-save Makefile target (scripts/progress-plan.sh)
+# PLANs are emitted by _progress_plan-save Makefile target (scripts/progress-plan.sh)
 aba_progress "START|sv_preflight"
 
 aba_debug "Loading and validating configuration"

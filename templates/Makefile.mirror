@@ -154,11 +154,11 @@ data/imageset-config.yaml: ../aba.conf $(wildcard mirror.conf) $(wildcard ../ima
 # Auth is verified only when building .available (install); do not depend on verify here or we run
 # reg-verify.sh even when .available is up-to-date (stale .available => login fails before sync).
 .PHONY: sync
-sync: .init .rpmsint                                        install _plan-sync status-preflight data/imageset-config.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint                                        install _progress_plan-sync status-preflight data/imageset-config.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
-.PHONY: _plan-sync
-_plan-sync:
+.PHONY: _progress_plan-sync
+_progress_plan-sync:
 	@$(SCRIPTS)/progress-plan.sh sync
 
 .PHONY: save
@@ -166,7 +166,7 @@ _plan-sync:
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
 # Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
-save: _plan-save .init .rpmsext                                                 status-preflight data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
+save: _progress_plan-save .init .rpmsext                                                 status-preflight data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
 	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
 ifneq ($(arch),aarch64)
 	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
@@ -174,8 +174,8 @@ endif
 	@[ -f $(DOCKER_REG_FILE) ] || echo "[ABA] Warning: Docker registry image not available (docker.io may not be reachable). Bundle will include Quay registry only."
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
-.PHONY: _plan-save
-_plan-save:
+.PHONY: _progress_plan-save
+_progress_plan-save:
 	@$(SCRIPTS)/progress-plan.sh save
 
 # Fail fast if data/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
@@ -191,11 +191,11 @@ _plan-save:
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init               .rpmsint .check-data-dir install _plan-load  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+load: .init               .rpmsint .check-data-dir install _progress_plan-load  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-load.sh          $(retry)
 
-.PHONY: _plan-load
-_plan-load:
+.PHONY: _progress_plan-load
+_progress_plan-load:
 	@$(SCRIPTS)/progress-plan.sh load
 
 .PHONY: testload
@@ -272,10 +272,10 @@ uninstall-docker-registry:
 mirror.conf: .init                                    ## Create the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
-install: _plan-install .available
+install: _progress_plan-install .available
 
-.PHONY: _plan-install
-_plan-install:
+.PHONY: _progress_plan-install
+_progress_plan-install:
 	@$(SCRIPTS)/progress-plan.sh install
 
 # .init and .rpmsext are order-only (|) so their timestamps don't trigger a rebuild of .available.
@@ -355,10 +355,10 @@ status: .init                     ## Show mirror state summary (human-readable, 
 status-preflight: .init           ## Run preflight checks (interactive, fixes blocking issues)
 	$(SCRIPTS)/mirror-status.sh --preflight
 
-uninstall: _plan-uninstall .init .unavailable     ## Uninstall any previously installed registry  
+uninstall: _progress_plan-uninstall .init .unavailable     ## Uninstall any previously installed registry  
 
-.PHONY: _plan-uninstall
-_plan-uninstall:
+.PHONY: _progress_plan-uninstall
+_progress_plan-uninstall:
 	@$(SCRIPTS)/progress-plan.sh uninstall
 .unavailable:
 	$(SCRIPTS)/reg-uninstall.sh

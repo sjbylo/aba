@@ -221,7 +221,6 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_info "Downloading binary data." >&2  # Must use stderr channel here
 
 	aba_progress "DONE|bnd_preflight"
-	aba_progress "START|bnd_save"
 
 	aba_debug "Calling: make -s -C mirror save retry=2"
 	make -s -C mirror save retry=2 >&2 	|| exit 1
@@ -233,7 +232,6 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "All CLI tarballs downloaded"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
-	aba_progress "DONE|bnd_save"
 	aba_progress "START|bnd_pack"
 	aba_debug "Calling: make -s tar out=- $with_clusters"
 	make -s tar out=- $with_clusters   # Be sure the output of this command is ONLY tar output!
@@ -263,7 +261,6 @@ if [ "$light_bundle" ]; then
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
 	aba_progress "DONE|bnd_preflight"
-	aba_progress "START|bnd_save"
 	aba_debug "Calling: make -s -C mirror save retry=2"
 	make -s -C mirror save retry=2				# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
@@ -274,7 +271,6 @@ if [ "$light_bundle" ]; then
 	aba_debug "All CLI tarballs downloaded"
 	
 	rm -f "$bundle_dest_file"
-	aba_progress "DONE|bnd_save"
 	aba_progress "START|bnd_pack"
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file $with_clusters"
 	make -s tarrepo out="$bundle_dest_file" $with_clusters			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
@@ -306,7 +302,6 @@ else
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
 	aba_progress "DONE|bnd_preflight"
-	aba_progress "START|bnd_save"
 	aba_debug "Calling: make -s -C mirror save retry=2"
 	make -s -C mirror save retry=2		    		# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
@@ -317,7 +312,6 @@ else
 	aba_debug "All CLI tarballs downloaded"
 
 	rm -f "$bundle_dest_file"
-	aba_progress "DONE|bnd_save"
 	aba_progress "START|bnd_pack"
 	aba_debug "Calling: make tar out=$bundle_dest_file $with_clusters"
 	make -s tar out="$bundle_dest_file" $with_clusters	   		# Create all-in-one archive, including all files.
