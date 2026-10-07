@@ -5,15 +5,15 @@
 #
 # ─── Key design decisions ───────────────────────────────────────────
 #
-# 1. SEPARATION OF CONCERNS — each _plan-* target only knows its OWN steps.
-#    _plan-install emits install PLANs.  _plan-sync emits sync PLANs.
-#    When "make sync" triggers install as a dependency, _plan-install fires
-#    first (it's a prereq of install), then _plan-sync fires later.
+# 1. SEPARATION OF CONCERNS — each _progress_plan-* target only knows its OWN steps.
+#    _progress_plan-install emits install PLANs.  _progress_plan-sync emits sync PLANs.
+#    When "make sync" triggers install as a dependency, _progress_plan-install fires
+#    first (it's a prereq of install), then _progress_plan-sync fires later.
 #    The dialog GROWS as new PLANs arrive — two visible batches.
 #
-# 2. CONSISTENCY — _plan-install is ALWAYS a prereq of install.
+# 2. CONSISTENCY — _progress_plan-install is ALWAYS a prereq of install.
 #    The TUI just calls "make install" or "make sync".  No need to
-#    manually chain "_plan-install install" from the caller.
+#    manually chain "_progress_plan-install install" from the caller.
 #
 # 3. OVER-GENEROUS PLANs — every step that MIGHT run is declared.
 #    Steps that don't actually execute (Make skips them, or the script
@@ -38,7 +38,7 @@
 # 6. LATE PLANs — a PLAN can arrive AFTER its START/DONE events.
 #    This happens when Make runs a script (emits START/DONE) before
 #    the plan target fires (emits PLAN).  Example: .rpmsint runs
-#    before _plan-sync fires.  The engine handles this: _text[] is
+#    before _progress_plan-sync fires.  The engine handles this: _text[] is
 #    used as the dedup key (not _status[]), so the step is added to
 #    _order even if it already has a status.
 #
@@ -110,7 +110,7 @@ export ABA_DEMO_TMP="$tmpdir"
 #                Used to distinguish a graceful FAIL (script emits FAIL event)
 #                from an unexpected crash (syntax error, command not found, etc.)
 declare -A _status _text _real_done
-declare -a _order _errors _details _nexts
+declare -a _order _errors _details _nexts _failed
 _prompt_msg=""
 _abort=""
 _aba_exited=0
@@ -180,7 +180,7 @@ _parse_event() {
 			;;
 		START)       [ "${_status[$id]:-9}" != "0" ] && _status[$id]="77"; _real_done[$id]="started" ;;
 		DONE)        _status[$id]="0"; _real_done[$id]="done" ;;
-		FAIL)        _status[$id]="1"; _real_done[$id]="fail" ;;
+		FAIL)        _status[$id]="1"; _real_done[$id]="fail"; _failed+=("${_text[$id]:-$id}") ;;
 		ERROR)       _errors+=("${arg1:-$id}") ;;
 		DETAIL)      _details+=("${arg1:-$id}") ;;
 		NEXT)        _nexts+=("${arg1:-$id}") ;;
@@ -219,7 +219,7 @@ _drain_events() {
 #   3  = Completed
 #   4  = Checked
 #   5  = Done
-#   6  = Skipped
+#   6  = Skipped (internally; displayed as "Satisfied" via custom text)
 #   7  = In Progress
 #   8  = (blank)
 #   9  = N/A
@@ -227,6 +227,7 @@ _drain_events() {
 
 draw_progress() {
 	local _title="$1"
+	local _subtitle_override="${2:-}"
 	local args=() total=0 done_count=0 id text status
 	local _idx=0
 
@@ -255,10 +256,12 @@ draw_progress() {
 		if [ "$_idx" -gt "$_last_real_idx" ]; then
 			status="9"
 		fi
+		# Custom label: "Satisfied" instead of dialog's built-in "Skipped"
+		[ "$status" = "6" ] && status="Satisfied"
 		args+=("$text" "$status")
 		total=$((total + 1))
-		# Count Succeeded, Completed, Done, and Skipped toward progress %
-		case "$status" in 0|3|5|6) done_count=$((done_count + 1)) ;; esac
+		# Count Succeeded, Completed, Done, and Satisfied toward progress %
+		case "$status" in 0|3|5|6|Satisfied) done_count=$((done_count + 1)) ;; esac
 		_idx=$((_idx + 1))
 	done
 
@@ -267,14 +270,16 @@ draw_progress() {
 	local pct=0
 	[ "$total" -gt 0 ] && pct=$((done_count * 100 / total))
 
-	local _subtitle="\n  [O] Live output  ·  [Q] Back to menu\n"
-	if [ -n "$_prompt_msg" ]; then
-		_subtitle="\n  ⚠  ABA needs input — press [O] to answer\n"
+	local _subtitle="\n       < Output (Space) >       < Abort (Q) >\n"
+	if [ -n "$_subtitle_override" ]; then
+		_subtitle="$_subtitle_override"
+	elif [ -n "$_prompt_msg" ]; then
+		_subtitle="\n     ⚠  ABA needs input — press < Output (Space) >\n"
 	fi
 
-	# Dynamic height: 8 rows for chrome + 1 per step, min 18.
+	# Dynamic height: 10 rows for chrome (title, subtitle, progress bar) + 1 per step, min 18.
 	# Needed because the dialog grows when sync PLANs arrive after install.
-	local _height=$(( ${#_order[@]} + 8 ))
+	local _height=$(( ${#_order[@]} + 10 ))
 	[ "$_height" -lt 18 ] && _height=18
 
 	dialog --title " $_title " \
@@ -288,9 +293,18 @@ draw_progress() {
 # ============================================================
 
 handle_prompt() {
-	local prompt="$1" rc=0
-	dialog --title " ABA " --yes-label "Yes" --no-label "No" \
-		--yesno "\n$prompt" 8 56 || rc=$?
+	local _raw="$1" rc=0
+	# Extract default from "question|y" or "question|n" format
+	local _prompt="${_raw%|*}"
+	local _default="${_raw##*|}"
+	# If no separator, prompt is the full string
+	[ "$_prompt" = "$_raw" ] && _prompt="$_raw" && _default=""
+
+	local _default_flag=""
+	[ "$_default" = "n" ] && _default_flag="--defaultno"
+
+	dialog --title " ABA " --yes-label "Yes" --no-label "No" $_default_flag \
+		--yesno "\n$_prompt" 0 0 || rc=$?
 	case "$rc" in
 		0) printf 'y\r' > "$input_fifo" ;;
 		1) printf 'n\r' > "$input_fifo" ;;
@@ -421,11 +435,18 @@ finish_outcome() {
 }
 
 show_error() {
+	local _title="${1:-Error}"
 	local _msg="\n" line
-	[ "${#_errors[@]}" -eq 0 ] && _msg="\n  A step failed.\n"
-	for line in "${_errors[@]}"; do
-		_msg="${_msg}  ERROR: ${line}\n"
+
+	# Show which step(s) failed
+	for line in "${_failed[@]}"; do
+		_msg="${_msg}  Failed: ${line}\n"
 	done
+
+	# Show only the first ERROR (the most specific/tailored one).
+	# aba_abort auto-emits ERROR, so duplicates are expected — first wins.
+	[ "${#_errors[@]}" -eq 0 ] && _msg="${_msg}\n  A step failed.\n"
+	[ "${#_errors[@]}" -gt 0 ] && _msg="${_msg}\n  ERROR: ${_errors[0]}\n"
 	if [ "${#_details[@]}" -gt 0 ]; then
 		_msg="${_msg}\n"
 		for line in "${_details[@]}"; do
@@ -439,29 +460,71 @@ show_error() {
 		done
 	fi
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
-	while dialog --title " ✗ Error " \
+	while dialog --title " ${_title}: Error " \
 		--yes-label "View Output" \
 		--no-label "OK" \
 		--yesno "$_msg" \
-		18 64; do
+		0 0; do
 		show_output
 	done
 }
 
 show_abort() {
+	local _title="${1:-ABA}"
 	[ -n "$_abort" ] || _abort="Aborted."
-	dialog --title " Aborted " --msgbox "\n  $_abort\n" 8 60 || true
+	dialog --title " ${_title}: Aborted " --msgbox "\n  $_abort\n" 8 60 || true
 }
 
 show_stopped() {
-	dialog --title " Stopped " \
+	local _title="${1:-ABA}"
+	dialog --title " ${_title}: Stopped " \
 		--msgbox "\n  Stopped before all steps finished.\n" 8 56 || true
 }
 
 show_success() {
-	dialog --title " ✓ Complete " \
-		--msgbox "\n  All steps completed successfully!\n\n  PHONY Make target emitted all PLANs upfront.\n  Skipped steps were swept at the end.\n  Each script only emitted START/DONE.\n" \
-		13 56 || true
+	local _title="${1:-ABA}"
+	local _body id text status _label _color _pad
+	local _max_len=34
+
+	# Build colored status text from the step arrays
+	_body="\n"
+	for id in "${_order[@]}"; do
+		text="${_text[$id]:-$id}"
+		status="${_status[$id]:-9}"
+		case "$status" in
+			0)  _label=" Succeeded "; _color="\\Z2" ;;
+			1)  _label="  Failed   "; _color="\\Z1" ;;
+			6)  _label=" Satisfied "; _color="\\Z2" ;;
+			7)  _label="In Progress"; _color="\\Z5" ;;
+			9)  _label="    N/A    "; _color="" ;;
+			*)  _label="$status"; _color="" ;;
+		esac
+		_pad=$(( _max_len - ${#text} ))
+		[ "$_pad" -lt 1 ] && _pad=1
+		if [ -n "$_color" ]; then
+			_body="${_body}  ${text}$(printf '%*s' "$_pad" '')${_color}[${_label}]\\Zn\n"
+		else
+			_body="${_body}  ${text}$(printf '%*s' "$_pad" '')[${_label}]\n"
+		fi
+	done
+	_body="${_body}\n  \\Z2✓  All steps completed successfully.\\Zn\n "
+
+	local _height=$(( ${#_order[@]} + 8 ))
+	[ "$_height" -lt 14 ] && _height=14
+
+	local _default_btn=""
+	while true; do
+		local _rc=0
+		dialog --colors $_default_btn \
+			--title " $_title " \
+			--yes-label "Done" --no-label "Output" \
+			--yesno "$_body" \
+			"$_height" 56 || _rc=$?
+		case "$_rc" in
+			0|255) break ;;
+			1) _default_btn="--defaultno"; show_output ;;
+		esac
+	done
 }
 
 # ============================================================
@@ -476,6 +539,7 @@ _reset_state() {
 	_errors=()
 	_details=()
 	_nexts=()
+	_failed=()
 	_prompt_msg=""
 	_abort=""
 	_aba_exited=0
@@ -508,7 +572,7 @@ _setup_workdir() {
 			;;
 		cached-installed)
 			# All prereqs + registry installed (.available exists)
-			# _plan-install checks .available and emits nothing → no install PLANs
+			# _progress_plan-install checks .available and emits nothing → no install PLANs
 			mkdir -p "$work_dir/data"
 			touch "$work_dir/.init" "$work_dir/.rpmsext" "$work_dir/.rpmsint"
 			touch "$work_dir/.available"
@@ -527,7 +591,7 @@ show_menu() {
 	_choice=$(dialog --title " ABA TUI Progress Demo " \
 		--cancel-label "Exit" \
 		--menu "\n  PHONY _plan targets · Skipped sweep · PTY + FIFO\n" \
-		24 66 12 \
+		26 68 14 \
 		"install"       "Install registry (cached — RPMs skipped)" \
 		"install-fresh" "Install registry (fresh — all steps run)" \
 		"sync"          "Sync images (cached — RPMs & catalogs skipped)" \
@@ -536,6 +600,8 @@ show_menu() {
 		"save"          "Save images (cached, no prompt)" \
 		"save-prompt"   "Save images (with interactive prompt)" \
 		"save-error"    "Save images (fails during save step)" \
+		"bundle"        "Create bundle (shared IDs — dedup demo)" \
+		"bundle-error"  "Create bundle (save fails mid-way)" \
 		"sync-crash"    "Sync crash (script dies, no FAIL event)" \
 		"uninstall"     "Uninstall registry (all steps run)" \
 		"fresh-all"     "Sync (mirror not installed — installs first)" \
@@ -554,7 +620,7 @@ run_workflow() {
 	_reset_state
 
 	# Parse scenario into make target + env + workdir mode.
-	# The TUI just calls "make <target>" — _plan-* targets are Make prereqs,
+	# The TUI just calls "make <target>" — _progress_plan-* targets are Make prereqs,
 	# so the TUI never needs to chain them manually.
 	local make_target="" wdir_mode="cached" title="" envs=""
 	case "$scenario" in
@@ -610,6 +676,18 @@ run_workflow() {
 			title="Save Images"
 			envs="SKIP_ASK=1 SKIP_OC_MIRROR=1 SIMULATE_FAIL=1"
 			;;
+		bundle)
+			make_target="bundle"
+			wdir_mode="cached"
+			title="Create Install Bundle"
+			envs="SKIP_ASK=1 SKIP_OC_MIRROR=1"
+			;;
+		bundle-error)
+			make_target="bundle"
+			wdir_mode="cached"
+			title="Create Install Bundle"
+			envs="SKIP_ASK=1 SKIP_OC_MIRROR=1 SIMULATE_FAIL=1"
+			;;
 		sync-crash)
 			# Unexpected crash: oc-mirror (or any tool) dies with no FAIL event.
 			# The TUI detects non-zero exit, marks the active step as Failed,
@@ -626,8 +704,8 @@ run_workflow() {
 			;;
 		fresh-all)
 			# Sync on a fresh system — Make resolves install as a dependency.
-			# _plan-install fires first (install PLANs), install runs,
-			# then _plan-sync fires (sync PLANs) and the dialog grows.
+			# _progress_plan-install fires first (install PLANs), install runs,
+			# then _progress_plan-sync fires (sync PLANs) and the dialog grows.
 			# Title is just "Sync" — the TUI doesn't predict dependencies.
 			# The install steps appearing in the dialog tell the user what's happening.
 			make_target="sync"
@@ -693,6 +771,7 @@ run_workflow() {
 				if [ "$_has_fail" -eq 0 ] && [ -n "$_last_active" ]; then
 					_status[$_last_active]="1"
 					_real_done[$_last_active]="fail"
+					_failed+=("${_text[$_last_active]:-$_last_active}")
 					if [ "${#_errors[@]}" -eq 0 ]; then
 						_errors+=("${_text[$_last_active]:-$_last_active} failed (exit code $_exit_code)")
 						_nexts+=("Check the live output for details")
@@ -709,10 +788,10 @@ run_workflow() {
 
 			draw_progress "$title"
 			case "$(finish_outcome)" in
-				error)   show_error ;;
-				abort)   show_abort ;;
-				stopped) show_stopped ;;
-				*)       show_success ;;
+				error)   show_error "$title" ;;
+				abort)   show_abort "$title" ;;
+				stopped) show_stopped "$title" ;;
+				*)       show_success "$title" ;;
 			esac
 			break
 		fi
@@ -730,10 +809,10 @@ run_workflow() {
 			continue
 		fi
 
-		# Poll for user keypresses (O=output view, Q=quit)
-		if read -rsn1 -t 0.4 key; then
+		# Poll for user keypresses (Space=output view, Q=quit)
+		if IFS= read -rsn1 -t 0.4 key; then
 			case "$key" in
-				o|O) show_output ;;
+				o|O|' ') show_output ;;
 				q|Q) break ;;
 			esac
 		fi
@@ -752,7 +831,7 @@ run_workflow() {
 while true; do
 	choice=$(show_menu)
 	case "$choice" in
-		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|sync-crash|uninstall|fresh-all|fresh-bg)
+		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|bundle|bundle-error|sync-crash|uninstall|fresh-all|fresh-bg)
 			run_workflow "$choice" ;;
 		quit|"")
 			break ;;
