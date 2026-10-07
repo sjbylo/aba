@@ -2,24 +2,24 @@
 #
 # ─── Key design decisions ───────────────────────────────────────────
 #
-# 1. _plan-install is a PREREQ of install (consistent, always).
+# 1. _progress_plan-install is a PREREQ of install (consistent, always).
 #    The TUI just calls "make install" — no need to chain
-#    "_plan-install install" from the caller.
+#    "_progress_plan-install install" from the caller.
 #
-# 2. Each _plan-* target only knows its OWN steps.
-#    _plan-sync emits sync PLANs.  It knows nothing about install.
-#    When sync depends on install, _plan-install fires first
+# 2. Each _progress_plan-* target only knows its OWN steps.
+#    _progress_plan-sync emits sync PLANs.  It knows nothing about install.
+#    When sync depends on install, _progress_plan-install fires first
 #    (as install's prereq), emitting install PLANs.
-#    Then _plan-sync fires, emitting sync PLANs.
+#    Then _progress_plan-sync fires, emitting sync PLANs.
 #    The TUI dialog grows as new PLANs arrive.
 #
 # 3. Prerequisite ORDER in sync matters for PLAN timing.
-#    "install" is listed BEFORE "_plan-sync" so that:
-#      a. _plan-install fires first (install PLANs appear)
+#    "install" is listed BEFORE "_progress_plan-sync" so that:
+#      a. _progress_plan-install fires first (install PLANs appear)
 #      b. install runs (install work happens)
-#      c. _plan-sync fires (sync PLANs appear — dialog grows)
+#      c. _progress_plan-sync fires (sync PLANs appear — dialog grows)
 #      d. sync work runs
-#    If _plan-sync were listed first, sync PLANs would appear before
+#    If _progress_plan-sync were listed first, sync PLANs would appear before
 #    install PLANs — wrong visual order.
 #
 # 4. Marker files control caching (.init, .rpmsext, .rpmsint, .available).
@@ -34,15 +34,15 @@
 SCRIPTS := scripts
 
 # ─── install workflow ────────────────────────────────────
-# _plan-install checks .available internally and emits nothing
+# _progress_plan-install checks .available internally and emits nothing
 # when the registry is already installed.  This prevents 7 Skipped
 # items cluttering the sync dialog for a cached install.
 
 .PHONY: install
-install: _plan-install .available
+install: _progress_plan-install .available
 
-.PHONY: _plan-install
-_plan-install:
+.PHONY: _progress_plan-install
+_progress_plan-install:
 	WORK_DIR=. bash $(SCRIPTS)/plan.sh install
 
 # Order-only prereqs (|) — .init and .rpmsext must exist but their
@@ -52,35 +52,48 @@ _plan-install:
 	touch .available
 
 # ─── sync workflow ───────────────────────────────────────
-# Prereq order: .init → .rpmsint → install → _plan-sync → preflight → sync
-# "install" comes BEFORE "_plan-sync" — see design decision #3 above.
+# Prereq order: .init → .rpmsint → install → _progress_plan-sync → preflight → sync
+# "install" comes BEFORE "_progress_plan-sync" — see design decision #3 above.
 
 .PHONY: sync
-sync: .init .rpmsint install _plan-sync status-preflight data/imageset-config.yaml
+sync: .init .rpmsint install _progress_plan-sync status-preflight data/imageset-config.yaml
 	bash $(SCRIPTS)/sync-images.sh
 
-.PHONY: _plan-sync
-_plan-sync:
+.PHONY: _progress_plan-sync
+_progress_plan-sync:
 	bash $(SCRIPTS)/plan.sh sync
 
 # ─── save workflow ───────────────────────────────────────
 
 .PHONY: save
-save: _plan-save .init .rpmsext data/imageset-config.yaml status-preflight
+save: _progress_plan-save .init .rpmsext data/imageset-config.yaml status-preflight
 	bash $(SCRIPTS)/save.sh
 
-.PHONY: _plan-save
-_plan-save:
+.PHONY: _progress_plan-save
+_progress_plan-save:
 	bash $(SCRIPTS)/plan.sh save
+
+# ─── bundle workflow ─────────────────────────────────────
+# Bundle wraps save.  _progress_plan-bundle fires first, pre-declaring ALL shared IDs.
+# Then _progress_plan-save fires — ALL its IDs already exist, so ZERO new rows appear.
+# This demonstrates GLOBAL ID dedup: the receiver discards duplicates silently.
+
+.PHONY: bundle
+bundle: _progress_plan-bundle _progress_plan-save .init .rpmsext data/imageset-config.yaml status-preflight
+	bash $(SCRIPTS)/bundle.sh
+
+.PHONY: _progress_plan-bundle
+_progress_plan-bundle:
+	bash $(SCRIPTS)/plan.sh bundle
 
 # ─── uninstall workflow ──────────────────────────────────
 
 .PHONY: uninstall
-uninstall: _plan-uninstall
+uninstall: _progress_plan-uninstall
 	bash $(SCRIPTS)/uninstall-registry.sh
 
-.PHONY: _plan-uninstall
-_plan-uninstall:
+.PHONY: _progress_plan-uninstall
+_progress_plan-uninstall:
 	bash $(SCRIPTS)/plan.sh uninstall
 
 # ─── shared prerequisites ────────────────────────────────

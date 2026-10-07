@@ -71,7 +71,7 @@ def main():
     child_exited = False
     child_status = 0
 
-    with open(output_file, "wb") as out:
+    with open(output_file, "ab") as out:
         while True:
             read_fds = [master_fd]
             if input_fd >= 0:

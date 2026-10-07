@@ -10,22 +10,18 @@
 source "$(dirname "$0")/progress.sh"
 
 ask() {
-	aba_progress "PROMPT|$1"
+	aba_progress "PROMPT|$1|n"
 	read -rp "$1" _reply
 	aba_progress "PROMPT_DONE|"
 	echo "$_reply"
 }
 
-# catalogs_dl — only emits if catalogs need downloading
-if [ -n "${FORCE_CATALOG_DOWNLOAD:-}" ]; then
-	aba_progress "START|catalogs_dl"
-	printf '\033[1;34m[ABA]\033[0m Downloading operator catalogs ...\n'
-	sleep 2.0
-	echo "       Catalogs downloaded."
-	aba_progress "DONE|catalogs_dl"
-else
-	printf '\033[0;90m[ABA] All operator catalogs cached\033[0m\n'
-fi
+# ─── Preflight ───
+aba_progress "START|preflight"
+printf '\033[1;34m[ABA]\033[0m Running preflight checks ...\n'
+sleep 0.5
+printf '\033[1;32m[ABA]\033[0m Preflight passed.\n'
+aba_progress "DONE|preflight"
 
 # ─── Ask to continue (unless skipped) ───
 if [ -z "${SKIP_ASK:-}" ]; then
@@ -42,7 +38,7 @@ fi
 
 # ─── Tools step ───
 aba_progress "START|sv_tools"
-printf '\033[1;34m[ABA]\033[0m Preparing tools ...\n'
+printf '\033[1;34m[ABA]\033[0m Downloading CLI tools ...\n'
 sleep 0.4
 echo "       oc-mirror: 4.17.6"
 printf '\033[1;32m[ABA]\033[0m Tools ready.\n'
@@ -72,6 +68,13 @@ fi
 
 printf '\033[1;32m[ABA]\033[0m Save complete.\n'
 aba_progress "DONE|sv_save"
+
+# ─── Wait for CLI tools ───
+aba_progress "START|sv_cli_wait"
+printf '\033[1;34m[ABA]\033[0m Waiting for CLI tool downloads ...\n'
+sleep 0.3
+printf '\033[1;32m[ABA]\033[0m All CLI tools ready.\n'
+aba_progress "DONE|sv_cli_wait"
 
 # ─── Finalize step ───
 aba_progress "START|sv_finalize"
