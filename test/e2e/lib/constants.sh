@@ -18,3 +18,5 @@ E2E_HUNG_TIMEOUT="${E2E_HUNG_TIMEOUT:-3600}"        # No-output watchdog thresho
 E2E_MIN_DISK_GB="${E2E_MIN_DISK_GB:-150}"            # Minimum free disk (GB) on / before a suite starts
 
 POOL_REG_DIR="/opt/pool-reg"                      # Docker pool registry data dir (certs, auth, data)
+POOL_REG_PORT=9444                                # Pool registry port (intentionally NOT 8443 to avoid
+                                                  # conflicting with ABA's default registry port)

@@ -259,6 +259,8 @@ e2e_run "Delete any leftover $SNO_MIRROR cluster" \
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Set reg_port to pool registry port" \
+    "sed -i 's/^reg_port=.*/reg_port=${POOL_REG_PORT}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \

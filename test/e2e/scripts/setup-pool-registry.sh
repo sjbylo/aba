@@ -27,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ABA_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 source "$SCRIPT_DIR/../lib/constants.sh"
-REG_PORT=8443
+REG_PORT="${POOL_REG_PORT}"
 REG_PW="p4ssw0rd"
 REG_USER="init"
 REG_PATH="/ocp4/openshift4"
@@ -269,7 +269,7 @@ else
     echo "  Creating authentication ..."
     htpasswd -Bbn "$REG_USER" "$REG_PW" > "$AUTH_DIR/htpasswd"
 
-    # Stop our container, any stale containers on port 8443, and orphan pods
+    # Stop our container, any stale containers on pool port, and orphan pods
     podman rm -f "$CONTAINER_NAME" || true
     for _cid in $(podman ps -a --format '{{.ID}} {{.Ports}}' | grep ":${REG_PORT}" | awk '{print $1}'); do
         echo "  Removing stale container $_cid holding port ${REG_PORT} ..."

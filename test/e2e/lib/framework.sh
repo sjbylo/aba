@@ -1829,20 +1829,31 @@ yaml_diff() {
 #   Output goes to stdout (use process substitution for yaml_diff).
 adapt_example_for_pool() {
     local file="$1" pool="${2:-${POOL_NUM:-1}}"
-    if [ "$pool" = "1" ]; then
-        cat "$file"
-        return
+    local -a _sed_args=()
+
+    # Port substitution applies to ALL pools (pool registry uses POOL_REG_PORT, not 8443)
+    if [[ -n "${POOL_REG_PORT:-}" && "$POOL_REG_PORT" != "8443" ]]; then
+        _sed_args+=(-e "s/:8443/:${POOL_REG_PORT}/g")
     fi
-    sed \
-        -e "s/p1\.example\.com/p${pool}.example.com/g" \
-        -e "s/con1\.example\.com/con${pool}.example.com/g" \
-        -e "s/\be2e-sno1\b/e2e-sno${pool}/g" \
-        -e "s/\be2e-compact1\b/e2e-compact${pool}/g" \
-        -e "s/\be2e-standard1\b/e2e-standard${pool}/g" \
-        -e "s/10\.0\.2\.1\([0-9]\)/10.0.2.${pool}\1/g" \
-        -e "s/aba-e2e\/pool1/aba-e2e\/pool${pool}/g" \
-        -e "s/Datastore4-1/Datastore4-${pool}/g" \
-        "$file"
+
+    if [ "$pool" != "1" ]; then
+        _sed_args+=(
+            -e "s/p1\.example\.com/p${pool}.example.com/g"
+            -e "s/con1\.example\.com/con${pool}.example.com/g"
+            -e "s/\be2e-sno1\b/e2e-sno${pool}/g"
+            -e "s/\be2e-compact1\b/e2e-compact${pool}/g"
+            -e "s/\be2e-standard1\b/e2e-standard${pool}/g"
+            -e "s/10\.0\.2\.1\([0-9]\)/10.0.2.${pool}\1/g"
+            -e "s/aba-e2e\/pool1/aba-e2e\/pool${pool}/g"
+            -e "s/Datastore4-1/Datastore4-${pool}/g"
+        )
+    fi
+
+    if [ ${#_sed_args[@]} -eq 0 ]; then
+        cat "$file"
+    else
+        sed "${_sed_args[@]}" "$file"
+    fi
 }
 
 # --- Guards -----------------------------------------------------------------

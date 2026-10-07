@@ -51,7 +51,7 @@ _e2e_cleanup_mirror_entry() {
 			echo '  Externally-managed registry -- using unregister'
 			\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister || exit 1
 		else
-			\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall || exit 1
+			\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall --delete-data || exit 1
 		fi
 		# Post-success only: drop suite-created working dirs (never after aba failure)
 		if [ \"\$(basename '$abs_path')\" != mirror ]; then

@@ -130,11 +130,17 @@ _expect_empty "docker all-absent → empty rc=0" docker
 _expect_empty "quay all-absent → empty rc=0" quay
 _expect_empty "quay-ng all-absent → empty rc=0" quay-ng
 
-# --- 2) reg_root present -----------------------------------------------------
+# --- 2) reg_root present (only detected when REG_DELETE_DATA is set) ----------
 mkdir -p "$WORKDIR/reg-root-present"
 reg_root="$WORKDIR/reg-root-present"
-_expect_contains "docker detects reg_root" docker "reg_root"
-_expect_contains "quay detects reg_root" quay "reg_root"
+# Without REG_DELETE_DATA: data dir is expected, not flagged as stale
+_expect_empty "docker reg_root present but REG_DELETE_DATA unset → empty" docker
+_expect_empty "quay reg_root present but REG_DELETE_DATA unset → empty" quay
+# With REG_DELETE_DATA: data dir is flagged as stale
+export REG_DELETE_DATA=1
+_expect_contains "docker detects reg_root (REG_DELETE_DATA)" docker "reg_root"
+_expect_contains "quay detects reg_root (REG_DELETE_DATA)" quay "reg_root"
+unset REG_DELETE_DATA
 reg_root="$WORKDIR/reg-root-absent"
 rm -rf "$WORKDIR/reg-root-present"
 

@@ -117,6 +117,8 @@ e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
 suite_create_mirror_workdir
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Set reg_port to pool registry port" \
+    "sed -i 's/^reg_port=.*/reg_port=${POOL_REG_PORT}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
@@ -219,6 +221,8 @@ e2e_run_remote "Create mirror.conf on bastion" \
     "cd ~/aba && aba -d mirror mirror.conf"
 e2e_run_remote "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' ~/aba/mirror/mirror.conf"
+e2e_run_remote "Set reg_port to pool registry port" \
+    "sed -i 's/^reg_port=.*/reg_port=${POOL_REG_PORT}/g' ~/aba/mirror/mirror.conf"
 e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 # Register the pool registry on disN using the staged creds

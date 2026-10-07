@@ -143,6 +143,8 @@ test_begin "Setup: configure mirror for local registry"
 suite_create_mirror_workdir
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Set reg_port to pool registry port" \
+    "sed -i 's/^reg_port=.*/reg_port=${POOL_REG_PORT}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
@@ -823,7 +825,7 @@ e2e_run "Unregister pool registry for re-registration test" \
     "aba -d mirror unregister"
 
 e2e_run "Register with explicit --reg-host and --reg-port" \
-    "aba -d mirror register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+    "aba -d mirror register --reg-host ${CON_HOST} --reg-port ${POOL_REG_PORT} --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify registry access after --reg-host/--reg-port register" \
     "aba -d mirror verify"
@@ -832,7 +834,7 @@ e2e_run "Assert reg_host in mirror.conf matches CLI flag" \
     "grep -q 'reg_host=${CON_HOST}' mirror/mirror.conf"
 
 e2e_run "Assert reg_port in mirror.conf matches CLI flag" \
-    "grep -q 'reg_port=8443' mirror/mirror.conf"
+    "grep -q 'reg_port=${POOL_REG_PORT}' mirror/mirror.conf"
 
 test_end
 
@@ -851,7 +853,7 @@ e2e_run "Assert enclave mirror directory exists" \
     "test -d $ENCLAVE_MIRROR && test -f $ENCLAVE_MIRROR/mirror.conf"
 
 e2e_run "Register pool registry to named mirror" \
-    "aba -d $ENCLAVE_MIRROR register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+    "aba -d $ENCLAVE_MIRROR register --reg-host ${CON_HOST} --reg-port ${POOL_REG_PORT} --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify named mirror registry access" \
     "aba -d $ENCLAVE_MIRROR verify"

@@ -138,7 +138,7 @@ suite_generate_pool_reg_pull_secret() {
 		"enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
 {
   \"auths\": {
-    \"${host}:8443\": {
+    \"${host}:${POOL_REG_PORT}\": {
       \"auth\": \"\$enc_pw\"
     }
   }

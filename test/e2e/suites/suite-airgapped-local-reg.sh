@@ -293,7 +293,7 @@ e2e_run_remote "Verify Docker registry listening on port $_DOCKER_PORT" \
 e2e_run_remote "Verify Docker registry accessible with custom creds" \
     "cd ~/aba && aba -d mirror verify"
 e2e_run_remote "Uninstall Docker registry (smoke test done)" \
-    "cd ~/aba && aba -d mirror uninstall"
+    "cd ~/aba && aba -d mirror uninstall --delete-data"
 e2e_run "Assert: Docker registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run_remote "Remove custom data dir on disN" \
     "sudo rm -rf $_DOCKER_DATADIR"
@@ -334,7 +334,7 @@ test_begin "Registry: Quay install and load"
 # Negative path tests in block 6 may auto-install a Docker registry via Makefile
 # dependencies (aba -d mirror load triggers install target).  Clean up first.
 e2e_run_remote "Uninstall any leftover registry before Quay install" \
-    "cd ~/aba && aba -d mirror uninstall"
+    "cd ~/aba && aba -d mirror uninstall --delete-data"
 
 _QUAY_PORT=8448
 e2e_run_remote "Set vendor=quay and reg_port=$_QUAY_PORT for Quay" \
@@ -872,7 +872,7 @@ test_end
 test_begin "Cleanup: uninstall registry on disN"
 
 e2e_run_remote "Uninstall Quay registry" \
-    "cd ~/aba && aba -d mirror uninstall"
+    "cd ~/aba && aba -d mirror uninstall --delete-data"
 e2e_run_remote "Verify mirror DNS record removed after uninstall" \
     "test ! -f /etc/dnsmasq.d/aba-mirror.conf"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"

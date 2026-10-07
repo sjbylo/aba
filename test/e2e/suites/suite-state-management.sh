@@ -317,7 +317,7 @@ e2e_run "Remote: data dir exists on disN at $_TILDE_REMOTE_USER path" \
 e2e_run "Verify remote tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
 
 e2e_run "Uninstall remote tilde registry" \
-	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall"
+	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall --delete-data"
 e2e_run "Assert: remote tilde registry removed" "e2e_assert_registry_removed"
 e2e_run "Remote: cleanup $_TILDE_REMOTE_USER data dir" \
 	"_essh $_TILDE_REMOTE_USER@$DIS_HOST \"rm -rf ~/$_TILDE_REMOTE_SUBDIR\""
@@ -349,7 +349,7 @@ e2e_run "Local: data dir exists at expected path" \
 e2e_run "Verify local tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
 
 e2e_run "Uninstall local tilde registry" \
-	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall"
+	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall --delete-data"
 
 e2e_run "Local: cleanup data dir" "rm -rf ~/$_TILDE_LOCAL_SUBDIR"
 e2e_run "Cleanup tilde mirror dir" \
@@ -546,7 +546,7 @@ test_begin "Cleanup: uninstall mirror"
 
 # Uninstall registry if state.sh still exists (covers mid-test failure)
 e2e_run "Uninstall Docker registry if still tracked" \
-	"if [ -s $_STATE_DIR/state.sh ]; then cd ~/aba && test -d $_MIRROR_NAME || aba mirror --name $_MIRROR_NAME && aba -d $_MIRROR_NAME uninstall; else echo 'No state.sh -- registry already cleaned up'; fi"
+	"if [ -s $_STATE_DIR/state.sh ]; then cd ~/aba && test -d $_MIRROR_NAME || aba mirror --name $_MIRROR_NAME && aba -d $_MIRROR_NAME uninstall --delete-data; else echo 'No state.sh -- registry already cleaned up'; fi"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 # Unregister if registered (covers failure during register test)
