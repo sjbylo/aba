@@ -281,7 +281,7 @@ e2e_run "Verify state.sh is gone" \
 	"test ! -f ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
 e2e_run "Uninstall with missing state (fallback path)" \
-	"aba -y -d $_DOCKER_MIRROR uninstall"
+	"aba -y -d $_DOCKER_MIRROR uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Remove local $_DOCKER_MIRROR dir" "rm -rf $_DOCKER_MIRROR"
@@ -327,7 +327,7 @@ e2e_run "Verify now succeeds after unblocking" \
 	"aba -d $_DOCKER_NEG_MIRROR verify"
 
 e2e_run "Uninstall neg-test registry" \
-	"aba -y -d $_DOCKER_NEG_MIRROR uninstall"
+	"aba -y -d $_DOCKER_NEG_MIRROR uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Remove local $_DOCKER_NEG_MIRROR dir" "rm -rf $_DOCKER_NEG_MIRROR"
@@ -336,7 +336,7 @@ e2e_run "Remove local $_DOCKER_NEG_MIRROR dir" "rm -rf $_DOCKER_NEG_MIRROR"
 
 e2e_run "Clean leftover mirror dirs (uninstall + remove if exist)" \
 	"for d in $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR; do
-		if [ -d \$d ]; then aba -y -d \$d uninstall && rm -rf \$d; fi
+		if [ -d \$d ]; then aba -y -d \$d uninstall --delete-data && rm -rf \$d; fi
 	done"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
@@ -432,7 +432,7 @@ e2e_run "Restore reg_host" \
 # Hostname reconciliation: pull secret hostname doesn't match --reg-host but has 1 entry.
 # reg-register.sh should auto-infer the hostname from the pull secret (Bug #396 fix).
 e2e_run "Set reg_host to a MISMATCHED hostname" \
-	"aba -d mirror --reg-host bogus-host.example.com --reg-port 8443"
+	"aba -d mirror --reg-host bogus-host.example.com --reg-port ${POOL_REG_PORT}"
 e2e_run "Register with mismatched --reg-host (auto-infer from single-entry pull secret)" \
 	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Verify reg_host was updated to match pull secret" \

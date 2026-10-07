@@ -129,7 +129,7 @@ if _con "cd ~/aba && aba -d mirror install \
 		_con "cd ~/aba && aba -d mirror verify"
 
 	echo "  Uninstalling ..."
-	_con "cd ~/aba && aba -d mirror uninstall" 2>&1 | tail -3
+	_con "cd ~/aba && aba -d mirror uninstall --delete-data" 2>&1 | tail -3
 
 	_assert_not "registry container gone" \
 		_con "podman ps --format '{{.Names}}' | grep -q '^registry$'"
@@ -195,7 +195,7 @@ if _con "cd ~/aba && aba -d mirror install \
 		_con "cd ~/aba && aba -d mirror verify"
 
 	echo "  Uninstalling ..."
-	_con "cd ~/aba && aba -d mirror uninstall" 2>&1 | tail -3
+	_con "cd ~/aba && aba -d mirror uninstall --delete-data" 2>&1 | tail -3
 
 	_assert_not "registry container gone on disN" \
 		_dis "podman ps --format '{{.Names}}' | grep -q '^registry$'"
@@ -240,7 +240,7 @@ if _con "cd ~/aba && aba -d mirror install \
 		_con "cd ~/aba && aba -d mirror verify"
 
 	echo "  Uninstalling ..."
-	_con "cd ~/aba && aba -d mirror uninstall" 2>&1 | tail -3
+	_con "cd ~/aba && aba -d mirror uninstall --delete-data" 2>&1 | tail -3
 
 	_assert_not "registry container gone" \
 		_con "podman ps --format '{{.Names}}' | grep -q '^registry$'"
@@ -263,7 +263,7 @@ _log "Final cleanup"
 _con "rm -rf ~/my-docker-test ~/my-docker-test2 ~/docker-reg" 2>/dev/null || true
 _dis "rm -rf ~/my-docker-test2 ~/docker-reg" 2>/dev/null || true
 # Reset mirror state via ABA (only ABA should manage .available)
-_con "cd ~/aba && aba -y -d mirror uninstall" 2>/dev/null || true
+_con "cd ~/aba && aba -y -d mirror uninstall --delete-data" 2>/dev/null || true
 echo "  Done."
 
 # =============================================================================

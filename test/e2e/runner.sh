@@ -121,7 +121,7 @@ _E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
-_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
+_E2E_STALE_FW_PORTS="${POOL_REG_PORT}/tcp 8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
 
 # Print filesystem snapshot of conN (local) and disN (remote) for debug diagnostics.
 _print_fs_snapshot() {
@@ -395,13 +395,13 @@ _verify_no_orphan_vms() {
 	return 0
 }
 
-# Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
+# Reset firewall on conN: remove stale test ports, preserve pool registry.
 _reset_con_firewall() {
 	echo "  Resetting firewall ports on conN ..."
 	local _removed=""
 	for _port in $_E2E_STALE_FW_PORTS; do
 		case "$_port" in
-			8443/tcp|22/tcp) continue ;;  # pool registry + ssh — do not touch
+			${POOL_REG_PORT}/tcp|22/tcp) continue ;;  # pool registry + ssh — do not touch
 		esac
 		if sudo firewall-cmd --query-port="$_port" --permanent >/dev/null; then
 			sudo firewall-cmd --remove-port="$_port" --permanent
@@ -417,7 +417,7 @@ _reset_con_firewall() {
 	local _ports _unexpected=""
 	_ports=$(sudo firewall-cmd --list-ports)
 	for _p in $_ports; do
-		case "$_p" in 8443/tcp|22/tcp) ;; *) _unexpected="$_unexpected $_p" ;; esac
+		case "$_p" in ${POOL_REG_PORT}/tcp|22/tcp) ;; *) _unexpected="$_unexpected $_p" ;; esac
 	done
 	if [ -n "$_unexpected" ]; then
 		echo "  WARNING: conN has unexpected firewall ports after reset:$_unexpected"
@@ -446,13 +446,13 @@ _ensure_pool_registry() {
 	_reg_host="$(hostname -f)"
 
 	podman run -d \
-		-p 8443:5000 \
+		--network host \
 		--restart=always \
 		--name pool-registry \
 		-v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
 		-v "${POOL_REG_DIR}/certs:/certs:Z" \
 		-v "${POOL_REG_DIR}/auth:/auth:Z" \
-		-e REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+		-e REGISTRY_HTTP_ADDR=0.0.0.0:${POOL_REG_PORT} \
 		-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
 		-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
 		-e REGISTRY_AUTH=htpasswd \
@@ -461,7 +461,7 @@ _ensure_pool_registry() {
 		docker.io/library/registry:latest
 
 	sleep 2
-	if curl -sfk -o /dev/null -u "init:p4ssw0rd" "https://${_reg_host}:8443/v2/"; then
+	if curl -sfk -o /dev/null -u "init:p4ssw0rd" "https://${_reg_host}:${POOL_REG_PORT}/v2/"; then
 		echo "  pool-registry: restarted successfully"
 	else
 		echo "  ERROR: pool-registry restart failed -- curl check unsuccessful" >&2
@@ -1107,6 +1107,43 @@ if [ -n "${DIS_VM:-}" ]; then
 		fi
 		_rc=5
 	fi
+fi
+
+# 2c. Check for stray ABA-related processes on conN (local) and disN
+# After a suite finishes, no make/oc-mirror/aba/openshift-install/dialog
+# processes should still be running.  Catches orphans from killed pipelines,
+# hung FIFO writers, stuck dialogs, etc.
+_stray_patterns='make.*-[sC]|oc-mirror|openshift-install|/scripts/.*\.sh|/aba |dialog --'
+_stray=""
+
+# conN (local) — exclude the runner itself and grep
+_stray_local=$(ps -eo pid,ppid,etime,args --no-headers 2>/dev/null \
+	| grep -E "$_stray_patterns" \
+	| grep -v -e "grep" -e "runner.sh" -e "$$" \
+	|| true)
+if [ -n "$_stray_local" ]; then
+	_stray="${_stray}${_stray:+$'\n'}  conN (local):${_stray:+$'\n'}$_stray_local"
+fi
+
+# disN (remote)
+if [ -n "${DIS_VM:-}" ]; then
+	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	_stray_remote=$(_essh "$_dis" "ps -eo pid,ppid,etime,args --no-headers 2>/dev/null \
+		| grep -E '$_stray_patterns' \
+		| grep -v grep" 2>/dev/null || true)
+	if [ -n "$_stray_remote" ]; then
+		_stray="${_stray}${_stray:+$'\n'}  disN ($_dis):${_stray:+$'\n'}$_stray_remote"
+	fi
+fi
+
+if [ -n "$_stray" ]; then
+	echo ""
+	echo "  *** POST-SUITE WARNING: stray ABA processes detected ***"
+	echo "$_stray" | sed 's/^/    /'
+	echo ""
+	echo "  These processes should have exited when the suite finished."
+	echo "  Investigate whether ABA code is leaking orphan processes."
+	_e2e_notify "WARNING: $SUITE -- stray processes after suite"
 fi
 
 echo ""

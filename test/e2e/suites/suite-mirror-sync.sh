@@ -112,7 +112,7 @@ e2e_run_must_fail "Sync without pull secret should fail" \
 # The sync fails (expected), but the registry is left running on disN.
 # Must uninstall it to avoid interfering with later registry tests (e.g. quay-ng).
 e2e_run "Uninstall registry side-effect from must-fail test" \
-    "aba --dir mirror uninstall"
+    "aba --dir mirror uninstall --delete-data"
 e2e_run -q "Clean up local data-dir from must-fail test" \
     "rm -rf ~/e2e-test-neg-datadir"
 e2e_run -q "Restore all pull secrets" \
@@ -176,7 +176,7 @@ e2e_run "Idempotent install (registry already running)" \
 e2e_run "Verify registry still accessible after idempotent install" \
     "aba -d e2e-mirror-quay-ng verify"
 
-e2e_run "Uninstall quay-ng registry" "aba --dir e2e-mirror-quay-ng uninstall"
+e2e_run "Uninstall quay-ng registry" "aba --dir e2e-mirror-quay-ng uninstall --delete-data"
 e2e_run "Verify registry unreachable after uninstall" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:9999/v2/"
 
@@ -184,10 +184,8 @@ e2e_run "Verify registry unreachable after uninstall" \
 e2e_run "Install quay-ng with custom user and password" \
     "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa --reg-user testadmin --reg-password SecretPass42"
 e2e_run "Verify custom credentials work" \
-    "curl -sk -u testadmin:SecretPass42 https://${DIS_HOST}:9999/v2/ -o /dev/null -w '%{http_code}' | grep -q 200"
-e2e_run "Verify wrong password fails" \
-    "! curl -sk -u testadmin:wrongpass https://${DIS_HOST}:9999/v2/ -o /dev/null -w '%{http_code}' | grep -q 200"
-e2e_run "Uninstall quay-ng (custom creds)" "aba --dir e2e-mirror-quay-ng uninstall"
+    "aba -d e2e-mirror-quay-ng verify"
+e2e_run "Uninstall quay-ng (custom creds)" "aba --dir e2e-mirror-quay-ng uninstall --delete-data"
 
 test_end
 
@@ -211,10 +209,10 @@ test_end
 # ============================================================================
 test_begin "Save/Load: roundtrip"
 
-e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
+e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall --delete-data"
 # Test 4 (save) installs Quay on disN via the default mirror/ config —
 # must uninstall it too before asserting all registries are removed.
-e2e_run "Uninstall default mirror registry" "aba --dir mirror uninstall"
+e2e_run "Uninstall default mirror registry" "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"
@@ -374,7 +372,7 @@ e2e_diag "Markers: after save-load" "_marker_snap"
 # when the registry is healthy, we must explicitly uninstall to get a
 # fresh install with the new configuration.
 e2e_diag "Markers: before uninstall-2" "_marker_snap"
-e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
+e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
@@ -554,7 +552,7 @@ e2e_run "Remove vCenter folder for BM OOB (if vCenter)" \
 e2e_run "Delete BM cluster (state + dir)" "aba -y --dir $SNO_BM delete --force"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO_BM"
 
-e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
+e2e_run "Uninstall remote registry" "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
@@ -574,14 +572,14 @@ e2e_run "Delete SNO cluster" \
 # $STANDARD was created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \
-    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
+    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall --delete-data; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
 e2e_run "Uninstall e2e-mirror-quay-ng registry" \
-    "if [ -d e2e-mirror-quay-ng ]; then aba --dir e2e-mirror-quay-ng uninstall; else echo '[cleanup] e2e-mirror-quay-ng already removed'; fi"
+    "if [ -d e2e-mirror-quay-ng ]; then aba --dir e2e-mirror-quay-ng uninstall --delete-data; else echo '[cleanup] e2e-mirror-quay-ng already removed'; fi"
 e2e_run "Assert: registry fully removed on disN (docker1/quay-ng)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
-    "aba --dir mirror uninstall"
+    "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN (mirror)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir1 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"

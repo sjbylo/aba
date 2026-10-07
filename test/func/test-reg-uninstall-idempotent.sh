@@ -113,7 +113,7 @@ _mark_available() {
 _run_uninstall() {
 	_force_uninstallable
 	local rc=0
-	UNINST_OUT=$(aba -y -d "$MIRROR_NAME" uninstall 2>&1) || rc=$?
+	UNINST_OUT=$(aba -y -d "$MIRROR_NAME" uninstall "$@" 2>&1) || rc=$?
 	UNINST_RC=$rc
 	echo "$UNINST_OUT" | tail -30
 }
@@ -159,8 +159,8 @@ _assert "data dir exists" test -d "$DATA_DIR/docker-reg"
 REG_ROOT=$(grep '^reg_root=' "$REGCREDS_DIR/state.sh" 2>/dev/null | cut -d= -f2-)
 [ -n "$REG_ROOT" ] || REG_ROOT="$DATA_DIR/docker-reg"
 
-echo "  Uninstalling ..."
-_run_uninstall
+echo "  Uninstalling (with --delete-data) ..."
+_run_uninstall --delete-data
 if [ "$UNINST_RC" -eq 0 ]; then
 	_ok "docker uninstall exit 0"
 else
@@ -170,7 +170,7 @@ fi
 _assert_not ".available removed after uninstall" test -f "$MIRROR_DIR/.available"
 _assert_not "state.sh cleared after uninstall" test -s "$REGCREDS_DIR/state.sh"
 _assert_not "registry container gone" bash -c "podman ps -a --format '{{.Names}}' | grep -q '^registry$'"
-_assert_not "data dir removed" test -d "$REG_ROOT"
+_assert_not "data dir removed (--delete-data)" test -d "$REG_ROOT"
 
 # =============================================================================
 _log "TEST 2: Idempotent docker — plant state for already-gone registry"
