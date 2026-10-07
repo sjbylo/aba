@@ -127,7 +127,7 @@ _vm_url() {
 	local m="$1" v="$2" c="$3"
 	local h p
 	[ "$m" = "remote" ] && h="$DIS_HOST" || h="$CON_HOST"
-	[ "$c" = "custom" ] && p="${_CPORT[$v]}" || p="${POOL_REG_PORT}"
+	[ "$c" = "custom" ] && p="${_CPORT[$v]}" || p=8443
 	echo "https://${h}:${p}"
 }
 
