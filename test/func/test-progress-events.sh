@@ -199,13 +199,13 @@ test_plan_count sync      8
 test_plan_count save      6
 test_plan_count load      5
 test_plan_count uninstall 2
-test_plan_count bundle    4
+test_plan_count bundle    8
 test_plan_count day2      8
 test_plan_count day2-ntp  3
 test_plan_count day2-osus 4
 test_plan_count day2-virt 3
-test_plan_count cluster-shutdown 3
-test_plan_count cluster-startup  3
+test_plan_count cluster-shutdown 4
+test_plan_count cluster-startup  6
 test_plan_count cluster-upgrade  4
 echo ""
 
@@ -232,8 +232,8 @@ test_plan_id_coverage uninstall 2 \
 	scripts/reg-uninstall.sh scripts/reg-uninstall-docker.sh scripts/reg-uninstall-quay.sh \
 	scripts/reg-uninstall-quay-ng.sh scripts/reg-uninstall-remote.sh
 
-test_plan_id_coverage bundle 4 \
-	scripts/make-bundle.sh
+test_plan_id_coverage bundle 8 \
+	scripts/make-bundle.sh scripts/install-rpms.sh scripts/reg-save.sh
 
 test_plan_id_coverage day2 8 \
 	scripts/day2.sh
@@ -247,10 +247,10 @@ test_plan_id_coverage day2-osus 4 \
 test_plan_id_coverage day2-virt 3 \
 	scripts/day2-config-virt.sh
 
-test_plan_id_coverage cluster-shutdown 3 \
+test_plan_id_coverage cluster-shutdown 4 \
 	scripts/cluster-graceful-shutdown.sh
 
-test_plan_id_coverage cluster-startup 3 \
+test_plan_id_coverage cluster-startup 6 \
 	scripts/cluster-startup.sh
 
 test_plan_id_coverage cluster-upgrade 4 \
