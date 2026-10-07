@@ -12,11 +12,12 @@ name=
 
 . <(process_args "$@")
 
-[ ! "$name" ] && aba_abort "Error: mirror name missing! Usage: aba mirror --name <name>"
+[ ! "$name" ] && aba_abort "Mirror name missing! Usage: aba mirror --name <name>"
 
 [[ "$name" == "direct" || "$name" == "proxy" ]] && \
 	aba_abort "'$name' is a reserved image_source value and cannot be used as a mirror directory name"
 
+_mirror_existed=
 if [ ! -d "$name" ]; then
 	mkdir "$name"
 	cd "$name"
@@ -25,6 +26,7 @@ if [ ! -d "$name" ]; then
 	aba_debug "Running: $exec_cmd (new mirror dir $name)"
 	$exec_cmd
 else
+	_mirror_existed=1
 	if [ -s "$name/Makefile" ]; then
 		if grep -q "Mirror Makefile" "$name/Makefile"; then
 			cd "$name"
@@ -32,7 +34,7 @@ else
 			aba_debug "Running: $exec_cmd (existing mirror dir $name)"
 			$exec_cmd
 		else
-			aba_abort "Error: Directory $name is not a valid mirror dir."
+			aba_abort "Directory $name is not a valid mirror dir."
 		fi
 	else
 		cd "$name"
@@ -54,7 +56,11 @@ aba_debug "Running: $exec_cmd"
 $exec_cmd
 
 echo
-aba_info "Mirror directory created: $name"
+if [ "$_mirror_existed" ]; then
+	aba_info "Mirror directory ready: $name"
+else
+	aba_info "Mirror directory created: $name"
+fi
 aba_info "Next steps:"
 aba_info "  Install registry:  aba -d $name install"
 aba_info "  Register existing: aba -d $name register --pull-secret-mirror <file> --ca-cert <file>"

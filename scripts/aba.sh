@@ -368,6 +368,9 @@ do
 	aba_debug "Args: [$@]"
 	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
 
+	# Treat bare "help" the same as "--help" (prevents destructive fallthrough to Make)
+	[ "$1" = "help" ] && set -- "--help" "${@:2}"
+
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		# Peek at next arg if no target yet (allows "aba --help cluster")
 		_ht="${cur_target:-$2}"
@@ -546,7 +549,9 @@ for i in imgs:
 				;;
 		esac
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
+		opt=$1
 		shift
+		[[ -z "$1" ]] && aba_abort "missing argument after option $opt"
 		if [ "$1" = "-" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND out=-"  # FIXME: This only works if command=bundle
 			opt_out="--out -"
@@ -720,6 +725,9 @@ for i in imgs:
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n data_dir -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
+	elif [ "$1" = "--delete-data" ]; then
+		export REG_DELETE_DATA=1
+		shift
 	elif [ "$1" = "--vendor" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
@@ -1069,6 +1077,7 @@ for i in imgs:
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
+		upgrade_wait=1  # Also enables upgrade monitoring (aba upgrade --wait)
 	elif [ "$1" = "--workers" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND workers=1"
 		opt_workers="--workers"
@@ -1150,10 +1159,6 @@ for i in imgs:
 	elif [ "$1" = "--allow-not-recommended" ]; then
 		upgrade_allow_not_recommended="--allow-not-recommended"
 		shift
-	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		# upgrade --wait: keep monitoring after triggering the upgrade
-		upgrade_wait=1
-		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
 		shift
@@ -1168,7 +1173,7 @@ for i in imgs:
 		[ "$cmd" ] && shift || cmd="get co" # Set default command here
 	else
 		if echo "$1" | grep -q "^-"; then
-			aba_abort "$(basename $0): Error: no such option $1" 
+			aba_abort "$(basename $0): no such option $1" 
 		elif [ "$cur_target" ]; then
 			# cur_target already set — additional positionals are make arguments
 			BUILD_COMMAND="$BUILD_COMMAND $1"
@@ -1556,6 +1561,13 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		install)
+			# Guard: install needs a cluster or mirror directory
+			if [ ! -f cluster.conf ] && [ ! -f mirror.conf ]; then
+				aba_abort "'install' requires a cluster or mirror directory." \
+					"To install ABA itself:    ./install" \
+					"To install a mirror:      aba -d mirror install" \
+					"To install a cluster:     aba -d <cluster> install"
+			fi
 			# Idempotent install: if cluster is already installed, succeed
 			# without invoking make (avoids cascading dependency rebuilds
 			# that could recreate VMs on an already-running cluster).
@@ -1600,6 +1612,11 @@ aba_debug "interactive_mode=[$interactive_mode]"
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
+
+# Default mirror name to "mirror" (not Makefile's "standard" which is for clusters)
+if [ "$cur_target" = "mirror" ] && ! echo "$BUILD_COMMAND" | grep -q "name="; then
+	BUILD_COMMAND="$BUILD_COMMAND name='mirror'"
+fi
 
 # Auto-inject 'register' target when --pull-secret-mirror and --ca-cert are given without an explicit target
 if echo "$BUILD_COMMAND" | grep -q "pull_secret_mirror=" && echo "$BUILD_COMMAND" | grep -q "ca_cert="; then

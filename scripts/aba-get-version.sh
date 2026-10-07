@@ -29,7 +29,7 @@ export tmp_dir=$(mktemp -d "$ABA_TMP/ver-XXXX")
 aba_info -n "Looking up OpenShift release versions ..."
 
 if ! curl --connect-timeout 10 --retry 8 -sL https://mirror.openshift.com/pub/openshift-v${ocp_major:-4}/$ARCH/clients/ocp/stable/release.txt > $tmp_dir/.release.txt; then
-	aba_abort "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
+	aba_abort "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
 fi
 
 ## Get the latest stable OpenShift version number, e.g. 4.14.6

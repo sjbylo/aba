@@ -12,7 +12,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh "$@")" || exit 1
 fi
 
-[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "$ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
 grep -E -q "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$" "$ASSETS_DIR/rendezvousIP" || exit 0 # Ignore if not an IP
 
 aba_info =================================================================================

@@ -45,7 +45,7 @@ merge_container_auth() {
 
 if [ "$public_pull_secret_file_needed" ] && [ ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then
-		aba_abort "Error: pull_secret_file not defined in aba.conf"
+		aba_abort "pull_secret_file not defined in aba.conf"
 	fi
 
 	aba_abort \
