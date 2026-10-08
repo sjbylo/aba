@@ -1245,8 +1245,9 @@ _tui_settings_summary() {
 
 	local rv="Auto"
 	case "$_TUI_REG_VENDOR" in
-		quay)   rv="Quay" ;;
-		docker) rv="Docker" ;;
+		quay)    rv="Quay" ;;
+		docker)  rv="Docker" ;;
+		quay-ng) rv="Quay-NG" ;;
 	esac
 
 	printf '(\Z6%s, retry=%s\Zn)' "$rv" "${_TUI_RETRY_COUNT:-1}"
