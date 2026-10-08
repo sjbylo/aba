@@ -1294,7 +1294,11 @@ _state_override_mirror() {
 		[ -z "$_sval" ] && continue
 		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
+			if [[ "$_field" == "reg_pw" ]]; then
+				_drifted="${_drifted:+$_drifted, }${_field}=*** (installed: ***)"
+			else
+				_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
+			fi
 		fi
 		echo "export ${_field}='${_sval}'"
 	done
@@ -2877,15 +2881,15 @@ replace-value-conf() {
 		[ ! -s "$f" ] && continue # Try next file
 		[ ! "$_first_file" ] && _first_file="$f"
 
-		local _dbg_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _dbg_val="***"
-		aba_debug "Replacing config value [$name] with [$_dbg_val] in file: $f" >&2
+		local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
+		aba_debug "Replacing config value [$name] with [$_log_val] in file: $f" >&2
 
 		# Idempotency: if the file already has the desired state, skip the write.
 		# Uses grep -F (fixed string) first so regex chars in values (e.g. passwords) don't cause false matches.
 		if [ "$value" ]; then
 			if grep -q -F "${name}=${_write_value}" "$f" && \
 			   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
-				aba_debug "Value ${name}=${_write_value} already exists in file $f"
+				aba_debug "Value ${name}=${_log_val} already exists in file $f"
 				return 0
 			fi
 		else
@@ -2918,21 +2922,22 @@ replace-value-conf() {
 		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_success "Added value ${name}=${_write_value} to file $f" >&2 || aba_success "Clearing ${name} in file $f" >&2 
+			[ "$value" ] && aba_success "Added value ${name}=${_log_val} to file $f" >&2 || aba_success "Clearing ${name} in file $f" >&2
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Clearing ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_log_val} to file $f"     || aba_debug "Clearing ${name} in file $f"
 		fi
 
 		return 0
 	done
 
 	# Key not found in any file — append to the first valid file
+	local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
 	if [ "$_first_file" ] && [ "$value" ]; then
 		echo "${name}=${_write_value}" >> "$_first_file"
 		if [ ! "$quiet" ]; then
-			aba_success "Added value ${name}=${_write_value} to file $_first_file" >&2
+			aba_success "Added value ${name}=${_log_val} to file $_first_file" >&2
 		else
-			aba_debug "Added value ${name}=${_write_value} to file $_first_file"
+			aba_debug "Added value ${name}=${_log_val} to file $_first_file"
 		fi
 		return 0
 	fi
