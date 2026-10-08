@@ -33,6 +33,20 @@ Issues or Pull Requests.
 
 ---
 
+## verify-*-conf: machine_network should validate octet ranges
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** `verify-aba-conf()` and `verify-cluster-conf()` check `machine_network` with a regex that accepts invalid octets (e.g. `999.999.999.999`). The at-source CLI validation uses `validate_cidr()` which properly checks octet ranges 0-255 and prefix 0-32, but the verify functions only check format after `normalize` has split the CIDR into `machine_network` (IP) and `prefix_length`.
+
+**Root cause:** The verify regex `^([0-9]{1,3}\.){3}[0-9]{1,3}$` matches the pattern but does not check that each octet is ≤ 255. This allows hand-edited configs with bogus IPs to pass verification.
+
+**Proposed fix:** Replace the inline regex in both `verify-aba-conf()` and `verify-cluster-conf()` with `_valid_ipv4()` (which already validates octet ranges). Also use `_valid_ipv4` for `starting_ip`, `next_hop_address`, `api_vip`, and `ingress_vip` checks in `verify-cluster-conf()`.
+
+---
+
 ## Uninstall: keep the mirror data directory unless the user asks to delete it
 
 **Severity:** HIGH
@@ -2046,3 +2060,188 @@ create-agent-config.sh, preflight-check.sh, generate-image.sh, vmw-*.sh/kvm-*.sh
 wait-agent-up.sh, monitor-install.sh
 
 Reference: mirror save/sync/load cleanup (commit 55c22607) for the pattern to follow.
+
+---
+
+## Refactor: Docker and Quay vendor files into mirror/<sub-dir>
+
+**Severity:** LOW — consistency and cleanliness
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** The Quay NG vendor already installs into `mirror/<data_dir>/quay-ng/`,
+but Docker and Quay (legacy) scatter files directly in `mirror/` or use
+inconsistent subdirectory patterns:
+
+- **Docker:** `docker-reg-image.tgz` in `mirror/`, data in `<data_dir>/docker-reg/`
+- **Quay (legacy):** `mirror-registry-amd64.tar.gz` + extracted `mirror-registry`,
+  `execution-environment.tar`, `image-archive.tar`, `sqlite3.tar`, `quay.tar`,
+  `pause.tar`, `postgres.tar`, `redis.tar` all loose in `mirror/`; data in
+  `<data_dir>/quay-install/`
+- **Quay NG:** `quay-ng-image.tgz` in `mirror/`, data in `<data_dir>/quay-ng/`
+  — cleanest of the three
+
+The loose Quay files in `mirror/` require many per-file exclusions in
+`backup.sh` (lines 208-214) and clutter `ls mirror/`.
+
+**Proposed fix:** Move vendor-specific files into per-vendor subdirectories
+under `mirror/`:
+
+- `mirror/docker/` — `docker-reg-image.tgz`
+- `mirror/quay/` — `mirror-registry-*.tar.gz`, extracted `mirror-registry`,
+  `execution-environment.tar`, `image-archive.tar`, `sqlite3.tar`, etc.
+- `mirror/quay-ng/` — `quay-ng-image.tgz`
+
+**Benefits:**
+- `backup.sh` per-file exclusions become one `! -path "*/vendor/*"` or similar
+- `mirror/` directory is clean (only `data/`, `mirror.conf`, `state.sh`, etc.)
+- Each vendor's files are self-contained and easy to reason about
+- `make reset` / `make clean` can wipe vendor dirs cleanly
+
+**Files likely affected:**
+- `templates/Makefile.mirror`: download targets, file paths, clean/reset recipes
+- `scripts/reg-install-docker.sh`, `scripts/reg-install-quay.sh`,
+  `scripts/reg-install-quay-ng.sh`: load paths for tarballs/images
+- `scripts/reg-common.sh`: any shared vendor file references
+- `scripts/backup.sh`: simplify exclusions
+- `scripts/include_all.sh`: download command paths (`CMD_DL_*`)
+- `.gitignore`: update vendor file patterns
+
+---
+
+## Audit: Error handling and exit code propagation
+
+**Severity:** MEDIUM — silent failures lead to partial state
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** Some scripts may use `echo_red` + `exit 1` instead of `aba_abort`
+for fatal errors (inconsistent abort pattern). Make targets that call multiple
+scripts may silently succeed when an intermediate step fails if `set -e` is not
+active or if errors are swallowed by pipes, subshells, or `|| true`.
+
+**Audit scope:**
+- Search for `echo_red.*; exit` patterns (should be `aba_abort`)
+- Verify `set -e` / `set -eo pipefail` is active in all scripts
+- Check Make recipes for unguarded multi-command chains
+- Verify `run_once` properly propagates exit codes from background tasks
+- Check that `oc` command failures in day2/upgrade scripts are caught
+
+**Files likely affected:**
+- All `scripts/*.sh` — grep for `echo_red.*exit`
+- `templates/Makefile.*` — check recipe error handling
+- `scripts/include_all.sh` (`run_once`): exit code propagation
+
+---
+
+## Audit: Race conditions and concurrency in run_once / parallel downloads
+
+**Severity:** MEDIUM — potential data corruption or stale results
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** `run_once` manages background tasks via PID files and state
+markers. Concurrent invocations (e.g. TUI spawning multiple background tasks,
+parallel CLI downloads, multiple `aba` invocations) may collide on shared
+state files. The per-vendor download split introduced new parallelism that
+needs verification.
+
+**Audit scope:**
+- Verify `run_once` task ID uniqueness — can two tasks with the same ID run
+  simultaneously and corrupt each other's output?
+- Check for TOCTOU races in PID file checks (read PID → check alive → act)
+- Verify atomic writes in `run_once` output files (mktemp + mv pattern)
+- Audit `cli-download-all.sh` parallel downloads — do they share temp dirs?
+- Check TUI background tasks that write to the same config files
+
+**Files likely affected:**
+- `scripts/include_all.sh` (`run_once`, `run_once_wait`, `run_once_peek`)
+- `scripts/cli-download-all.sh`, `scripts/cli-download-extra.sh`
+- `scripts/reg-download-all.sh` (per-vendor parallel downloads)
+
+---
+
+## Audit: Config migration and backward compatibility
+
+**Severity:** MEDIUM — upgrades from older ABA versions may break
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** ABA has migrated config formats over time (e.g. `int_connection` +
+`mirror_name` → `image_source`). The `normalize-*-conf` functions handle
+migration, but edge cases may exist: empty values, corrupt files, mixed old/new
+keys, partially migrated configs from interrupted upgrades.
+
+**Audit scope:**
+- Test `normalize-cluster-conf` with legacy keys (`int_connection`, `mirror_name`)
+- Test `normalize-mirror-conf` with missing or empty `reg_vendor`
+- Verify `aba.conf` migration from pre-1.2 formats (missing keys, old defaults)
+- Check what happens when config files have Windows line endings (CRLF)
+- Verify `.bundle` marker and `state.sh` survive across ABA version upgrades
+- Test `--primed` bundles created with older ABA versions on newer ABA
+
+**Files likely affected:**
+- `scripts/include_all.sh` (`normalize-cluster-conf`, `normalize-mirror-conf`,
+  `normalize-aba-conf`)
+- `scripts/create-cluster-conf.sh`
+- `scripts/create-mirror-conf.sh`
+
+---
+
+## Audit: Security surface — unescaped input, temp files, credential leaks
+
+**Severity:** HIGH — potential command injection or credential exposure
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** User-controlled values (hostnames, mirror names, cluster names,
+paths, passwords) are embedded in shell commands, SSH invocations, `oc` calls,
+and Make variables. Improper quoting or escaping could allow command injection.
+Temp files may have overly permissive permissions. Credentials (registry
+passwords, pull secrets) may leak to stdout or log files.
+
+**Audit scope:**
+- Check all `ssh` commands for unquoted variable expansion in remote commands
+- Verify `reg_password` / `reg_user` are never logged to stdout
+  (only stderr via `aba_debug`)
+- Check temp file creation (`mktemp`) for secure permissions (0600)
+- Verify pull secret files have restricted permissions
+- Audit `eval` usage — any user-controlled strings reaching `eval`?
+- Check `replace-value-conf` for values containing shell metacharacters
+  (e.g. passwords with `$`, `!`, backticks)
+- Verify `.netrc` / `.docker/config.json` permissions after creation
+
+**Files likely affected:**
+- `scripts/reg-install-*.sh` (password handling)
+- `scripts/include_all.sh` (`replace-value-conf`, SSH helpers)
+- `scripts/reg-common.sh` (credential management)
+- `scripts/create-pull-secret.sh`
+- `tui/v2/tui-mirror.sh` (password input dialog)
+
+---
+
+## Audit: TUI edge cases — ESC/Cancel, empty states, corrupt config
+
+**Severity:** MEDIUM — crashes or undefined behavior on unexpected input
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** The TUI (dialog-based) may not handle all edge cases gracefully:
+pressing ESC or Cancel at unexpected points, encountering missing or corrupt
+config files, empty operator lists, no clusters defined, no mirror installed.
+The TUI should degrade gracefully rather than crash or show raw error output.
+
+**Audit scope:**
+- Press ESC/Cancel at every dialog and verify clean exit (no partial state)
+- Test TUI startup with missing `aba.conf`, `mirror.conf`, `cluster.conf`
+- Test TUI with empty `ops=` (no operators selected)
+- Test cluster menu with no cluster directories
+- Test mirror menu with no mirror directory
+- Verify all `dialog` exit code checks (`$?`) handle 1 (Cancel) and 255 (ESC)
+- Check `--default-button` correctness (destructive dialogs should default to No)
+- Test wizard flow with all fields empty / at defaults
+
+**Files likely affected:**
+- `tui/v2/tui-mirror.sh`, `tui/v2/tui-cluster.sh`, `tui/v2/tui-direct.sh`
+- `tui/v2/tui-lib.sh` (shared dialog helpers)
+- `tui/v2/abatui2.sh` (main entry, config loading)
