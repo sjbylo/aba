@@ -886,6 +886,12 @@ if [[ "$_TUI_FIRST_RUN" ]]; then
 		_user_domain=$(<"$_TUI_TMP")
 	fi
 	_new_domain="${_user_domain:-${_cur_domain:-example.com}}"
+	# Validate domain format before saving
+	if [[ -n "$_new_domain" ]] && ! _valid_domain "$_new_domain"; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Invalid domain format: '$_new_domain'\n\nExpected a valid domain name (e.g. example.com)." 0 0
+		_new_domain="${_cur_domain:-example.com}"
+	fi
 	if [[ "$_new_domain" != "$_cur_domain" ]]; then
 		replace-value-conf -q -n domain -v "$_new_domain" -f "$ABA_ROOT/aba.conf"
 		tui_log "User changed domain: $_cur_domain -> $_new_domain"

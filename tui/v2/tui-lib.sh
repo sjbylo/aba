@@ -152,21 +152,12 @@ _valid_ip_list() {
 	return 0
 }
 
-# Validate FQDN (must have at least one dot and a TLD label)
-_valid_fqdn() {
-	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || return 1
-	[[ "$1" == *.* ]] || return 1
-}
+# _valid_fqdn, _valid_abs_path: defined in scripts/include_all.sh (DRY)
 
 # Validate TCP/UDP port number (1-65535)
 _valid_port() {
 	[[ "$1" =~ ^[0-9]+$ ]] || return 1
 	[[ "$1" -ge 1 && "$1" -le 65535 ]] || return 1
-}
-
-# Validate absolute path or ~-prefixed path
-_valid_abs_path() {
-	[[ "$1" =~ ^(/|~) ]] || return 1
 }
 
 # Validate MAC prefix pattern (exactly 5 octets with trailing colon, e.g. 00:50:56:xx:xx:)
@@ -181,9 +172,13 @@ _valid_mac() {
 }
 
 # Validate comma-separated network port names (e.g. ens1f0,ens1f1)
+# Uses _valid_port_name from include_all.sh for each item.
 _valid_port_names() {
 	[[ -z "$1" ]] && return 0
-	[[ "$1" =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]]
+	local _p
+	for _p in $(echo "$1" | tr , " "); do
+		_valid_port_name "$_p" || return 1
+	done
 }
 
 # =============================================================================
@@ -1197,10 +1192,11 @@ _tui_settings_menu_reg_vendor() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
 		--cancel-label "$TUI2_BTN_BACK" \
-		--menu "Select registry installer vendor (stored in mirror/mirror.conf).\nAuto picks Quay vs Docker based on detected architecture.\nCurrent: $cur" 0 0 3 \
-		"auto"  "Auto (architecture-based)" \
-		"quay"  "Quay mirror-registry" \
-		"docker" "Docker registry tarball" \
+		--menu "Select registry installer vendor (stored in mirror/mirror.conf).\nAuto picks Quay vs Docker based on detected architecture.\nCurrent: $cur" 0 0 4 \
+		"auto"    "Auto (architecture-based)" \
+		"quay"    "Quay mirror-registry" \
+		"docker"  "Docker registry tarball" \
+		"$_QUAY_NG_VENDOR" "Quay-NG (mirror-registry binary)" \
 		2>"$_TUI_TMP"
 	local rc=$?
 	[[ $rc -ne 0 ]] && return
@@ -1273,9 +1269,10 @@ _tui_settings_menu() {
 		if [[ "${_TUI_MODE:-}" != "DIRECT" ]]; then
 			local reg_display
 			case "$_TUI_REG_VENDOR" in
-				quay)   reg_display="Registry Type: \Z2Quay\Zn" ;;
-				docker) reg_display="Registry Type: \Z3Docker\Zn" ;;
-				*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
+				quay)      reg_display="Registry Type: \Z2Quay\Zn" ;;
+				docker)    reg_display="Registry Type: \Z3Docker\Zn" ;;
+				quay-ng)   reg_display="Registry Type: \Z2Quay-NG\Zn" ;;
+				*)         reg_display="Registry Type: \Z6Auto\Zn" ;;
 			esac
 			local retry_display
 			local rc_val="${_TUI_RETRY_COUNT:-1}"
@@ -1286,9 +1283,10 @@ _tui_settings_menu() {
 			_menu_items+=("1" "$reg_display" "2" "$retry_display")
 			_help_extra="
 Registry Type:
-  Auto   - Let aba choose the registry (recommended).
-  Quay   - Force Quay mirror registry.
-  Docker - Force Docker V2 mirror registry.
+  Auto    - Let aba choose the registry (recommended).
+  Quay    - Force Quay mirror registry.
+  Docker  - Force Docker V2 mirror registry.
+  Quay-NG - Force Quay-NG mirror registry (binary).
 
 Retry Count:
   How many times to retry failed oc-mirror operations.
@@ -1331,12 +1329,13 @@ Toggle a setting by selecting it and pressing Enter."
 
 		case "$choice" in
 			1)
-				# Toggle in-memory: auto → quay → docker → auto
+				# Toggle in-memory: auto → quay → docker → quay-ng → auto
 				case "$_TUI_REG_VENDOR" in
-					auto)   _TUI_REG_VENDOR="quay";   tui_log "Settings: Registry type toggled to Quay" ;;
-					quay)   _TUI_REG_VENDOR="docker"; tui_log "Settings: Registry type toggled to Docker" ;;
-					docker) _TUI_REG_VENDOR="auto";   tui_log "Settings: Registry type toggled to Auto" ;;
-					*)      _TUI_REG_VENDOR="auto";   tui_log "Settings: Registry type reset to Auto" ;;
+					auto)    _TUI_REG_VENDOR="quay";    tui_log "Settings: Registry type toggled to Quay" ;;
+					quay)    _TUI_REG_VENDOR="docker";  tui_log "Settings: Registry type toggled to Docker" ;;
+					docker)  _TUI_REG_VENDOR="quay-ng"; tui_log "Settings: Registry type toggled to Quay-NG" ;;
+					quay-ng) _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type toggled to Auto" ;;
+					*)       _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type reset to Auto" ;;
 				esac
 				# Persist to file
 				local vf="$ABA_ROOT/mirror/mirror.conf"

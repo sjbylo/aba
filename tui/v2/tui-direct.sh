@@ -201,8 +201,8 @@ direct_wizard() {
 							run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
 						done
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
-						# Start registry download early (shared task ID with aba.sh)
-						run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
+						# Start registry downloads early (shared with aba.sh)
+						start_all_registry_downloads >>"$_TUI_LOG_FILE" 2>&1
 					fi
 					step="platform"
 					;;

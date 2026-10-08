@@ -150,6 +150,7 @@ integration_tests=(
 	test/func/test-cli-download-pipeline.sh
 	test/func/test-download-before-install-race.sh
 	test/func/test-download-install-race.sh
+	test/func/test-registry-download-per-vendor.sh
 
 	# Catalog / ISC
 	test/func/test-catalog-helpers.sh

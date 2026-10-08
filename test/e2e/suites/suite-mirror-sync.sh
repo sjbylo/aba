@@ -377,7 +377,7 @@ e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/e2e-mirror-datadir1'"
-e2e_run "Set empty reg_pw" "aba -d mirror --reg-password"
+e2e_run "Set empty reg_pw" "aba -d mirror --reg-password ''"
 e2e_run "Set reg_path=my/path" "aba -d mirror --reg-path my/path"
 e2e_run "Set reg_user=myuser" "aba -d mirror --reg-user myuser"
 e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"

@@ -710,7 +710,7 @@ reg_stale_report() {
 			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
-			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -q '^registry$'" "registry container" && \
+			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE '^registry(-[0-9]+)?$'" "registry container" && \
 				stale+="  registry container still present"$'\n'
 			;;
 		"$_QUAY_NG_VENDOR"|quay-ng)
@@ -722,8 +722,9 @@ reg_stale_report() {
 				stale+="  Port $port still listening"$'\n'
 			# systemctl is-active: 0 + "active" = present; 3/"inactive" = gone.
 			# SSH failure (255) or missing systemctl (127) must not look like gone.
+			# Check both user-level and system-level (root creates system Quadlets).
 			rc=0
-			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay.service 2>/dev/null") || rc=$?
+			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay.service 2>/dev/null || sudo systemctl is-active quay.service 2>/dev/null") || rc=$?
 			if [ "$rc" -eq 255 ] || [ "$rc" -eq 127 ]; then
 				aba_abort "Registry probe failed (quay.service, rc=$rc)"
 			fi
@@ -804,7 +805,8 @@ reg_docker_remove() {
 	[ -n "$ssh_cmd" ] && _where="$reg_host"
 
 	aba_info "Removing Docker registry on $_where ..."
-	_reg_host_run "$ssh_cmd" "podman rm -f registry 2>/dev/null" || true
+	# Remove both new (registry-PORT) and legacy (registry) container names
+	_reg_host_run "$ssh_cmd" "podman rm -f registry-${reg_port} 2>/dev/null; podman rm -f registry 2>/dev/null" || true
 
 	if [ "${REG_DELETE_DATA:-}" ]; then
 		reg_rm_data_dir docker "$reg_root" "$ssh_cmd"
@@ -821,44 +823,69 @@ reg_docker_remove() {
 }
 
 # --- reg_quay_ng_remove -------------------------------------------------------
-# Core quay-ng uninstall: stop/disable service, remove quadlet, delete data.
+# Core quay-ng uninstall: call the tool's own 'uninstall' command.
+# Same pattern as reg_quay_remove — use the tool, then verify clean.
 # Usage: reg_quay_ng_remove [ssh_cmd]
 reg_quay_ng_remove() {
 	local ssh_cmd="${1:-}"
 	local _where="localhost"
 	[ -n "$ssh_cmd" ] && _where="$reg_host"
 
-	aba_info "Removing $_QUAY_NG_VENDOR registry on $_where ..."
+	aba_info "Uninstalling $_QUAY_NG_VENDOR registry on $_where ..."
 
+	local _uninst_rc=0
 	if [ -n "$ssh_cmd" ]; then
-		# Remote: single SSH command with set -e for atomicity
-		if ! $ssh_cmd "set -e
-			systemctl --user stop quay.service 2>/dev/null || true
-			systemctl --user disable quay.service 2>/dev/null || true
-			rm -f ~/.config/containers/systemd/quay.container
-			systemctl --user daemon-reload
-			systemctl --user reset-failed quay.service 2>/dev/null || true"; then
-			aba_abort "Failed to stop/remove $_QUAY_NG_VENDOR service on $_where." \
-				"SSH command returned non-zero. Check connectivity and remote systemd state."
+		# Remote: ensure mirror-registry binary is on remote host
+		local _bin_dir="quay-ng"
+		local _bin="$_bin_dir/mirror-registry"
+
+		if ! $ssh_cmd "test -x $reg_root/../$_bin_dir/mirror-registry 2>/dev/null"; then
+			aba_info "mirror-registry binary not found on remote host, uploading ..."
+			if [ ! -x "$_bin" ]; then
+				aba_abort "$_QUAY_NG_VENDOR binary '$_bin' not found locally." \
+					"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
+			fi
+			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
+			local _target="$reg_ssh_user@$reg_host"
+			$ssh_cmd "mkdir -p $reg_root/../$_bin_dir" || true
+			$_scp "$_bin" "$_target:$reg_root/../$_bin_dir/" || \
+				aba_abort "Failed to copy mirror-registry binary to $reg_host"
+		fi
+
+		local _remote_bin="$reg_root/../$_bin_dir/mirror-registry"
+		aba_info "Running: mirror-registry uninstall on $reg_host ..."
+		if [ "${REG_DELETE_DATA:-}" ]; then
+			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve" || _uninst_rc=$?
+		else
+			$ssh_cmd "echo y | $_remote_bin uninstall -data-dir $reg_root" || _uninst_rc=$?
 		fi
 	else
 		# Local
-		systemctl --user stop quay.service 2>/dev/null || true
-		systemctl --user disable quay.service 2>/dev/null || true
-		rm -f "$HOME/.config/containers/systemd/quay.container"
-		systemctl --user daemon-reload
-		systemctl --user reset-failed quay.service 2>/dev/null || true
-	fi
+		local _bin="quay-ng/mirror-registry"
+		if [ ! -x "$_bin" ]; then
+			aba_abort "$_QUAY_NG_VENDOR binary '$_bin' not found." \
+				"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
+		fi
 
-	if [ "${REG_DELETE_DATA:-}" ]; then
-		reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$ssh_cmd"
+		aba_info "Running: mirror-registry uninstall -data-dir $reg_root ..."
+		if [ "${REG_DELETE_DATA:-}" ]; then
+			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
+		else
+			echo y | ./"$_bin" uninstall -data-dir "$reg_root" || _uninst_rc=$?
+		fi
 	fi
 
 	local _stale
 	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR" "$ssh_cmd")
 	if [ -n "$_stale" ]; then
+		if [ "$_uninst_rc" -ne 0 ]; then
+			aba_abort \
+				"mirror-registry uninstall failed (exit=$_uninst_rc) and left stale state on $_where:" \
+				"$_stale" \
+				"Investigate the uninstall failure above. Do not force-clean past an aba failure."
+		fi
 		aba_abort \
-			"$_QUAY_NG_VENDOR registry uninstall left stale state on $_where:" \
+			"mirror-registry uninstall reported success but left stale state on $_where:" \
 			"$_stale" \
 			"Investigate and clean up manually before retrying."
 	fi
@@ -928,6 +955,14 @@ reg_quay_remove() {
 		fi
 	fi
 
+	# mirror-registry's Ansible playbook does not remove podman secrets.
+	# Clean up redis_pass to prevent stale-state detection on next install.
+	if [ -n "$ssh_cmd" ]; then
+		$ssh_cmd "podman secret rm redis_pass 2>/dev/null" || true
+	else
+		podman secret rm redis_pass 2>/dev/null || true
+	fi
+
 	local _stale
 	_stale=$(reg_stale_report quay "$ssh_cmd")
 	if [ -n "$_stale" ]; then
@@ -944,6 +979,21 @@ reg_quay_remove() {
 	fi
 	[ "${_uninst_rc:-0}" -ne 0 ] && \
 		aba_info "mirror-registry uninstall exited $_uninst_rc but registry is fully gone -- treating as success"
+
+	# When keeping data (no REG_DELETE_DATA), fix ownership of persisted files.
+	# Quay containers run in a user namespace, creating files owned by mapped UIDs
+	# (e.g. 101000) that the host user cannot modify.  Without this, re-install
+	# fails with PermissionError on quay-storage/uploads.
+	# Inside 'podman unshare', UID 0 maps to the host user — so chown 0:0 gives
+	# the files back to the calling user.
+	if [ -z "${REG_DELETE_DATA:-}" ]; then
+		aba_debug "Fixing ownership of persisted data in $reg_root"
+		if [ -n "$ssh_cmd" ]; then
+			$ssh_cmd "podman unshare chown -R 0:0 $reg_root" 2>/dev/null || true
+		else
+			podman unshare chown -R 0:0 "$reg_root" 2>/dev/null || true
+		fi
+	fi
 }
 
 # --- reg_finish_uninstall -----------------------------------------------------
@@ -1096,13 +1146,23 @@ reg_remote_post_install() {
 
 	reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 
-	# Verify the registry is reachable and auth works from this host.
-	# Uses reg_check_v2_auth which handles both Basic (Docker) and Bearer (Quay-ng).
-	if ! try_cmd -n 3 -d 5 -m "Verify registry ${reg_host}:${reg_port}" -- \
-		reg_check_v2_auth "https://${reg_host}:${reg_port}" "$reg_user" "$reg_pw"; then
+	# Phase 1: Wait for the registry HTTP endpoint to respond (no auth = no
+	# lockout risk).  Safe to retry freely — just checks connectivity + TLS.
+	if ! try_cmd -n 12 -d 5 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
+		probe_host --any "https://${reg_host}:${reg_port}/v2/" "registry readiness"; then
 		aba_abort \
-			"Registry started on $reg_host but verification of ${reg_host}:${reg_port} failed after 3 attempts." \
-			"Check firewall rules (port $reg_port), TLS certificates, and registry credentials." \
+			"Registry on $reg_host is not responding on port $reg_port after 60s." \
+			"Check firewall rules and that the registry service started correctly." \
+			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+	fi
+
+	# Phase 2: Single auth check — NO retry to avoid Quay brute-force lockout.
+	# Quay locks accounts after ~5 failed login attempts; retrying auth when
+	# the registry is slow to initialize burns through that budget fast.
+	if ! reg_check_v2_auth "https://${reg_host}:${reg_port}" "$reg_user" "$reg_pw"; then
+		aba_abort \
+			"Registry on $reg_host is reachable but authentication failed." \
+			"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 	fi
 

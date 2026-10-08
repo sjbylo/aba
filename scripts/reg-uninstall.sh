@@ -92,7 +92,7 @@ fi
 _found=
 case "$vendor" in
 	docker)
-		echo "$_podman_ps" | grep -q "^registry$" && _found=1
+		echo "$_podman_ps" | grep -q -E "^registry(-[0-9]+)?$" && _found=1
 		;;
 	quay)
 		echo "$_podman_ps" | grep -q "quay-app\|quay" && _found=1

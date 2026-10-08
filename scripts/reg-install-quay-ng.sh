@@ -1,7 +1,8 @@
 #!/bin/bash
 # Install the Go-based Quay mirror registry (quay-ng) on localhost.
 # Called by reg-install.sh dispatcher; not intended for direct invocation.
-# Uses Podman Quadlet for systemd-managed container lifecycle.
+# Uses the quay-ng mirror-registry binary's 'install' command, which handles
+# init (certs, admin user, database), Quadlet creation, and service start.
 
 source scripts/reg-common.sh
 
@@ -15,66 +16,66 @@ reg_generate_password
 reg_verify_localhost
 
 _QUAY_NG_IMAGE_FILE="quay-ng-image.tgz"
-_QUADLET_DIR="$HOME/.config/containers/systemd"
-_QUADLET_FILE="$_QUADLET_DIR/quay.container"
-_SERVICE_NAME="quay.service"
+_QUAY_NG_BIN_DIR="quay-ng"
+_QUAY_NG_BIN="$_QUAY_NG_BIN_DIR/mirror-registry"
 
 ask "Install $_QUAY_NG_VENDOR registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
 aba_info "Installing $_QUAY_NG_VENDOR registry on localhost ..."
 
-# Load image from tarball (air-gapped) or pull from registry (connected)
+# Load image from tarball (air-gapped) or pull from registry (connected).
+# Ensure the tarball always exists — the install binary needs -image-archive
+# because its compiled-in image reference differs from $_QUAY_NG_IMAGE.
 if [ -f "$_QUAY_NG_IMAGE_FILE" ]; then
 	aba_info "Loading $_QUAY_NG_VENDOR image from $_QUAY_NG_IMAGE_FILE ..."
 	podman load -i "$_QUAY_NG_IMAGE_FILE"
-elif ! podman image exists "$_QUAY_NG_IMAGE" 2>/dev/null; then
-	aba_info "Pulling $_QUAY_NG_VENDOR image: $_QUAY_NG_IMAGE ..."
-	podman pull "$_QUAY_NG_IMAGE"
-fi
-
-mkdir -p "$reg_root"
-
-# Initialize registry (creates certs, admin user, database)
-if [ ! -f "$reg_root/auth/admin-password" ]; then
-	aba_info "Initializing registry ..."
-	echo "$reg_pw" | podman run --rm -i \
-		-v "${reg_root}:/data:Z" "$_QUAY_NG_IMAGE" \
-		init -data-dir /data -hostname "$reg_host" -init-user "$reg_user" -init-password-stdin
-
-	if [ ! -f "$reg_root/auth/admin-password" ]; then
-		aba_abort \
-			"Registry initialization failed — no credentials created." \
-			"Check podman output above for errors."
+else
+	if ! podman image exists "$_QUAY_NG_IMAGE" 2>/dev/null; then
+		aba_info "Pulling $_QUAY_NG_VENDOR image: $_QUAY_NG_IMAGE ..."
+		podman pull "$_QUAY_NG_IMAGE"
 	fi
+	aba_info "Saving $_QUAY_NG_VENDOR image to $_QUAY_NG_IMAGE_FILE ..."
+	podman save -o "$_QUAY_NG_IMAGE_FILE" "$_QUAY_NG_IMAGE"
 fi
 
-# Create Quadlet unit file for systemd-managed container.
-# serve records -hostname in the token realm URL. The port has to be there,
-# or clients request tokens from 443 instead of $reg_port. init rejects a
-# hostname that contains a port, so only the serve command gets host:port.
-mkdir -p "$_QUADLET_DIR"
-cat > "$_QUADLET_FILE" <<-EOF
-[Unit]
-Description=Quay OCI Registry ($_QUAY_NG_VENDOR)
-After=network-online.target
+# Extract the install binary from the container image
+if [ ! -x "$_QUAY_NG_BIN" ]; then
+	aba_info "Extracting $_QUAY_NG_VENDOR install binary ..."
+	mkdir -p "$_QUAY_NG_BIN_DIR"
+	_cid=$(podman create "$_QUAY_NG_IMAGE")
+	podman cp "$_cid:/mirror-registry" "$_QUAY_NG_BIN"
+	podman rm "$_cid" >/dev/null
+	chmod +x "$_QUAY_NG_BIN"
+fi
 
-[Container]
-Image=$_QUAY_NG_IMAGE
-Volume=${reg_root}:/data:Z
-PublishPort=${reg_port}:8443
-Exec=serve -data-dir /data -hostname $reg_hostport -addr :8443
-
-[Install]
-WantedBy=default.target
-EOF
-
-aba_info "Starting $_QUAY_NG_VENDOR registry service ..."
-systemctl --user daemon-reload
-if ! systemctl --user start "$_SERVICE_NAME"; then
-	aba_abort \
-		"Failed to start $_SERVICE_NAME." \
-		"Check: journalctl --user -xeu $_SERVICE_NAME" \
-		"Quadlet: $_QUADLET_FILE"
+# Install or reinstall via the tool's own 'install' command.
+# Fresh install: pass -init-user/-init-password-stdin for admin setup.
+# Reinstall (data preserved, service removed): omit init flags — the tool
+# detects existing data, skips admin provisioning, creates Quadlet, starts service.
+if [ -f "$reg_root/auth/admin-password" ]; then
+	aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
+	if ! ./"$_QUAY_NG_BIN" install \
+		-data-dir "$reg_root" \
+		-hostname "$reg_host" \
+		-port "$reg_port" \
+		-image-archive "$_QUAY_NG_IMAGE_FILE"; then
+		aba_abort \
+			"$_QUAY_NG_VENDOR reinstall failed." \
+			"Check the output above for errors."
+	fi
+else
+	aba_info "Running: $_QUAY_NG_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
+	if ! echo "$reg_pw" | ./"$_QUAY_NG_BIN" install \
+		-data-dir "$reg_root" \
+		-hostname "$reg_host" \
+		-port "$reg_port" \
+		-init-user "$reg_user" \
+		-init-password-stdin \
+		-image-archive "$_QUAY_NG_IMAGE_FILE"; then
+		aba_abort \
+			"$_QUAY_NG_VENDOR install failed." \
+			"Check the output above for errors."
+	fi
 fi
 
 # Quay-ng uses a systemd quadlet (WantedBy=default.target) -- systemd handles
@@ -101,20 +102,12 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
 
-# Verify connectivity (wait briefly for TLS listener to be ready)
-_verify_ok=""
-for i in $(seq 1 10); do
-	if reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
-		_verify_ok=1
-		break
-	fi
-	sleep 1
-done
-
-if [ ! "$_verify_ok" ]; then
+# Phase 1: Wait for the TLS listener (no auth = no lockout risk)
+if ! try_cmd -n 10 -d 1 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
+	probe_host --any --quick "$reg_url/v2/" "registry readiness"; then
 	_local_ips=$(hostname -I 2>/dev/null | xargs)
 	_localhost_ok="no"
-	reg_check_v2_auth "https://localhost:$reg_port" "$reg_user" "$reg_pw" && _localhost_ok="yes"
+	probe_host --any --quick "https://localhost:$reg_port/v2/" "localhost" && _localhost_ok="yes"
 
 	aba_abort \
 		"Registry installed but not reachable via FQDN." \
@@ -127,5 +120,13 @@ if [ ! "$_verify_ok" ]; then
 		"  - DNS points to a different host" \
 		"  - Firewall blocking port $reg_port" \
 		"" \
+		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+fi
+
+# Phase 2: Single auth check — NO retry to avoid Quay brute-force lockout
+if ! reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
+	aba_abort \
+		"Registry is reachable but authentication failed on $reg_host:$reg_port." \
+		"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi

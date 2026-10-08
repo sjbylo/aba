@@ -11,7 +11,7 @@ reg_remote_pre_install "docker"
 # Pre-install assertion: detect stale Docker registry state.
 _stale=""
 $_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-$_ssh "podman ps -a --format '{{.Names}}' | grep -q '^registry$'" && _stale+="  registry container still present"$'\n'
+$_ssh "podman ps -a --format '{{.Names}}' | grep -q -E '^registry(-[0-9]+)?$'" && _stale+="  registry container still present"$'\n'
 if [ -n "$_stale" ]; then
 	aba_abort \
 		"Stale registry state detected on $reg_host before install:" \
@@ -43,7 +43,7 @@ REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 _force_regen=""
 
 aba_info "Running Docker registry install on remote host ..."
-aba_info "  ssh $reg_ssh_user@$reg_host: podman run -d -p ${reg_port}:5000 --name registry docker.io/library/registry:latest"
+aba_info "  ssh $reg_ssh_user@$reg_host: podman run -d -p ${reg_port}:5000 --name registry-${reg_port} docker.io/library/registry:latest"
 if ! $_ssh "
 	set -e
 	podman load -i $remote_dir/docker-reg-image.tgz
@@ -79,10 +79,13 @@ if ! $_ssh "
 
 	htpasswd -Bbn '$reg_user' '$reg_pw' > '$REGISTRY_AUTH_DIR/htpasswd'
 
-	podman rm -f registry 2>/dev/null || true
+	if podman ps -a --format '{{.Names}}' | grep -q '^registry-${reg_port}\$'; then
+		echo '[ABA] Error: Container registry-${reg_port} already exists. Clean up with: podman rm -f registry-${reg_port}' >&2
+		exit 1
+	fi
 	podman run -d \
 		-p ${reg_port}:5000 \
-		--restart=always --name registry \
+		--restart=always --name registry-${reg_port} \
 		-v '${REGISTRY_DATA_DIR}:/var/lib/registry:Z' \
 		-v '${REGISTRY_CERTS_DIR}:/certs:Z' \
 		-v '${REGISTRY_AUTH_DIR}:/auth:Z' \

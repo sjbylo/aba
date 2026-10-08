@@ -16,7 +16,7 @@ reg_setup_data_dir docker
 reg_generate_password
 reg_verify_localhost
 
-REGISTRY_NAME="registry"
+REGISTRY_NAME="registry-${reg_port}"
 REGISTRY_DATA_DIR="$reg_root/data"
 REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
@@ -84,10 +84,12 @@ fi
 aba_info "Creating authentication file ..."
 htpasswd -Bbn "$reg_user" "$reg_pw" > "$REGISTRY_AUTH_DIR/htpasswd"
 
-# --- Stop old container if running ---
+# --- Abort if a container with this name already exists ---
 if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
-	aba_info "Removing old registry container ..."
-	podman rm -f "$REGISTRY_NAME" || true
+	aba_abort "Container '$REGISTRY_NAME' already exists." \
+		"A previous install may have failed or was not fully uninstalled." \
+		"Clean up with: podman rm -f $REGISTRY_NAME" \
+		"Then retry: aba -d $(basename "$PWD") install"
 fi
 
 # --- Start the registry container ---

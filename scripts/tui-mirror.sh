@@ -67,7 +67,7 @@ _mirror_config_menu_loop() {
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, or docker
+  • Vendor — auto (detects arch), quay, docker, or quay-ng
   • Data dir — storage location for images
 
 Press 'Continue' when ready. The mirror will be installed automatically."
@@ -99,7 +99,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, or docker
+  • Vendor — auto (detects arch), quay, docker, or quay-ng
   • Data dir — storage location for images"
 			dlg_items=(
 				"H"  "Hostname:     $m_host"
@@ -131,7 +131,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, or docker
+  • Vendor — auto (detects arch), quay, docker, or quay-ng
   • Data dir — storage location on remote host"
 			dlg_items=(
 				"H"  "Hostname:     ${m_host:-(enter FQDN)}"
@@ -2526,7 +2526,7 @@ _ensure_offline_prereqs() {
 	# Peek using the SAME per-tool IDs that ABA core uses
 	local need_download=false
 	run_once -p -i "cli:download:openshift-install:${ocp_version}" 2>/dev/null || need_download=true
-	run_once -p -i "$TASK_DL_QUAY_REG" 2>/dev/null || need_download=true
+	registry_downloads_ready || need_download=true
 
 	if [[ "$need_download" == "false" ]]; then
 		tui_log "Offline prerequisites already ready (peek passed)."
@@ -2544,8 +2544,7 @@ _ensure_offline_prereqs() {
 		return 1
 	fi
 
-	if ! run_once -q -w -i "$TASK_DL_QUAY_REG" -- \
-		"${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1; then
+	if ! wait_all_registry_downloads >>"$_TUI_LOG_FILE" 2>&1; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
 			--msgbox "Failed to download registry installers.\n\nCheck internet connectivity and try again." 0 0
 		return 1

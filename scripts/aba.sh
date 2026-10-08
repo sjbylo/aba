@@ -148,6 +148,14 @@ while [ $i -le $# ]; do
 			new_args+=("$arg" "$_CLI_CLUSTER_NAME")
 			;;
 
+		--channel|-c)
+			# Extract channel early so --version latest/previous resolves against
+			# the correct channel regardless of flag order (#1225)
+			i=$((i + 1))
+			chan="${!i}"
+			new_args+=("$arg" "$chan")
+			;;
+
 		*)
 			# Keep all other arguments
 			new_args+=("$arg")
@@ -229,6 +237,11 @@ fi
 
 source $ABA_ROOT/scripts/include_all.sh
 
+# Redact sensitive flags (--reg-password) from argument strings before logging.
+_redact_args() {
+	echo "$*" | sed -E 's/(--reg-password[[:space:]]+)[^[:space:]]+/\1***/g'
+}
+
 # --- Trace logging setup ---
 # Always capture full output + debug to a trace file for post-mortem debugging.
 # Keeps the last 5 trace files (trace.log, trace.log.1, ... trace.log.4).
@@ -246,7 +259,7 @@ chmod 600 "$ABA_TRACE_FILE"
 {
 	echo "=== ABA Trace ==="
 	echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-	echo "Command:   aba $*"
+	echo "Command:   aba $(_redact_args "$*")"
 	echo "Version:   $ABA_VERSION (build $ABA_BUILD)"
 	echo "CWD:       $PWD"
 	echo "ABA_ROOT:  $ABA_ROOT"
@@ -268,7 +281,7 @@ aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 export RUN_ONCE_CLEANED=1 # Be sure it's only run once!
 
 aba_debug DEBUG_ABA=$DEBUG_ABA
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $(_redact_args "$*")"
 aba_debug "ABA_ROOT=[$ABA_ROOT]"
 
 # Guard: mirror config flags require WORK_DIR to be a mirror directory.
@@ -357,7 +370,7 @@ _set_cluster_conf() {
 	if [ -f cluster.conf ]; then
 		replace-value-conf -n "$var" -v "$val" -f cluster.conf
 	elif [ "$cur_target" = "cluster" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND ${var}=${val}"
+		BUILD_COMMAND="$BUILD_COMMAND ${var}='${val}'"
 	else
 		aba_abort "Flag $flag sets cluster config but no cluster.conf found. Use 'aba -d <cluster> $flag' or 'aba cluster -n <name> $flag'."
 	fi
@@ -365,7 +378,7 @@ _set_cluster_conf() {
 
 while [ "$*" ] 
 do
-	aba_debug "Args: [$@]"
+	aba_debug "Args: [$(_redact_args "$@")]"
 	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
 
 	# Treat bare "help" the same as "--help" (prevents destructive fallthrough to Make)
@@ -584,8 +597,11 @@ for i in imgs:
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
-		# Be strict if arg missing
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
+		# No argument → show ABA version (standard CLI convention)
+		if [[ -z "$2" || "$2" =~ ^- ]]; then
+			echo "aba $ABA_VERSION"
+			exit 0
+		fi
 		arg=$2
 		ver=$arg
 		# Reject obvious format errors immediately (before any network lookups)
@@ -684,6 +700,7 @@ for i in imgs:
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_valid_fqdn "$2" || aba_abort "invalid hostname '$2' — must be a fully qualified domain name (e.g. registry.example.com)"
 		# ADR-007: persistent state locks reg_host after install/register.
 		# Reject -H if it conflicts with the installed value.
 		_h_state_file="$HOME/.aba/mirror/$(basename "$WORK_DIR")/state.sh"
@@ -705,6 +722,10 @@ for i in imgs:
 		# The ssh key used to access the linux registry host
 		# If no value, remove from mirror.conf
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_key= || { reg_ssh_key=$2; shift; }
+		# Validate path format if a value was provided
+		if [ "$reg_ssh_key" ] && ! _valid_abs_path "$reg_ssh_key"; then
+			aba_abort "invalid SSH key path '$reg_ssh_key' — must be an absolute path (starting with '/' or '~')"
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $WORK_DIR/mirror.conf
@@ -714,6 +735,10 @@ for i in imgs:
 		# The ssh username used to access the linux registry host
 		# If no value, remove from mirror.conf
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_user_val= || { reg_ssh_user_val=$2; shift; }
+		# Validate SSH username format if a value was provided
+		if [ "$reg_ssh_user_val" ] && ! _valid_username "$reg_ssh_user_val"; then
+			aba_abort "invalid SSH username '$reg_ssh_user_val' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $WORK_DIR/mirror.conf
@@ -721,6 +746,7 @@ for i in imgs:
 	elif [ "$1" = "--data-dir" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_valid_abs_path "$2" || aba_abort "invalid data-dir '$2' — must be an absolute path (starting with '/' or '~')"
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n data_dir -v "$2" -f $WORK_DIR/mirror.conf
@@ -731,7 +757,7 @@ for i in imgs:
 	elif [ "$1" = "--vendor" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[[ "$2" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR})$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_QUAY_NG_VENDOR"
+		_valid_reg_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, $_QUAY_NG_VENDOR, or existing"
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
@@ -745,30 +771,33 @@ for i in imgs:
 	elif [ "$1" = "--reg-user" ]; then
 		_require_mirror_dir "$1"
 		# The username used to access the mirror registry 
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_valid_username "$2" || aba_abort "invalid registry username '$2' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_user -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
 		_require_mirror_dir "$1"
-		# The password used to access the mirror registry 
-		# Add a password in ='password'
-		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
-		# Reject quote characters — mirror-registry cannot handle them internally
-		if [[ "$reg_pw_value" == *"'"* || "$reg_pw_value" == *'"'* ]]; then
-			aba_abort "Password cannot contain quote characters (' or \"). The upstream mirror-registry tool cannot handle them."
-		fi
+		# Always consume the next arg as the password (passwords can start with -)
+		[[ -z "${2+x}" ]] && aba_abort "missing argument after option $1"
+		reg_pw_value="$2"
+		# Validate password (same rules as TUI and mirror.conf docs)
+		_pw_err=$(_valid_password "$reg_pw_value") || \
+			aba_abort "Invalid password: $_pw_err." \
+				"Password must be at least 8 characters with no whitespace and not include: \"'\`\$"
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $WORK_DIR/mirror.conf
-		shift
+		shift 2
 	elif [ "$1" = "--reg-path" ]; then
 		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" >&2 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_rp="$2"
+		[[ "$_rp" =~ ^/ ]] || _rp="/$_rp"
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_path -v "$2" -f $WORK_DIR/mirror.conf
+		replace-value-conf -n reg_path -v "$_rp" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--pull-secret-mirror" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
@@ -790,11 +819,8 @@ for i in imgs:
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
-		else
-			aba_abort "invalid CIDR [$2]" 
-		fi
+		validate_cidr "$2" || aba_abort "invalid CIDR [$2] — expected X.X.X.X/N (octets 0-255, prefix 0-32)"
+		replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		# If arg missing remove from aba.conf
@@ -858,6 +884,7 @@ for i in imgs:
 		ports_vals=""
 		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
 		do
+			_valid_port_name "$2" || aba_abort "invalid port/interface name '$2' — must be alphanumeric (hyphens, dots, underscores allowed)"
 			[ "$ports_vals" ] && ports_vals="$ports_vals,$2" || ports_vals="$2"
 			shift	
 		done
@@ -901,7 +928,11 @@ for i in imgs:
 			shift
 		else
 			shift
-			while [[ -n "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
+			while [[ -n "$1" && "$1" != -* ]]; do
+				_valid_operator_name "$1" || aba_abort "invalid operator name '$1' — must be lowercase alphanumeric with hyphens (e.g. advanced-cluster-management, 3scale-operator)"
+				ops_list="$ops_list $1"
+				shift
+			done
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 			replace-value-conf -n ops -v $ops_list -f $ABA_ROOT/aba.conf
 		fi
@@ -913,21 +944,29 @@ for i in imgs:
 		esac
 		shift 2
 	elif [ "$1" = "--excl-platform" ]; then
-		if [ "$2" = "false" ]; then
-			replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
-			shift
-		else
-			replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
-			[ "$2" = "true" ] && shift
-		fi
+		case "${2:-}" in
+			true)  replace-value-conf -n excl_platform -v "true"  -f $ABA_ROOT/aba.conf; shift ;;
+			false) replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf; shift ;;
+			-*|"") replace-value-conf -n excl_platform -v "true"  -f $ABA_ROOT/aba.conf ;;
+			*)     aba_abort "invalid value '$2' for --excl-platform (use true or false, or omit for true)" ;;
+		esac
 		shift
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		editor="$2"
+		# If no value (or next arg is a flag), clear editor (set to none)
+		if [[ -z "$2" || "$2" =~ ^- ]]; then
+			editor="none"
+		else
+			editor="$2"
+			shift
+		fi
+		if [ "$editor" != "none" ] && ! which "$editor" >/dev/null 2>&1; then
+			aba_abort "editor '$editor' command not found! Please install your preferred editor and try again."
+		fi
 		replace-value-conf -n editor -v "$editor" -f $ABA_ROOT/aba.conf
-		shift 2
+		shift
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ -f "$(_expand_tilde "$2")" ] || aba_abort "pull secret file not found: $2"
 		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
@@ -1004,6 +1043,7 @@ for i in imgs:
 		shift 2
 	elif [ "$1" = "--image-source" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_valid_image_source "$2" || aba_abort "invalid image source '$2' — use direct, proxy, or a mirror directory name"
 		_set_cluster_conf image_source "$2" "$1"
 		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
@@ -1025,7 +1065,11 @@ for i in imgs:
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if [ "$cur_target" = "cluster" -o "$cur_target" = "mirror" ]; then
-			[[ "$cur_target" = "cluster" ]] && { _valid_cluster_name "$2" || aba_abort "--name: invalid cluster name '$2'"; }
+			if [[ "$cur_target" = "cluster" ]]; then
+				_valid_cluster_name "$2" || aba_abort "--name: invalid cluster name '$2'"
+			else
+				_valid_mirror_name "$2" || aba_abort "--name: invalid mirror name '$2'"
+			fi
 			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 		else
 			aba_abort "option $1 requires target 'cluster' or 'mirror'.  See aba cluster -h or aba mirror -h"
@@ -1049,9 +1093,9 @@ for i in imgs:
 			aba_abort "missing or incorrect argument (sno|compact|standard) after option $1" 
 		fi
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		# If there's another arg and it's NOT an option (^-) then accept it, otherwise error
-		BUILD_COMMAND="$BUILD_COMMAND target='$2'"  # FIXME: Also confusing, similar to --name
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^[a-zA-Z0-9._-]+$ ]] || aba_abort "invalid step '$2' — must be a valid Make target name"
+		BUILD_COMMAND="$BUILD_COMMAND target='$2'"
 		shift 2
 	elif [ "$1" = "--retry" -o "$1" = "-r" ]; then
 		# If there's another arg and it's a number then accept it
@@ -1107,22 +1151,34 @@ for i in imgs:
 			vlan_val=$2
 			shift
 		fi
+		if [[ -n "$vlan_val" ]]; then
+			[[ "$vlan_val" =~ ^[0-9]+$ && "$vlan_val" -ge 1 && "$vlan_val" -le 4094 ]] || \
+				aba_abort "invalid VLAN '$vlan_val' — must be 1-4094"
+		fi
 		_set_cluster_conf vlan "$vlan_val" "$_flag"
 		shift
 	elif [ "$1" = "--mac-prefix" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		echo "$2" | grep -qE '^([0-9A-Fa-fXx]{2}:){5}$' || \
+			aba_abort "invalid MAC prefix '$2' — expected 5 octets + colon, e.g. 52:54:00:xx:xx:"
 		_set_cluster_conf mac_prefix "$2" "$1"
 		shift 2
 	elif [ "$1" = "--host-prefix" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		echo "$2" | grep -qE '^([0-9]|[1-2][0-9]|3[0-2])$' || \
+			aba_abort "invalid host prefix '$2' — must be 0-32"
 		_set_cluster_conf hostPrefix "$2" "$1"
 		shift 2
 	elif [ "$1" = "--master-prefix" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || \
+			aba_abort "invalid master prefix '$2' — must be a DNS label (lowercase alphanumeric, hyphens)"
 		_set_cluster_conf master_prefix "$2" "$1"
 		shift 2
 	elif [ "$1" = "--worker-prefix" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || \
+			aba_abort "invalid worker prefix '$2' — must be a DNS label (lowercase alphanumeric, hyphens)"
 		_set_cluster_conf worker_prefix "$2" "$1"
 		shift 2
 	elif [ "$1" = "--ssh-key" ]; then
@@ -1137,6 +1193,7 @@ for i in imgs:
 	elif [ "$1" = "--mirror-name" ]; then
 		# Deprecated alias for --image-source <mirror-dir-name>
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_valid_image_source "$2" || aba_abort "invalid mirror name '$2' — must be alphanumeric (hyphens, dots, underscores allowed)"
 		_set_cluster_conf image_source "$2" "$1"
 		shift 2
 	elif [ "$1" = "--start" ]; then
@@ -1145,6 +1202,7 @@ for i in imgs:
 	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
 	elif [ "$1" = "--to" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]] || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
 		upgrade_to="$2"
 		shift 2
 	elif [ "$1" = "--dry-run" ]; then
@@ -1561,12 +1619,13 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		install)
-			# Guard: install needs a cluster or mirror directory
-			if [ ! -f cluster.conf ] && [ ! -f mirror.conf ]; then
+			# Guard: install needs a cluster, mirror, or cli directory
+			if [ ! -f cluster.conf ] && [ ! -f mirror.conf ] && [ "$(basename "$PWD")" != "cli" ]; then
 				aba_abort "'install' requires a cluster or mirror directory." \
 					"To install ABA itself:    ./install" \
 					"To install a mirror:      aba -d mirror install" \
-					"To install a cluster:     aba -d <cluster> install"
+					"To install a cluster:     aba -d <cluster> install" \
+					"To install CLI tools:     aba -d cli install"
 			fi
 			# Idempotent install: if cluster is already installed, succeed
 			# without invoking make (avoids cascading dependency rebuilds
@@ -2004,8 +2063,8 @@ download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., reg-create-imageset-config.sh, download-and-wait-catalogs.sh)
 
-# Start: download mirror-registry and docker-reg images. Wait: ensure_quay_registry() in include_all.sh
-run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
+# Start: download registry vendor binaries (per-vendor, non-blocking). Wait: ensure_quay_registry() / save target
+start_all_registry_downloads
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 
