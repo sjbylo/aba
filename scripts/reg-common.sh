@@ -723,12 +723,14 @@ reg_stale_report() {
 			# systemctl is-active: 0 + "active" = present; 3/"inactive" = gone.
 			# SSH failure (255) or missing systemctl (127) must not look like gone.
 			# Check both user-level and system-level (root creates system Quadlets).
+			# Output may be multiline (user prints "inactive", then system prints
+			# "active"), so grep for any "active" line instead of exact match.
 			rc=0
 			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay.service 2>/dev/null || sudo systemctl is-active quay.service 2>/dev/null") || rc=$?
 			if [ "$rc" -eq 255 ] || [ "$rc" -eq 127 ]; then
 				aba_abort "Registry probe failed (quay.service, rc=$rc)"
 			fi
-			[ "$state" = "active" ] && stale+="  quay.service still active"$'\n'
+			echo "$state" | grep -qx "active" && stale+="  quay.service still active"$'\n'
 			;;
 		*)
 			aba_abort "reg_stale_report: unknown vendor '$vendor'"

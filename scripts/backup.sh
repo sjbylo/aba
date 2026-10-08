@@ -29,9 +29,12 @@ with_clusters=			# Include pre-configured configs (cluster dirs, mirror.conf, vm
 
 while echo "$1" | grep -q ^--[a-z]
 do
-	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
-	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
-	[ "$1" = "--primed" ] && with_clusters=1 && shift
+	case "$1" in
+		--repo)   repo_only=1; shift ;;
+		--inc)    inc=1; shift ;;
+		--primed) with_clusters=1; shift ;;
+		*)        aba_abort "unknown option: $1" ;;
+	esac
 done
 
 [ "$1" ] && dest="$1"
