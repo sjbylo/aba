@@ -200,6 +200,11 @@ _bundle_files=()
 [ -f "data/imageset-config.yaml" ] && _bundle_files+=("mirror/data/imageset-config.yaml")
 [ -f "data/imageset-config-digest.yaml" ] && _bundle_files+=("mirror/data/imageset-config-digest.yaml")
 
+# Catalog indexes — keeps disco's operator knowledge fresh on each transfer
+for _idx in ../.index/*-operator-index-v*; do
+	[ -f "$_idx" ] && _bundle_files+=(".index/$(basename "$_idx")")
+done
+
 if [ "$_is_upgrade" ]; then
 	_bundle_ver="$ocp_upgrade_to"
 	_bundle_chan="${ocp_channel:-fast}"
