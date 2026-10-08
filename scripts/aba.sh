@@ -598,7 +598,7 @@ for i in imgs:
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
 		# No argument → show ABA version (standard CLI convention)
-		if [[ -z "$2" || "$2" =~ ^- ]]; then
+		if [[ -z "${2+x}" ]]; then
 			echo "aba $ABA_VERSION"
 			exit 0
 		fi
@@ -757,7 +757,8 @@ for i in imgs:
 	elif [ "$1" = "--vendor" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_reg_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, $_QUAY_NG_VENDOR, or existing"
+		[[ "$2" == "existing" ]] && aba_abort "'existing' is not a valid --vendor value. Use 'aba register' to connect an externally managed registry."
+		_valid_reg_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_QUAY_NG_VENDOR"
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
@@ -782,10 +783,12 @@ for i in imgs:
 		# Always consume the next arg as the password (passwords can start with -)
 		[[ -z "${2+x}" ]] && aba_abort "missing argument after option $1"
 		reg_pw_value="$2"
-		# Validate password (same rules as TUI and mirror.conf docs)
-		_pw_err=$(_valid_password "$reg_pw_value") || \
-			aba_abort "Invalid password: $_pw_err." \
-				"Password must be at least 8 characters with no whitespace and not include: \"'\`\$"
+		# Empty password = "clear / let installer generate". Only validate non-empty.
+		if [ -n "$reg_pw_value" ]; then
+			_pw_err=$(_valid_password "$reg_pw_value") || \
+				aba_abort "Invalid password: $_pw_err." \
+					"Password must be at least 8 characters with no whitespace and not include: \"'\`\$"
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $WORK_DIR/mirror.conf
