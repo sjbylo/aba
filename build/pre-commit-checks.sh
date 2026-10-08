@@ -201,8 +201,13 @@ for script in scripts/*.sh; do
         if [[ "$content" == *" -p "* ]]; then
             prev_line=0; prev_fn=""; continue
         fi
-        # Skip continuation lines (previous source line ends with \)
+        # Skip continuation lines (this line's content ends with \)
         if [[ "$content" == *'\' ]]; then
+            prev_line=0; prev_fn=""; continue
+        fi
+        # Skip if this aba_abort/warn is a || continuation (previous source line ends with \)
+        _prev_src=$(sed -n "$((linenum - 1))p" "$script")
+        if [[ "$_prev_src" == *'\' ]]; then
             prev_line=0; prev_fn=""; continue
         fi
         # Check for consecutive same-function calls (within 2 source lines)
