@@ -109,11 +109,11 @@ if _con "cd ~/aba && aba -d mirror install \
 	_ok "Docker registry installed (custom config)"
 
 	echo "  Verifying state.sh values ..."
-	_assert_state "vendor" "REG_VENDOR" "docker"
-	_assert_state "port" "REG_PORT" "$T1_PORT"
-	_assert_state "user" "REG_USER" "$T1_USER"
-	_assert_state "password" "REG_PW" "$T1_PW"
-	_assert_state "host" "REG_HOST" "${_CON}"
+	_assert_state "vendor" "reg_vendor" "docker"
+	_assert_state "port" "reg_port" "$T1_PORT"
+	_assert_state "user" "reg_user" "$T1_USER"
+	_assert_state "password" "reg_pw" "'$T1_PW'"
+	_assert_state "host" "reg_host" "${_CON}"
 
 	# REG_ROOT should be the expanded data_dir + /docker-reg
 	_assert "data dir exists on conN" \
@@ -174,13 +174,13 @@ if _con "cd ~/aba && aba -d mirror install \
 	_ok "Docker registry installed on remote (custom config)"
 
 	echo "  Verifying state.sh values ..."
-	_assert_state "vendor" "REG_VENDOR" "docker"
-	_assert_state "port" "REG_PORT" "$T2_PORT"
-	_assert_state "user" "REG_USER" "$T2_USER"
-	_assert_state "password" "REG_PW" "$T2_PW"
-	_assert_state "host" "REG_HOST" "${_DIS}"
+	_assert_state "vendor" "reg_vendor" "docker"
+	_assert_state "port" "reg_port" "$T2_PORT"
+	_assert_state "user" "reg_user" "$T2_USER"
+	_assert_state "password" "reg_pw" "'$T2_PW'"
+	_assert_state "host" "reg_host" "${_DIS}"
 	_assert "state.sh has SSH key" \
-		_con "grep -q 'REG_SSH_KEY=.*id_rsa' ~/.aba/mirror/mirror/state.sh"
+		_con "grep -q 'reg_ssh_key=.*id_rsa' ~/.aba/mirror/mirror/state.sh"
 
 	_assert "registry container running on disN" \
 		_dis "podman ps --format '{{.Names}}' | grep -q '^registry$'"
@@ -228,10 +228,10 @@ if _con "cd ~/aba && aba -d mirror install \
 	_ok "Docker registry installed (defaults)"
 
 	echo "  Verifying default values in state.sh ..."
-	_assert_state "vendor" "REG_VENDOR" "docker"
-	_assert_state "port" "REG_PORT" "$T3_PORT"
-	_assert_state "user (default)" "REG_USER" "init"
-	_assert_state "password (default)" "REG_PW" "p4ssw0rd"
+	_assert_state "vendor" "reg_vendor" "docker"
+	_assert_state "port" "reg_port" "$T3_PORT"
+	_assert_state "user (default)" "reg_user" "init"
+	_assert_state "password (default)" "reg_pw" "'p4ssw0rd'"
 
 	_assert "default data dir ~/docker-reg exists" \
 		_con "test -d ~/docker-reg/data"
