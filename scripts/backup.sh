@@ -171,12 +171,9 @@ file_list=$(find				\
 	"${repo_dir}/aba"			\
 	"${repo_dir}/aba.conf"			\
 	"${repo_dir}/.bundle"			\
-	"${repo_dir}/cli"			\
-	"${repo_dir}/rpms"			\
 	"${repo_dir}/others"			\
 	"${repo_dir}/scripts"			\
 	"${repo_dir}/templates"			\
-	"${repo_dir}/tools"			\
 	"${repo_dir}/tui/v2"			\
 	"${repo_dir}/Makefile"			\
 	"${repo_dir}/README.md"			\
@@ -185,6 +182,10 @@ file_list=$(find				\
 	"${repo_dir}/LICENSE"			\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/.index"			\
+	"${repo_dir}/tools"			\
+	"${repo_dir}/cli"			\
+	"${repo_dir}/rpms"			\
+	"${repo_dir}/catalogs"			\
 	"${repo_dir}/mirror"			\
 	$_cluster_paths				\
 	${_hv_conf_path:+"$_hv_conf_path"}	\
