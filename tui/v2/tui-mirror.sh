@@ -67,7 +67,7 @@ _mirror_config_menu_loop() {
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, or docker
+  • Vendor — auto (detects arch), quay, docker, or quay-ng
   • Data dir — storage location for images
 
 Press 'Continue' when ready. The mirror will be installed automatically."
@@ -99,7 +99,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, or docker
+  • Vendor — auto (detects arch), quay, docker, or quay-ng
   • Data dir — storage location for images"
 			dlg_items=(
 				"H"  "Hostname:     $m_host"
@@ -131,7 +131,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, or docker
+  • Vendor — auto (detects arch), quay, docker, or quay-ng
   • Data dir — storage location on remote host"
 			dlg_items=(
 				"H"  "Hostname:     ${m_host:-(enter FQDN)}"
@@ -245,6 +245,11 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				if [[ $? -eq 0 ]]; then
 					m_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_user" || continue
+					if [[ -n "$m_user" ]] && ! _valid_username "$m_user"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid username.\n\nMust start with a letter or underscore,\nfollowed by letters, digits, dots, hyphens, or underscores." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_user -v "$m_user" -f "$mcf"
 				fi
 				;;
@@ -273,7 +278,8 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				case "$m_vendor" in
 					auto) m_vendor="quay" ;;
 					quay) m_vendor="docker" ;;
-					docker) m_vendor="auto" ;;
+					docker) m_vendor="$_QUAY_NG_VENDOR" ;;
+					"$_QUAY_NG_VENDOR") m_vendor="auto" ;;
 					*) m_vendor="auto" ;;
 				esac
 				replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$mcf"
@@ -324,6 +330,11 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				if [[ $? -eq 0 ]]; then
 					m_ssh_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_ssh_user" || continue
+					if [[ -n "$m_ssh_user" ]] && ! _valid_username "$m_ssh_user"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid SSH username.\n\nMust start with a letter or underscore,\nfollowed by letters, digits, dots, hyphens, or underscores." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$mcf"
 				fi
 				;;
@@ -1240,8 +1251,8 @@ mirror_payload_menu() {
 	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	tui_log "Action: Mirror Payload (readonly=$readonly)"
 
-	# Ensure selection is persisted and ISC gen is running
-	_persist_operator_basket
+	# Ensure selection is persisted and ISC gen is running (skip in DISCO readonly mode)
+	[[ "$readonly" != "true" ]] && _persist_operator_basket
 
 	# Wait for background ISC generation (kicked off at startup or after config change)
 	# Skip in DISCO mode (readonly) — ISC is already baked into the bundle
@@ -2546,7 +2557,7 @@ _ensure_offline_prereqs() {
 
 	local need_download=false
 	run_once -p -i "cli:download:openshift-install:${ocp_version}" 2>/dev/null || need_download=true
-	run_once -p -i "$TASK_DL_QUAY_REG" 2>/dev/null || need_download=true
+	registry_downloads_ready || need_download=true
 
 	if [[ "$need_download" == "false" ]]; then
 		tui_log "Offline prerequisites already ready (peek passed)."
@@ -2562,8 +2573,7 @@ _ensure_offline_prereqs() {
 		return 1
 	fi
 
-	if ! run_once -q -w -i "$TASK_DL_QUAY_REG" -- \
-		"${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1; then
+	if ! wait_all_registry_downloads >>"$_TUI_LOG_FILE" 2>&1; then
 		dlg --backtitle "$(ui_backtitle)" --title "Download Failed" \
 			--msgbox "Failed to download registry installers.\n\nCheck internet connectivity and try again." 0 0
 		return 1

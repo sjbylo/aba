@@ -385,7 +385,7 @@ _print_progress() {
             SKIP)    status_str="$(_e2e_yellow "SKIP")";         status_str_color="$(_e2e_Yellow "SKIP")" ;;
             RUNNING) status_str="$(_e2e_cyan "RUNNING...")";     status_str_color="$(_e2e_Cyan "RUNNING...")" ;;
             DONE)    status_str="$(_e2e_green "DONE (resumed)")"; status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
-            *)       status_str="  --";                          status_str_color="  --" ;;
+            *)       status_str="--";                            status_str_color="--" ;;
         esac
         printf "  %s %s\n" "$(_e2e_white "$(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}")")" "$status_str"
     done
@@ -413,7 +413,7 @@ _print_progress() {
             SKIP)    status_str_color="$(_e2e_Yellow "SKIP")" ;;
             RUNNING) status_str_color="$(_e2e_Cyan "RUNNING...")" ;;
             DONE)    status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
-            *)       status_str_color="  --" ;;
+            *)       status_str_color="--" ;;
         esac
         _e2e_summary "  $(_e2e_White "$(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}")") $status_str_color"
     done

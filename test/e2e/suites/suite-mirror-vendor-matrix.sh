@@ -41,7 +41,7 @@ CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 
 # Small public image for push/check tests (no auth needed to pull from conN)
-_IMG_SRC="registry.access.redhat.com/ubi9/ubi-micro:latest"
+_IMG_SRC="docker.io/library/busybox:latest"
 _IMG1="e2e-vendor-test/img1:v1"
 _IMG2="e2e-vendor-test/img2:v1"
 
@@ -54,15 +54,16 @@ _CPATH="/e2e/images"
 # test/func/test-password-handling.sh (roundtrip + htpasswd verification).
 # Excluded: ' (breaks single-quote wrapping), whitespace (Quay rejects),
 #           ()[]+ (grep -E bug in replace-value-conf)
-_E2E_PW_CHARS='A-Za-z0-9!@#%^&|~=_-'
+_E2E_PW_SPECIAL='!@#%^&|~=_-'
+_E2E_PW_ALNUM='A-Za-z0-9'
 
 _gen_e2e_password() {
-	local pw
-	while true; do
-		pw=$(LC_ALL=C tr -dc "$_E2E_PW_CHARS" < /dev/urandom | head -c 16)
-		# Ensure at least one special char and one alphanumeric
-		[[ "$pw" =~ [^A-Za-z0-9] ]] && [[ "$pw" =~ [A-Za-z] ]] && break
-	done
+	local special alnum pw
+	# 50/50 mix: 8 special + 8 alnum = 16 chars
+	special=$(LC_ALL=C tr -dc "$_E2E_PW_SPECIAL" < /dev/urandom | head -c 8)
+	alnum=$(LC_ALL=C tr -dc "$_E2E_PW_ALNUM" < /dev/urandom | head -c 8)
+	# Shuffle so the char types are interleaved
+	pw=$(echo -n "${special}${alnum}" | fold -w1 | shuf | tr -d '\n')
 	echo "$pw"
 }
 
@@ -237,7 +238,16 @@ for _v in "${_VENDORS[@]}"; do
 	done
 done
 
-_tnames+=("Cleanup: uninstall and verify")
+_tnames+=(
+	"Password edge cases"
+	"Register existing registry"
+	"Vendor switch (docker→quay→quay-ng)"
+	"Port reuse across vendors"
+	"Concurrent local registries"
+	"Verify negative path"
+	"Firewall verification"
+	"Cleanup: uninstall and verify"
+)
 
 # --- Suite ------------------------------------------------------------------
 
@@ -290,6 +300,264 @@ for _v in "${_VENDORS[@]}"; do
 		done
 	done
 done
+
+# ============================================================================
+# Password edge cases
+# ============================================================================
+test_begin "Password edge cases"
+
+# Known-difficult passwords that stress quoting, CLI parsing, and htpasswd
+# Min 8 chars (Quay constraint), no spaces (Quay constraint), no quotes
+# Mix of known-difficult patterns + random passwords to catch unknowns
+_HARD_PASSWORDS=(
+	'-leadingDash'
+	'--double-dash'
+	'=leading=Equals'
+	'!@#%^&|~=_-!@#%'
+	'-=~!@#%^&|_-=~!'
+	'PoT_&B_EAyf=8WS7'
+	'--------'
+	'========X1======'
+	"$(_gen_e2e_password)"
+	"$(_gen_e2e_password)"
+	"$(_gen_e2e_password)"
+	"$(_gen_e2e_password)"
+)
+
+_pw_idx=0
+for _hardpw in "${_HARD_PASSWORDS[@]}"; do
+	_pw_idx=$(( _pw_idx + 1 ))
+	_pw_dn="e2e-vm-pw-edge-${_pw_idx}"
+
+	e2e_run "Create mirror dir (pw-edge-${_pw_idx})" "aba mirror --name $_pw_dn"
+	e2e_add_to_mirror_cleanup "$PWD/$_pw_dn"
+
+	e2e_run "Install docker with pw='${_hardpw}' (#${_pw_idx})" \
+		"aba -d $_pw_dn install --vendor docker -H $CON_HOST --reg-password '${_hardpw}'"
+	e2e_run "Verify registry (pw-edge-${_pw_idx})" "aba -d $_pw_dn verify"
+	e2e_run "Push test image (pw-edge-${_pw_idx})" "$(_vm_push "$_pw_dn" "e2e-pw-test/img:v${_pw_idx}")"
+	e2e_run "Check test image (pw-edge-${_pw_idx})" "$(_vm_check "$_pw_dn" "e2e-pw-test/img:v${_pw_idx}")"
+	e2e_run "Uninstall (pw-edge-${_pw_idx})" "aba -d $_pw_dn uninstall --delete-data"
+
+	e2e_remove_from_mirror_cleanup "$PWD/$_pw_dn"
+done
+
+e2e_run "Clean pw-edge dirs" "rm -rf e2e-vm-pw-edge-* && rm -rf ~/.aba/mirror/e2e-vm-pw-edge-*"
+
+test_end
+
+# ============================================================================
+# Register existing registry
+# ============================================================================
+test_begin "Register existing registry"
+
+# Install a Docker registry in one mirror dir, then register it from another
+_REG_INSTALL_DN="e2e-vm-reg-install"
+_REG_REGISTER_DN="e2e-vm-reg-register"
+_REG_PW=$(_gen_e2e_password)
+
+e2e_run "Create install mirror dir" "aba mirror --name $_REG_INSTALL_DN"
+e2e_add_to_mirror_cleanup "$PWD/$_REG_INSTALL_DN"
+
+e2e_run "Install Docker registry" \
+	"aba -d $_REG_INSTALL_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_REG_PW'"
+e2e_run "Verify installed registry" "aba -d $_REG_INSTALL_DN verify"
+
+# Now register the same running registry from a different mirror dir
+e2e_run "Create register mirror dir" "aba mirror --name $_REG_REGISTER_DN"
+e2e_add_to_mirror_cleanup "$PWD/$_REG_REGISTER_DN"
+
+e2e_run "Register existing registry" \
+	"aba -d $_REG_REGISTER_DN register \
+	 --pull-secret-mirror \$HOME/.aba/mirror/$_REG_INSTALL_DN/pull-secret-mirror.json \
+	 --ca-cert \$HOME/.aba/mirror/$_REG_INSTALL_DN/rootCA.pem"
+e2e_run "Verify registered registry" "aba -d $_REG_REGISTER_DN verify"
+
+# Push from the registered dir to prove it works
+e2e_run "Push image via registered dir" "$(_vm_push "$_REG_REGISTER_DN" "e2e-register-test/img:v1")"
+e2e_run "Check image via registered dir" "$(_vm_check "$_REG_REGISTER_DN" "e2e-register-test/img:v1")"
+# Also check from the install dir (same registry)
+e2e_run "Check image via install dir" "$(_vm_check "$_REG_INSTALL_DN" "e2e-register-test/img:v1")"
+
+e2e_run "Unregister" "aba -d $_REG_REGISTER_DN unregister"
+e2e_run "Uninstall" "aba -d $_REG_INSTALL_DN uninstall --delete-data"
+e2e_remove_from_mirror_cleanup "$PWD/$_REG_INSTALL_DN"
+e2e_remove_from_mirror_cleanup "$PWD/$_REG_REGISTER_DN"
+e2e_run "Clean register dirs" "rm -rf $_REG_INSTALL_DN $_REG_REGISTER_DN && rm -rf ~/.aba/mirror/$_REG_INSTALL_DN ~/.aba/mirror/$_REG_REGISTER_DN"
+
+test_end
+
+# ============================================================================
+# Vendor switch (docker→quay→quay-ng) — same mirror dir, keep data between
+# ============================================================================
+test_begin "Vendor switch (docker→quay→quay-ng)"
+
+_VS_DN="e2e-vm-vendor-switch"
+_VS_PW=$(_gen_e2e_password)
+
+e2e_run "Create mirror dir" "aba mirror --name $_VS_DN"
+e2e_add_to_mirror_cleanup "$PWD/$_VS_DN"
+
+# Start with Docker
+e2e_run "Install Docker" \
+	"aba -d $_VS_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_VS_PW'"
+e2e_run "Verify Docker" "aba -d $_VS_DN verify"
+e2e_run "Push image (docker)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:docker")"
+e2e_run "Uninstall Docker (keep data)" "aba -d $_VS_DN uninstall"
+
+# Switch to Quay
+e2e_run "Install Quay (vendor switch)" \
+	"aba -d $_VS_DN install --vendor quay -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve"
+e2e_run "Verify Quay" "aba -d $_VS_DN verify"
+e2e_run "Push image (quay)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:quay")"
+e2e_run "Uninstall Quay (keep data)" "aba -d $_VS_DN uninstall"
+
+# Switch to quay-ng
+e2e_run "Install quay-ng (vendor switch)" \
+	"aba -d $_VS_DN install --vendor quay-ng -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_VS_PW'"
+e2e_run "Verify quay-ng" "aba -d $_VS_DN verify"
+e2e_run "Push image (quay-ng)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:quay-ng")"
+e2e_run "Uninstall quay-ng (delete data)" "aba -d $_VS_DN uninstall --delete-data"
+
+e2e_remove_from_mirror_cleanup "$PWD/$_VS_DN"
+e2e_run "Clean vendor-switch dir" "rm -rf $_VS_DN && rm -rf ~/.aba/mirror/$_VS_DN"
+
+test_end
+
+# ============================================================================
+# Port reuse across vendors — same port :5111, different vendors sequentially
+# ============================================================================
+test_begin "Port reuse across vendors"
+
+_PR_PORT=5111
+_PR_PW=$(_gen_e2e_password)
+
+for _pr_vendor in docker quay quay-ng; do
+	_PR_DN="e2e-vm-portreuse-${_pr_vendor}"
+
+	e2e_run "Create mirror dir (${_pr_vendor})" "aba mirror --name $_PR_DN"
+	e2e_add_to_mirror_cleanup "$PWD/$_PR_DN"
+
+	e2e_run "Install ${_pr_vendor} on :${_PR_PORT}" \
+		"aba -d $_PR_DN install --vendor ${_pr_vendor} -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port $_PR_PORT --reg-password '$_PR_PW'"
+	e2e_run "Verify ${_pr_vendor} on :${_PR_PORT}" "aba -d $_PR_DN verify"
+	e2e_run "Push image (${_pr_vendor})" "$(_vm_push "$_PR_DN" "e2e-portreuse/img:${_pr_vendor}")"
+	e2e_run "Uninstall ${_pr_vendor} (delete data)" "aba -d $_PR_DN uninstall --delete-data"
+	e2e_run "Verify :${_PR_PORT} unreachable" "! curl -sk --connect-timeout 5 https://${DIS_HOST}:${_PR_PORT}/v2/"
+
+	e2e_remove_from_mirror_cleanup "$PWD/$_PR_DN"
+	e2e_run "Clean portreuse dir" "rm -rf $_PR_DN && rm -rf ~/.aba/mirror/$_PR_DN"
+done
+
+test_end
+
+# ============================================================================
+# Concurrent local registries — 2 registries on different ports at once
+# ============================================================================
+test_begin "Concurrent local registries"
+
+_CC_DN1="e2e-vm-concurrent-1"
+_CC_DN2="e2e-vm-concurrent-2"
+_CC_PW1=$(_gen_e2e_password)
+_CC_PW2=$(_gen_e2e_password)
+
+e2e_run "Create mirror dir 1" "aba mirror --name $_CC_DN1"
+e2e_run "Create mirror dir 2" "aba mirror --name $_CC_DN2"
+e2e_add_to_mirror_cleanup "$PWD/$_CC_DN1"
+e2e_add_to_mirror_cleanup "$PWD/$_CC_DN2"
+
+# Install two Docker registries locally on different ports
+e2e_run "Install docker on :5111" \
+	"aba -d $_CC_DN1 install --vendor docker -H $CON_HOST --reg-port 5111 --reg-password '$_CC_PW1'"
+e2e_run "Install docker on :5112" \
+	"aba -d $_CC_DN2 install --vendor docker -H $CON_HOST --reg-port 5112 --reg-password '$_CC_PW2'"
+
+# Both should be reachable simultaneously
+e2e_run "Verify registry 1" "aba -d $_CC_DN1 verify"
+e2e_run "Verify registry 2" "aba -d $_CC_DN2 verify"
+
+# Push to each, verify no cross-contamination
+e2e_run "Push to registry 1" "$(_vm_push "$_CC_DN1" "e2e-cc/only-in-1:v1")"
+e2e_run "Push to registry 2" "$(_vm_push "$_CC_DN2" "e2e-cc/only-in-2:v1")"
+e2e_run "Check image in registry 1" "$(_vm_check "$_CC_DN1" "e2e-cc/only-in-1:v1")"
+e2e_run "Check image in registry 2" "$(_vm_check "$_CC_DN2" "e2e-cc/only-in-2:v1")"
+
+# Image from registry 1 should NOT be in registry 2 and vice versa
+e2e_run "Assert no cross-contamination (1→2)" \
+	"! $(_vm_check "$_CC_DN2" "e2e-cc/only-in-1:v1")"
+e2e_run "Assert no cross-contamination (2→1)" \
+	"! $(_vm_check "$_CC_DN1" "e2e-cc/only-in-2:v1")"
+
+e2e_run "Uninstall registry 1" "aba -d $_CC_DN1 uninstall --delete-data"
+e2e_run "Uninstall registry 2" "aba -d $_CC_DN2 uninstall --delete-data"
+e2e_remove_from_mirror_cleanup "$PWD/$_CC_DN1"
+e2e_remove_from_mirror_cleanup "$PWD/$_CC_DN2"
+e2e_run "Clean concurrent dirs" "rm -rf $_CC_DN1 $_CC_DN2 && rm -rf ~/.aba/mirror/$_CC_DN1 ~/.aba/mirror/$_CC_DN2"
+
+test_end
+
+# ============================================================================
+# Verify negative path — aba verify after uninstall should fail cleanly
+# ============================================================================
+test_begin "Verify negative path"
+
+_VN_DN="e2e-vm-verify-neg"
+_VN_PW=$(_gen_e2e_password)
+
+e2e_run "Create mirror dir" "aba mirror --name $_VN_DN"
+e2e_add_to_mirror_cleanup "$PWD/$_VN_DN"
+
+e2e_run "Install Docker" \
+	"aba -d $_VN_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_VN_PW'"
+e2e_run "Verify (should pass)" "aba -d $_VN_DN verify"
+e2e_run "Uninstall" "aba -d $_VN_DN uninstall --delete-data"
+
+# verify after uninstall should fail (non-zero exit) but not crash
+e2e_run "Verify after uninstall (should fail cleanly)" \
+	"! aba -d $_VN_DN verify"
+
+e2e_remove_from_mirror_cleanup "$PWD/$_VN_DN"
+e2e_run "Clean verify-neg dir" "rm -rf $_VN_DN && rm -rf ~/.aba/mirror/$_VN_DN"
+
+test_end
+
+# ============================================================================
+# Firewall verification — ports opened on install, closed on uninstall
+# ============================================================================
+test_begin "Firewall verification"
+
+_FW_DN="e2e-vm-firewall"
+_FW_PORT=5113
+_FW_PW=$(_gen_e2e_password)
+
+# Capture baseline firewall state on disN
+e2e_run "Snapshot firewall baseline" \
+	"ssh -F ~/.aba/ssh.conf steve@${DIS_HOST} 'sudo firewall-cmd --list-ports' > /tmp/e2e-fw-baseline.txt && cat /tmp/e2e-fw-baseline.txt"
+
+e2e_run "Create mirror dir" "aba mirror --name $_FW_DN"
+e2e_add_to_mirror_cleanup "$PWD/$_FW_DN"
+
+e2e_run "Install Docker on :${_FW_PORT}" \
+	"aba -d $_FW_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port $_FW_PORT --reg-password '$_FW_PW'"
+
+# Verify port is open in firewall
+e2e_run "Assert port ${_FW_PORT} open in firewall" \
+	"ssh -F ~/.aba/ssh.conf steve@${DIS_HOST} 'sudo firewall-cmd --list-ports' | grep -q '${_FW_PORT}/tcp'"
+
+e2e_run "Uninstall" "aba -d $_FW_DN uninstall --delete-data"
+
+# Verify port is closed after uninstall
+e2e_run "Assert port ${_FW_PORT} closed after uninstall" \
+	"! ssh -F ~/.aba/ssh.conf steve@${DIS_HOST} 'sudo firewall-cmd --list-ports' | grep -q '${_FW_PORT}/tcp'"
+
+# Verify firewall returned to baseline
+e2e_run "Assert firewall matches baseline" \
+	"ssh -F ~/.aba/ssh.conf steve@${DIS_HOST} 'sudo firewall-cmd --list-ports' > /tmp/e2e-fw-after.txt && diff /tmp/e2e-fw-baseline.txt /tmp/e2e-fw-after.txt"
+
+e2e_remove_from_mirror_cleanup "$PWD/$_FW_DN"
+e2e_run "Clean firewall dir" "rm -rf $_FW_DN && rm -rf ~/.aba/mirror/$_FW_DN"
+
+test_end
 
 # ============================================================================
 # Cleanup: uninstall and verify

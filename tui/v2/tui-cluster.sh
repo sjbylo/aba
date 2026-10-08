@@ -1984,7 +1984,7 @@ tui_advanced_menu() {
 			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
 		fi
 		if [[ "$_TUI_MODE" != "DISCO" ]]; then
-			adv_items+=("R" "Reset ABA (clean config and state)")
+			adv_items+=("R" "Clean ABA (remove config and state)")
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
@@ -2011,7 +2011,7 @@ X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
     installation from scratch. All current cluster data is lost.\n\n\
-R - Reset ABA: Cleans configuration and state files so you can\n\
+R - Clean ABA: Removes configuration and state files so you can\n\
     reconfigure from scratch. Keeps downloaded CLI tools, mirror\n\
     installers, and saved image archives. Use 'aba reset --force'\n\
     from the command line for a full factory reset." 0 0
@@ -2028,10 +2028,10 @@ R - Reset ABA: Cleans configuration and state files so you can\n\
 			;;
 		"R")
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
-				--yes-label "Reset" --no-label "$TUI2_BTN_CANCEL" \
-				--yesno "Reset ABA configuration?\n\nThis will clean configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
+				--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
+				--yesno "Clean ABA configuration?\n\nThis will remove configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
 			[[ $? -ne 0 ]] && continue
-			confirm_and_execute "aba clean" "Reset ABA"
+			confirm_and_execute "aba clean" "Clean ABA"
 			return 0
 			;;
 			"P")

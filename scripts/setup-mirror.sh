@@ -14,6 +14,8 @@ name=
 
 [ ! "$name" ] && aba_abort "Mirror name missing! Usage: aba mirror --name <name>"
 
+_valid_mirror_name "$name" || exit 1
+
 [[ "$name" == "direct" || "$name" == "proxy" ]] && \
 	aba_abort "'$name' is a reserved image_source value and cannot be used as a mirror directory name"
 

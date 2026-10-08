@@ -167,7 +167,13 @@ _progress_plan-sync:
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
 # Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
 save: _progress_plan-save .init .rpmsext                                                 status-preflight data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
-	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+	@echo "[ABA] Downloading registry vendor binaries (Quay tarball, Docker image, Quay-NG image) ..."
+	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory download-quay-tarball
+	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:docker" -- $(MAKE) --no-print-directory download-docker-image
+	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:quay-ng" -- $(MAKE) --no-print-directory download-quay-ng-image
+	@$(SCRIPTS)/run-once.sh -q -w -i "mirror:reg:download:quay"
+	@$(SCRIPTS)/run-once.sh -q -w -i "mirror:reg:download:docker"
+	@$(SCRIPTS)/run-once.sh -q -w -i "mirror:reg:download:quay-ng"
 ifneq ($(arch),aarch64)
 	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
 endif
@@ -213,12 +219,19 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
-	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+	@$(SCRIPTS)/run-once.sh -w -m "Downloading Quay mirror-registry" -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory $(MR_TARBALL)
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
 
+# Per-vendor download targets (each has its own run-once ID — one ID per file, no races)
+# Use literal filenames (not variables) because DOCKER_REG_FILE/QUAY_NG_FILE are defined later
+.PHONY: download-quay-tarball download-docker-image download-quay-ng-image
+download-quay-tarball: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL))
+download-docker-image: docker-reg-image.tgz
+download-quay-ng-image: quay-ng-image.tgz
+
 .PHONY: download-registries
-download-registries: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL)) docker-reg-image.tgz quay-ng-image.tgz
+download-registries: download-quay-tarball download-docker-image download-quay-ng-image
 
 mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
 
@@ -294,7 +307,7 @@ installclean:
 
 .PHONY: password pw
 password: pw
-pw: 
+pw: .init mirror.conf
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
 #	@touch .available  #FIXME: is this really needed?
 
@@ -409,10 +422,11 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .available ] && echo "[ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'." || true
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download"
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:download:docker-reg-image.tgz"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:quay"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:docker"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:quay-ng"
 	make clean
-	rm -rf *.tar mirror-registry
+	rm -rf *.tar mirror-registry quay-ng
 	rm -rf regcreds
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo "[ABA] mirror.conf backed up to mirror.conf.bk" || true
 	rm -rf          oc-mirror-workspace 

@@ -614,11 +614,10 @@ verify-aba-conf() {
 
 	local ret=0
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
-	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
 	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$ocp_channel" | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$platform"    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo "$ocp_channel" | grep -q -E "^(fast|stable|candidate|eus)$" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo "$platform"    | grep -q -E "^(bm|vmw|kvm)$" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -631,12 +630,13 @@ verify-aba-conf() {
 	fi
 
 	if [ "$ops" ]; then
-		echo $ops | grep -q -E "^[a-z,]+" || { echo_red "Error: ops invalid in aba.conf: [$ops]" >&2; ret=1; }
+		local _op
+		for _op in $(echo "$ops" | tr , " "); do
+			_valid_operator_name "$_op" || { echo_red "Error: invalid operator name '$_op' in aba.conf" >&2; ret=1; }
+		done
 	fi
 
-	# Check for a domain name in less strict way
-	#[ "$domain" ] && ! echo $domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
-	[ "$domain" ] && ! echo $domain | grep -q -E "$REGEX_BASIC_DOMAIN" && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
+	[ "$domain" ] && ! _valid_domain "$domain" && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
 
 	# Check for ip addr
 	[ "$machine_network" ] && ! echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
@@ -713,8 +713,8 @@ verify-mirror-conf() {
 
 	local ret=0
 
-	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	[ ! "$reg_host" ] && echo_red "Error: reg_host value is missing in mirror.conf" >&2 && ret=1
+	[ "$reg_host" ] && ! _valid_fqdn "$reg_host" && { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host] — must be a fully qualified domain name" >&2; ret=1; }
 
 	if [ "$reg_port" ] && ! valid_port "$reg_port"; then
 		aba_abort "reg_port is invalid in mirror.conf [$reg_port]" \
@@ -725,15 +725,13 @@ verify-mirror-conf() {
 
 	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is deprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
 
-	REGEX_ABS_PATH='^(~(/([A-Za-z0-9._-]+(/)?)*|$)|/([A-Za-z0-9._-]+(/)?)*$)'
+	[ "$data_dir" ] && { _valid_abs_path "$data_dir" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
 
-	[ "$data_dir" ] && { echo $data_dir | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
+	[ "$reg_path" ] && { _valid_abs_path "$reg_path" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
 
-	[ "$reg_path" ] && { echo $reg_path | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
+	[ "$reg_ssh_key" ] && { _valid_abs_path "$reg_ssh_key" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
-
-	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE "^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_QUAY_NG_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { _valid_reg_vendor "$reg_vendor" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_QUAY_NG_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
@@ -950,6 +948,114 @@ _valid_ipv4() {
 	local ip="$1"
 	[[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
 	(( BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255 ))
+}
+
+# Validate a Unix username (SSH user, registry user, etc.)
+# Rules: start with letter or underscore, then alphanumeric/dots/hyphens/underscores
+# Returns 0 if valid, 1 if invalid.
+_valid_username() {
+	[[ "$1" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]
+}
+
+# Validate an absolute filesystem path (or ~-prefixed path).
+# Segments must be alphanumeric with dots, hyphens, underscores.
+# Returns 0 if valid, 1 if invalid.
+_valid_abs_path() {
+	[[ "$1" =~ ^(/|~(/|$))([A-Za-z0-9._-]+/)*([A-Za-z0-9._-]+)?$ ]]
+}
+
+# Validate a fully qualified domain name (at least 2 labels, dot-separated).
+# Each label: start/end with alphanumeric, hyphens allowed inside. TLD ≥ 2 alpha chars.
+# Used for: reg_host, domain, base_domain.
+# Returns 0 if valid, 1 if invalid.
+_valid_fqdn() {
+	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]
+}
+
+# Validate a registry password.
+# Rules (must match TUI and mirror.conf documentation):
+#   - At least 8 characters
+#   - No whitespace
+#   - Must not contain: ' " ` $
+# Returns 0 if valid, 1 if invalid.  Prints reason on failure.
+_valid_password() {
+	local pw="$1"
+	if [[ ${#pw} -lt 8 ]]; then
+		echo "too short (minimum 8 characters)"
+		return 1
+	fi
+	if [[ "$pw" =~ [[:space:]] ]]; then
+		echo "contains whitespace"
+		return 1
+	fi
+	if [[ "$pw" == *"'"* ]]; then
+		echo "contains single quote (')"
+		return 1
+	fi
+	if [[ "$pw" == *'"'* ]]; then
+		echo "contains double quote (\")"
+		return 1
+	fi
+	if [[ "$pw" == *'`'* ]]; then
+		echo "contains backtick (\`)"
+		return 1
+	fi
+	if [[ "$pw" == *'$'* ]]; then
+		echo "contains dollar sign (\$)"
+		return 1
+	fi
+	return 0
+}
+
+# Domain validation (alias for _valid_fqdn — same rules).
+_valid_domain() { _valid_fqdn "$1"; }
+
+# Validate a registry vendor value.
+# Returns 0 if valid, 1 if invalid.
+_valid_reg_vendor() {
+	[[ "$1" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$ ]]
+}
+
+# Validate an image_source value (direct, proxy, or mirror directory name).
+# Returns 0 if valid, 1 if invalid.
+_valid_image_source() {
+	[[ "$1" == "direct" || "$1" == "proxy" || "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+
+# Validate a port/interface name.
+# Returns 0 if valid, 1 if invalid.
+_valid_port_name() {
+	[[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+
+# Validate an operator package name against the catalog indexes.
+# Format: lowercase alphanumeric with hyphens, may start with a digit (e.g. 3scale-operator).
+# Warns (does NOT abort) if the name is not found in any catalog index for the configured OCP version.
+# Returns 0 if the format is valid, 1 if invalid.
+_valid_operator_name() {
+	local name="$1"
+	[[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || return 1
+
+	# Derive the version-specific index suffix (e.g. 4.22.0 → v4.22)
+	local _ver_short
+	_ver_short=$(_ver_minor "${ocp_version:-}")
+	if [ ! "$_ver_short" ]; then
+		# No OCP version configured yet — can't check index, skip warning
+		return 0
+	fi
+
+	# Warn if the operator is not found in any catalog index for this version
+	local _found=""
+	for _idx in "$ABA_ROOT"/.index/*-operator-index-v${_ver_short}; do
+		[ -f "$_idx" ] || continue
+		if awk '{print $1}' "$_idx" | grep -qx "$name"; then
+			_found=1
+			break
+		fi
+	done
+	[ ! "$_found" ] && aba_warn "Operator '$name' was not found in any catalog index for v${_ver_short} — it may be misspelled or from an uncached catalog"
+
+	return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -1247,18 +1353,35 @@ _valid_cluster_name() {
 	return 0
 }
 
+_valid_mirror_name() {
+	local name="$1"
+	[ -z "$name" ] && echo_red "Error: mirror name is empty" >&2 && return 1
+
+	if [[ ${#name} -gt 63 || ! "$name" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		echo_red "Error: invalid mirror name '$name' — must be a DNS label (lowercase letters, digits, hyphens; start with letter; max 63 chars)" >&2
+		return 1
+	fi
+
+	# Reserved ABA directories — 'mirror' is allowed (it's the default mirror name)
+	case "$name" in
+		scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel)
+			echo_red "Error: '$name' is a reserved ABA directory name — choose a different mirror name" >&2
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
 verify-cluster-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f cluster.conf ] && [ ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
 	local ret=0
-	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
-
 	echo $cluster_name | grep -q -E -i '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: cluster_name incorrectly set or missing in cluster.conf" >&2; ret=1; }
 
-	#echo $base_domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
-	echo $base_domain | grep -q -E "$REGEX_BASIC_DOMAIN" || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
+	_valid_domain "$base_domain" || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
 
 	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
@@ -1335,20 +1458,15 @@ verify-cluster-conf() {
 
 	# The next few values are all optional — only validate if set
 	if [ -n "${ports:-}" ]; then
-		[[ $ports =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]] || { echo_red "Error: ports list is invalid in cluster.conf: [$ports]" >&2; ret=1; }
+		local _p
+		for _p in $(echo "$ports" | tr , " "); do
+			_valid_port_name "$_p" || { echo_red "Error: invalid port/interface name '$_p' in cluster.conf" >&2; ret=1; break; }
+		done
 	fi
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 
-	if [ "${image_source:-}" ]; then
-		if [[ "$image_source" == "direct" || "$image_source" == "proxy" ]]; then
-			: # valid
-		elif [[ "$image_source" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-			: # valid mirror dir name
-		else
-			echo_red "Error: image_source is invalid in cluster.conf [$image_source]" >&2; ret=1
-		fi
-	fi
+	[ "${image_source:-}" ] && ! _valid_image_source "$image_source" && { echo_red "Error: image_source is invalid in cluster.conf [$image_source]" >&2; ret=1; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
 	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warn -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
@@ -2670,7 +2788,10 @@ replace-value-conf() {
 	# Auto-quotes new values that contain spaces or '#'.
 	# If the caller already pre-quotes (e.g. -v "'password'"), no double-quoting occurs.
 
-	aba_debug "Calling: replace-value-conf() $*"
+	# Redact reg_pw values from debug output
+	local _rvc_dbg_args="$*"
+	[[ "$_rvc_dbg_args" == *"reg_pw"* ]] && _rvc_dbg_args=$(echo "$_rvc_dbg_args" | sed -E "s/(-v[[:space:]]+)[^[:space:]]+/\1***/")
+	aba_debug "Calling: replace-value-conf() $_rvc_dbg_args"
 
 	local quiet=
 	local _rvc_case=
@@ -2756,7 +2877,8 @@ replace-value-conf() {
 		[ ! -s "$f" ] && continue # Try next file
 		[ ! "$_first_file" ] && _first_file="$f"
 
-		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
+		local _dbg_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _dbg_val="***"
+		aba_debug "Replacing config value [$name] with [$_dbg_val] in file: $f" >&2
 
 		# Idempotency: if the file already has the desired state, skip the write.
 		# Uses grep -F (fixed string) first so regex chars in values (e.g. passwords) don't cause false matches.
@@ -4439,7 +4561,9 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	readonly TASK_DL_OC_MIRROR="cli:download:oc-mirror"
 	readonly TASK_DL_GOVC="cli:download:govc"
 	readonly TASK_DL_BUTANE="cli:download:butane"
-	readonly TASK_DL_QUAY_REG="mirror:reg:download"
+	readonly TASK_DL_QUAY_REG="mirror:reg:download:quay"
+	readonly TASK_DL_DOCKER_REG="mirror:reg:download:docker"
+	readonly TASK_DL_QUAY_NG_REG="mirror:reg:download:quay-ng"
 
 	# Download commands (arrays)
 	CMD_DL_OC=(make -sC cli download-oc)
@@ -4455,8 +4579,10 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	CMD_INST_GOVC=(make -sC cli govc)
 	CMD_INST_BUTANE=(make -sC cli butane)
 
-	# Mirror registry commands (arrays)
-	CMD_DL_QUAY_REG=(make -sC mirror download-registries)
+	# Mirror registry commands (arrays) — one command per vendor file (no races)
+	CMD_DL_QUAY_REG=(make -sC mirror download-quay-tarball)
+	CMD_DL_DOCKER_REG=(make -sC mirror download-docker-image)
+	CMD_DL_QUAY_NG_REG=(make -sC mirror download-quay-ng-image)
 	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
 fi
 
@@ -5007,6 +5133,33 @@ ensure_quay_registry() {
 
 	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
 	run_once -w -m "Installing mirror-registry binary" -i "$TASK_INST_QUAY_REG"
+}
+
+# Start all registry vendor downloads in background (non-blocking)
+# Used by: aba.sh pre-fetch, tui-direct.sh early download
+start_all_registry_downloads() {
+	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
+	run_once -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}"
+	run_once -i "$TASK_DL_QUAY_NG_REG" -- "${CMD_DL_QUAY_NG_REG[@]}"
+}
+
+# Wait for all registry vendor downloads to complete (blocking)
+# Returns non-zero if any download failed
+# Used by: TUI _ensure_offline_prereqs, anywhere that needs all vendor binaries ready
+wait_all_registry_downloads() {
+	local _failed=false
+	run_once -q -w -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" || _failed=true
+	run_once -q -w -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}" || _failed=true
+	run_once -q -w -i "$TASK_DL_QUAY_NG_REG" -- "${CMD_DL_QUAY_NG_REG[@]}" || _failed=true
+	[[ "$_failed" == "false" ]]
+}
+
+# Check if all registry vendor downloads are already complete (non-blocking peek)
+# Returns 0 if all done, 1 if any pending
+registry_downloads_ready() {
+	run_once -p -i "$TASK_DL_QUAY_REG" 2>/dev/null &&
+	run_once -p -i "$TASK_DL_DOCKER_REG" 2>/dev/null &&
+	run_once -p -i "$TASK_DL_QUAY_NG_REG" 2>/dev/null
 }
 
 # Get error output from a task (helper for error messages)

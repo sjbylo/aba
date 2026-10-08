@@ -49,7 +49,7 @@ if [ "$public_pull_secret_file_needed" ] && [ ! -s "$pull_secret_file" ]; then
 	fi
 
 	aba_abort \
-		"Error: Your pull secret file '$pull_secret_file' does not exist!" \
+		"Your pull secret file '$pull_secret_file' does not exist!" \
 		"Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 fi
 
@@ -62,7 +62,9 @@ mkdir -p ~/.docker ~/.containers
 #   mirror only      → use mirror creds
 #   Red Hat only     → use Red Hat pull secret
 if [ -s "$regcreds_dir/pull-secret-mirror.json" ] && [ -s "$pull_secret_file" ]; then
-	jq -s '.[0] * .[1]' "$regcreds_dir/pull-secret-mirror.json" "$pull_secret_file" > "$regcreds_dir/pull-secret-full.json"
+	_tmp=$(mktemp "$regcreds_dir/.pull-secret-full.XXXXXX")
+	jq -s '.[0] * .[1]' "$regcreds_dir/pull-secret-mirror.json" "$pull_secret_file" > "$_tmp"
+	mv "$_tmp" "$regcreds_dir/pull-secret-full.json"
 	_auth_src="$regcreds_dir/pull-secret-full.json"
 elif [ -s "$regcreds_dir/pull-secret-mirror.json" ]; then
 	_auth_src="$regcreds_dir/pull-secret-mirror.json"

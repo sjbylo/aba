@@ -458,6 +458,7 @@ _ensure_pool_registry() {
 		-e REGISTRY_AUTH=htpasswd \
 		-e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
 		-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+		-e REGISTRY_HTTP_DEBUG_ADDR=0.0.0.0:5003 \
 		docker.io/library/registry:latest
 
 	sleep 2

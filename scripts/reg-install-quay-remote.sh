@@ -42,7 +42,7 @@ $_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 
 # printf '%q' safely escapes all shell metacharacters for remote evaluation
 _escaped_pw=$(printf '%q' "$reg_pw")
-cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword '\$_reg_pw' $reg_root_opts"
+cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword \"\$_reg_pw\" $reg_root_opts"
 
 # mirror-registry hardcodes --name ansible_runner_instance without --replace.
 $_ssh "podman rm -f ansible_runner_instance 2>/dev/null" || true

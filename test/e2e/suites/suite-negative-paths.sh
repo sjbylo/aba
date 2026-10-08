@@ -139,7 +139,7 @@ test_end 0
 # ============================================================================
 test_begin "Version mismatch"
 
-e2e_run "Ensure CLIs are installed" "aba -d cli install"
+e2e_run "Ensure CLIs are installed" "make -sC cli install"
 e2e_run "Create dummy imageset-config for mismatch check" \
 	"mkdir -p mirror/data && touch mirror/data/.created && sleep 1 && cat > mirror/data/imageset-config.yaml <<'ENDYAML'
 mirror:
