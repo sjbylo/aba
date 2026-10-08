@@ -4361,10 +4361,10 @@ validate_ip() {
 	for octet in "${octets[@]}"; do
 		# Must be numeric
 		[[ ! "$octet" =~ ^[0-9]+$ ]] && return 1
+		# No leading zeros (except "0" itself) — check before arithmetic to avoid octal parse errors
+		[[ ${#octet} -gt 1 && ${octet:0:1} == "0" ]] && return 1
 		# Must be in range 0-255
 		[[ $octet -lt 0 || $octet -gt 255 ]] && return 1
-		# No leading zeros (except "0" itself)
-		[[ ${#octet} -gt 1 && ${octet:0:1} == "0" ]] && return 1
 	done
 	
 	return 0
