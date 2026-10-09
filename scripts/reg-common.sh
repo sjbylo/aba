@@ -338,6 +338,28 @@ reg_setup_data_dir() {
 			"To reclaim disk space, remove them after verifying they are no longer needed:" \
 			"  rm -rf ${_orphans//$'\n'/ }"
 	fi
+
+	# Guard: detect if another mirror workdir already owns this reg_root on the
+	# same host.  Different vendors under the same data_dir are fine because each
+	# gets its own subdirectory (docker-reg, quay-install, etc.) — reg_root is
+	# already vendor-qualified at this point.  Parse state.sh with grep rather
+	# than sourcing it to avoid clobbering the caller's variables.
+	local _current_mirror _sf _sf_mirror _sf_root _sf_host
+	_current_mirror=$(basename "$PWD")
+	for _sf in "$HOME/.aba/mirror"/*/state.sh; do
+		[ -f "$_sf" ] || continue
+		_sf_mirror=$(basename "$(dirname "$_sf")")
+		[ "$_sf_mirror" = "$_current_mirror" ] && continue  # reinstall of same workdir is fine
+		_sf_root=$(grep '^reg_root=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
+		_sf_host=$(grep '^reg_host=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
+		if [ "$_sf_root" = "$reg_root" ] && [ "$_sf_host" = "$reg_host" ]; then
+			aba_abort \
+				"Data directory '$reg_root' on host '$reg_host' is already in use by mirror workdir '$_sf_mirror'." \
+				"Each registry instance of the same vendor needs its own data directory." \
+				"Use --data-dir to specify a unique path:" \
+				"  aba -d $(basename "$PWD") install --data-dir ~/my-data-dir"
+		fi
+	done
 }
 
 # --- reg_generate_password ----------------------------------------------------
