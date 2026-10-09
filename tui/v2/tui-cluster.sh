@@ -1670,7 +1670,7 @@ _cluster_execute() {
 
 	local summary="Review — Confirm before installing:\n\n"
 	summary+="  Cluster:      $fqdn\n"
-	summary+="  Type:         $cl_type$( [[ "$cl_type" == "sno" ]] && echo " (single node)" || echo " ($_nm master, $_nw workers = $total_nodes nodes)")\n"
+	summary+="  Type:         $cl_type$( [[ "$cl_type" == "sno" ]] && echo " (single node)" || echo " ($_nm $( (( _nm == 1 )) && echo master || echo masters), $_nw $( (( _nw == 1 )) && echo worker || echo workers) = $total_nodes nodes)")\n"
 	summary+="  Platform:     $_plat_disp\n"
 	summary+="  OpenShift:    ${ocp_version:-?} (${ocp_channel:-?})\n"
 	local _mode_display
