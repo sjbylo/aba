@@ -180,7 +180,6 @@ env_tests=(
 	# Requires special infrastructure (real VMs, remote hosts, root, tmux, s390x)
 	test/func/test-e2e-framework.sh        # Deploys/stops real E2E pool VMs
 	test/func/test-e2e-cleanup.sh          # Installs registry on conN, cleans clusters
-	test/func/test-docker-registry.sh      # Installs real Docker registry on conN
 	test/func/test-reg-uninstall-idempotent.sh  # Must run ON conno.example.com
 	test/func/test-govc-error-handling.sh  # Needs real govc + vCenter + VM
 	test/func/test-infra-auto.sh           # Needs root/sudo, dnsmasq, chrony
