@@ -1479,6 +1479,10 @@ The registry (mirror) host is the server that runs your container image registry
 - **Recommended for large operator workloads** (e.g. RHOAI, GPU, AI/ML): 16 GB RAM minimum, ideally 24+ GB. These operators include very large image layers that cause Quay's gunicorn workers to buffer significant data in memory during upload. Insufficient RAM can trigger OOM kills mid-upload, leading to mirroring failures and corrupted image data in the registry that persists across retries — see the [troubleshooting FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai).
 - **Docker Registry** has a much lower memory footprint than Quay and is a good alternative when resources are constrained.
 
+#### Registry Password
+
+The registry password (`reg_pw` in `mirror.conf`) is auto-generated if left empty. If you set a custom password, avoid these characters: single quote, double quote, backslash, backtick, dollar sign, and exclamation mark. These are known to cause failures during registry installation and are blocked by ABA for all registry vendors.
+
 #### Registry Storage
 
 - Registry images are stored by default under your home directory. Use `data_dir=` in `mirror.conf` to change this.
@@ -1626,7 +1630,8 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba -d mirror password`   | Regenerate pull secret for existing registry                  |
 | `aba -d mirror tidy`       | Clean up stale metadata from a previous run                   |
 | `aba -d mirror transfer-info` | Inspect a pending transfer config (version, operators, upgrade target) |
-| `aba -d mirror uninstall`  | Uninstall the registry                                        |
+| `aba -d mirror uninstall`  | Uninstall the registry (data directory is preserved)          |
+| `aba -d mirror uninstall --delete-data` | Uninstall the registry and remove all data          |
 
 
 ### Cluster Commands
@@ -1695,6 +1700,8 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba clean`           | Remove generated files, preserving configuration                   |
 | `aba reset --force`   | Full reset — returns directory to unpacked state (**destructive**) |
 | `aba --help`          | Show help and available options                                    |
+| `aba help`            | Alias for `--help`                                                 |
+| `aba --version`       | Print ABA version                                                  |
 
 
 [Back to top](#quick-start)
@@ -1920,13 +1927,15 @@ Run on the disconnected bastion:
 
 ```
 cd aba
-aba -d mirror uninstall    # Uninstall the registry if installed by ABA
+aba -d mirror uninstall    # Uninstall the registry (data directory is preserved by default)
 aba -d mirror unregister   # Or, deregister an existing registry (removes creds only)
 cd ..
 rm -rf aba
 sudo rm -f "$(which aba)" "$(which abatui 2>/dev/null)"
 rm -rf ~/.aba              # Remove externalized state (kubeconfigs, cache, runner state, logs)
 ```
+
+> **Note:** `aba -d mirror uninstall` preserves the registry data directory so you can reinstall later without re-mirroring images. To remove everything: `aba -d mirror uninstall --delete-data`.
 
 Run on the workstation or laptop:
 
@@ -2220,7 +2229,9 @@ See [Controlling validation with verify_conf](#controlling-validation-with-verif
 
 ## Q: I accidentally uninstalled my mirror registry, how can I recover?
 
-1. Re-install Quay and push the same set and version of images.
+Since `aba -d mirror uninstall` preserves the data directory by default, simply re-install and your images are intact:
+
+1. Re-install: `aba -d mirror install`
 2. Verify: `aba -d mirror verify`
 3. Start the cluster. Check `oc whoami`.
 4. Delete old config:
@@ -2231,6 +2242,8 @@ See [Controlling validation with verify_conf](#controlling-validation-with-verif
 5. Re-create cluster.conf: `rm -rf sno; aba cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf`
 6. Run: `aba -d sno day2`
 7. Wait 2-3 minutes and check OperatorHub in the Console.
+
+> If you used `--delete-data`, the image data is gone. You will need to re-mirror images with `aba -d mirror sync` or `aba -d mirror load` before the registry is usable again.
 
 ---
 
