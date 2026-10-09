@@ -9,11 +9,16 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_load_config
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
+
 reg_detect_existing
 reg_check_fqdn
 reg_setup_data_dir "$_QUAY_NG_VENDOR"
 reg_generate_password
 reg_verify_localhost
+
+aba_progress "DONE|reg_env"
 
 _QUAY_NG_IMAGE_FILE="quay-ng-image.tgz"
 _QUAY_NG_BIN_DIR="quay-ng"
@@ -21,6 +26,7 @@ _QUAY_NG_BIN="$_QUAY_NG_BIN_DIR/mirror-registry"
 
 ask "Install $_QUAY_NG_VENDOR registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
+aba_progress "START|reg_download"
 aba_info "Installing $_QUAY_NG_VENDOR registry on localhost ..."
 
 # Load image from tarball (air-gapped) or pull from registry (connected).
@@ -47,6 +53,9 @@ if [ ! -x "$_QUAY_NG_BIN" ]; then
 	podman rm "$_cid" >/dev/null
 	chmod +x "$_QUAY_NG_BIN"
 fi
+
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
 
 # Install or reinstall via the tool's own 'install' command.
 # Fresh install: pass -init-user/-init-password-stdin for admin setup.
@@ -78,6 +87,9 @@ else
 	fi
 fi
 
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_firewall"
+
 # Quay-ng uses a systemd quadlet (WantedBy=default.target) -- systemd handles
 # auto-start directly. Only linger is needed so the user's systemd instance
 # stays alive after logout.
@@ -90,6 +102,9 @@ fi
 
 reg_open_firewall
 
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_postcfg"
+
 reg_post_install "$reg_root/ssl.cert" "$_QUAY_NG_VENDOR"
 
 cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
@@ -101,6 +116,9 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To verify:    cd $PWD && aba verify
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
+
+aba_progress "DONE|reg_postcfg"
+aba_progress "START|reg_verify"
 
 # Phase 1: Wait for the TLS listener (no auth = no lockout risk)
 if ! try_cmd -n 10 -d 1 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
@@ -130,3 +148,5 @@ if ! reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
 		"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi
+
+aba_progress "DONE|reg_verify"

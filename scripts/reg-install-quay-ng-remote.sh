@@ -9,6 +9,8 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_remote_pre_install "$_QUAY_NG_VENDOR"
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
 
 # Pre-install assertion: detect stale state.
 # The tool refuses to install if a Quadlet file exists (even if service is dead).
@@ -25,6 +27,11 @@ if [ -n "$_stale" ]; then
 fi
 
 ask "Install $_QUAY_NG_VENDOR registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
+
+aba_progress "DONE|reg_env"
+aba_progress "START|reg_firewall"
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_download"
 
 aba_info "Installing $_QUAY_NG_VENDOR registry on remote host $reg_host ..."
 
@@ -51,6 +58,9 @@ fi
 # Copy binary and image tarball to remote host
 aba_info "Copying $_QUAY_NG_VENDOR binary and image to remote host ..."
 $_scp "$_bin" "$_image_file" "$_target:$remote_dir/"
+
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
 
 # Install or reinstall on remote host via the tool's own 'install' command.
 # Fresh install: pass -init-user/-init-password-stdin for admin setup.
@@ -86,6 +96,9 @@ if ! $_ssh "
 		"Check the output above for details."
 fi
 
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_postcfg"
+
 # Wait for serve to generate the TLS certificate
 _cert_ok=""
 for _i in $(seq 1 15); do
@@ -100,4 +113,9 @@ if [ -z "$_cert_ok" ]; then
 		"Check the quay.service logs on $reg_host: journalctl --user -u quay.service"
 fi
 
+aba_progress "DONE|reg_postcfg"
+aba_progress "START|reg_verify"
+
 reg_remote_post_install "$_QUAY_NG_VENDOR" "$reg_root/ssl.cert"
+
+aba_progress "DONE|reg_verify"
