@@ -1180,64 +1180,6 @@ _tui_abaconf_raw_ask() {
 	echo "$_ask_val"
 }
 
-_tui_settings_menu_reg_vendor() {
-	local vf="$ABA_ROOT/mirror/mirror.conf"
-	if [[ ! -f "$vf" ]]; then
-		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
-	fi
-
-	local cur="auto"
-	if [[ -f "$vf" ]]; then
-		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
-		cur="${reg_vendor:-auto}"
-	fi
-
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--menu "Select registry installer vendor (stored in mirror/mirror.conf).\nAuto picks Quay vs Docker based on detected architecture.\nCurrent: $cur" 0 0 4 \
-		"auto"    "Auto (architecture-based)" \
-		"quay"    "Quay mirror-registry" \
-		"docker"  "Docker registry tarball" \
-		"$_QUAY_NG_VENDOR" "Quay-NG (mirror-registry binary)" \
-		2>"$_TUI_TMP"
-	local rc=$?
-	[[ $rc -ne 0 ]] && return
-
-	local pick
-	pick=$(<"$_TUI_TMP")
-	case "$pick" in
-		auto|quay|docker|$_QUAY_NG_VENDOR)
-			if [[ ! -f "$vf" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox "mirror.conf not available." 0 0
-				return 1
-			fi
-			replace-value-conf -q -n reg_vendor -v "$pick" -f "$vf"
-			tui_log "Settings: reg_vendor=$pick"
-			;;
-	esac
-}
-
-_tui_settings_menu_retry() {
-	local current="${_TUI_RETRY_COUNT:-1}"
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
-		--inputbox "Oc-mirror retry count for this session (0 = omit --retry):" 0 0 "$current" \
-		2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return
-
-	local val
-	val=$(<"$_TUI_TMP")
-	val=$(echo "$val" | tr -dc '0-9')
-	[[ -z "$val" ]] && val="0"
-
-	if [[ "$val" =~ ^[0-9]+$ ]] && [[ "$val" -le 999 ]]; then
-		_TUI_RETRY_COUNT="$val"
-		_tui_persist_retry_count "$val"
-		tui_log "Settings: _TUI_RETRY_COUNT=$val"
-	else
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"Invalid retry count.\n\nEnter an integer between 0 and 999." 0 0
-	fi
-}
 
 # Build a compact settings summary string for the menu item label.
 _tui_settings_summary() {
