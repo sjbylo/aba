@@ -13,7 +13,7 @@ aba_progress "START|reg_env"
 # Pre-install assertion: detect stale Docker registry state.
 _stale=""
 $_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-$_ssh "podman ps -a --format '{{.Names}}' | grep -q -E '^registry(-[0-9]+)?$'" && _stale+="  registry container still present"$'\n'
+$_ssh "podman ps -a --format '{{.Names}}' | grep -q -E '^registry(-${reg_port})?$'" && _stale+="  registry container still present"$'\n'
 if [ -n "$_stale" ]; then
 	aba_abort \
 		"Stale registry state detected on $reg_host before install:" \
