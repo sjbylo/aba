@@ -1237,6 +1237,18 @@ _persist_operator_basket() {
 	_OP_BASKET_DIRTY=false
 }
 
+# Run a basket sub-menu and auto-persist if the basket changed
+_with_basket_dirty_check() {
+	local _pre_hash _post_hash
+	_pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
+	"$@"
+	_post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
+	if [[ "$_pre_hash" != "$_post_hash" ]]; then
+		_OP_BASKET_DIRTY=true
+		_persist_operator_basket
+	fi
+}
+
 # =============================================================================
 # View ImageSet Config (read-only or editable)
 # =============================================================================
@@ -1707,34 +1719,13 @@ Selected operators will be included in the ImageSet config."
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			1) local _pre_hash _post_hash
-			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
-			   _operator_sets "$version_short"
-			   _post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
-			   if [[ "$_pre_hash" != "$_post_hash" ]]; then
-			   	_OP_BASKET_DIRTY=true
-			   	_persist_operator_basket
-			   fi
+			1) _with_basket_dirty_check _operator_sets "$version_short"
 			   [[ ${#OP_BASKET[@]} -gt 0 ]] && default_item=3
 			   ;;
-			2) local _pre_hash _post_hash
-			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
-			   _operator_search "$version_short"
-			   _post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
-			   if [[ "$_pre_hash" != "$_post_hash" ]]; then
-			   	_OP_BASKET_DIRTY=true
-			   	_persist_operator_basket
-			   fi
+			2) _with_basket_dirty_check _operator_search "$version_short"
 			   [[ ${#OP_BASKET[@]} -gt 0 ]] && default_item=3
 			   ;;
-			3) local _pre_hash _post_hash
-			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
-			   _operator_view_basket
-			   _post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
-			   if [[ "$_pre_hash" != "$_post_hash" ]]; then
-			   	_OP_BASKET_DIRTY=true
-			   	_persist_operator_basket
-			   fi
+			3) _with_basket_dirty_check _operator_view_basket
 			   ;;
 			4)
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
