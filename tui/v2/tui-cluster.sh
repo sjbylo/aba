@@ -1759,7 +1759,7 @@ _cluster_execute() {
 	# After successful ISO creation (bare-metal, ISO-only step): show boot guidance
 	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
 		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
-		local _node_count=$(( ${cl_masters:-3} + ${cl_workers:-0} ))
+		local _node_count=$total_nodes
 		local _boot_msg
 		if [ "$_node_count" -eq 1 ]; then
 			_boot_msg="Boot your server from this ISO using one of:"
