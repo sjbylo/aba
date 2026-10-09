@@ -493,11 +493,13 @@ e2e_run "Create mirror dir 2" "aba mirror --name $_CC_DN2"
 e2e_add_to_mirror_cleanup "$PWD/$_CC_DN1"
 e2e_add_to_mirror_cleanup "$PWD/$_CC_DN2"
 
-# Install two Docker registries locally on different ports
+# Install two Docker registries locally on different ports.
+# Each needs its own data_dir — the default (~/docker-reg) is shared, which
+# clobbers htpasswd/certs and causes auth failures on the first registry.
 e2e_run "Install docker on :5111" \
-	"aba -d $_CC_DN1 install --vendor docker -H $CON_HOST --reg-port 5111 --reg-password '$_CC_PW1'"
+	"aba -d $_CC_DN1 install --vendor docker -H $CON_HOST --reg-port 5111 --reg-password '$_CC_PW1' --data-dir ~/docker-reg-5111"
 e2e_run "Install docker on :5112" \
-	"aba -d $_CC_DN2 install --vendor docker -H $CON_HOST --reg-port 5112 --reg-password '$_CC_PW2'"
+	"aba -d $_CC_DN2 install --vendor docker -H $CON_HOST --reg-port 5112 --reg-password '$_CC_PW2' --data-dir ~/docker-reg-5112"
 
 # Both should be reachable simultaneously
 e2e_run "Verify registry 1" "aba -d $_CC_DN1 verify"
@@ -509,11 +511,12 @@ e2e_run "Push to registry 2" "$(_vm_push "$_CC_DN2" "e2e-cc/only-in-2:v1")"
 e2e_run "Check image in registry 1" "$(_vm_check "$_CC_DN1" "e2e-cc/only-in-1:v1")"
 e2e_run "Check image in registry 2" "$(_vm_check "$_CC_DN2" "e2e-cc/only-in-2:v1")"
 
-# Image from registry 1 should NOT be in registry 2 and vice versa
-e2e_run "Assert no cross-contamination (1→2)" \
-	"! $(_vm_check "$_CC_DN2" "e2e-cc/only-in-1:v1")"
-e2e_run "Assert no cross-contamination (2→1)" \
-	"! $(_vm_check "$_CC_DN1" "e2e-cc/only-in-2:v1")"
+# Image from registry 1 should NOT be in registry 2 and vice versa.
+# Wrap in subshell so '!' negates the whole chain, not just 'cd'.
+e2e_run "Assert no cross-contamination (1>2)" \
+	"! ($(_vm_check "$_CC_DN2" "e2e-cc/only-in-1:v1"))"
+e2e_run "Assert no cross-contamination (2>1)" \
+	"! ($(_vm_check "$_CC_DN1" "e2e-cc/only-in-2:v1"))"
 
 e2e_run "Uninstall registry 1" "aba -d $_CC_DN1 uninstall --delete-data"
 e2e_run "Uninstall registry 2" "aba -d $_CC_DN2 uninstall --delete-data"
