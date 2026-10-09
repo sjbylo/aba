@@ -19,7 +19,26 @@
 
 set -u
 
-_RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_STAGING_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_RUN_DIR="$_STAGING_DIR/run"
+
+# Copy harness from staging to run dir so deploy can update staging at any
+# time without clobbering scripts mid-execution.  This copy happens once,
+# before the suite starts, so nothing in run/ is executing yet.
+rm -rf "$_RUN_DIR"
+mkdir -p "$_RUN_DIR"
+cp -a "$_STAGING_DIR"/lib "$_RUN_DIR/"
+cp -a "$_STAGING_DIR"/suites "$_RUN_DIR/"
+cp -a "$_STAGING_DIR"/scripts "$_RUN_DIR/"
+[ -d "$_STAGING_DIR/bin" ] && cp -a "$_STAGING_DIR"/bin "$_RUN_DIR/"
+# logs/ stays in staging — shared across runs, never executed
+ln -sfn "$_STAGING_DIR/logs" "$_RUN_DIR/logs"
+# config files are read-only, safe to symlink
+for _cf in config.env pools.conf; do
+	[ -f "$_STAGING_DIR/$_cf" ] && ln -sf "$_STAGING_DIR/$_cf" "$_RUN_DIR/$_cf"
+done
+
+_RUNNER_DIR="$_RUN_DIR"
 _ABA_ROOT="$HOME/aba"
 export _ABA_ROOT
 
@@ -558,9 +577,9 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		# govc not in PATH -- check ~/bin/ and harness bin/ (deployed by run.sh)
 		if [ -x "$HOME/bin/govc" ]; then
 			export PATH="$HOME/bin:$PATH"
-		elif [ -x "$HOME/.e2e-harness/bin/govc" ]; then
+		elif [ -x "$_STAGING_DIR/bin/govc" ]; then
 			mkdir -p "$HOME/bin"
-			cp "$HOME/.e2e-harness/bin/govc" "$HOME/bin/govc"
+			cp "$_STAGING_DIR/bin/govc" "$HOME/bin/govc"
 			chmod 755 "$HOME/bin/govc"
 			export PATH="$HOME/bin:$PATH"
 		elif [ -f "$_ABA_ROOT/cli/Makefile" ]; then
