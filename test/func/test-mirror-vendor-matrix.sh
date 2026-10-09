@@ -229,6 +229,15 @@ _vm_check() {
 	echo "cd $dn && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && skopeo inspect --tls-verify=false --authfile \$HOME/.aba/mirror/$dn/pull-secret-mirror.json docker://\${reg_host}:\${reg_port}\${reg_path}/$img | grep -q Digest"
 }
 
+# Assert a value in state.sh for a given mirror dir
+_assert_state() {
+	local dn="$1" key="$2" expected="$3"
+	local state_file="$HOME/.aba/mirror/$dn/state.sh"
+	local actual
+	actual=$(grep "^[[:space:]]*${key}=" "$state_file" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' | cut -d= -f2-) || true
+	[ "$actual" = "$expected" ]
+}
+
 _vm_check_data_dir() {
 	local v="$1" m="$2" u="$3" c="$4" dn="$5" assertion="$6"
 	local test_op="test -d"
@@ -288,6 +297,16 @@ _vm_test() {
 
 	run "Install registry (pw=$_pw)" "aba -d $dn install $flags"
 	run "Verify registry" "aba -d $dn verify"
+
+	# Verify state.sh values match what was installed
+	run "state.sh: reg_vendor=$v" "_assert_state '$dn' reg_vendor '$v'"
+	run "state.sh: reg_port=$_port" "_assert_state '$dn' reg_port '$_port'"
+	run "state.sh: reg_host=$_host" "_assert_state '$dn' reg_host '$_host'"
+	run "state.sh: reg_pw matches" "_assert_state '$dn' reg_pw \"'$_pw'\""
+	if [ "$m" = "remote" ]; then
+		run "state.sh: reg_ssh_key" "_assert_state '$dn' reg_ssh_key '${_SSHKEY[$u]}'"
+	fi
+
 	run "Push test image 1" "$(_vm_push "$dn" "$_IMG1")"
 	run "Check image 1 exists" "$(_vm_check "$dn" "$_IMG1")"
 
@@ -545,7 +564,9 @@ test_end
 test_begin "Port reuse across vendors"
 
 _PR_PORT=6601
-_PR_PW=$(_gen_password)
+_PR_PW='PortReuse26pw'  # Alphanumeric only — Quay v1 has an upstream bug where passwords
+                        # containing "!!" cause 401 "Invalid bearer token format".
+                        # This test validates port reuse, not password handling.
 
 for _pr_vendor in docker quay quay-ng; do
 	_PR_DN="sa-vm-portreuse-${_pr_vendor}"
