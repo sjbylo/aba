@@ -1635,7 +1635,7 @@ _cluster_execute() {
 	# Platform display
 	local _plat_disp="$cl_platform"
 	case "$cl_platform" in
-		bm)  _plat_disp="Bare-metal" ;;
+		bm)  _plat_disp="Bare-metal (ISO only — you boot servers)" ;;
 		vmw) _plat_disp="VMware/ESXi" ;;
 		kvm) _plat_disp="Libvirt/KVM" ;;
 	esac
@@ -2029,7 +2029,7 @@ R - Clean ABA: Removes configuration and state files so you can\n\
 		"R")
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 				--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
-				--yesno "Clean ABA configuration?\n\nThis will remove configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
+				--defaultno --yesno "Clean ABA configuration?\n\nThis will remove configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
 			[[ $? -ne 0 ]] && continue
 			confirm_and_execute "aba clean" "Clean ABA"
 			return 0
