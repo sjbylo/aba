@@ -346,4 +346,62 @@ else
     echo -e "${YELLOW}[8/8] Skipping operator set check (no catalog index files found)${NC}\n"
 fi
 
+# =============================================================================
+# [9/9] Check that scripts emit progress events for all planned step IDs
+# =============================================================================
+# progress-plan.sh declares PLAN step IDs for each workflow.
+# The scripts that implement those workflows must emit START|<id> and DONE|<id>
+# for every planned step.  Missing events cause the TUI to show "Stopped before
+# all steps finished" even when the operation succeeded.
+#
+# Mapping: progress-plan.sh "install" declares reg_config..reg_verify.
+# reg-install.sh (dispatcher) emits START|reg_config, then exec's into
+# the vendor-specific script which must emit DONE|reg_config and all
+# subsequent START/DONE pairs.
+echo -e "${YELLOW}[9/9] Checking progress events in registry install scripts...${NC}"
+_progress_failed=0
+
+# Extract only the install case's PLAN step IDs from progress-plan.sh
+_plan_ids=()
+while IFS= read -r line; do
+    if [[ "$line" =~ aba_progress.*PLAN\|([a-z_0-9]+)\| ]]; then
+        _plan_ids+=("${BASH_REMATCH[1]}")
+    fi
+done < <(awk '/^\tinstall\)$/{found=1; next} found && /^\t\t;;$/{exit} found' scripts/progress-plan.sh)
+
+if [ ${#_plan_ids[@]} -eq 0 ]; then
+    echo -e "${YELLOW}      ⚠ No PLAN IDs found in progress-plan.sh install case — skipping${NC}\n"
+else
+    # Check every reg-install-*.sh script (excluding the dispatcher reg-install.sh)
+    for script in scripts/reg-install-*.sh; do
+        [ -f "$script" ] || continue
+        [[ "$(basename "$script")" == "reg-install.sh" ]] && continue
+
+        _script_events=$(grep -o 'aba_progress "[A-Z]*|[a-z_0-9]*"' "$script" 2>/dev/null || true)
+        _missing=()
+        for id in "${_plan_ids[@]}"; do
+            # rpms_ext is handled by Makefile prereqs, not the install script
+            [[ "$id" == "rpms_ext" ]] && continue
+            # reg_config START is emitted by the dispatcher (reg-install.sh)
+            # Vendor scripts only need DONE|reg_config
+            _has_done=$(echo "$_script_events" | grep -c "DONE|${id}" || true)
+            if [ "$_has_done" -eq 0 ]; then
+                _missing+=("$id")
+            fi
+        done
+        if [ ${#_missing[@]} -gt 0 ]; then
+            echo -e "${RED}      ✗ $script: missing DONE for step IDs: ${_missing[*]}${NC}"
+            _progress_failed=1
+        fi
+    done
+
+    if [ $_progress_failed -eq 1 ]; then
+        echo -e "${RED}      ✗ Progress event check FAILED${NC}"
+        echo -e "${RED}        Scripts must emit aba_progress START|<id> and DONE|<id> for every${NC}"
+        echo -e "${RED}        step declared in progress-plan.sh. See reg-install-docker.sh as reference.${NC}\n"
+        exit 1
+    fi
+    echo -e "${GREEN}      ✓ All registry install scripts emit progress events for all planned steps${NC}\n"
+fi
+
 echo -e "${GREEN}=== All Pre-Commit Checks Passed! ===${NC}"
