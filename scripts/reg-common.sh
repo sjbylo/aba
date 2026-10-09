@@ -296,6 +296,9 @@ reg_setup_data_dir() {
 	fi
 
 	# Build Quay-specific root options
+	# Explicitly set --quayStorage and --sqliteStorage to subdirectories of reg_root.
+	# Without these, mirror-registry defaults to Podman named volumes, which scatters
+	# data outside the data dir and requires root to uninstall.
 	if [ "$vendor" = "quay" ]; then
 		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 	else
@@ -353,6 +356,11 @@ reg_setup_data_dir() {
 		_sf_root=$(grep '^reg_root=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
 		_sf_host=$(grep '^reg_host=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
 		if [ "$_sf_root" = "$reg_root" ] && [ "$_sf_host" = "$reg_host" ]; then
+			# For local installs, skip stale state.sh entries where the data dir
+			# no longer exists (previous install was cleaned up or removed).
+			if [ -z "$reg_ssh_key" ] && [ ! -d "$reg_root" ]; then
+				continue
+			fi
 			aba_abort \
 				"Data directory '$reg_root' on host '$reg_host' is already in use by mirror workdir '$_sf_mirror'." \
 				"Each registry instance of the same vendor needs its own data directory." \
@@ -1141,7 +1149,7 @@ reg_remote_pre_install() {
 	# Resolve reg_root on remote host (~ may expand differently than localhost)
 	reg_root=$($_ssh "echo $reg_root")
 
-	# Rebuild reg_root_opts with resolved path (Quay needs these)
+	# Rebuild reg_root_opts with resolved path (see reg_setup_data_dir comment)
 	if [ "$vendor" = "quay" ]; then
 		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 	fi
