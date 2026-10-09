@@ -105,6 +105,7 @@ podman run -d \
 	-v "${REGISTRY_CERTS_DIR}:/certs:Z" \
 	-v "${REGISTRY_AUTH_DIR}:/auth:Z" \
 	-e REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port} \
+	-e REGISTRY_HTTP_DEBUG_ADDR=localhost:$(( reg_port + 10000 )) \
 	-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
 	-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
 	-e REGISTRY_AUTH=htpasswd \
