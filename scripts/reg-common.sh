@@ -320,27 +320,20 @@ reg_setup_data_dir() {
 		fi
 	fi
 
-	# Warn about orphaned data directories from other vendors in the same data_dir.
-	# This catches the case where a user switches vendors without cleaning up.
-	local _other_suffix _other_root _orphans=""
+	# Note other vendor data directories under the same data_dir.
+	local _other_suffix _other_root _others=""
 	local _all_suffixes="docker-reg quay-install $_QUAY_NG_VENDOR"
 	for _other_suffix in $_all_suffixes; do
 		_other_root="$data_dir/$_other_suffix"
 		[ "$_other_root" = "$reg_root" ] && continue
 		if [ -z "$reg_ssh_key" ]; then
-			[ -d "$_other_root" ] && _orphans+="  $_other_root"$'\n'
+			[ -d "$_other_root" ] && _others+=" $_other_root"
 		else
 			ssh -i "$reg_ssh_key" -F "$ssh_conf_file" "$reg_ssh_user@$reg_host" \
-				"test -d '$_other_root'" 2>/dev/null && _orphans+="  $_other_root (on $reg_host)"$'\n' || true
+				"test -d '$_other_root'" 2>/dev/null && _others+=" $_other_root" || true
 		fi
 	done
-	if [ -n "$_orphans" ]; then
-		aba_warn "Orphaned registry data from a different vendor detected:" \
-			"$_orphans" \
-			"These directories are not managed by the current $vendor install." \
-			"To reclaim disk space, remove them after verifying they are no longer needed:" \
-			"  rm -rf ${_orphans//$'\n'/ }"
-	fi
+	[ -n "$_others" ] && aba_info "Other registry data also under $data_dir:$_others"
 
 	# Guard: detect if another mirror workdir already owns this reg_root on the
 	# same host.  Different vendors under the same data_dir are fine because each
@@ -740,7 +733,7 @@ reg_stale_report() {
 			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
-			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE '^registry(-[0-9]+)?$'" "registry container" && \
+			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE '^registry(-$port)?$'" "registry container" && \
 				stale+="  registry container still present"$'\n'
 			;;
 		"$_QUAY_NG_VENDOR"|quay-ng)
