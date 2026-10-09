@@ -828,7 +828,9 @@ mirror_available() {
 # chain from delaying PLAN events past the 5-second progress timeout.
 # Returns 0 on success, non-zero on failure or user cancel.
 _tui_install_mirror() {
-	local _label="${1:-Install Mirror}"
+	local _vendor
+	_vendor=$(source <(normalize-mirror-conf) && echo "${reg_vendor:-auto}")
+	local _label="Install ${_vendor} Mirror"
 	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
 	local rc=$?
 	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "$_label" _invalidate_mirror_cache && rc=$?
