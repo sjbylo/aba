@@ -7,6 +7,8 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_remote_pre_install "docker"
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
 
 # Pre-install assertion: detect stale Docker registry state.
 _stale=""
@@ -22,6 +24,11 @@ fi
 
 ask "Install Docker registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
+aba_progress "DONE|reg_env"
+aba_progress "START|reg_firewall"
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_download"
+
 aba_info "Installing Docker registry on remote host $reg_host ..."
 
 # Ensure Docker image tarball exists
@@ -35,6 +42,9 @@ $_ssh "rpm -q httpd-tools openssl || $SUDO dnf install httpd-tools openssl -y" >
 
 aba_info "Copying Docker registry image to remote host ..."
 $_scp docker-reg-image.tgz "$_target:$remote_dir/"
+
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
 
 REGISTRY_DATA_DIR="$reg_root/data"
 REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
@@ -120,4 +130,11 @@ if ! $_ssh "
 		"Check the output above for details."
 fi
 
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_postcfg"
+aba_progress "DONE|reg_postcfg"
+aba_progress "START|reg_verify"
+
 reg_remote_post_install "docker" "$REGISTRY_CERTS_DIR/ca.crt"
+
+aba_progress "DONE|reg_verify"

@@ -7,6 +7,8 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_remote_pre_install "quay"
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
 
 reg_check_quay_resources "$_ssh"
 
@@ -26,6 +28,11 @@ fi
 
 ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
+aba_progress "DONE|reg_env"
+aba_progress "START|reg_firewall"
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_download"
+
 aba_info "Installing Quay registry on remote host $reg_host ..."
 
 if ! ensure_quay_registry; then
@@ -39,6 +46,9 @@ $_ssh "if [ ! -s ~/.ssh/quay_installer ]; then mkdir -p ~/.ssh && chmod 700 ~/.s
 
 aba_info "Copying mirror-registry tarball to remote host ..."
 $_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
+
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
 
 # printf '%q' safely escapes all shell metacharacters for remote evaluation
 _escaped_pw=$(printf '%q' "$reg_pw")
@@ -54,4 +64,11 @@ if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then
 		"Check the output above for details."
 fi
 
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_postcfg"
+aba_progress "DONE|reg_postcfg"
+aba_progress "START|reg_verify"
+
 reg_remote_post_install "quay" "$reg_root/quay-rootCA/rootCA.pem"
+
+aba_progress "DONE|reg_verify"
