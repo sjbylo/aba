@@ -1556,7 +1556,7 @@ _mirror_isc_advanced() {
 			R)
 				dlg --backtitle "$(ui_backtitle)" --title "Confirm Reset" \
 					--yes-label "Reset" --no-label "Cancel" \
-					--yesno "\nThis will discard any manual edits and regenerate\nimageset-config.yaml from aba.conf + mirror.conf\n(version, channel, operators).\n\nAre you sure?" 0 0
+					--defaultno --yesno "\nThis will discard any manual edits and regenerate\nimageset-config.yaml from aba.conf + mirror.conf\n(version, channel, operators).\n\nAre you sure?" 0 0
 				if [[ $? -eq 0 ]]; then
 					touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
 					rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null

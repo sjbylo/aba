@@ -1927,7 +1927,7 @@ On virtualized platforms (VMware, KVM), the VMs are also destroyed."
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
 			--yes-label "Delete" --no-label "$TUI2_BTN_CANCEL" \
 			--help-button --help-label "Help" \
-			--yesno "$_del_msg" 0 0
+			--defaultno --yesno "$_del_msg" 0 0
 		local rc=$?
 		case $rc in
 			0) break ;;
@@ -2703,7 +2703,7 @@ _day2_shutdown() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_SHUTDOWN" \
 		--yes-label "Shutdown" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
+		--defaultno --yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	local _cmd="aba --dir $SELECTED_CLUSTER shutdown --wait"
@@ -2745,7 +2745,7 @@ _day2_refresh() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
 		--yes-label "Refresh" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
+		--defaultno --yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER refresh" "$TUI2_TITLE_DAY2_REFRESH: $cl_display"
@@ -2761,7 +2761,7 @@ _day2_clean() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
 		--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
+		--defaultno --yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"
