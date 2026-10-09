@@ -1016,6 +1016,12 @@ _valid_reg_vendor() {
 	[[ "$1" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$ ]]
 }
 
+# Validate a CLI-facing registry vendor value (excludes 'existing', which is internal-only).
+# Returns 0 if valid, 1 if invalid.
+_valid_cli_vendor() {
+	[[ "$1" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR})$ ]]
+}
+
 # Validate an image_source value (direct, proxy, or mirror directory name).
 # Returns 0 if valid, 1 if invalid.
 _valid_image_source() {
