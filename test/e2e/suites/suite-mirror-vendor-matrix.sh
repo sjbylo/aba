@@ -442,7 +442,12 @@ e2e_run "Install quay-ng (vendor switch)" \
 	"aba -d $_VS_DN install --vendor quay-ng -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_VS_PW'"
 e2e_run "Verify quay-ng" "aba -d $_VS_DN verify"
 e2e_run "Push image (quay-ng)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:quay-ng")"
-e2e_run "Uninstall quay-ng (delete data)" "aba -d $_VS_DN uninstall --delete-data"
+e2e_run "Uninstall quay-ng (keep data)" "aba -d $_VS_DN uninstall"
+
+# Clean up data dirs left by earlier vendors (docker, quay) so subsequent
+# tests that use the same host + default paths start clean.
+e2e_run "Clean leftover vendor data dirs on $DIS_HOST" \
+	"ssh -F ~/.aba/ssh.conf steve@$DIS_HOST 'rm -rf ~/docker-reg ~/quay-install ~/quay-ng'"
 
 e2e_remove_from_mirror_cleanup "$PWD/$_VS_DN"
 e2e_run "Clean vendor-switch dir" "rm -rf $_VS_DN && rm -rf ~/.aba/mirror/$_VS_DN"
