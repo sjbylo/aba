@@ -128,7 +128,7 @@ e2e_run -q "Restore all pull secrets" \
 e2e_run "Create e2e-mirror-docker1 dir" "aba mirror --name e2e-mirror-docker1"
 e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-docker1"
 e2e_run "Install Docker registry on remote host" \
-    "aba -d e2e-mirror-docker1 install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass --data-dir '~/e2e-mirror-datadir2' -H $DIS_HOST -k ~/.ssh/id_rsa"
+    "aba -d e2e-mirror-docker1 install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass!! --data-dir '~/e2e-mirror-datadir2' -H $DIS_HOST -k ~/.ssh/id_rsa"
 e2e_run "Verify e2e-mirror-docker1 registry access" "aba -d e2e-mirror-docker1 verify"
 
 # Idempotent install: re-running install on a healthy registry must succeed

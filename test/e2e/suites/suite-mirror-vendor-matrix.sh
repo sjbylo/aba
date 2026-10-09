@@ -145,6 +145,15 @@ _vm_check() {
 }
 
 # --- Helper: verify data dir exists or is gone (local or remote) -----------
+# Assert a value in state.sh for a given mirror dir
+_assert_state() {
+	local dn="$1" key="$2" expected="$3"
+	local state_file="$HOME/.aba/mirror/$dn/state.sh"
+	local actual
+	actual=$(grep "^[[:space:]]*${key}=" "$state_file" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' | cut -d= -f2-) || true
+	[ "$actual" = "$expected" ]
+}
+
 _vm_check_data_dir() {
 	local v="$1" m="$2" u="$3" c="$4" dn="$5" assertion="$6"
 	local test_op="test -d"
@@ -186,8 +195,24 @@ _vm_test() {
 	e2e_run "Create mirror dir" "aba mirror --name $dn"
 	e2e_add_to_mirror_cleanup "$PWD/$dn"
 
+	local _host _port
+	[ "$m" = "remote" ] && _host="$DIS_HOST" || _host="$CON_HOST"
+	[ "$c" = "custom" ] && _port="${_CPORT[$v]}" || _port=8443
+
 	e2e_run "Install registry (pw=$_pw)" "aba -d $dn install $flags"
 	e2e_run "Verify registry" "aba -d $dn verify"
+
+	# Verify state.sh values match what was installed
+	e2e_run "state.sh: reg_vendor=$v" "_assert_state '$dn' reg_vendor '$v'"
+	e2e_run "state.sh: reg_port=$_port" "_assert_state '$dn' reg_port '$_port'"
+	e2e_run "state.sh: reg_host=$_host" "_assert_state '$dn' reg_host '$_host'"
+	if [ "$c" = "custom" ]; then
+		e2e_run "state.sh: reg_pw matches" "_assert_state '$dn' reg_pw \"'$_pw'\""
+	fi
+	if [ "$m" = "remote" ]; then
+		e2e_run "state.sh: reg_ssh_key" "_assert_state '$dn' reg_ssh_key '${_SSHKEY[$u]}'"
+	fi
+
 	e2e_run "Push test image 1" "$(_vm_push "$dn" "$_IMG1")"
 	e2e_run "Check image 1 exists" "$(_vm_check "$dn" "$_IMG1")"
 
@@ -241,7 +266,7 @@ done
 _tnames+=(
 	"Password edge cases"
 	"Register existing registry"
-	"Vendor switch (docker→quay→quay-ng)"
+	"Vendor switch (docker>quay>quay-ng)"
 	"Port reuse across vendors"
 	"Concurrent local registries"
 	"Verify negative path"
@@ -390,7 +415,7 @@ test_end
 # ============================================================================
 # Vendor switch (docker→quay→quay-ng) — same mirror dir, keep data between
 # ============================================================================
-test_begin "Vendor switch (docker→quay→quay-ng)"
+test_begin "Vendor switch (docker>quay>quay-ng)"
 
 _VS_DN="e2e-vm-vendor-switch"
 _VS_PW=$(_gen_e2e_password)
@@ -430,7 +455,9 @@ test_end
 test_begin "Port reuse across vendors"
 
 _PR_PORT=5111
-_PR_PW=$(_gen_e2e_password)
+_PR_PW='PortReuse26pw'  # Alphanumeric only — Quay v1 has an upstream bug where passwords
+                        # containing "!!" cause 401 "Invalid bearer token format".
+                        # This test validates port reuse, not password handling.
 
 for _pr_vendor in docker quay quay-ng; do
 	_PR_DN="e2e-vm-portreuse-${_pr_vendor}"
