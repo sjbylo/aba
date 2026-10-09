@@ -384,6 +384,7 @@ _tp_finish_outcome() {
 _tp_show_error() {
 	local _title="${1:-Error}"
 	local _msg="\n" line id
+	local _btn_rc
 
 	# Show which step(s) failed
 	for line in "${_tp_failed[@]}"; do
@@ -407,12 +408,19 @@ _tp_show_error() {
 		done
 	fi
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
-	while _tp_dlg --title " ${_title}: Error " \
-		--yes-label "View Output" \
-		--no-label "OK" \
-		--yesno "$_msg" \
-		0 0; do
-		_tp_show_output
+	while true; do
+		_btn_rc=0
+		_tp_dlg --title " ${_title}: Error " \
+			--yes-label "View Output" \
+			--no-label "OK" \
+			--extra-button --extra-label "Retry" \
+			--yesno "$_msg" \
+			0 0 || _btn_rc=$?
+		case "$_btn_rc" in
+			0) _tp_show_output ;;
+			3) _TP_RETRY=1; return ;;
+			*) return ;;
+		esac
 	done
 }
 
@@ -491,6 +499,7 @@ _exec_with_progress() {
 	local post_cmd_hook="${3:-}"
 	local _rc=0
 	local _tp_interrupted=0
+	local _TP_RETRY=0
 
 	# Restore terminal for progress display (TUI redirects stdout/stderr to log).
 	# Clear _TUI_REDIRECT_ACTIVE so dlg() uses its simple path (no per-call
@@ -504,6 +513,9 @@ _exec_with_progress() {
 	# would skip cleanup entirely)
 	trap '_tp_interrupted=1' INT
 
+	while true; do
+	_TP_RETRY=0
+	_tp_interrupted=0
 	_tp_init
 	_tp_reset_state
 
@@ -622,13 +634,17 @@ _exec_with_progress() {
 	done
 
 	unset ABA_PROGRESS_FIFO
+	_tp_cleanup
+
+	# If user pressed Retry, loop; otherwise break out
+	[[ "$_TP_RETRY" -eq 1 ]] && continue
+	break
+	done  # retry loop
 
 	# Run post-command hook (mirror cache invalidation, etc.)
 	if [ -n "$post_cmd_hook" ]; then
 		"$post_cmd_hook"
 	fi
-
-	_tp_cleanup
 
 	# Restore TUI's global INT handler and redirect state
 	trap 'exit 0' HUP TERM INT
