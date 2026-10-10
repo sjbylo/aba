@@ -436,7 +436,7 @@ remove these -- only Makefiles may.
 
 Installed-object state lives outside the working dir in `~/.aba/`:
 
-- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw), operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened), and version tracking (mirror_ocp_version, last_action, last_action_at, reg_installed_at)
+- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw), operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened, reg_running), and version tracking (mirror_ocp_version, last_action, last_action_at, reg_installed_at)
 - **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
 
 State files use lowercase vars matching config file names. Normalize functions
@@ -491,6 +491,14 @@ is unaffected.
 
 **Invariant**: All intelligence lives in the status script. The TUI and other
 consumers are dumb readers of `--shell` output.
+
+**`--runtime` mode** (ADR-008): Lightweight registry runtime state for TUI
+menu rendering. Infers `reg_state` (ready|installed|stopped|absent) from
+`.available` marker + `state.sh` fields (`reg_running`, `mirror_ocp_version`,
+`last_action`). Only calls `check_release_image()` when state is ambiguous.
+Self-heals `reg_running` on crash detection (registry unreachable but
+`reg_running=true`). Cached via `run_once` (`aba:mirror:runtime`) with
+`aba_mirror_runtime_*` wrapper functions in `include_all.sh`.
 
 ---
 
