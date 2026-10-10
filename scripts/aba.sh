@@ -757,7 +757,7 @@ for i in imgs:
 	elif [ "$1" = "--vendor" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_cli_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_QUAY_NG_VENDOR. Use 'aba register' to connect an externally managed registry."
+		_valid_cli_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_OMR_VENDOR. Use 'aba register' to connect an externally managed registry."
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2

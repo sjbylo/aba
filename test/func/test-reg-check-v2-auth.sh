@@ -2,7 +2,7 @@
 # Functional test: reg_check_v2_auth handles both Basic and Bearer auth.
 #
 # Tests the shared registry auth verification function from reg-common.sh.
-# Uses a local Docker registry (Basic auth) and optionally a quay-ng
+# Uses a local Docker registry (Basic auth) and optionally a omr
 # registry (Bearer auth) if available.
 #
 # Prerequisites: podman, openssl, httpd-tools (htpasswd)
@@ -111,11 +111,11 @@ _check "Basic auth: empty credentials" "fail" \
 _check "Unreachable host" "fail" \
 	reg_check_v2_auth "https://localhost:19999" "$_user" "$_pw"
 
-# --- Optional: Bearer auth (quay-ng) if running locally ---
+# --- Optional: Bearer auth (omr) if running locally ---
 _qng_names=$(podman ps --format '{{.Names}}' 2>/dev/null || true)
 if echo "$_qng_names" | grep -q systemd-quay; then
 	echo ""
-	echo "--- Local quay-ng (Bearer auth, port 8443) ---"
+	echo "--- Local omr (Bearer auth, port 8443) ---"
 	_qng_user="init"
 	_qng_pw=$(awk -F"'" '/^reg_pw=/{print $2}' mirror/mirror.conf 2>/dev/null || true)
 	if [ -n "$_qng_pw" ]; then
@@ -125,11 +125,11 @@ if echo "$_qng_names" | grep -q systemd-quay; then
 		_check "Bearer auth: wrong password" "fail" \
 			reg_check_v2_auth "https://localhost:8443" "$_qng_user" "wrongpass"
 	else
-		echo "SKIP: Could not read quay-ng credentials from mirror/mirror.conf"
+		echo "SKIP: Could not read omr credentials from mirror/mirror.conf"
 	fi
 else
 	echo ""
-	echo "SKIP: No local quay-ng registry — Bearer auth tests skipped"
+	echo "SKIP: No local omr registry — Bearer auth tests skipped"
 fi
 
 # --- Summary ---

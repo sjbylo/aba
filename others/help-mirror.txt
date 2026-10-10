@@ -15,7 +15,7 @@ Options:
       --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
       --delete-data                    # Delete registry data directory during uninstall (default: keep).
       --reg-path <string>              # The path to store images inside the mirror registry.
-      --vendor <auto|quay|docker|quay-ng>  # Registry type: auto (default), quay, docker, or quay-ng.
+      --vendor <auto|quay|docker|omr>  # Registry type: auto (default), quay, docker, or omr.
       --reg-port <number>              # Port of the mirror registry (default 8443).
       --pull-secret-mirror <file>      # Path to an existing registry's pull secret JSON file.
       --ca-cert <file>                 # Path to an existing registry's root CA certificate.

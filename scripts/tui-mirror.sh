@@ -67,7 +67,7 @@ _mirror_config_menu_loop() {
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, docker, or quay-ng
+  • Vendor — auto (detects arch), quay, docker, or omr
   • Data dir — storage location for images
 
 Press 'Continue' when ready. The mirror will be installed automatically."
@@ -99,7 +99,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, docker, or quay-ng
+  • Vendor — auto (detects arch), quay, docker, or omr
   • Data dir — storage location for images"
 			dlg_items=(
 				"H"  "Hostname:     $m_host"
@@ -131,7 +131,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, docker, or quay-ng
+  • Vendor — auto (detects arch), quay, docker, or omr
   • Data dir — storage location on remote host"
 			dlg_items=(
 				"H"  "Hostname:     ${m_host:-(enter FQDN)}"

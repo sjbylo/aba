@@ -380,7 +380,7 @@ _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 _TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-${TUI_OC_MIRROR_RETRY_COUNT:-1}}"
 
 # Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
-# Values: "auto", "quay", "docker", "quay-ng"
+# Values: "auto", "quay", "docker", "omr"
 _TUI_REG_VENDOR="auto"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
@@ -1215,7 +1215,7 @@ _tui_settings_summary() {
 	case "$_TUI_REG_VENDOR" in
 		quay)    rv="Quay" ;;
 		docker)  rv="Docker" ;;
-		quay-ng) rv="Quay-NG" ;;
+		omr) rv="OMR" ;;
 	esac
 
 	printf '(\Z6%s, retry=%s\Zn)' "$rv" "${_TUI_RETRY_COUNT:-1}"
@@ -1240,7 +1240,7 @@ _tui_settings_menu() {
 			case "$_TUI_REG_VENDOR" in
 				quay)      reg_display="Registry Type: \Z2Quay\Zn" ;;
 				docker)    reg_display="Registry Type: \Z3Docker\Zn" ;;
-				quay-ng)   reg_display="Registry Type: \Z2Quay-NG\Zn" ;;
+				omr)   reg_display="Registry Type: \Z2OMR\Zn" ;;
 				*)         reg_display="Registry Type: \Z6Auto\Zn" ;;
 			esac
 			local retry_display
@@ -1255,7 +1255,7 @@ Registry Type:
   Auto    - Let aba choose the registry (recommended).
   Quay    - Force Quay mirror registry.
   Docker  - Force Docker V2 mirror registry.
-  Quay-NG - Force Quay-NG mirror registry (binary).
+  OMR - Force OMR mirror registry (binary).
 
 Retry Count:
   How many times to retry failed oc-mirror operations.
@@ -1298,12 +1298,12 @@ Toggle a setting by selecting it and pressing Enter."
 
 		case "$choice" in
 			1)
-				# Toggle in-memory: auto → quay → docker → quay-ng → auto
+				# Toggle in-memory: auto → quay → docker → omr → auto
 				case "$_TUI_REG_VENDOR" in
 					auto)    _TUI_REG_VENDOR="quay";    tui_log "Settings: Registry type toggled to Quay" ;;
 					quay)    _TUI_REG_VENDOR="docker";  tui_log "Settings: Registry type toggled to Docker" ;;
-					docker)  _TUI_REG_VENDOR="quay-ng"; tui_log "Settings: Registry type toggled to Quay-NG" ;;
-					quay-ng) _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type toggled to Auto" ;;
+					docker)  _TUI_REG_VENDOR="omr"; tui_log "Settings: Registry type toggled to OMR" ;;
+					omr) _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type toggled to Auto" ;;
 					*)       _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type reset to Auto" ;;
 				esac
 				# Persist to file

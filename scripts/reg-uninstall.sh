@@ -97,7 +97,7 @@ case "$vendor" in
 	quay)
 		echo "$_podman_ps" | grep -q "quay-app\|quay" && _found=1
 		;;
-	$_QUAY_NG_VENDOR)
+	$_OMR_VENDOR)
 		echo "$_podman_ps" | grep -q "^systemd-quay$" && _found=1
 		;;
 esac
@@ -125,7 +125,7 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 		case "$vendor" in
 			docker)           reg_docker_remove "$_ssh" ;;
 			quay)             reg_quay_remove "$_ssh" ;;
-			$_QUAY_NG_VENDOR) reg_quay_ng_remove "$_ssh" ;;
+			$_OMR_VENDOR) reg_omr_remove "$_ssh" ;;
 			*)                aba_abort "Unknown registry vendor: $vendor" ;;
 		esac
 		reg_close_firewall --ssh
@@ -133,7 +133,7 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 		case "$vendor" in
 			docker)           reg_docker_remove ;;
 			quay)             reg_quay_remove ;;
-			$_QUAY_NG_VENDOR) reg_quay_ng_remove ;;
+			$_OMR_VENDOR) reg_omr_remove ;;
 			*)                aba_abort "Unknown registry vendor: $vendor" ;;
 		esac
 		reg_close_firewall

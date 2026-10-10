@@ -7,7 +7,7 @@
 # parameter configurations.
 #
 # Matrix (4 nested loops):
-#   Vendor:  docker, quay, quay-ng             (3)
+#   Vendor:  docker, quay, omr             (3)
 #   Mode:    remote (disN via SSH), local       (2)
 #   User:    root, steve, testy                 (3, remote only — reg_ssh_user)
 #   Config:  default (template), custom (all)   (2)
@@ -46,7 +46,7 @@ _IMG1="e2e-vendor-test/img1:v1"
 _IMG2="e2e-vendor-test/img2:v1"
 
 # Custom config overrides
-declare -A _CPORT=([docker]=5111 [quay]=5002 [quay-ng]=5005)
+declare -A _CPORT=([docker]=5111 [quay]=5002 [omr]=5005)
 _CUSER="e2eadmin"
 _CPATH="/e2e/images"
 
@@ -72,7 +72,7 @@ declare -A _SSHKEY=([root]=~/.ssh/id_rsa [steve]=~/.ssh/id_rsa [testy]=~/.ssh/te
 
 # --- Matrix dimensions ------------------------------------------------------
 
-_VENDORS=(docker quay quay-ng)
+_VENDORS=(docker quay omr)
 _MODES=(remote local)
 _USERS=(root steve testy)
 _CONFIGS=(default custom)
@@ -164,7 +164,7 @@ _vm_check_data_dir() {
 	case "$v" in
 		docker)  suffix="docker-reg" ;;
 		quay)    suffix="quay-install" ;;
-		quay-ng) suffix="quay-ng" ;;
+		omr) suffix="omr" ;;
 	esac
 
 	local path
@@ -266,7 +266,7 @@ done
 _tnames+=(
 	"Password edge cases"
 	"Register existing registry"
-	"Vendor switch (docker>quay>quay-ng)"
+	"Vendor switch (docker>quay>omr)"
 	"Port reuse across vendors"
 	"Concurrent local registries"
 	"Verify negative path"
@@ -413,9 +413,9 @@ e2e_run "Clean register dirs" "rm -rf $_REG_INSTALL_DN $_REG_REGISTER_DN && rm -
 test_end
 
 # ============================================================================
-# Vendor switch (docker→quay→quay-ng) — same mirror dir, keep data between
+# Vendor switch (docker→quay→omr) — same mirror dir, keep data between
 # ============================================================================
-test_begin "Vendor switch (docker>quay>quay-ng)"
+test_begin "Vendor switch (docker>quay>omr)"
 
 _VS_DN="e2e-vm-vendor-switch"
 _VS_PW=$(_gen_e2e_password)
@@ -437,17 +437,17 @@ e2e_run "Verify Quay" "aba -d $_VS_DN verify"
 e2e_run "Push image (quay)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:quay")"
 e2e_run "Uninstall Quay (keep data)" "aba -d $_VS_DN uninstall"
 
-# Switch to quay-ng
-e2e_run "Install quay-ng (vendor switch)" \
-	"aba -d $_VS_DN install --vendor quay-ng -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_VS_PW'"
-e2e_run "Verify quay-ng" "aba -d $_VS_DN verify"
-e2e_run "Push image (quay-ng)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:quay-ng")"
-e2e_run "Uninstall quay-ng (keep data)" "aba -d $_VS_DN uninstall"
+# Switch to omr
+e2e_run "Install omr (vendor switch)" \
+	"aba -d $_VS_DN install --vendor omr -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-password '$_VS_PW'"
+e2e_run "Verify omr" "aba -d $_VS_DN verify"
+e2e_run "Push image (omr)" "$(_vm_push "$_VS_DN" "e2e-vswitch/img:omr")"
+e2e_run "Uninstall omr (keep data)" "aba -d $_VS_DN uninstall"
 
 # Clean up data dirs left by earlier vendors (docker, quay) so subsequent
 # tests that use the same host + default paths start clean.
 e2e_run "Clean leftover vendor data dirs on $DIS_HOST" \
-	"ssh -F ~/.aba/ssh.conf steve@$DIS_HOST 'rm -rf ~/docker-reg ~/quay-install ~/quay-ng'"
+	"ssh -F ~/.aba/ssh.conf steve@$DIS_HOST 'rm -rf ~/docker-reg ~/quay-install ~/omr'"
 
 e2e_remove_from_mirror_cleanup "$PWD/$_VS_DN"
 e2e_run "Clean vendor-switch dir" "rm -rf $_VS_DN && rm -rf ~/.aba/mirror/$_VS_DN"
@@ -464,7 +464,7 @@ _PR_PW='PortReuse26pw'  # Alphanumeric only — Quay v1 has an upstream bug wher
                         # containing "!!" cause 401 "Invalid bearer token format".
                         # This test validates port reuse, not password handling.
 
-for _pr_vendor in docker quay quay-ng; do
+for _pr_vendor in docker quay omr; do
 	_PR_DN="e2e-vm-portreuse-${_pr_vendor}"
 
 	e2e_run "Create mirror dir (${_pr_vendor})" "aba mirror --name $_PR_DN"
@@ -613,8 +613,8 @@ e2e_run "Assert: no registries on conN" "e2e_assert_registry_removed local"
 
 e2e_run "Remove mirror dirs on conN" "rm -rf e2e-vm-*"
 e2e_run_remote "Remove data dirs on disN (all users)" \
-	"sudo rm -rf /root/e2e-vm-data-* /home/*/e2e-vm-data-* /root/docker-reg /home/*/docker-reg /root/quay-install /home/*/quay-install /root/quay-ng /home/*/quay-ng"
-e2e_run "Remove data dirs on conN" "rm -rf ~/e2e-vm-data-* ~/docker-reg ~/quay-install ~/quay-ng"
+	"sudo rm -rf /root/e2e-vm-data-* /home/*/e2e-vm-data-* /root/docker-reg /home/*/docker-reg /root/quay-install /home/*/quay-install /root/omr /home/*/omr"
+e2e_run "Remove data dirs on conN" "rm -rf ~/e2e-vm-data-* ~/docker-reg ~/quay-install ~/omr"
 e2e_run "Remove regcreds" "rm -rf ~/.aba/mirror/e2e-vm-*"
 
 test_end

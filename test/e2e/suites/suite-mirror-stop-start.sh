@@ -30,15 +30,15 @@ source "$_SUITE_DIR/../lib/suite-helpers.sh"
 _MIRROR_NAME="e2e-stop-start"
 _PORT=5333
 
-_VENDORS=(docker quay-ng quay)
+_VENDORS=(docker omr quay)
 
 # Build test names
 _tnames=("Setup: install aba and configure")
 for _v in "${_VENDORS[@]}"; do
 	_tnames+=("$_v: stop/start cycle")
 done
-_tnames+=("quay-ng: stop → uninstall → reinstall (data preserved)")
-_tnames+=("quay-ng: --runtime state and status output")
+_tnames+=("omr: stop → uninstall → reinstall (data preserved)")
+_tnames+=("omr: --runtime state and status output")
 _tnames+=("Cleanup")
 
 # --- Suite ------------------------------------------------------------------
@@ -127,10 +127,10 @@ done
 # causing reinstall to fail with "existing installation found".  The fix: uninstall
 # reads reg_running from state.sh, starts the mirror first if stopped, then
 # runs mirror-registry uninstall cleanly.
-test_begin "quay-ng: stop → uninstall → reinstall (data preserved)"
+test_begin "omr: stop → uninstall → reinstall (data preserved)"
 
-e2e_run "Install quay-ng registry" \
-	"aba -d $_MIRROR_NAME install --vendor quay-ng --reg-port $_PORT -y"
+e2e_run "Install omr registry" \
+	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -y"
 
 e2e_run "Sync images (populate registry)" \
 	"aba -d $_MIRROR_NAME sync --retry"
@@ -151,10 +151,10 @@ e2e_run "Verify Quadlet unit removed" \
 	"! test -f \$HOME/.config/containers/systemd/quay.container"
 
 e2e_run "Verify data dir still exists" \
-	"source \$HOME/.aba/mirror/$_MIRROR_NAME/state.sh 2>/dev/null || true; test -d \${reg_root:-/nonexistent} || test -f \$HOME/quay-ng/auth/admin-password"
+	"source \$HOME/.aba/mirror/$_MIRROR_NAME/state.sh 2>/dev/null || true; test -d \${reg_root:-/nonexistent} || test -f \$HOME/omr/auth/admin-password"
 
 e2e_run "Reinstall (should reuse existing data)" \
-	"aba -d $_MIRROR_NAME install --vendor quay-ng --reg-port $_PORT -y"
+	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -y"
 
 e2e_run "Verify registry running after reinstall" \
 	"aba -d $_MIRROR_NAME verify"
@@ -173,10 +173,10 @@ test_end
 # Verifies that mirror-status.sh --runtime returns correct reg_state for each
 # lifecycle phase, and that the human-readable status output shows the right
 # labels (especially "stopped" instead of "MISSING").
-test_begin "quay-ng: --runtime state and status output"
+test_begin "omr: --runtime state and status output"
 
-e2e_run "Install quay-ng registry" \
-	"aba -d $_MIRROR_NAME install --vendor quay-ng --reg-port $_PORT -y"
+e2e_run "Install omr registry" \
+	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -y"
 
 # --- Running state ---
 e2e_run "Runtime: reg_state=installed when running (no sync)" \

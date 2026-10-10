@@ -38,7 +38,7 @@ plan_tests \
     "Setup: install aba and configure" \
     "Docker e2e-mirror-docker1: install and verify" \
     "Firewalld: port persistence" \
-    "Quay-ng: remote install, verify, uninstall" \
+    "OMR: remote install, verify, uninstall" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
     "Differential: incremental operator save/load" \
@@ -110,7 +110,7 @@ e2e_run_must_fail "Sync without pull secret should fail" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-test-neg-datadir'"
 # aba sync installs a Quay registry on disN as a dependency before syncing.
 # The sync fails (expected), but the registry is left running on disN.
-# Must uninstall it to avoid interfering with later registry tests (e.g. quay-ng).
+# Must uninstall it to avoid interfering with later registry tests (e.g. omr).
 e2e_run "Uninstall registry side-effect from must-fail test" \
     "aba --dir mirror uninstall --delete-data"
 e2e_run -q "Clean up local data-dir from must-fail test" \
@@ -160,32 +160,32 @@ e2e_run_remote "Verify port 5000 persisted across restart" \
 test_end
 
 # ============================================================================
-# 4. Quay-ng [BETA]: install on remote host, verify, uninstall
+# 4. OMR [BETA]: install on remote host, verify, uninstall
 # ============================================================================
-test_begin "Quay-ng: remote install, verify, uninstall"
+test_begin "OMR: remote install, verify, uninstall"
 
-e2e_run "Create e2e-mirror-quay-ng dir" "aba mirror --name e2e-mirror-quay-ng"
-e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-quay-ng"
-e2e_run "Install quay-ng registry on remote host" \
-    "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa"
-e2e_run "Verify quay-ng registry access" "aba -d e2e-mirror-quay-ng verify"
+e2e_run "Create e2e-mirror-omr dir" "aba mirror --name e2e-mirror-omr"
+e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-omr"
+e2e_run "Install omr registry on remote host" \
+    "aba -d e2e-mirror-omr install --vendor omr --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa"
+e2e_run "Verify omr registry access" "aba -d e2e-mirror-omr verify"
 
 # Idempotent install: re-running install on a healthy registry must succeed
 e2e_run "Idempotent install (registry already running)" \
-    "aba -d e2e-mirror-quay-ng install"
+    "aba -d e2e-mirror-omr install"
 e2e_run "Verify registry still accessible after idempotent install" \
-    "aba -d e2e-mirror-quay-ng verify"
+    "aba -d e2e-mirror-omr verify"
 
-e2e_run "Uninstall quay-ng registry" "aba --dir e2e-mirror-quay-ng uninstall --delete-data"
+e2e_run "Uninstall omr registry" "aba --dir e2e-mirror-omr uninstall --delete-data"
 e2e_run "Verify registry unreachable after uninstall" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:9999/v2/"
 
 # Custom credentials: verify reg_user and reg_pw are respected
-e2e_run "Install quay-ng with custom user and password" \
-    "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa --reg-user testadmin --reg-password SecretPass42"
+e2e_run "Install omr with custom user and password" \
+    "aba -d e2e-mirror-omr install --vendor omr --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa --reg-user testadmin --reg-password SecretPass42"
 e2e_run "Verify custom credentials work" \
-    "aba -d e2e-mirror-quay-ng verify"
-e2e_run "Uninstall quay-ng (custom creds)" "aba --dir e2e-mirror-quay-ng uninstall --delete-data"
+    "aba -d e2e-mirror-omr verify"
+e2e_run "Uninstall omr (custom creds)" "aba --dir e2e-mirror-omr uninstall --delete-data"
 
 test_end
 
@@ -573,9 +573,9 @@ e2e_run "Delete SNO cluster" \
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \
     "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall --delete-data; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
-e2e_run "Uninstall e2e-mirror-quay-ng registry" \
-    "if [ -d e2e-mirror-quay-ng ]; then aba --dir e2e-mirror-quay-ng uninstall --delete-data; else echo '[cleanup] e2e-mirror-quay-ng already removed'; fi"
-e2e_run "Assert: registry fully removed on disN (docker1/quay-ng)" "e2e_assert_registry_removed"
+e2e_run "Uninstall e2e-mirror-omr registry" \
+    "if [ -d e2e-mirror-omr ]; then aba --dir e2e-mirror-omr uninstall --delete-data; else echo '[cleanup] e2e-mirror-omr already removed'; fi"
+e2e_run "Assert: registry fully removed on disN (docker1/omr)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
