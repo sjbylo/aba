@@ -184,6 +184,7 @@ env_tests=(
 	test/func/test-govc-error-handling.sh  # Needs real govc + vCenter + VM
 	test/func/test-infra-auto.sh           # Needs root/sudo, dnsmasq, chrony
 	test/func/test-linuxone.sh             # Must run on s390x LinuxONE host
+	test/func/test-mirror-stop-start.sh    # Needs running mirror registry
 )
 
 passed=0
