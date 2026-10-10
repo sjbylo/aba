@@ -27,6 +27,7 @@ _show_disk=false
 for arg in "$@"; do
 	case "$arg" in
 		shell|--shell)         _mode="shell" ;;
+		runtime|--runtime)     _mode="runtime" ;;
 		preflight|--preflight) _mode="preflight" ;;
 		disk|--disk)           _show_disk=true ;;
 		op=save)               _mode="op"; _op="save" ;;
@@ -34,6 +35,102 @@ for arg in "$@"; do
 		op=load)               _mode="op"; _op="load" ;;
 	esac
 done
+
+# --- Lightweight runtime state (fast path for TUI menu) ---
+# Infers reg_state from .available + state.sh (reg_running, mirror_ocp_version,
+# last_action). Only calls check_release_image() when ambiguous.
+# Output: ~9 key=value fields. No ISC, operators, disk, or upgrade path.
+if [ "$_mode" = "runtime" ]; then
+	source <(normalize-aba-conf)
+	source <(normalize-mirror-conf)
+
+	_mirror_name=$(basename "$PWD")
+	_state_file="$HOME/.aba/mirror/$_mirror_name/state.sh"
+
+	# Layer 1: .available marker
+	if [ ! -f .available ]; then
+		echo "reg_state=absent"
+		echo "mirror_installed=false"
+		echo "release_image_available=unknown"
+		exit 0
+	fi
+
+	# Layer 2: state.sh fields
+	_reg_running=""
+	_reg_vendor=""
+	_mirror_ocp_version=""
+	_last_action=""
+	_last_action_at=""
+	if [ -s "$_state_file" ]; then
+		_reg_running=$(grep '^reg_running=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_reg_vendor=$(grep '^reg_vendor=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_mirror_ocp_version=$(grep '^mirror_ocp_version=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_last_action=$(grep '^last_action=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_last_action_at=$(grep '^last_action_at=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"") || true
+	fi
+
+	# Layer 2b: stopped?
+	if [ "$_reg_running" = "false" ]; then
+		echo "reg_state=stopped"
+		echo "mirror_installed=true"
+		echo "reg_vendor=${_reg_vendor:-}"
+		echo "mirror_host=${reg_host:-}"
+		echo "mirror_port=${reg_port:-}"
+		echo "reg_listening=false"
+		echo "release_image_available=unknown"
+		echo "mirror_last_action=${_last_action:-}"
+		echo "mirror_last_action_at=\"${_last_action_at:-}\""
+		exit 0
+	fi
+
+	# Layer 3: can we infer release image availability from state.sh?
+	_release_avail="unknown"
+	_reg_state="installed"
+	_need_curl=false
+
+	if [ "${_mirror_ocp_version:-}" = "${ocp_version:-}" ]; then
+		case "$_last_action" in
+			sync|load)
+				_reg_state="ready"
+				_release_avail="true"
+				;;
+			*)
+				_need_curl=true
+				;;
+		esac
+	else
+		_need_curl=true
+	fi
+
+	# Layer 4: live probe only when ambiguous
+	_reg_listening=true
+	if [ "$_need_curl" = "true" ]; then
+		export regcreds_dir=$HOME/.aba/mirror/$_mirror_name
+		if check_release_image "${_reg_vendor:-}" 2>/dev/null; then
+			_reg_state="ready"
+			_release_avail="true"
+		elif [ "${_release_http_code:-}" = "000" ]; then
+			# Crash detection: state.sh says running but registry is unreachable
+			_reg_state="stopped"
+			_reg_listening=false
+			_release_avail="unknown"
+			replace-value-conf -q -n reg_running -v "false" -f "$_state_file" 2>/dev/null || true
+		else
+			_release_avail="false"
+		fi
+	fi
+
+	echo "reg_state=$_reg_state"
+	echo "mirror_installed=true"
+	echo "reg_vendor=${_reg_vendor:-}"
+	echo "mirror_host=${reg_host:-}"
+	echo "mirror_port=${reg_port:-}"
+	echo "reg_listening=$_reg_listening"
+	echo "release_image_available=$_release_avail"
+	echo "mirror_last_action=${_last_action:-}"
+	echo "mirror_last_action_at=\"${_last_action_at:-}\""
+	exit 0
+fi
 
 # --- Gather state ---
 
@@ -63,10 +160,12 @@ fi
 _mirror_name=$(basename "$PWD")
 _last_action=""
 _last_action_at=""
+_reg_running=""
 if [ -s "$HOME/.aba/mirror/$_mirror_name/state.sh" ]; then
 	# grep exits 1 when the field is absent. That must not abort status.
 	_last_action=$(grep '^last_action=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2-) || true
 	_last_action_at=$(grep '^last_action_at=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"") || true
+	_reg_running=$(grep '^reg_running=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2-) || true
 fi
 
 # OCP version
@@ -551,7 +650,7 @@ op)
 		[ "$_excl_platform" = "true" ] && _excl_list="release images"
 		[ "$_excl_operators" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }operators"
 		[ "$_excl_additional" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }additional images"
-		[ -n "$_excl_list" ] && aba_warn "Excluded: $_excl_list"
+		[ -n "$_excl_list" ] && aba_warn -p "Excluded" "$_excl_list"
 	fi
 	;;
 
@@ -568,7 +667,11 @@ op)
 	if [ -n "$_reg_host" ]; then
 		_reg_display="${_reg_host}:${_reg_port}${_reg_path}"
 		if [ "$_mirror_installed" = "true" ]; then
-			_reg_display="$_reg_display (installed)"
+			if [ "$_reg_running" = "false" ]; then
+				_reg_display="$_reg_display (stopped)"
+			else
+				_reg_display="$_reg_display (installed)"
+			fi
 		else
 			_reg_display="$_reg_display (not installed)"
 		fi
@@ -603,8 +706,10 @@ op)
 	aba_info "Mirror status:"
 	aba_info "  OCP:          ${local_ver_display}"
 	aba_info "  Registry:     ${_reg_display}"
-	if [ "$_mirror_installed" = "true" ] && [ "$_mirror_has_release" != "true" ]; then
-		aba_warn "  Release:      MISSING (v${_ver:-?} not found in registry)"
+	if [ "$_mirror_installed" = "true" ] && [ "$_reg_running" = "false" ]; then
+		aba_warn -p "  Release" "     unknown (registry is stopped)"
+	elif [ "$_mirror_installed" = "true" ] && [ "$_mirror_has_release" != "true" ]; then
+		aba_warn -p "  Release" "     MISSING (v${_ver:-?} not found in registry)"
 	fi
 	if [ "$_op_count" -gt 0 ]; then
 		aba_info "  Operators (${_op_count}): ${_ops_display}"
@@ -612,7 +717,7 @@ op)
 		aba_info "  Operators:    none"
 	fi
 	aba_info "  ISC:          ${_isc_display}"
-	[ -n "$_excl_display" ] && aba_warn "  Excluded:     ${_excl_display}"
+	[ -n "$_excl_display" ] && aba_warn -p "  Excluded" "    ${_excl_display}"
 	if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
 		if [ "$_upgrade_path_exists" = "true" ]; then
 			if [ "$_upgrade_path_conditional" = "true" ]; then
