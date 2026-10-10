@@ -1321,7 +1321,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|day2-virt|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
+		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|day2-virt|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1536,22 +1536,30 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		start)
-			eval $BUILD_COMMAND
-			_ensure_hv_ready
-			exec_cmd="make -s init"
-			aba_debug "Running: $exec_cmd (start)"
-			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit $?
-			exit
+			# Cluster VM start (requires cluster.conf); otherwise fall through to Makefile
+			if [ -f cluster.conf ]; then
+				eval $BUILD_COMMAND
+				_ensure_hv_ready
+				exec_cmd="make -s init"
+				aba_debug "Running: $exec_cmd (start)"
+				$exec_cmd
+				$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit $?
+				exit
+			fi
+			BUILD_COMMAND="start $BUILD_COMMAND"
 		;;
 		stop)
-			eval $BUILD_COMMAND
-			_ensure_hv_ready
-			exec_cmd="make -s init"
-			aba_debug "Running: $exec_cmd (stop)"
-			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
-			exit
+			# Cluster VM stop (requires cluster.conf); otherwise fall through to Makefile
+			if [ -f cluster.conf ]; then
+				eval $BUILD_COMMAND
+				_ensure_hv_ready
+				exec_cmd="make -s init"
+				aba_debug "Running: $exec_cmd (stop)"
+				$exec_cmd
+				$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
+				exit
+			fi
+			BUILD_COMMAND="stop $BUILD_COMMAND"
 		;;
 		kill|poweroff)
 			_ensure_hv_ready

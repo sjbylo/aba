@@ -384,6 +384,22 @@ _progress_plan-uninstall:
 checkversion: init
 	$(SCRIPTS)/check-version-mismatch.sh
 
+.PHONY: stop
+stop: .init _progress_plan-stop    ## Stop the mirror registry (data is preserved). Use before copying the data directory.
+	$(SCRIPTS)/reg-stop.sh
+
+.PHONY: _progress_plan-stop
+_progress_plan-stop:
+	@$(SCRIPTS)/progress-plan.sh stop
+
+.PHONY: start
+start: .init _progress_plan-start   ## Start a previously stopped mirror registry.
+	$(SCRIPTS)/reg-start.sh
+
+.PHONY: _progress_plan-start
+_progress_plan-start:
+	@$(SCRIPTS)/progress-plan.sh start
+
 .PHONY: cluster
 cluster:
 	@echo [ABA] "Run: 'aba cluster ...' from ABA's top-level directory" >&2

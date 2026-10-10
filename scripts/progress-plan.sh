@@ -82,6 +82,16 @@ case "$1" in
 		aba_progress "PLAN|uninst_cleanup|Clean up|3"
 		;;
 
+	stop)
+		aba_progress "PLAN|stop_reg|Stop registry|5"
+		aba_progress "PLAN|stop_verify|Verify stopped|2"
+		;;
+
+	start)
+		aba_progress "PLAN|start_reg|Start registry|5"
+		aba_progress "PLAN|start_verify|Verify running|3"
+		;;
+
 	# ── Bundle workflow (called from _progress_plan-bundle Makefile target) ──
 
 	bundle)
