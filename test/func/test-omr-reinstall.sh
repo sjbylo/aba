@@ -1,7 +1,7 @@
 #!/bin/bash
-# Test: quay-ng reinstall on existing data dir
+# Test: omr reinstall on existing data dir
 # =============================================================================
-# Verifies the mirror-registry 3.x (quay-ng) "uninstall → reinstall" workflow:
+# Verifies the mirror-registry 3.x (omr) "uninstall → reinstall" workflow:
 #   1. Fresh install with -init-password-stdin
 #   2. Uninstall (keep data dir)
 #   3. Reinstall WITH -init-password-stdin  → must FAIL (already initialized)
@@ -12,15 +12,15 @@
 #   connected host: install → push images → uninstall (keep data)
 #   disconnected host: transfer data dir → reinstall on top
 #
-# Upstream ref: the quay-ng binary rejects -init-password-stdin when it
-# detects an existing database. ABA handles this in reg-install-quay-ng.sh
+# Upstream ref: the omr binary rejects -init-password-stdin when it
+# detects an existing database. ABA handles this in reg-install-omr.sh
 # by omitting init flags when auth/admin-password exists.
 #
 # Usage:
-#   ./test/func/test-quay-ng-reinstall.sh
+#   ./test/func/test-omr-reinstall.sh
 #
 # Prerequisites:
-#   - ABA installed, quay-ng image available (mirror/quay-ng-image.tgz)
+#   - ABA installed, omr image available (mirror/omr-image.tgz)
 #   - Port 5298 free on localhost
 # =============================================================================
 
@@ -39,13 +39,13 @@ _fail() { fail=$(( fail + 1 )); printf "  ${RED}FAIL${NC}  %s\n" "$*"; }
 
 # ---- Configuration ---------------------------------------------------------
 
-DATA_DIR="/tmp/test-quay-ng-reinstall-$$"
+DATA_DIR="/tmp/test-omr-reinstall-$$"
 PORT=5298
 HOST=$(hostname -f)
 USER=testuser
 PW=TestReinstall2026
-BIN=./mirror/quay-ng/mirror-registry
-IMAGE=./mirror/quay-ng-image.tgz
+BIN=./mirror/omr/mirror-registry
+IMAGE=./mirror/omr-image.tgz
 
 # ---- Helpers ----------------------------------------------------------------
 
@@ -59,17 +59,17 @@ trap cleanup EXIT
 
 # ---- Preflight --------------------------------------------------------------
 
-echo "=== Quay-NG Reinstall Test ==="
+echo "=== OMR Reinstall Test ==="
 echo ""
 
 if [ ! -x "$BIN" ]; then
-	echo "ERROR: quay-ng binary not found at $BIN"
-	echo "Run: aba -d mirror install --vendor quay-ng  (to extract the binary)"
+	echo "ERROR: omr binary not found at $BIN"
+	echo "Run: aba -d mirror install --vendor omr  (to extract the binary)"
 	exit 2
 fi
 
 if [ ! -f "$IMAGE" ]; then
-	echo "ERROR: quay-ng image archive not found at $IMAGE"
+	echo "ERROR: omr image archive not found at $IMAGE"
 	exit 2
 fi
 

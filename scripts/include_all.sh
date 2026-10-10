@@ -45,8 +45,8 @@ _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.c
 
 # Registry vendor name for the new Go-based Quay mirror registry.
 # Single rename point — change here to rename the vendor everywhere.
-_QUAY_NG_VENDOR="quay-ng"
-_QUAY_NG_IMAGE="${QUAY_NG_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
+_OMR_VENDOR="omr"
+_OMR_IMAGE="${OMR_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
 
 # ===========================
 # Color Echo Functions
@@ -731,12 +731,12 @@ verify-mirror-conf() {
 
 	[ "$reg_ssh_key" ] && { _valid_abs_path "$reg_ssh_key" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_vendor" ] && { _valid_reg_vendor "$reg_vendor" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_QUAY_NG_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { _valid_reg_vendor "$reg_vendor" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_OMR_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	# quay-ng and docker handle passwords safely, so skip this check for those vendors.
-	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_QUAY_NG_VENDOR" ]]; then
+	# omr and docker handle passwords safely, so skip this check for those vendors.
+	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_OMR_VENDOR" ]]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
 			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
@@ -760,7 +760,7 @@ resolved_reg_user() {
 }
 
 # Resolve reg_vendor to the actual registry type for this host.
-# User intent (auto/quay/docker/quay-ng/existing) stays in mirror.conf unchanged.
+# User intent (auto/quay/docker/omr/existing) stays in mirror.conf unchanged.
 # This function is the ONLY place where "auto" is resolved to a concrete vendor.
 resolved_reg_vendor() {
 	local vendor="${reg_vendor:-auto}"
@@ -1013,13 +1013,13 @@ _valid_domain() { _valid_fqdn "$1"; }
 # Validate a registry vendor value.
 # Returns 0 if valid, 1 if invalid.
 _valid_reg_vendor() {
-	[[ "$1" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$ ]]
+	[[ "$1" =~ ^(auto|quay|docker|${_OMR_VENDOR}|existing)$ ]]
 }
 
 # Validate a CLI-facing registry vendor value (excludes 'existing', which is internal-only).
 # Returns 0 if valid, 1 if invalid.
 _valid_cli_vendor() {
-	[[ "$1" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR})$ ]]
+	[[ "$1" =~ ^(auto|quay|docker|${_OMR_VENDOR})$ ]]
 }
 
 # Validate an image_source value (direct, proxy, or mirror directory name).
@@ -4574,7 +4574,7 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	readonly TASK_DL_BUTANE="cli:download:butane"
 	readonly TASK_DL_QUAY_REG="mirror:reg:download:quay"
 	readonly TASK_DL_DOCKER_REG="mirror:reg:download:docker"
-	readonly TASK_DL_QUAY_NG_REG="mirror:reg:download:quay-ng"
+	readonly TASK_DL_OMR_REG="mirror:reg:download:omr"
 
 	# Download commands (arrays)
 	CMD_DL_OC=(make -sC cli download-oc)
@@ -4593,7 +4593,7 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	# Mirror registry commands (arrays) — one command per vendor file (no races)
 	CMD_DL_QUAY_REG=(make -sC mirror download-quay-tarball)
 	CMD_DL_DOCKER_REG=(make -sC mirror download-docker-image)
-	CMD_DL_QUAY_NG_REG=(make -sC mirror download-quay-ng-image)
+	CMD_DL_OMR_REG=(make -sC mirror download-omr-image)
 	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
 fi
 
@@ -4747,12 +4747,12 @@ check_release_image() {
 	local _try_basic=true _try_bearer=true
 	case "$_vendor" in
 		docker)               _try_bearer=false ;;
-		quay|*quay-ng*)       _try_basic=false ;;
+		quay|*omr*)       _try_basic=false ;;
 	esac
 
 	local _p1_code="" _p2_code=""
 
-	# --- Phase 1+2: Basic auth (parallel) — Docker/quay-ng fast path ---
+	# --- Phase 1+2: Basic auth (parallel) — Docker/omr fast path ---
 	if [ "$_try_basic" = "true" ]; then
 
 	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---
@@ -4791,7 +4791,7 @@ check_release_image() {
 	# When vendor is known (quay), skip Basic entirely and come straight here.
 	# When vendor is unknown, enter only if Basic returned 401.
 	# A successful token exchange proves credentials are valid (no separate /v2/ check needed).
-	# Parse the service name from the actual WWW-Authenticate header — quay-ng may
+	# Parse the service name from the actual WWW-Authenticate header — omr may
 	# advertise a service without a port even when the registry runs on a non-standard
 	# port (e.g. port-mapped containers).  Always hit the known-reachable registry
 	# endpoint for the token exchange, not the realm URL (which may point to port 443).
@@ -5195,7 +5195,7 @@ ensure_quay_registry() {
 start_all_registry_downloads() {
 	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	run_once -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}"
-	run_once -i "$TASK_DL_QUAY_NG_REG" -- "${CMD_DL_QUAY_NG_REG[@]}"
+	run_once -i "$TASK_DL_OMR_REG" -- "${CMD_DL_OMR_REG[@]}"
 }
 
 # Wait for all registry vendor downloads to complete (blocking)
@@ -5205,7 +5205,7 @@ wait_all_registry_downloads() {
 	local _failed=false
 	run_once -q -w -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" || _failed=true
 	run_once -q -w -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}" || _failed=true
-	run_once -q -w -i "$TASK_DL_QUAY_NG_REG" -- "${CMD_DL_QUAY_NG_REG[@]}" || _failed=true
+	run_once -q -w -i "$TASK_DL_OMR_REG" -- "${CMD_DL_OMR_REG[@]}" || _failed=true
 	[[ "$_failed" == "false" ]]
 }
 
@@ -5214,7 +5214,7 @@ wait_all_registry_downloads() {
 registry_downloads_ready() {
 	run_once -p -i "$TASK_DL_QUAY_REG" 2>/dev/null &&
 	run_once -p -i "$TASK_DL_DOCKER_REG" 2>/dev/null &&
-	run_once -p -i "$TASK_DL_QUAY_NG_REG" 2>/dev/null
+	run_once -p -i "$TASK_DL_OMR_REG" 2>/dev/null
 }
 
 # Get error output from a task (helper for error messages)

@@ -8,7 +8,7 @@
 # Usage:
 #   ./test/func/test-mirror-vendor-matrix.sh                      # full matrix
 #   ./test/func/test-mirror-vendor-matrix.sh --vendor docker      # one vendor
-#   ./test/func/test-mirror-vendor-matrix.sh --vendor quay-ng --mode local
+#   ./test/func/test-mirror-vendor-matrix.sh --vendor omr --mode local
 #   ./test/func/test-mirror-vendor-matrix.sh --skip-extras        # matrix only
 #   ./test/func/test-mirror-vendor-matrix.sh --extras-only        # extras only
 #   ./test/func/test-mirror-vendor-matrix.sh --list               # show plan
@@ -38,8 +38,8 @@ _IMG2="e2e-vendor-test/img2:v1"
 
 # Port allocation: every test gets a unique port to avoid clobbering.
 # "default" tests use 6100-range, "custom" tests use 6200-range.
-declare -A _DPORT=([docker]=6101 [quay]=6102 [quay-ng]=6103)
-declare -A _CPORT=([docker]=6201 [quay]=6202 [quay-ng]=6203)
+declare -A _DPORT=([docker]=6101 [quay]=6102 [omr]=6103)
+declare -A _CPORT=([docker]=6201 [quay]=6202 [omr]=6203)
 _CUSER="e2eadmin"
 _CPATH="/sa-images"
 
@@ -52,7 +52,7 @@ _E2E_PW_ALNUM='A-Za-z0-9'
 
 # Matrix dimensions (overridable via flags)
 # Order: most failure-prone first so we don't wait hours for the easy ones
-_VENDORS=(quay-ng quay docker)
+_VENDORS=(omr quay docker)
 _MODES=(remote local)
 _USERS=(root steve testy)
 _CONFIGS=(default custom)
@@ -247,7 +247,7 @@ _vm_check_data_dir() {
 	case "$v" in
 		docker)  suffix="docker-reg" ;;
 		quay)    suffix="quay-install" ;;
-		quay-ng) suffix="quay-ng" ;;
+		omr) suffix="omr" ;;
 	esac
 
 	# Always under isolated data dir (never default ~/<suffix>)
@@ -356,7 +356,7 @@ while [ $# -gt 0 ]; do
 			echo "Usage: $0 [OPTIONS]"
 			echo ""
 			echo "Filters:"
-			echo "  --vendor docker|quay|quay-ng   Run only one vendor"
+			echo "  --vendor docker|quay|omr   Run only one vendor"
 			echo "  --mode remote|local            Run only one mode"
 			echo "  --user root|steve|testy         Run only one user (remote only)"
 			echo "  --config default|custom         Run only one config"
@@ -396,7 +396,7 @@ if [ -z "$_SKIP_EXTRAS" ]; then
 	_plan+=(
 		"Password edge cases"
 		"Register existing registry"
-		"Vendor switch (docker→quay→quay-ng)"
+		"Vendor switch (docker→quay→omr)"
 		"Port reuse across vendors"
 		"Concurrent local registries"
 	)
@@ -531,7 +531,7 @@ run "Assert dirs removable" "rm -rf $_REG_INSTALL_DN $_REG_REGISTER_DN $HOME/.ab
 test_end
 
 # ---- Vendor switch ---------------------------------------------------------
-test_begin "Vendor switch (docker→quay→quay-ng)"
+test_begin "Vendor switch (docker→quay→omr)"
 
 _VS_DN="sa-vm-vendor-switch"
 _VS_PW=$(_gen_password)
@@ -550,11 +550,11 @@ run "Verify Quay" "aba -d $_VS_DN verify"
 run "Push image (quay)" "$(_vm_push "$_VS_DN" "sa-vswitch/img:quay")"
 run "Uninstall Quay (keep data)" "aba -d $_VS_DN uninstall"
 
-run "Install quay-ng (vendor switch)" \
-	"aba -d $_VS_DN install --vendor quay-ng -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --reg-password '$_VS_PW' --data-dir '~/sa-vm-data-${_VS_DN}'"
-run "Verify quay-ng" "aba -d $_VS_DN verify"
-run "Push image (quay-ng)" "$(_vm_push "$_VS_DN" "sa-vswitch/img:quay-ng")"
-run "Uninstall quay-ng (delete data)" "aba -d $_VS_DN uninstall --delete-data"
+run "Install omr (vendor switch)" \
+	"aba -d $_VS_DN install --vendor omr -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --reg-password '$_VS_PW' --data-dir '~/sa-vm-data-${_VS_DN}'"
+run "Verify omr" "aba -d $_VS_DN verify"
+run "Push image (omr)" "$(_vm_push "$_VS_DN" "sa-vswitch/img:omr")"
+run "Uninstall omr (delete data)" "aba -d $_VS_DN uninstall --delete-data"
 run "Assert port free" "! curl -sk --connect-timeout 3 https://${DIS_HOST}:6501/v2/"
 run "Assert dir removable" "rm -rf $_VS_DN $HOME/.aba/mirror/$_VS_DN"
 
@@ -568,7 +568,7 @@ _PR_PW='PortReuse26pw'  # Alphanumeric only — Quay v1 has an upstream bug wher
                         # containing "!!" cause 401 "Invalid bearer token format".
                         # This test validates port reuse, not password handling.
 
-for _pr_vendor in docker quay quay-ng; do
+for _pr_vendor in docker quay omr; do
 	_PR_DN="sa-vm-portreuse-${_pr_vendor}"
 
 	run "Create mirror dir (${_pr_vendor})" "aba mirror --name $_PR_DN"

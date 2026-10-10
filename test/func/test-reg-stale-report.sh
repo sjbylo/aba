@@ -128,7 +128,7 @@ _expect_abort() {
 # --- 1) all absent → empty, rc=0 ---------------------------------------------
 _expect_empty "docker all-absent → empty rc=0" docker
 _expect_empty "quay all-absent → empty rc=0" quay
-_expect_empty "quay-ng all-absent → empty rc=0" quay-ng
+_expect_empty "omr all-absent → empty rc=0" omr
 
 # --- 2) reg_root present (only detected when REG_DELETE_DATA is set) ----------
 mkdir -p "$WORKDIR/reg-root-present"
@@ -184,14 +184,14 @@ exit 0
 EOF
 chmod +x "$STUB_DIR/podman"
 
-# --- 5) quay-ng systemctl active / inactive ----------------------------------
+# --- 5) omr systemctl active / inactive ----------------------------------
 cat >"$STUB_DIR/systemctl" <<'EOF'
 #!/bin/bash
 echo active
 exit 0
 EOF
 chmod +x "$STUB_DIR/systemctl"
-_expect_contains "quay-ng detects active service" quay-ng "quay.service still active"
+_expect_contains "omr detects active service" omr "quay.service still active"
 
 cat >"$STUB_DIR/systemctl" <<'EOF'
 #!/bin/bash
@@ -199,7 +199,7 @@ echo inactive
 exit 3
 EOF
 chmod +x "$STUB_DIR/systemctl"
-_expect_empty "quay-ng inactive → empty" quay-ng
+_expect_empty "omr inactive → empty" omr
 
 # --- 6) SSH transport failure (rc=255) → abort, not empty --------------------
 export FAKE_SSH_RC=255

@@ -615,7 +615,7 @@ aba -d mirror sync
 aba -d mirror stop                  # Quiesce registry for safe copy
 
 # Transfer to portable media:
-#   1. Registry data dir (e.g. ~/quay-ng/)                         — large
+#   1. Registry data dir (e.g. ~/omr/)                         — large
 #   2. mirror/data/working-dir/cluster-resources/                   — ~20KB (needed for day2)
 
 aba -d mirror start                 # Resume connected registry
@@ -624,7 +624,7 @@ aba -d mirror start                 # Resume connected registry
 # ABA already installed (via an earlier 'aba bundle' install)
 # Copy data dir from portable media to the disconnected host
 
-aba -d mirror install --reg-host registry.disco.com --vendor quay-ng --data-dir /path/to/data
+aba -d mirror install --reg-host registry.disco.com --vendor omr --data-dir /path/to/data
 
 # Copy cluster-resources into the ABA tree:
 cp -a /media/cluster-resources/ mirror/data/working-dir/cluster-resources/

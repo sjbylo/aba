@@ -203,7 +203,7 @@ e2e_run "Localhost-as-remote shows actionable error (not rm permission crash)" \
 e2e_run "Restore mirror.conf after localhost test" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf && sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror/mirror.conf"
 
-# Idempotent install is tested in suite-mirror-sync.sh (both Docker and Quay-ng)
+# Idempotent install is tested in suite-mirror-sync.sh (both Docker and OMR)
 # with real running registries. No need to duplicate here.
 
 # Stale state detection: reg_detect_existing() must abort with a clear message

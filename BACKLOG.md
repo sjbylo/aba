@@ -55,13 +55,13 @@ Issues or Pull Requests.
 
 **Problem:** `aba uninstall` removes the registry and then deletes its data directory. That directory is the mirror: often hundreds of GB of images. One confirmation today means the images are gone. Putting the same vendor back means downloading them again.
 
-**Root cause:** Docker and Quay NG call `reg_rm_data_dir`, which is `rm -rf` of the vendor root. Quay delegates the wipe to `mirror-registry uninstall`, which removes `quay-install` including `quay-storage` and `sqlite-storage`. Afterwards `reg_stale_report` treats "the data directory still exists" as a failed uninstall, so the directory is not allowed to remain on purpose.
+**Root cause:** Docker and OMR call `reg_rm_data_dir`, which is `rm -rf` of the vendor root. Quay delegates the wipe to `mirror-registry uninstall`, which removes `quay-install` including `quay-storage` and `sqlite-storage`. Afterwards `reg_stale_report` treats "the data directory still exists" as a failed uninstall, so the directory is not allowed to remain on purpose.
 
 The three vendors do not share a directory. Each lives under `data_dir`:
 
 - Quay: `quay-install`
 - Docker: `docker-reg`
-- Quay NG: `quay-ng`
+- OMR: `omr`
 
 A leftover Docker directory does not block a new Quay install, or the reverse. It only uses disk. Reusing images means reinstalling the **same** vendor and leaving that vendor's directory in place.
 
@@ -78,16 +78,16 @@ If the user keeps the directory, uninstall still succeeds when the container and
 Reinstall then has to honor what is already on disk:
 
 - **Docker.** Mount the existing `docker-reg/data` again. The blobs are in that directory, so the images come back. Keep `registry.crt` when its name matches `reg_host`. The htpasswd file is rewritten from the current user and password, and the new pull secret matches that password. Clients that still have the old pull secret must be given the new one.
-- **Quay NG.** `init` is skipped when `quay-ng/auth/admin-password` already exists, so the old database, certificate, and password stay. A newly generated password will not log in. Read the password from that data directory and use it. Run `init` again only when the hostname changed, because the certificate was created for the hostname used the first time.
+- **OMR.** `init` is skipped when `omr/auth/admin-password` already exists, so the old database, certificate, and password stay. A newly generated password will not log in. Read the password from that data directory and use it. Run `init` again only when the hostname changed, because the certificate was created for the hostname used the first time.
 - **Quay.** Do not `chown` the tree to the login user. Quay's own files are owned by the container user, and the database will not start if those owners change. The early check in `reg_setup_data_dir` that aborts on container-owned files must allow a complete leftover Quay tree. Keep `quay-storage` and `sqlite-storage` and run `mirror-registry install` on that same `quayRoot`. That is the path that keeps the images. A full `mirror-registry uninstall` deletes those directories, so there is nothing left to repair afterwards.
 
 **Workaround:** Copy the vendor directory aside before `aba uninstall`, then move it back. For Quay, copying after uninstall is too late: `mirror-registry uninstall` has already removed it.
 
 **Files likely affected:**
 
-- `scripts/reg-uninstall-docker.sh`, `scripts/reg-uninstall-quay-ng.sh`, `scripts/reg-uninstall-quay.sh`, `scripts/reg-uninstall-remote.sh`: ask, and skip the wipe when the answer is no
+- `scripts/reg-uninstall-docker.sh`, `scripts/reg-uninstall-omr.sh`, `scripts/reg-uninstall-quay.sh`, `scripts/reg-uninstall-remote.sh`: ask, and skip the wipe when the answer is no
 - `scripts/reg-common.sh`: `reg_stale_report` and the ownership check in `reg_setup_data_dir`
-- `scripts/reg-install-quay-ng.sh`: reuse the stored password; re-init only when the hostname changed
+- `scripts/reg-install-omr.sh`: reuse the stored password; re-init only when the hostname changed
 - `scripts/reg-install-docker.sh`: already remounts `docker-reg/data` and rewrites htpasswd; confirm that path once uninstall can leave the directory behind
 
 ---
@@ -773,24 +773,24 @@ in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 ---
 
-## quay-ng: transition to GA (mirror-registry v3.0)
+## omr: transition to GA (mirror-registry v3.0)
 
 **Severity:** LOW — tracking item, no action until upstream ships GA
 **Status:** Waiting on upstream
 **Added:** 2026-07-21
 
-**Context:** The Go-based mirror-registry rewrite (currently `quay-ng` in ABA)
+**Context:** The Go-based mirror-registry rewrite (currently `omr` in ABA)
 will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
 
 **When GA ships, ABA needs:**
-- Switch `_QUAY_NG_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
+- Switch `_OMR_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
 - Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
 - Re-test `-init-password-stdin` flag (merged upstream, not in current image)
 - Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
-- Rename vendor display from "quay-ng [BETA]" to GA (internal name can stay)
+- Rename vendor display from "omr [BETA]" to GA (internal name can stay)
 - Update bundle workflow for official offline delivery format
 
-**Design doc:** `ai/DESIGN-quay-ng-vendor.md`
+**Design doc:** `ai/DESIGN-omr-vendor.md`
 
 ---
 
@@ -2069,7 +2069,7 @@ Reference: mirror save/sync/load cleanup (commit 55c22607) for the pattern to fo
 **Status:** Planned
 **Added:** 2026-10-08
 
-**Problem:** The Quay NG vendor already installs into `mirror/<data_dir>/quay-ng/`,
+**Problem:** The OMR vendor already installs into `mirror/<data_dir>/omr/`,
 but Docker and Quay (legacy) scatter files directly in `mirror/` or use
 inconsistent subdirectory patterns:
 
@@ -2078,7 +2078,7 @@ inconsistent subdirectory patterns:
   `execution-environment.tar`, `image-archive.tar`, `sqlite3.tar`, `quay.tar`,
   `pause.tar`, `postgres.tar`, `redis.tar` all loose in `mirror/`; data in
   `<data_dir>/quay-install/`
-- **Quay NG:** `quay-ng-image.tgz` in `mirror/`, data in `<data_dir>/quay-ng/`
+- **OMR:** `omr-image.tgz` in `mirror/`, data in `<data_dir>/omr/`
   — cleanest of the three
 
 The loose Quay files in `mirror/` require many per-file exclusions in
@@ -2090,7 +2090,7 @@ under `mirror/`:
 - `mirror/docker/` — `docker-reg-image.tgz`
 - `mirror/quay/` — `mirror-registry-*.tar.gz`, extracted `mirror-registry`,
   `execution-environment.tar`, `image-archive.tar`, `sqlite3.tar`, etc.
-- `mirror/quay-ng/` — `quay-ng-image.tgz`
+- `mirror/omr/` — `omr-image.tgz`
 
 **Benefits:**
 - `backup.sh` per-file exclusions become one `! -path "*/vendor/*"` or similar
@@ -2101,7 +2101,7 @@ under `mirror/`:
 **Files likely affected:**
 - `templates/Makefile.mirror`: download targets, file paths, clean/reset recipes
 - `scripts/reg-install-docker.sh`, `scripts/reg-install-quay.sh`,
-  `scripts/reg-install-quay-ng.sh`: load paths for tarballs/images
+  `scripts/reg-install-omr.sh`: load paths for tarballs/images
 - `scripts/reg-common.sh`: any shared vendor file references
 - `scripts/backup.sh`: simplify exclusions
 - `scripts/include_all.sh`: download command paths (`CMD_DL_*`)

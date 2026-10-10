@@ -297,7 +297,7 @@ phase_mirror() {
 
 	r "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1 || true"
 
-	# docker: classic Quay is too heavy for 24GB; quay-ng image is amd64-only.
+	# docker: classic Quay is too heavy for 24GB; omr image is amd64-only.
 	r "cd ~/aba && aba -d mirror --reg-host ${REG_FQDN} --vendor docker"
 
 	r "cd ~/aba && aba mirror --name mirror"

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Install the Go-based Quay mirror registry (quay-ng) on localhost.
+# Install the Go-based Quay mirror registry (omr) on localhost.
 # Called by reg-install.sh dispatcher; not intended for direct invocation.
-# Uses the quay-ng mirror-registry binary's 'install' command, which handles
+# Uses the omr mirror-registry binary's 'install' command, which handles
 # init (certs, admin user, database), Quadlet creation, and service start.
 
 source scripts/reg-common.sh
@@ -14,44 +14,44 @@ aba_progress "START|reg_env"
 
 reg_detect_existing
 reg_check_fqdn
-reg_setup_data_dir "$_QUAY_NG_VENDOR"
+reg_setup_data_dir "$_OMR_VENDOR"
 reg_generate_password
 reg_verify_localhost
 
 aba_progress "DONE|reg_env"
 
-_QUAY_NG_IMAGE_FILE="quay-ng-image.tgz"
-_QUAY_NG_BIN_DIR="quay-ng"
-_QUAY_NG_BIN="$_QUAY_NG_BIN_DIR/mirror-registry"
+_OMR_IMAGE_FILE="omr-image.tgz"
+_OMR_BIN_DIR="omr"
+_OMR_BIN="$_OMR_BIN_DIR/mirror-registry"
 
-ask "Install $_QUAY_NG_VENDOR registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
+ask "Install $_OMR_VENDOR registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
 aba_progress "START|reg_download"
-aba_info "Installing $_QUAY_NG_VENDOR registry on localhost ..."
+aba_info "Installing $_OMR_VENDOR registry on localhost ..."
 
 # Load image from tarball (air-gapped) or pull from registry (connected).
 # Ensure the tarball always exists — the install binary needs -image-archive
-# because its compiled-in image reference differs from $_QUAY_NG_IMAGE.
-if [ -f "$_QUAY_NG_IMAGE_FILE" ]; then
-	aba_info "Loading $_QUAY_NG_VENDOR image from $_QUAY_NG_IMAGE_FILE ..."
-	podman load -i "$_QUAY_NG_IMAGE_FILE"
+# because its compiled-in image reference differs from $_OMR_IMAGE.
+if [ -f "$_OMR_IMAGE_FILE" ]; then
+	aba_info "Loading $_OMR_VENDOR image from $_OMR_IMAGE_FILE ..."
+	podman load -i "$_OMR_IMAGE_FILE"
 else
-	if ! podman image exists "$_QUAY_NG_IMAGE" 2>/dev/null; then
-		aba_info "Pulling $_QUAY_NG_VENDOR image: $_QUAY_NG_IMAGE ..."
-		podman pull "$_QUAY_NG_IMAGE"
+	if ! podman image exists "$_OMR_IMAGE" 2>/dev/null; then
+		aba_info "Pulling $_OMR_VENDOR image: $_OMR_IMAGE ..."
+		podman pull "$_OMR_IMAGE"
 	fi
-	aba_info "Saving $_QUAY_NG_VENDOR image to $_QUAY_NG_IMAGE_FILE ..."
-	podman save -o "$_QUAY_NG_IMAGE_FILE" "$_QUAY_NG_IMAGE"
+	aba_info "Saving $_OMR_VENDOR image to $_OMR_IMAGE_FILE ..."
+	podman save -o "$_OMR_IMAGE_FILE" "$_OMR_IMAGE"
 fi
 
 # Extract the install binary from the container image
-if [ ! -x "$_QUAY_NG_BIN" ]; then
-	aba_info "Extracting $_QUAY_NG_VENDOR install binary ..."
-	mkdir -p "$_QUAY_NG_BIN_DIR"
-	_cid=$(podman create "$_QUAY_NG_IMAGE")
-	podman cp "$_cid:/mirror-registry" "$_QUAY_NG_BIN"
+if [ ! -x "$_OMR_BIN" ]; then
+	aba_info "Extracting $_OMR_VENDOR install binary ..."
+	mkdir -p "$_OMR_BIN_DIR"
+	_cid=$(podman create "$_OMR_IMAGE")
+	podman cp "$_cid:/mirror-registry" "$_OMR_BIN"
 	podman rm "$_cid" >/dev/null
-	chmod +x "$_QUAY_NG_BIN"
+	chmod +x "$_OMR_BIN"
 fi
 
 aba_progress "DONE|reg_download"
@@ -63,26 +63,26 @@ aba_progress "START|reg_install"
 # detects existing data, skips admin provisioning, creates Quadlet, starts service.
 if [ -f "$reg_root/auth/admin-password" ]; then
 	aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
-	if ! ./"$_QUAY_NG_BIN" install \
+	if ! ./"$_OMR_BIN" install \
 		-data-dir "$reg_root" \
 		-hostname "$reg_host" \
 		-port "$reg_port" \
-		-image-archive "$_QUAY_NG_IMAGE_FILE"; then
+		-image-archive "$_OMR_IMAGE_FILE"; then
 		aba_abort \
-			"$_QUAY_NG_VENDOR reinstall failed." \
+			"$_OMR_VENDOR reinstall failed." \
 			"Check the output above for errors."
 	fi
 else
-	aba_info "Running: $_QUAY_NG_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
-	if ! echo "$reg_pw" | ./"$_QUAY_NG_BIN" install \
+	aba_info "Running: $_OMR_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
+	if ! echo "$reg_pw" | ./"$_OMR_BIN" install \
 		-data-dir "$reg_root" \
 		-hostname "$reg_host" \
 		-port "$reg_port" \
 		-init-user "$reg_user" \
 		-init-password-stdin \
-		-image-archive "$_QUAY_NG_IMAGE_FILE"; then
+		-image-archive "$_OMR_IMAGE_FILE"; then
 		aba_abort \
-			"$_QUAY_NG_VENDOR install failed." \
+			"$_OMR_VENDOR install failed." \
 			"Check the output above for errors."
 	fi
 fi
@@ -90,7 +90,7 @@ fi
 aba_progress "DONE|reg_install"
 aba_progress "START|reg_firewall"
 
-# Quay-ng uses a systemd quadlet (WantedBy=default.target) -- systemd handles
+# OMR uses a systemd quadlet (WantedBy=default.target) -- systemd handles
 # auto-start directly. Only linger is needed so the user's systemd instance
 # stays alive after logout.
 if [ "$(id -u)" -ne 0 ] && command -v loginctl >/dev/null 2>&1; then
@@ -105,7 +105,7 @@ reg_open_firewall
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 
-reg_post_install "$reg_root/ssl.cert" "$_QUAY_NG_VENDOR"
+reg_post_install "$reg_root/ssl.cert" "$_OMR_VENDOR"
 
 cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git

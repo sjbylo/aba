@@ -67,7 +67,7 @@ _mirror_config_menu_loop() {
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, docker, or quay-ng
+  • Vendor — auto (detects arch), quay, docker, or omr
   • Data dir — storage location for images
 
 Press 'Continue' when ready. The mirror will be installed automatically."
@@ -99,7 +99,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, docker, or quay-ng
+  • Vendor — auto (detects arch), quay, docker, or omr
   • Data dir — storage location for images"
 			dlg_items=(
 				"H"  "Hostname:     $m_host"
@@ -131,7 +131,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
   • Username — registry login user
   • Password — registry login password
   • Image path — namespace path for mirrored images
-  • Vendor — auto (detects arch), quay, docker, or quay-ng
+  • Vendor — auto (detects arch), quay, docker, or omr
   • Data dir — storage location on remote host"
 			dlg_items=(
 				"H"  "Hostname:     ${m_host:-(enter FQDN)}"
@@ -278,8 +278,8 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				case "$m_vendor" in
 					auto) m_vendor="quay" ;;
 					quay) m_vendor="docker" ;;
-					docker) m_vendor="$_QUAY_NG_VENDOR" ;;
-					"$_QUAY_NG_VENDOR") m_vendor="auto" ;;
+					docker) m_vendor="$_OMR_VENDOR" ;;
+					"$_OMR_VENDOR") m_vendor="auto" ;;
 					*) m_vendor="auto" ;;
 				esac
 				replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$mcf"

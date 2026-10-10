@@ -3,7 +3,7 @@
 # reg-common.sh -- Shared functions for registry install/uninstall
 # =============================================================================
 # Sourced by vendor-specific scripts (reg-install-quay.sh, reg-install-docker.sh,
-# reg-install-quay-ng.sh, etc.) and dispatchers. Provides common pre-checks,
+# reg-install-omr.sh, etc.) and dispatchers. Provides common pre-checks,
 # post-install, firewall, and configuration functions so vendor scripts only
 # contain vendor-specific logic.
 #
@@ -284,7 +284,7 @@ reg_setup_data_dir() {
 	case "$vendor" in
 		quay)   reg_root="$data_dir/quay-install" ;;
 		docker) reg_root="$data_dir/docker-reg" ;;
-		$_QUAY_NG_VENDOR) reg_root="$data_dir/$_QUAY_NG_VENDOR" ;;
+		$_OMR_VENDOR) reg_root="$data_dir/$_OMR_VENDOR" ;;
 		*)      reg_root="$data_dir/$vendor" ;;
 	esac
 
@@ -322,7 +322,7 @@ reg_setup_data_dir() {
 
 	# Note other vendor data directories under the same data_dir.
 	local _other_suffix _other_root _others=""
-	local _all_suffixes="docker-reg quay-install $_QUAY_NG_VENDOR"
+	local _all_suffixes="docker-reg quay-install $_OMR_VENDOR"
 	for _other_suffix in $_all_suffixes; do
 		_other_root="$data_dir/$_other_suffix"
 		[ "$_other_root" = "$reg_root" ] && continue
@@ -372,7 +372,7 @@ reg_generate_password() {
 	_ng_pw="${reg_root:-}/auth/admin-password"
 	# Quay stores the user in its database. A new random password does not replace it.
 	# Docker rewrites htpasswd, so an explicit new password is allowed to win.
-	# quay-ng keeps the password in auth/admin-password and skips init when that file exists.
+	# omr keeps the password in auth/admin-password and skips init when that file exists.
 	if [ -s "$_saved" ]; then
 		_saved_user=$(sed -n "s/^reg_user='\(.*\)'/\1/p" "$_saved" | head -1)
 		_saved_pw=$(sed -n "s/^reg_pw='\(.*\)'/\1/p" "$_saved" | head -1)
@@ -388,11 +388,11 @@ reg_generate_password() {
 		_stored_pw=$(cat "$_ng_pw")
 		if [ -n "$_stored_pw" ]; then
 			if [ "$reg_pw" ] && [ "$reg_pw" != "$_stored_pw" ]; then
-				aba_warn "Using the quay-ng login stored with the data directory. The existing database user is unchanged."
+				aba_warn "Using the omr login stored with the data directory. The existing database user is unchanged."
 			fi
 			[ -n "$_saved_user" ] && reg_user="$_saved_user"
 			reg_pw="$_stored_pw"
-			aba_info "Reusing the quay-ng login stored with the data directory."
+			aba_info "Reusing the omr login stored with the data directory."
 		fi
 	elif [ ! "$reg_pw" ] && [ -n "$_saved_pw" ]; then
 		[ -n "$_saved_user" ] && reg_user="$_saved_user"
@@ -671,7 +671,7 @@ _reg_probe_set() {
 
 # --- reg_rm_data_dir ----------------------------------------------------------
 # Remove registry data directory, using sudo only for vendors that need it.
-# Docker and quay-ng use rootless podman (all files user-owned); quay v2 uses
+# Docker and omr use rootless podman (all files user-owned); quay v2 uses
 # Ansible with become:yes (root-owned + postgres-owned files).
 #
 # Usage: reg_rm_data_dir <vendor> <dir>
@@ -702,7 +702,7 @@ reg_rm_data_dir() {
 # state.sh. Optional ssh_cmd probes a remote host instead of localhost.
 # Probe/tool/SSH failures abort (fail closed) -- they must not look like "gone".
 #
-# Usage: _stale=$(reg_stale_report quay|docker|quay-ng [ssh_cmd])
+# Usage: _stale=$(reg_stale_report quay|docker|omr [ssh_cmd])
 reg_stale_report() {
 	local vendor="$1"
 	local ssh_cmd="${2:-}"
@@ -737,7 +737,7 @@ reg_stale_report() {
 			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE '^registry(-$port)?$'" "registry container" && \
 				stale+="  registry container still present"$'\n'
 			;;
-		"$_QUAY_NG_VENDOR"|quay-ng)
+		"$_OMR_VENDOR"|omr)
 			if [ "${REG_DELETE_DATA:-}" ]; then
 				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
 					stale+="  reg_root ($reg_root) still exists"$'\n'
@@ -848,27 +848,27 @@ reg_docker_remove() {
 	fi
 }
 
-# --- reg_quay_ng_remove -------------------------------------------------------
-# Core quay-ng uninstall: call the tool's own 'uninstall' command.
+# --- reg_omr_remove -------------------------------------------------------
+# Core omr uninstall: call the tool's own 'uninstall' command.
 # Same pattern as reg_quay_remove — use the tool, then verify clean.
-# Usage: reg_quay_ng_remove [ssh_cmd]
-reg_quay_ng_remove() {
+# Usage: reg_omr_remove [ssh_cmd]
+reg_omr_remove() {
 	local ssh_cmd="${1:-}"
 	local _where="localhost"
 	[ -n "$ssh_cmd" ] && _where="$reg_host"
 
-	aba_info "Uninstalling $_QUAY_NG_VENDOR registry on $_where ..."
+	aba_info "Uninstalling $_OMR_VENDOR registry on $_where ..."
 
 	local _uninst_rc=0
 	if [ -n "$ssh_cmd" ]; then
 		# Remote: ensure mirror-registry binary is on remote host
-		local _bin_dir="quay-ng"
+		local _bin_dir="omr"
 		local _bin="$_bin_dir/mirror-registry"
 
 		if ! $ssh_cmd "test -x $reg_root/../$_bin_dir/mirror-registry 2>/dev/null"; then
 			aba_info "mirror-registry binary not found on remote host, uploading ..."
 			if [ ! -x "$_bin" ]; then
-				aba_abort "$_QUAY_NG_VENDOR binary '$_bin' not found locally." \
+				aba_abort "$_OMR_VENDOR binary '$_bin' not found locally." \
 					"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
 			fi
 			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
@@ -887,9 +887,9 @@ reg_quay_ng_remove() {
 		fi
 	else
 		# Local
-		local _bin="quay-ng/mirror-registry"
+		local _bin="omr/mirror-registry"
 		if [ ! -x "$_bin" ]; then
-			aba_abort "$_QUAY_NG_VENDOR binary '$_bin' not found." \
+			aba_abort "$_OMR_VENDOR binary '$_bin' not found." \
 				"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
 		fi
 
@@ -902,7 +902,7 @@ reg_quay_ng_remove() {
 	fi
 
 	local _stale
-	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR" "$ssh_cmd")
+	_stale=$(reg_stale_report "$_OMR_VENDOR" "$ssh_cmd")
 	if [ -n "$_stale" ]; then
 		if [ "$_uninst_rc" -ne 0 ]; then
 			aba_abort \
@@ -1043,7 +1043,7 @@ reg_finish_uninstall() {
 
 # --- reg_check_v2_auth --------------------------------------------------------
 # Verify registry is reachable and credentials are valid via /v2/.
-# Handles both Basic auth (Docker) and Bearer token exchange (Quay/Quay-ng).
+# Handles both Basic auth (Docker) and Bearer token exchange (Quay/OMR).
 # Usage: reg_check_v2_auth <url> <user> <password>
 #   url       Base registry URL, e.g. https://host:port
 #   user      Registry username
@@ -1060,9 +1060,9 @@ reg_check_v2_auth() {
 		return 0
 	fi
 
-	# Basic auth returned 401 — try Bearer token exchange (Quay/Quay-ng)
+	# Basic auth returned 401 — try Bearer token exchange (Quay/OMR)
 	# Parse service from the challenge header but always use the known-reachable
-	# registry URL for the token endpoint.  Quay-ng in port-mapped containers may
+	# registry URL for the token endpoint.  OMR in port-mapped containers may
 	# advertise a realm on port 443 which is unreachable externally.
 	if [ "$code" = "401" ]; then
 		local hdr service token
@@ -1231,7 +1231,7 @@ reg_stop_vendor() {
 		quay)
 			_reg_host_run "$ssh_cmd" "podman stop quay-app quay-redis quay-postgres 2>/dev/null" || true
 			;;
-		"$_QUAY_NG_VENDOR"|quay-ng)
+		"$_OMR_VENDOR"|omr)
 			_reg_host_run "$ssh_cmd" "systemctl --user stop quay.service 2>/dev/null || sudo systemctl stop quay.service 2>/dev/null" || true
 			;;
 		*)
@@ -1275,7 +1275,7 @@ reg_start_vendor() {
 		quay)
 			_reg_host_run "$ssh_cmd" "podman start quay-postgres quay-redis quay-app"
 			;;
-		"$_QUAY_NG_VENDOR"|quay-ng)
+		"$_OMR_VENDOR"|omr)
 			_reg_host_run "$ssh_cmd" "systemctl --user start quay.service 2>/dev/null || sudo systemctl start quay.service 2>/dev/null"
 			;;
 		*)

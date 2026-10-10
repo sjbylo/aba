@@ -1,6 +1,6 @@
 #!/bin/bash
 # reg_generate_password for every registry vendor.
-# quay and quay-ng keep the login stored with the data directory.
+# quay and omr keep the login stored with the data directory.
 # docker accepts a new password because it rewrites htpasswd.
 # existing is not installed by ABA, so a supplied password is left as-is.
 # auto is resolved to quay or docker before this function runs.
@@ -64,29 +64,29 @@ reg_user=init
 reg_pw=
 check_generated "quay: first install generates a password" chosen-pw
 
-# --- quay-ng -----------------------------------------------------------------
-reg_root="$WORKDIR/quay-ng"
+# --- omr -----------------------------------------------------------------
+reg_root="$WORKDIR/omr"
 mkdir -p "$reg_root/auth"
 printf '%s' 'stored-ng' > "$reg_root/auth/admin-password"
 
 reg_user=admin
 reg_pw=
-check "quay-ng: empty password uses the stored password" admin stored-ng
+check "omr: empty password uses the stored password" admin stored-ng
 
 printf "reg_user='%s'\nreg_pw='%s'\n" 'keptuser' 'creds-pw' > "$reg_root/.aba-reuse-creds"
 reg_user=other
 reg_pw='brand-new'
-check "quay-ng: stored password wins over mirror.conf and the creds file" keptuser stored-ng
+check "omr: stored password wins over mirror.conf and the creds file" keptuser stored-ng
 
-reg_root="$WORKDIR/quay-ng-first"
+reg_root="$WORKDIR/omr-first"
 mkdir -p "$reg_root"
 reg_user=admin
 reg_pw='chosen-ng'
-check "quay-ng: first install keeps an explicit password" admin chosen-ng
+check "omr: first install keeps an explicit password" admin chosen-ng
 
 reg_user=admin
 reg_pw=
-check_generated "quay-ng: first install generates a password" chosen-ng
+check_generated "omr: first install generates a password" chosen-ng
 
 # --- docker ------------------------------------------------------------------
 reg_root="$WORKDIR/docker"

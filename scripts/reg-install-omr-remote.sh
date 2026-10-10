@@ -1,14 +1,14 @@
 #!/bin/bash
-# Install quay-ng registry on a remote host via SSH.
+# Install omr registry on a remote host via SSH.
 # Called by reg-install.sh dispatcher; not intended for direct invocation.
-# Uses the quay-ng mirror-registry binary's 'install' command on the remote
+# Uses the omr mirror-registry binary's 'install' command on the remote
 # host, which handles init, Quadlet creation, and service start.
 
 source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $*"
 
-reg_remote_pre_install "$_QUAY_NG_VENDOR"
+reg_remote_pre_install "$_OMR_VENDOR"
 aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
@@ -26,37 +26,37 @@ if [ -n "$_stale" ]; then
 		"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
 fi
 
-ask "Install $_QUAY_NG_VENDOR registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
+ask "Install $_OMR_VENDOR registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
 aba_progress "DONE|reg_env"
 aba_progress "START|reg_firewall"
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_download"
 
-aba_info "Installing $_QUAY_NG_VENDOR registry on remote host $reg_host ..."
+aba_info "Installing $_OMR_VENDOR registry on remote host $reg_host ..."
 
-_image_file="quay-ng-image.tgz"
-_bin_dir="quay-ng"
+_image_file="omr-image.tgz"
+_bin_dir="omr"
 _bin="$_bin_dir/mirror-registry"
 
 if [ ! -f "$_image_file" ]; then
-	aba_info "Downloading $_QUAY_NG_VENDOR image ..."
+	aba_info "Downloading $_OMR_VENDOR image ..."
 	make -s "$_image_file"
 fi
 
 # Extract the install binary from the container image (locally)
 if [ ! -x "$_bin" ]; then
-	aba_info "Extracting $_QUAY_NG_VENDOR install binary ..."
+	aba_info "Extracting $_OMR_VENDOR install binary ..."
 	mkdir -p "$_bin_dir"
 	podman load -i "$_image_file"
-	_cid=$(podman create "$_QUAY_NG_IMAGE")
+	_cid=$(podman create "$_OMR_IMAGE")
 	podman cp "$_cid:/mirror-registry" "$_bin"
 	podman rm "$_cid" >/dev/null
 	chmod +x "$_bin"
 fi
 
 # Copy binary and image tarball to remote host
-aba_info "Copying $_QUAY_NG_VENDOR binary and image to remote host ..."
+aba_info "Copying $_OMR_VENDOR binary and image to remote host ..."
 $_scp "$_bin" "$_image_file" "$_target:$remote_dir/"
 
 aba_progress "DONE|reg_download"
@@ -66,7 +66,7 @@ aba_progress "START|reg_install"
 # Fresh install: pass -init-user/-init-password-stdin for admin setup.
 # Reinstall (data preserved, service removed): omit init flags — the tool
 # detects existing data, skips admin provisioning, creates Quadlet, starts service.
-aba_info "Running $_QUAY_NG_VENDOR install on remote host ..."
+aba_info "Running $_OMR_VENDOR install on remote host ..."
 if ! $_ssh "
 	set -e
 	if [ -f $reg_root/auth/admin-password ]; then
@@ -92,7 +92,7 @@ if ! $_ssh "
 		fi
 	fi
 "; then
-	aba_abort "$_QUAY_NG_VENDOR install failed on remote host $reg_host." \
+	aba_abort "$_OMR_VENDOR install failed on remote host $reg_host." \
 		"Check the output above for details."
 fi
 
@@ -116,6 +116,6 @@ fi
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
 
-reg_remote_post_install "$_QUAY_NG_VENDOR" "$reg_root/ssl.cert"
+reg_remote_post_install "$_OMR_VENDOR" "$reg_root/ssl.cert"
 
 aba_progress "DONE|reg_verify"

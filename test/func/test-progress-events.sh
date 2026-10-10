@@ -230,7 +230,7 @@ test_plan_id_coverage load 5 \
 
 test_plan_id_coverage uninstall 2 \
 	scripts/reg-uninstall.sh scripts/reg-uninstall-docker.sh scripts/reg-uninstall-quay.sh \
-	scripts/reg-uninstall-quay-ng.sh scripts/reg-uninstall-remote.sh
+	scripts/reg-uninstall-omr.sh scripts/reg-uninstall-remote.sh
 
 test_plan_id_coverage bundle 8 \
 	scripts/make-bundle.sh scripts/install-rpms.sh scripts/reg-save.sh

@@ -67,8 +67,8 @@ mirror/.??*
 mirror/.redhat-operator-index*
 mirror/mirror.conf*
 mirror/docker-reg-image.tgz
-mirror/quay-ng-image.tgz
-mirror/quay-ng/
+mirror/omr-image.tgz
+mirror/omr/
 mirror/cli
 mirror/mirror
 mirror/reg-uninstall.sh.provision
