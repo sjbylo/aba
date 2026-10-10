@@ -123,7 +123,8 @@ ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat
 
 **Mirror Registry**
 
-- Installs Quay or Docker registry locally or remotely, or connects to an existing registry
+- Three vendor choices: **OMR** (v3, Tech Preview), **Quay** (v1, stable), or **Docker** registry — locally or remotely, or connect to an existing registry
+- **OMR** (*OpenShift Mirror Registry* v3) is the next-generation mirror registry, currently in Tech Preview and available from [quay.io](https://quay.io)
 - Handles pull secret merging and registry certificate trust automatically
 - Works with oc-mirror v2; incremental image and Operator loading (day-1/day-2)
 - [Named mirror directories](#named-mirror-directories-enclaves) for multiple enclaves
@@ -211,7 +212,7 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 # Install Bundles
 
 An ABA `Install Bundle` is a single archive containing everything required to install OpenShift in an air-gapped environment for a specific use case. 
-It includes platform and operator images, matching OpenShift CLI installation tools, registry configuration for Quay and Docker, and automation to set up a mirror registry and generate the configuration files needed for installation — tested, repeatable, and ready to use.
+It includes platform and operator images, matching OpenShift CLI installation tools, registry configuration for OMR, Quay, and Docker, and automation to set up a mirror registry and generate the configuration files needed for installation — tested, repeatable, and ready to use.
 
 Download the latest Install Bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy)
 
@@ -295,7 +296,7 @@ abatui --conno     # Force partially disconnected mode
 
 The `abatui` command is installed to your `$PATH` alongside `aba` and can be run from any directory within the ABA repository.
 
-The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror installation (local or remote Quay/Docker), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
+The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror installation (local or remote OMR/Quay/Docker), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
 
 Navigate using `Tab`, `Enter`, arrow keys, `Space` (to toggle selections), and `Escape` (to go back or quit). Menu items have single-key shortcuts shown as highlighted letters.
 
@@ -328,7 +329,7 @@ This command:
 
   - triggers `aba -d mirror install` (to configure or install the mirror registry).
   - for an existing registry, checks that the connection is available and working.
-  - or, installs *Mirror Registry for Red Hat OpenShift* (Quay) or Docker Registry on the local bastion. For remote host installation, see [Load images to a remote host](#load-images-to-a-remote-host).
+  - or, installs *Mirror Registry for Red Hat OpenShift* (OMR, Quay, or Docker) on the local bastion. For remote host installation, see [Load images to a remote host](#load-images-to-a-remote-host).
   - pulls images from the Internet and stores them in the registry.
 
 ```
@@ -393,10 +394,10 @@ aba -d mirror load -H registry.example.com --retry 3
 - The `-H` flag sets the registry FQDN (in this case, `registry.example.com` resolves to the local bastion).
 - Uses the install bundle to:
   - check if the mirror registry is already installed and accessible. If not, installs it.
-  - install *Mirror Registry for Red Hat OpenShift* (Quay) or Docker Registry onto the local bastion and load the images.
+  - install *Mirror Registry for Red Hat OpenShift* (OMR, Quay, or Docker) onto the local bastion and load the images.
   - verify the FQDN `registry.example.com` is resolvable *and* reachable via SSH.
 
-> Tip: If you experience issues pushing images into Quay, consider using the Docker Registry instead — set `reg_vendor=docker` in `mirror.conf` or select Docker in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
+> Tip: If you experience issues pushing images into Quay, consider using OMR (v3, Tech Preview) or Docker Registry instead — set `reg_vendor=omr` or `reg_vendor=docker` in `mirror.conf`, or select the vendor in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
 
 ### Load images to a remote host
 
@@ -405,7 +406,7 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
 ```
 
 - `-k ~/.ssh/id_rsa` specifies the private SSH key used to connect to the remote host for registry installation and image loading.
-- Installs Quay or Docker Registry onto the remote host `registry.example.com` and loads the images.
+- Installs OMR, Quay, or Docker Registry onto the remote host `registry.example.com` and loads the images.
 
 After loading, verify connectivity: `aba -d mirror verify`
 
@@ -1551,7 +1552,7 @@ These commands control VMs directly without performing any OpenShift-level drain
 
 #### Registry Host Resources
 
-The registry (mirror) host is the server that runs your container image registry (Quay or Docker Registry) and stores all mirrored OpenShift and operator images.
+The registry (mirror) host is the server that runs your container image registry (OMR, Quay, or Docker) and stores all mirrored OpenShift and operator images.
 
 - **Minimum**: 4 vCPUs, 8 GB RAM — sufficient for platform release images and most operators.
 - **Recommended for large operator workloads** (e.g. RHOAI, GPU, AI/ML): 16 GB RAM minimum, ideally 24+ GB. These operators include very large image layers that cause Quay's gunicorn workers to buffer significant data in memory during upload. Insufficient RAM can trigger OOM kills mid-upload, leading to mirroring failures and corrupted image data in the registry that persists across retries — see the [troubleshooting FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai).
@@ -1668,8 +1669,8 @@ To install OpenShift in a fully disconnected environment, you need one connected
 - RHEL 8, 9, or 10 within the disconnected environment.
 - Sudo or root access; passwordless sudo recommended (see [Common Requirements](#common-requirements)).
 - Install RPMs listed in `aba/templates/rpms-internal.txt`. See [Installing RPMs](#installing-rpms).
-- For Quay or Docker on the Internal Bastion: passwordless SSH from the bastion to itself.
-- For Quay or Docker on a remote host: passwordless SSH from the Internal Bastion to that host.
+- For OMR, Quay, or Docker on the Internal Bastion: passwordless SSH from the bastion to itself.
+- For OMR, Quay, or Docker on a remote host: passwordless SSH from the Internal Bastion to that host.
 
 After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
@@ -1686,8 +1687,8 @@ In a *partially disconnected environment*, the *connected bastion* has limited (
 - [Install ABA](#install-aba).
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
-- For Quay or Docker locally: passwordless SSH from the bastion to itself.
-- For Quay or Docker on a remote host: passwordless SSH from the bastion to that host.
+- For OMR, Quay, or Docker locally: passwordless SSH from the bastion to itself.
+- For OMR, Quay, or Docker on a remote host: passwordless SSH from the bastion to that host.
 
 After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
@@ -1698,7 +1699,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 
 | Command                    | Description                                                   |
 | -------------------------- | ------------------------------------------------------------- |
-| `aba -d mirror install`    | Install Quay or Docker registry (locally or remotely)         |
+| `aba -d mirror install`    | Install OMR, Quay, or Docker registry (locally or remotely)   |
 | `aba -d mirror sync`       | Copy images from the Internet into the mirror (mirror2mirror) |
 | `aba -d mirror save`       | Copy images from the Internet to disk (mirror2disk)           |
 | `aba -d mirror load`       | Copy images from disk to the mirror (disk2mirror)             |
@@ -1893,7 +1894,7 @@ bash-5.1# cd aba
 bash-5.1# aba
 ```
 
-Tested on Mac M1 (`arm64`). Caveats: installing *Mirror Registry for Red Hat OpenShift* (Quay) on a remote host from inside the container may not work on arm64.
+Tested on Mac M1 (`arm64`). Caveats: installing *Mirror Registry for Red Hat OpenShift* (OMR or Quay) on a remote host from inside the container may not work on arm64.
 
 **Tested use case:** An ISO generated from within the arm64 container successfully installed OpenShift on an M1 Mac using VMware Fusion.
 
@@ -2230,9 +2231,17 @@ aba -d mirror install --vendor docker          # Install Docker Registry
 aba -d mirror verify                           # Verify, then use as usual
 ```
 
+Or try OMR (v3, Tech Preview) — the next-generation mirror registry:
+
+```
+aba -d mirror uninstall                        # Uninstall Quay
+aba -d mirror install --vendor omr             # Install OMR (Tech Preview)
+aba -d mirror verify                           # Verify, then use as usual
+```
+
 To uninstall: `aba -d mirror uninstall`
 
-Note: The Quay mirror registry is supported by Red Hat but the Docker Registry is not.
+Note: The Quay mirror registry is supported by Red Hat. OMR (v3) is in Tech Preview. Docker Registry is not officially supported by Red Hat.
 
 ---
 
