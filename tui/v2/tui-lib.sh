@@ -861,6 +861,18 @@ mirror_state_label() {
 		echo "\\Z1no mirror\\Zn"
 		return
 	fi
+	# Check if registry is stopped (installed but port not listening)
+	# Only for local registries — remote SSH check would be too slow for menu redraw
+	local _state_file="$HOME/.aba/mirror/$(basename "$ABA_ROOT/mirror")/state.sh"
+	if [ -s "$_state_file" ]; then
+		local reg_port reg_ssh_key
+		reg_port=$(grep '^reg_port=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2)
+		reg_ssh_key=$(grep '^reg_ssh_key=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2)
+		if [ -n "$reg_port" ] && [ -z "$reg_ssh_key" ] && ! ss -tlnp 2>/dev/null | grep -q ":${reg_port} "; then
+			echo "\\Z1mirror stopped\\Zn"
+			return
+		fi
+	fi
 	if _mirror_has_release_image; then
 		echo "\\Z2\\Zbmirror ready\\Zn"
 	else
