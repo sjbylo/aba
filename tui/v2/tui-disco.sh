@@ -285,7 +285,7 @@ Navigation:
 		case "$choice" in
 			"$TUI2_DISCO_TAG_INSTALL_REG")
 				if [[ "$reg_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --yesno \
+					dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 						"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 					if [[ $? -eq 0 ]]; then
 						confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" _invalidate_mirror_cache && disco_install_reg
