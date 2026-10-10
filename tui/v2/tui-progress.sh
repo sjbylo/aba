@@ -411,9 +411,9 @@ _tp_show_error() {
 	while true; do
 		_btn_rc=0
 		_tp_dlg --title " ${_title}: Error " \
-			--yes-label "View Output" \
-			--no-label "OK" \
+			--ok-label "View Output" \
 			--extra-button --extra-label "Retry" \
+			--cancel-label "OK" \
 			--yesno "$_msg" \
 			0 0 || _btn_rc=$?
 		case "$_btn_rc" in
