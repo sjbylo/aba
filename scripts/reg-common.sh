@@ -785,7 +785,6 @@ reg_pre_uninstall() {
 	fi
 
 	source "$regcreds_dir/state.sh"
-	_migrate_vendor_name
 }
 
 # --- reg_remote_pre_uninstall -------------------------------------------------
