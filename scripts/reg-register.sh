@@ -28,6 +28,7 @@ ca_cert_file="$2"
 # Overwriting state from an ABA-installed registry would orphan it (can't uninstall).
 if [ -s "$regcreds_dir/state.sh" ]; then
 	source "$regcreds_dir/state.sh"
+	_migrate_vendor_name
 	if [ "${reg_vendor:-}" != "existing" ]; then
 		aba_abort "An ABA-managed registry ($reg_vendor) is already installed here." \
 			"Run 'aba -d $(basename "$PWD") uninstall' first, then register."

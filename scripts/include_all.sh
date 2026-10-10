@@ -48,6 +48,12 @@ _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.c
 _OMR_VENDOR="omr"
 _OMR_IMAGE="${OMR_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
 
+# Migrate legacy vendor name from state.sh (quay-ng → omr).
+# Call after every `source "$regcreds_dir/state.sh"`.
+_migrate_vendor_name() {
+	[ "${reg_vendor:-}" = "quay-ng" ] && reg_vendor="$_OMR_VENDOR"
+}
+
 # ===========================
 # Color Echo Functions
 # ===========================
@@ -764,6 +770,8 @@ resolved_reg_user() {
 # This function is the ONLY place where "auto" is resolved to a concrete vendor.
 resolved_reg_vendor() {
 	local vendor="${reg_vendor:-auto}"
+	# Migrate legacy vendor name
+	[ "$vendor" = "quay-ng" ] && vendor="$_OMR_VENDOR"
 	if [ "$vendor" = "auto" ]; then
 		case "$(uname -m)" in
 			aarch64|arm64) vendor=docker ;;
