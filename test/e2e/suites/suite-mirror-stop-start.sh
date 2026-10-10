@@ -37,6 +37,8 @@ _tnames=("Setup: install aba and configure")
 for _v in "${_VENDORS[@]}"; do
 	_tnames+=("$_v: stop/start cycle")
 done
+_tnames+=("quay-ng: stop → uninstall → reinstall (data preserved)")
+_tnames+=("quay-ng: --runtime state and status output")
 _tnames+=("Cleanup")
 
 # --- Suite ------------------------------------------------------------------
@@ -117,6 +119,106 @@ e2e_run "Uninstall $_v registry" \
 test_end
 
 done
+
+# ============================================================================
+# Stop → uninstall → reinstall (data preserved)
+# ============================================================================
+# Regression test for: uninstall a stopped mirror left the Quadlet unit behind,
+# causing reinstall to fail with "existing installation found".  The fix: uninstall
+# reads reg_running from state.sh, starts the mirror first if stopped, then
+# runs mirror-registry uninstall cleanly.
+test_begin "quay-ng: stop → uninstall → reinstall (data preserved)"
+
+e2e_run "Install quay-ng registry" \
+	"aba -d $_MIRROR_NAME install --vendor quay-ng --reg-port $_PORT -y"
+
+e2e_run "Sync images (populate registry)" \
+	"aba -d $_MIRROR_NAME sync --retry"
+
+e2e_run "Verify release image exists before cycle" \
+	"cd $_MIRROR_NAME && source ../scripts/include_all.sh && source <(normalize-aba-conf) && source <(normalize-mirror-conf) && export regcreds_dir=\$HOME/.aba/mirror/$_MIRROR_NAME && check_release_image"
+
+e2e_run "Stop registry" \
+	"aba -d $_MIRROR_NAME stop"
+
+e2e_run "Verify port closed after stop" \
+	"! ss -tlnp 2>/dev/null | grep -q ':${_PORT} '"
+
+e2e_run "Uninstall stopped mirror (keep data)" \
+	"aba -d $_MIRROR_NAME uninstall -y"
+
+e2e_run "Verify Quadlet unit removed" \
+	"! test -f \$HOME/.config/containers/systemd/quay.container"
+
+e2e_run "Verify data dir still exists" \
+	"source \$HOME/.aba/mirror/$_MIRROR_NAME/state.sh 2>/dev/null || true; test -d \${reg_root:-/nonexistent} || test -f \$HOME/quay-ng/auth/admin-password"
+
+e2e_run "Reinstall (should reuse existing data)" \
+	"aba -d $_MIRROR_NAME install --vendor quay-ng --reg-port $_PORT -y"
+
+e2e_run "Verify registry running after reinstall" \
+	"aba -d $_MIRROR_NAME verify"
+
+e2e_run "Verify release image survived the cycle" \
+	"cd $_MIRROR_NAME && source ../scripts/include_all.sh && source <(normalize-aba-conf) && source <(normalize-mirror-conf) && export regcreds_dir=\$HOME/.aba/mirror/$_MIRROR_NAME && check_release_image"
+
+e2e_run "Uninstall (clean for next test)" \
+	"aba -d $_MIRROR_NAME uninstall --delete-data -y"
+
+test_end
+
+# ============================================================================
+# --runtime state and CLI status output
+# ============================================================================
+# Verifies that mirror-status.sh --runtime returns correct reg_state for each
+# lifecycle phase, and that the human-readable status output shows the right
+# labels (especially "stopped" instead of "MISSING").
+test_begin "quay-ng: --runtime state and status output"
+
+e2e_run "Install quay-ng registry" \
+	"aba -d $_MIRROR_NAME install --vendor quay-ng --reg-port $_PORT -y"
+
+# --- Running state ---
+e2e_run "Runtime: reg_state=installed when running (no sync)" \
+	"cd $_MIRROR_NAME && ../scripts/mirror-status.sh --runtime | grep -q 'reg_state=installed'"
+
+e2e_run "Status: shows (installed) when running" \
+	"aba -d $_MIRROR_NAME status 2>&1 | grep -q '(installed)'"
+
+# --- Stopped state ---
+e2e_run "Stop registry" \
+	"aba -d $_MIRROR_NAME stop"
+
+e2e_run "Runtime: reg_state=stopped after stop" \
+	"cd $_MIRROR_NAME && ../scripts/mirror-status.sh --runtime | grep -q 'reg_state=stopped'"
+
+e2e_run "Runtime: reg_listening=false after stop" \
+	"cd $_MIRROR_NAME && ../scripts/mirror-status.sh --runtime | grep -q 'reg_listening=false'"
+
+e2e_run "Status: shows (stopped) not (installed)" \
+	"aba -d $_MIRROR_NAME status 2>&1 | grep -q '(stopped)'"
+
+e2e_run "Status: shows 'unknown (registry is stopped)' not MISSING" \
+	"aba -d $_MIRROR_NAME status 2>&1 | grep -q 'unknown (registry is stopped)'"
+
+# --- Start again ---
+e2e_run "Start registry" \
+	"aba -d $_MIRROR_NAME start"
+
+e2e_run "Runtime: reg_state back to installed after start" \
+	"cd $_MIRROR_NAME && ../scripts/mirror-status.sh --runtime | grep -q 'reg_state=installed'"
+
+e2e_run "Status: shows (installed) after start" \
+	"aba -d $_MIRROR_NAME status 2>&1 | grep -q '(installed)'"
+
+# --- Absent state ---
+e2e_run "Uninstall registry" \
+	"aba -d $_MIRROR_NAME uninstall --delete-data -y"
+
+e2e_run "Runtime: reg_state=absent after uninstall" \
+	"cd $_MIRROR_NAME && ../scripts/mirror-status.sh --runtime | grep -q 'reg_state=absent'"
+
+test_end
 
 # ============================================================================
 # Cleanup
