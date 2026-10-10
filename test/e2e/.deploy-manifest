@@ -24,6 +24,7 @@ test/acm-mch.yaml
 test/e2e/scripts/
 test/e2e/examples/
 test/e2e/lib/
+test/e2e/suites/
 
 Makefile
 aba
