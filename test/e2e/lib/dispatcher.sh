@@ -283,7 +283,7 @@ _check_pool() {
 
 	_export_pool_ssh_users "$pool_num"
 
-	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc'") || rc_content=""
+	rc_content=$(_ssh_con "$pool_num" "[ -f '${_RC_PREFIX}-${suite}.rc' ] && cat '${_RC_PREFIX}-${suite}.rc'") || rc_content=""
 	if [ -n "$rc_content" ]; then
 		# .rc may appear before the runner fully exits (legacy early write, or EXIT
 		# trap still running cleanup). A live lock means harness must NOT be
