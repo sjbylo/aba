@@ -2245,3 +2245,113 @@ The TUI should degrade gracefully rather than crash or show raw error output.
 - `tui/v2/tui-mirror.sh`, `tui/v2/tui-cluster.sh`, `tui/v2/tui-direct.sh`
 - `tui/v2/tui-lib.sh` (shared dialog helpers)
 - `tui/v2/abatui2.sh` (main entry, config loading)
+
+---
+
+## TUI: Interactive cluster checklist after mirror sync/load
+
+**Priority:** MEDIUM
+**Effort:** MEDIUM
+
+After mirror sync or load, `_offer_day2_after_mirror_update()` offers to run
+Day-2 (OperatorHub config) on clusters using that mirror. Currently:
+- 0 clusters → "Success" msgbox
+- 1 cluster → "Run Day-2 now?" yesno → runs day2
+- **Multiple clusters → static msgbox telling user to run day2 manually (useless)**
+
+**Change:** Replace the multi-cluster msgbox with an interactive checklist:
+1. Find all installed clusters whose `image_source` is `mirror`
+2. Quick TCP probe of each cluster's API (3s timeout)
+3. Show checklist: reachable clusters pre-checked, offline ones unchecked with
+   `(offline)` annotation
+4. User selects which to update → sequential `_exec_with_progress` per cluster
+5. After all done, brief summary
+
+**Design decisions:**
+- **Sequential, not parallel** — Day-2 is fast (10-30s per cluster) and
+  interleaved progress output would be confusing
+- **Foreground** — user just finished sync/load and is right there
+- **Only reachable clusters pre-checked** — offline clusters can still be
+  checked manually by the user if they know the cluster is coming up
+- **Uses existing `_exec_with_progress` → `confirm_and_execute` fallback**
+
+**Files likely affected:**
+- `tui/v2/tui-lib.sh` (`_offer_day2_after_mirror_update`)
+
+---
+
+## Cache pre-operation mirror summary (ADR-008)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-10
+
+**Problem:** The pre-operation confirmation dialog (before save/sync/load)
+calls `mirror-status.sh --shell` synchronously (~2s), blocking the UI every
+time the user opens it.
+
+**Proposed fix:** Cache the full `mirror-status.sh --shell` output via
+run_once (`aba:mirror:full-status`). Refresh after state-changing operations.
+Pre-op dialog reads from cache instead of blocking. See ADR-008.
+
+**Files likely affected:**
+- `scripts/mirror-status.sh` (already exists, just needs caching wrapper)
+- `scripts/include_all.sh` (new `aba_mirror_full_status_*` wrappers)
+- `tui/v2/tui-mirror.sh` (`_tui_mirror_status_shell` reads from cache)
+
+---
+
+## Cluster state cache for TUI (ADR-008)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-10
+
+**Problem:** The TUI cluster list and day-2 menu read `.install-complete`
+marker files directly (~15 places) and probe the cluster API (`oc get`)
+synchronously. This mixes business logic into the TUI and makes the cluster
+menu slow when clusters are unreachable.
+
+**Proposed fix:** New `cluster-status.sh --state` (or extend existing
+cluster status) that produces `cluster_state=installing|ready|degraded|unreachable`.
+Cache per-cluster via run_once (`aba:cluster:<name>:state`). TUI reads
+cached state only. See ADR-008.
+
+**Files likely affected:**
+- New: `scripts/cluster-status.sh` (or extend existing)
+- `scripts/include_all.sh` (new `aba_cluster_state_*` wrappers)
+- `tui/v2/tui-cluster.sh` (replace `.install-complete` reads)
+- `tui/v2/tui-lib.sh` (replace cluster state queries)
+
+---
+
+## Config mtime caching to avoid redundant subshell spawns (ADR-008)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-10
+
+**Problem:** The TUI calls `source <(normalize-aba-conf)` and
+`source <(normalize-mirror-conf)` ~30 times per menu cycle. Each spawns a
+subshell + sources include_all.sh (~0.15s each). Config rarely changes during
+a menu cycle.
+
+**Proposed fix:** Check file mtime before re-sourcing. Cache parsed values in
+shell variables. Re-source only when mtime changes. No run_once needed — this
+is in-process caching. See ADR-008.
+
+```bash
+_aba_conf_mtime=0
+_ensure_aba_conf_fresh() {
+    local _mt
+    _mt=$(stat -c %Y "$ABA_ROOT/aba.conf" 2>/dev/null) || return
+    [[ "$_mt" == "$_aba_conf_mtime" ]] && return
+    source <(normalize-aba-conf)
+    _aba_conf_mtime="$_mt"
+}
+```
+
+**Files likely affected:**
+- `tui/v2/tui-lib.sh` (new `_ensure_aba_conf_fresh`, `_ensure_mirror_conf_fresh`)
+- All TUI files that call `source <(normalize-*-conf)` (~30 call sites)
+
