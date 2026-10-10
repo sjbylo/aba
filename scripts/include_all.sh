@@ -4695,6 +4695,7 @@ ensure_openshift_install() {
 # Returns: 0 if available, 1 if not.
 # Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
+	local _vendor="${1:-}"
 	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
@@ -4742,6 +4743,18 @@ check_release_image() {
 	local _td="$ABA_TMP/cri.$$"
 	mkdir -p "$_td"
 
+	# Vendor-aware auth: skip the wrong path when caller knows the vendor
+	local _try_basic=true _try_bearer=true
+	case "$_vendor" in
+		docker)               _try_bearer=false ;;
+		quay|*quay-ng*)       _try_basic=false ;;
+	esac
+
+	local _p1_code="" _p2_code=""
+
+	# --- Phase 1+2: Basic auth (parallel) — Docker/quay-ng fast path ---
+	if [ "$_try_basic" = "true" ]; then
+
 	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---
 	aba_debug "Parallel check: Phase 1 ($_v2_url) + Phase 2 ($_manifest_url)"
 
@@ -4758,7 +4771,6 @@ check_release_image() {
 
 	wait "$_pid1" "$_pid2" 2>/dev/null || true
 
-	local _p1_code _p2_code
 	_p1_code=$(cat "$_td/p1.code" 2>/dev/null)
 	_p2_code=$(cat "$_td/p2.code" 2>/dev/null)
 
@@ -4773,15 +4785,23 @@ check_release_image() {
 		fi
 	fi
 
-	# --- Quay path: both return 401 with Basic, need Bearer token exchange ---
+	fi  # _try_basic
+
+	# --- Quay path: Bearer token exchange ---
+	# When vendor is known (quay), skip Basic entirely and come straight here.
+	# When vendor is unknown, enter only if Basic returned 401.
 	# A successful token exchange proves credentials are valid (no separate /v2/ check needed).
 	# Parse the service name from the actual WWW-Authenticate header — quay-ng may
 	# advertise a service without a port even when the registry runs on a non-standard
 	# port (e.g. port-mapped containers).  Always hit the known-reachable registry
 	# endpoint for the token exchange, not the realm URL (which may point to port 443).
-	if [ "$_p1_code" = "401" ]; then
-		local _bearer_svc _token_url _challenge_hdr
-		_challenge_hdr=$(curl -k -sS -D- -o /dev/null --connect-timeout 3 "$_v2_url" 2>/dev/null)
+	if [ "$_try_bearer" = "true" ] && { [ "$_try_basic" != "true" ] || [ "$_p1_code" = "401" ]; }; then
+		local _bearer_svc _token_url _challenge_hdr _bearer_code
+		# Probe /v2/ for the challenge header (also captures _p1_code when Basic was skipped)
+		_bearer_code=$(curl -k -sS -D "$_td/bearer.headers" -o /dev/null -w "%{http_code}" \
+			--connect-timeout 3 "$_v2_url" 2>/dev/null) || true
+		[ -z "$_p1_code" ] && _p1_code="$_bearer_code"
+		_challenge_hdr=$(cat "$_td/bearer.headers" 2>/dev/null)
 		_bearer_svc=$(printf '%s\n' "$_challenge_hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p' | head -1)
 		[ -z "$_bearer_svc" ] && _bearer_svc="$reg_host:$reg_port"
 		_token_url="https://$reg_host:$reg_port/v2/auth?service=${_bearer_svc}&scope=repository:$_repo:pull"
@@ -4980,6 +5000,30 @@ aba_mirror_verify_wait() {
 # Get cached exit code (non-blocking, for menu rendering). Echoes exit code.
 aba_mirror_verify_exit() {
 	run_once -E -i "aba:mirror:check-image" 2>/dev/null
+}
+
+# --- Mirror runtime state (reg_state + release image — replaces check-image) ---
+
+# Start runtime check in background (non-blocking)
+aba_mirror_runtime_start() {
+	run_once -i "aba:mirror:runtime" -- \
+		bash -lc "cd '${ABA_ROOT:-.}/mirror' && ../scripts/mirror-status.sh --runtime"
+}
+
+# Reset + restart (after state-changing operations)
+aba_mirror_runtime_refresh() {
+	run_once -r -i "aba:mirror:runtime" 2>/dev/null || true
+	aba_mirror_runtime_start
+}
+
+# Wait for completion (blocking)
+aba_mirror_runtime_wait() {
+	run_once -q -w -S -i "aba:mirror:runtime" 2>/dev/null || true
+}
+
+# Read cached stdout (non-blocking). Returns key=value lines.
+aba_mirror_runtime_read() {
+	run_once -o -i "aba:mirror:runtime" 2>/dev/null || true
 }
 
 # --- Internet connectivity ---
