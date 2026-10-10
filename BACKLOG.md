@@ -36,7 +36,7 @@ Issues or Pull Requests.
 ## TUI: OpenShift Channel dialog has no Back button and ESC doesn't exit
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Done
 **Added:** 2026-10-10
 
 **Problem:** The "OpenShift Channel" radiolist dialog (channel selection in the wizard) has only `Next` and `Help` buttons — no `Back` button. Pressing ESC does not exit the dialog either. The user gets stuck in a loop with no way to go back or cancel.

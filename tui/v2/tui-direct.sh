@@ -65,6 +65,7 @@ tui_change_version() {
 			_direct_channel
 			case "$DIALOG_RC" in
 				next) step="version" ;;
+				repeat) ;;  # Stay on channel (Help)
 				*) return 0 ;;
 			esac
 			;;
@@ -174,8 +175,9 @@ direct_wizard() {
 				back)
 					if $_has_back; then
 						step="pull_secret"
+					else
+						return 1
 					fi
-					# No back step — ignore (stay on channel)
 					;;
 				repeat) ;;  # Stay on channel
 				*) return 1 ;;
@@ -371,14 +373,16 @@ _direct_channel() {
 	esac
 
 	local _back_args=()
+	local _cancel_label="$TUI2_BTN_BACK"
 	if [[ "${1:-}" == "back" ]]; then
 		_back_args=(--extra-button --extra-label "$TUI2_BTN_BACK")
+		_cancel_label="$TUI2_BTN_EXIT"
 	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CHANNEL" \
 		--default-item "$_default_tag" \
 		--default-button ok \
-		--no-cancel \
+		--cancel-label "$_cancel_label" \
 		"${_back_args[@]}" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
@@ -419,12 +423,12 @@ _direct_channel() {
 • candidate — preview/beta for testing only"
 			DIALOG_RC="repeat"
 			;;
+		1|255)
+			DIALOG_RC=""
+			;;
 		3)
 			DIALOG_RC="back"
 			;;
-	255)
-		DIALOG_RC="back"
-		;;
 	esac
 }
 
