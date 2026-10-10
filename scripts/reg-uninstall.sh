@@ -18,7 +18,6 @@ export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 # Primary path: use persistent state.sh written at install time
 if [ -s "$regcreds_dir/state.sh" ]; then
 	source "$regcreds_dir/state.sh"
-	_migrate_vendor_name
 
 	# Externally-managed registries must use 'unregister', not 'uninstall'
 	if [ "$reg_vendor" = "existing" ]; then

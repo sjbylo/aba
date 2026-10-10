@@ -18,7 +18,6 @@ export regcreds_display="regcreds"
 # Guard: if state says ABA installed this registry, user should use 'uninstall'
 if [ -s "$regcreds_dir/state.sh" ]; then
 	source "$regcreds_dir/state.sh"
-	_migrate_vendor_name
 	if [ "${reg_vendor:-}" != "existing" ]; then
 		aba_abort \
 			"This registry was installed by ABA (vendor=$reg_vendor)." \
