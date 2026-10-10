@@ -1063,6 +1063,7 @@ change your channel when selected." 0 0
 			fi
 			replace-value-conf -q -n ocp_version -v "$_new_base" -f "$ABA_ROOT/aba.conf"
 			ocp_version="$_new_base"
+			_invalidate_mirror_cache
 			run_once -r -i "aba:upgrade-targets:${_new_base}" 2>/dev/null || true
 			aba_upgrade_targets_start "$_new_base" "$_channel"
 			mirror_prep_upgrade
@@ -2678,7 +2679,7 @@ mirror_create_bundle() {
 		_summary+="\\Z1Release images: EXCLUDED\\Zn\n"
 		dlg --backtitle "$(ui_backtitle)" --title "Warning: No Release Images" \
 			--yes-label "Continue" --no-label "$TUI2_BTN_BACK" \
-			--yesno "Release images are EXCLUDED (excl_platform=true).\n\nThis bundle cannot install a new cluster — it only\ncontains operator images.\n\nTo include release images:\n  Mirror Payload (P) → Release Images toggle\n\nContinue with operator-only bundle?" 0 0
+			--yesno "Release images are EXCLUDED (excl_platform=true).\n\nThis bundle cannot be used to install a new cluster —\nit only contains operator images.\n\nTo include release images:\n  Mirror Payload (P) → Release Images toggle\n\nContinue WITHOUT release images?" 0 0
 		[[ $? -ne 0 ]] && return 1
 	fi
 

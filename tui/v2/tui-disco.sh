@@ -150,6 +150,7 @@ disco_main() {
 	# confirm_and_execute post-hook).
 	while :; do
 		local items=()
+		_TUI_REG_STATE=""
 		local reg_label="$TUI2_LABEL_INSTALL_REGISTRY"
 		local load_label="$TUI2_LABEL_LOAD"
 		local isc_label="$TUI2_LABEL_VIEW_ISC_RO"
@@ -159,10 +160,10 @@ disco_main() {
 
 		# Mirror recheck: only when _invalidate_mirror_cache fired
 		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
-			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+			if ! run_once -p -i "aba:mirror:runtime" 2>/dev/null; then
 				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
 			fi
-			aba_mirror_verify_wait
+			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
 		fi
 
@@ -173,6 +174,8 @@ disco_main() {
 		if mirror_available; then
 			if _mirror_has_release_image; then
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
+			elif [[ "$_TUI_REG_STATE" == "stopped" ]]; then
+				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_STOPPED"
 			else
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_NOT_VERIFIED"
 			fi
@@ -228,7 +231,7 @@ disco_main() {
 		# Smart focus: last assignment wins = highest priority (read bottom-to-top)
 		if [[ -z "$default_item" ]]; then
 			default_item="$TUI2_DISCO_TAG_INSTALL_REG"
-			if mirror_available && ! _mirror_has_release_image;  then default_item="$TUI2_DISCO_TAG_LOAD"; fi
+			if mirror_available && ! _mirror_has_release_image && [[ "${_TUI_REG_STATE:-}" != "stopped" ]]; then default_item="$TUI2_DISCO_TAG_LOAD"; fi
 			if _mirror_has_release_image;                         then default_item="$TUI2_DISCO_TAG_INSTALL"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];         then default_item="$TUI2_DISCO_TAG_DAY2"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];        then default_item="$TUI2_DISCO_TAG_MONITOR"; fi
