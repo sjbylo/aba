@@ -17,6 +17,14 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_h
 
 	aba_progress "START|uninst_remove"
 
+	# A stopped registry has no running container/port but its Quadlet unit
+	# still exists.  mirror-registry uninstall needs a running service to
+	# remove cleanly.  Start it first so the uninstall tool can do its job.
+	if [ "${reg_running:-}" = "false" ]; then
+		aba_info "Registry is stopped — starting it before uninstall ..."
+		reg_start_vendor "$_QUAY_NG_VENDOR"
+	fi
+
 	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR")
 	if [ -z "$_stale" ]; then
 		aba_info "$_QUAY_NG_VENDOR registry already gone on localhost -- clearing local state"
