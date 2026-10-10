@@ -1959,6 +1959,8 @@ tui_advanced_menu() {
 		_plat_label="Platform Settings (${platform:-bm})"
 		adv_items+=("P" "$_plat_label")
 		if [[ "${_TUI_MODE:-}" != "DIRECT" ]] && mirror_available; then
+			adv_items+=("S" "Stop Mirror Registry")
+			adv_items+=("T" "Start Mirror Registry")
 			adv_items+=("U" "Uninstall Mirror Registry (destructive)")
 		fi
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
@@ -2005,6 +2007,9 @@ P - Platform Settings: View or edit your hypervisor configuration\n\
     (vmware.conf for vSphere, kvm.conf for KVM/libvirt).\n\n\
 U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
+S - Stop Mirror Registry: Stops the registry service without removing\n\
+    data or configuration. Use before copying the data directory.\n\n\
+T - Start Mirror Registry: Starts a previously stopped registry.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
 X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
@@ -2069,6 +2074,14 @@ R - Clean ABA: Removes configuration and state files so you can\n\
 						tui_log "Platform set to bare metal"
 						;;
 				esac
+				;;
+			"S")
+				_exec_with_progress "aba --dir mirror stop --yes" "Stop Mirror Registry" _invalidate_mirror_cache
+				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir mirror stop" "Stop Mirror Registry" _invalidate_mirror_cache
+				;;
+			"T")
+				_exec_with_progress "aba --dir mirror start --yes" "Start Mirror Registry" _invalidate_mirror_cache
+				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir mirror start" "Start Mirror Registry" _invalidate_mirror_cache
 				;;
 			"U")
 				local _unreg_host
