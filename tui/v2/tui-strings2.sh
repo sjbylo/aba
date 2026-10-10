@@ -232,6 +232,7 @@ TUI2_STATUS_SYNCED="\Z2(synced)\Zn"
 TUI2_STATUS_SAVED="\Z2(saved)\Zn"
 TUI2_STATUS_LOADED="\Z2(loaded)\Zn"
 TUI2_STATUS_NOT_VERIFIED="\Z3(installed — no release image)\Zn"
+TUI2_STATUS_STOPPED="\Z1(stopped)\Zn"
 TUI2_STATUS_NO_MIRROR="\Z1[no mirror]\Zn"
 TUI2_STATUS_NO_INTERNET="\Z1[no internet]\Zn"
 TUI2_STATUS_INSTALL_REGISTRY="\Z1[install registry]\Zn"
@@ -240,6 +241,7 @@ TUI2_STATUS_INSTALL_MIRROR="\Z1[install mirror]\Zn"
 TUI2_STATUS_SYNC_FIRST="\Z3[sync mirror first]\Zn"
 TUI2_STATUS_LOAD_FIRST="\Z3[load mirror first]\Zn"
 TUI2_STATUS_NO_RELEASE="\Z3[release image missing]\Zn"
+TUI2_STATUS_MIRROR_STOPPED="\Z1[mirror stopped]\Zn"
 
 # =============================================================================
 # Legacy aliases (for existing references)

@@ -264,6 +264,7 @@ dlg() {
 	local has_menu=false
 	local menu_type=""
 	local _add_trailing=false
+	local _needs_tab_hint=false
 	local dims_after_text=0
 	local height_idx=-1
 	local width_val=""
@@ -319,13 +320,21 @@ dlg() {
 				next_is_text=true; has_menu=true; menu_type="menu" ;;
 			--radiolist|--checklist)
 				next_is_text=true; has_menu=true; menu_type="checklist" ;;
-			--msgbox|--yesno|--inputbox)
-				next_is_text=true; _add_trailing=true ;;
-			--mixedform)
-				next_is_text=true ;;
+		--msgbox|--yesno)
+			next_is_text=true; _add_trailing=true ;;
+		--inputbox)
+			next_is_text=true; _add_trailing=true; _needs_tab_hint=true ;;
+		--mixedform|--editbox)
+			next_is_text=true; _needs_tab_hint=true ;;
 		esac
 		args+=("$arg")
 	done
+
+	# Inputbox / editbox / mixedform: arrow keys edit text, not navigate buttons.
+	# Inject --hline so the hint appears at the bottom frame, near the buttons.
+	if [[ "$_needs_tab_hint" == "true" ]]; then
+		args=("--hline" "Use Tab to navigate to the buttons" "${args[@]}")
+	fi
 
 	# If menu-height was 0, replace with actual item count and compute height
 	if [[ $dims_idx -ge 0 && "${args[$dims_idx]}" == "0" ]]; then
@@ -837,13 +846,22 @@ _tui_install_mirror() {
 	return $rc
 }
 
-# Check if the mirror has been verified (release image present in registry).
-# Uses the background run_once task — non-blocking, returns cached result.
-# Returns 0 (true) if verified, 1 (false) if not yet verified or failed.
+# Read the runtime cache exactly once and store it in _TUI_REG_STATE.
+# All TUI code that needs reg_state should call this (idempotent per menu
+# iteration — callers reset _TUI_REG_STATE="" at the top of each loop).
+_tui_read_mirror_state() {
+	if [[ -n "${_TUI_REG_STATE:-}" ]]; then
+		return
+	fi
+	local reg_state=""
+	eval "$(aba_mirror_runtime_read)"
+	_TUI_REG_STATE="${reg_state:-unknown}"
+}
+
+# Convenience: true when reg_state == ready (release image available).
 _mirror_has_release_image() {
-	local exit_code
-	exit_code=$(aba_mirror_verify_exit) || true
-	[[ "$exit_code" == "0" ]]
+	_tui_read_mirror_state
+	[[ "$_TUI_REG_STATE" == "ready" ]]
 }
 
 # Last completed mirror action from state.sh (install | load | sync | register).
@@ -853,31 +871,21 @@ _mirror_last_action() {
 }
 
 # Return human-readable mirror state for the menu title.
-# States: "no mirror" → "mirror installed" → "mirror ready"
-# "mirror ready" means the release image is actually present in the registry.
-# Color-coded via dialog --colors escape codes: green=ready, yellow=installed, red=none.
+# States: "no mirror" → "mirror stopped" → "mirror installed" → "mirror ready"
+# Pure display function — reads cached reg_state from core, zero business logic.
+# Color-coded via dialog --colors escape codes: green=ready, yellow=installed, red=none/stopped.
 mirror_state_label() {
 	if ! mirror_available; then
 		echo "\\Z1no mirror\\Zn"
 		return
 	fi
-	# Check if registry is stopped (installed but port not listening)
-	# Only for local registries — remote SSH check would be too slow for menu redraw
-	local _state_file="$HOME/.aba/mirror/$(basename "$ABA_ROOT/mirror")/state.sh"
-	if [ -s "$_state_file" ]; then
-		local reg_port reg_ssh_key
-		reg_port=$(grep '^reg_port=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2)
-		reg_ssh_key=$(grep '^reg_ssh_key=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2)
-		if [ -n "$reg_port" ] && [ -z "$reg_ssh_key" ] && ! ss -tlnp 2>/dev/null | grep -q ":${reg_port} "; then
-			echo "\\Z1mirror stopped\\Zn"
-			return
-		fi
-	fi
-	if _mirror_has_release_image; then
-		echo "\\Z2\\Zbmirror ready\\Zn"
-	else
-		echo "\\Z3mirror installed\\Zn"
-	fi
+	_tui_read_mirror_state
+	case "$_TUI_REG_STATE" in
+		ready)     echo "\\Z2\\Zbmirror ready\\Zn" ;;
+		stopped)   echo "\\Z1mirror stopped\\Zn" ;;
+		installed) echo "\\Z3mirror installed\\Zn" ;;
+		*)         echo "\\Z3mirror installed\\Zn" ;;
+	esac
 }
 
 # Invalidate mirror verify and kick off a fresh background check.
@@ -886,7 +894,7 @@ mirror_state_label() {
 # Also sets _TUI_NEED_MIRROR_RECHECK so the menu loop re-probes on next draw.
 _invalidate_mirror_cache() {
 	_TUI_NEED_MIRROR_RECHECK=true
-	aba_mirror_verify_refresh
+	aba_mirror_runtime_refresh
 	# Internet check uses TTL (aba_inet_check_cached) — no reset needed here.
 	# The menu loop re-triggers automatically if >300s elapsed.
 }
@@ -1154,6 +1162,8 @@ tui_cluster_menu_flags() {
 		CONNO)
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_MIRROR"
+			elif [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_MIRROR_STOPPED"
 			elif ! _mirror_has_release_image; then
 				# Release image may be absent after a successful sync/load
 				# (e.g. excl_platform=true / operators-only archive).
@@ -1163,6 +1173,8 @@ tui_cluster_menu_flags() {
 		DISCO)
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_INSTALL_REGISTRY"
+			elif [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_MIRROR_STOPPED"
 			elif ! _mirror_has_release_image; then
 				# Same check as CONNO: "not loaded" is wrong when the archive
 				# was loaded but intentionally omitted platform/release images.
@@ -1608,6 +1620,11 @@ tui_install_cluster_gate() {
 				fi
 				return 1
 			fi
+			if [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Mirror Stopped" \
+					--msgbox "The mirror registry is stopped.\n\nStart it first via Advanced → Start Mirror Registry." 0 0
+				return 1
+			fi
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_SYNCED" \
 				--yes-label "Sync Now" --no-label "$TUI2_BTN_BACK" \
 				--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
@@ -1632,6 +1649,11 @@ tui_install_cluster_gate() {
 						return 3
 					fi
 				fi
+				return 1
+			fi
+			if [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Mirror Stopped" \
+					--msgbox "The mirror registry is stopped.\n\nStart it first via Advanced → Start Mirror Registry." 0 0
 				return 1
 			fi
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \

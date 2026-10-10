@@ -145,7 +145,7 @@ _tick "Loading modules"
 # =============================================================================
 
 for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf \
-	aba_mirror_verify_start aba_mirror_verify_refresh aba_mirror_verify_exit \
+	aba_mirror_runtime_start aba_mirror_runtime_refresh aba_mirror_runtime_read aba_mirror_runtime_wait \
 	aba_inet_check_start aba_inet_check_wait aba_inet_check_wait_status \
 	aba_podman_check_start aba_podman_check_wait \
 	aba_version_fetch_start aba_isconf_generate_start aba_prefetch_catalogs aba_bg_cleanup; do
@@ -165,7 +165,7 @@ aba_bg_cleanup
 aba_inet_check_start
 
 tui_log "Kicking off background mirror verify"
-aba_mirror_verify_start
+aba_mirror_runtime_start
 
 _tick "Checking mirror"
 
@@ -526,6 +526,7 @@ _conno_main() {
 		if aba_inet_check_cached 300; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
 		local items=()
+		_TUI_REG_STATE=""
 
 		local mirr_label="$TUI2_LABEL_INSTALL_MIRROR"
 		local mirr_avail=true
@@ -549,10 +550,10 @@ _conno_main() {
 		# Mirror recheck: only when _invalidate_mirror_cache fired after a
 		# mirror-changing action (sync, load, install, uninstall).
 		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
-			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+			if ! run_once -p -i "aba:mirror:runtime" 2>/dev/null; then
 				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
 			fi
-			aba_mirror_verify_wait
+			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
 		fi
 
@@ -563,6 +564,12 @@ _conno_main() {
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
 			if [[ "$sync_avail" == "true" ]]; then
+				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			fi
+		elif mirror_available && [[ "$_TUI_REG_STATE" == "stopped" ]]; then
+			mirr_avail=false
+			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_STOPPED"
+			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
 				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
 			fi
 		elif mirror_available; then
@@ -610,7 +617,7 @@ _conno_main() {
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];           then default_item="$TUI2_CONNO_TAG_DAY2"; fi
 			if _mirror_has_release_image;                            then default_item="$TUI2_CONNO_TAG_INSTALL"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];          then default_item="$TUI2_CONNO_TAG_MONITOR"; fi
-			if mirror_available && ! _mirror_has_release_image;      then default_item="$TUI2_CONNO_TAG_SYNC"; fi
+			if mirror_available && ! _mirror_has_release_image && [[ "${_TUI_REG_STATE:-}" != "stopped" ]]; then default_item="$TUI2_CONNO_TAG_SYNC"; fi
 			if ! mirror_available;                                   then default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"; fi
 			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_PAYLOAD"; fi
 		fi
