@@ -17,6 +17,11 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on remote host $reg_ss
 
 	aba_progress "START|uninst_remove"
 
+	if [ "${reg_running:-}" = "false" ]; then
+		aba_info "Registry is stopped — starting it before uninstall ..."
+		reg_start_vendor "$_QUAY_NG_VENDOR" "$_ssh"
+	fi
+
 	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR" "$_ssh")
 	if [ -z "$_stale" ]; then
 		aba_info "$_QUAY_NG_VENDOR registry already gone on $reg_host -- clearing local state"
