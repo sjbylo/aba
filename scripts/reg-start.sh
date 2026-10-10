@@ -20,6 +20,7 @@ if [ ! -s "$regcreds_dir/state.sh" ]; then
 fi
 
 source "$regcreds_dir/state.sh"
+_migrate_vendor_name
 
 if [ "$reg_vendor" = "existing" ]; then
 	aba_abort \
