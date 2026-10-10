@@ -40,4 +40,7 @@ fi
 
 aba_progress "DONE|start_reg"
 aba_progress "START|start_verify"
+
+replace-value-conf -q -n reg_running -v "true" -f "$regcreds_dir/state.sh"
+
 aba_progress "DONE|start_verify"
