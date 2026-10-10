@@ -993,6 +993,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				# Warn if cluster is already installed
 				if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+						--defaultno \
 						--yes-label "Continue" --no-label "Back" \
 						--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
 					[[ $? -ne 0 ]] && continue
@@ -2544,8 +2545,13 @@ _day2_upgrade() {
 		return 1
 	fi
 
-	local opt_warnings="OFF" opt_force="OFF"
+	local opt_force="OFF"
 	local _cur_minor="${upgrade_current_ver%.*}"
+
+	# Build a lookup set for conditional versions
+	local -A _cond_set=()
+	local _cv
+	for _cv in "${_conditional[@]}"; do _cond_set[$_cv]=1; done
 
 	# Default to the safest choice: z-stream first, then minor, then conditional
 	local default_item="M"
@@ -2559,9 +2565,11 @@ _day2_upgrade() {
 		local _header="Current: ${upgrade_current_ver:-?}"
 		[[ -n "${upgrade_channel:-}" ]] && _header="$_header (${upgrade_channel})"
 		if [[ "${upgrade_osus:-}" == "true" ]]; then
-			_header="$_header [OSUS]"
+			_header="$_header \\Z2[OSUS]\\Zn"
 		else
-			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths (recommended)"
+			_header="$_header \\Z1[no OSUS]\\Zn"
+			_header="$_header\n\\Z1⚠ Upgrade paths cannot be validated without OSUS.\\Zn"
+			_header="$_header\n\\Z1  Install OSUS first: Day-2 → OSUS (recommended).\\Zn"
 		fi
 		_header="$_header\nNote: The update channel will be switched automatically if needed."
 
@@ -2596,17 +2604,16 @@ _day2_upgrade() {
 			done
 		fi
 
-		# Show conditional versions when toggle is ON
-		if [[ "$opt_warnings" == "ON" && ${#_conditional[@]} -gt 0 ]]; then
+		# Always show conditional versions inline (annotated)
+		if [[ ${#_conditional[@]} -gt 0 ]]; then
 			items+=("" "──── Conditional (not recommended) ───")
 			for v in "${_conditional[@]}"; do
-				items+=("$v" "(!) known issues")
+				items+=("$v" "\\Z1(conditional)\\Zn known issues")
 			done
 		fi
 
 		items+=("M" "Manual entry...")
 		items+=("" "──── Options ────────────────────")
-		items+=("W" "Include conditional versions:  $opt_warnings")
 		items+=("F" "Force (bypass safety checks):  $opt_force")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
@@ -2643,22 +2650,24 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 		choice=$(<"$_TUI_TMP")
 		[[ -n "$choice" ]] && default_item="$choice"
 
-		# Handle toggles
-		if [[ "$choice" == "W" ]]; then
-			[[ "$opt_warnings" == "OFF" ]] && opt_warnings="ON" || opt_warnings="OFF"
-			continue
-		elif [[ "$choice" == "F" ]]; then
+		# Handle toggles and selections
+		if [[ "$choice" == "F" ]]; then
 			[[ "$opt_force" == "OFF" ]] && opt_force="ON" || opt_force="OFF"
 			continue
 		elif [[ "$choice" == "M" ]]; then
 			:
 		elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			# Confirm if conditional version selected
+			if [[ -n "${_cond_set[$choice]:-}" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Conditional Version" \
+					--defaultno \
+					--yes-label "Proceed" --no-label "$TUI2_BTN_BACK" \
+					--yesno "Version $choice is \\Z1conditional (not recommended)\\Zn.\n\nThis version has known issues. Red Hat does not\nrecommend upgrading to it unless specifically advised.\n\nProceed with upgrade to $choice?" 0 0
+				[[ $? -ne 0 ]] && continue
+			fi
 			_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 			local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $choice"
-			# If the version is conditional, tell ABA core to skip the redundant interactive question
-			local _is_conditional=
-			for _cv in "${_conditional[@]}"; do [[ "$_cv" == "$choice" ]] && _is_conditional=1 && break; done
-			[[ "$_is_conditional" ]] && _cmd="$_cmd --allow-not-recommended"
+			[[ -n "${_cond_set[$choice]:-}" ]] && _cmd="$_cmd --allow-not-recommended"
 			[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
 			_exec_with_progress "$_cmd --yes" \
 				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"

@@ -132,6 +132,13 @@ if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ] && [ "$_excl_platform"
 	_upgrade_needs_platform=true
 fi
 
+# Transfer warning: release images excluded (bundle/save can't install a new cluster).
+# Skip when ISC is user-managed — user owns the config, we don't second-guess.
+_transfer_excl_release=false
+if [ "$_excl_platform" = "true" ] && [ "$_isc_user_managed" != "true" ]; then
+	_transfer_excl_release=true
+fi
+
 # How much more disk this ISC needs, from the one size estimate.
 # save writes an archive and the oc-mirror cache. sync writes the registry
 # only. load writes the registry and the cache; the archive is already here.
@@ -455,6 +462,7 @@ shell)
 	echo "isc_exists=$_isc_exists"
 	echo "isc_user_managed=$_isc_user_managed"
 	echo "upgrade_needs_platform=$_upgrade_needs_platform"
+	echo "transfer_excl_release=$_transfer_excl_release"
 	echo "upgrade_path_exists=$_upgrade_path_exists"
 	echo "upgrade_path_conditional=$_upgrade_path_conditional"
 	echo "upgrade_risks=$_upgrade_risks"
@@ -620,7 +628,9 @@ op)
 		fi
 	fi
 	if [ "$_upgrade_needs_platform" = "true" ]; then
-		aba_warn "  Warning:      upgrade requires release images but they are excluded!"
+		aba_warn "  Upgrade:      requires release images but they are excluded!"
+	elif [ "$_transfer_excl_release" = "true" ]; then
+		aba_warn "  Release:      excluded — bundles/saves are operator-only"
 	fi
 	if [ -n "$_last_action" ]; then
 		aba_info "  Last action:  ${_last_action}${_last_action_at:+ (${_last_action_at})}"

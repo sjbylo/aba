@@ -542,7 +542,29 @@ _mirror_op_confirm() {
 		if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
 			_op_count=-1
 			_op_preview=""
-		else
+		fi
+	fi
+
+	# Mirror status (ISC operator count, disk, upgrade path) — single source of truth.
+	# operator_count/operators from ISC override stale OP_BASKET when available.
+	local disk_save_summary="" disk_sync_summary="" disk_load_summary=""
+	local disk_save_short=false disk_sync_short=false disk_load_short=false
+	local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
+	local operator_count="" operators=""
+	eval "$(_tui_mirror_status_shell)"
+
+	if [[ $_op_count -ne -1 ]]; then
+		if [[ -n "$operator_count" && "$operator_count" -gt 0 ]]; then
+			_op_count=$operator_count
+			_op_preview=""
+			local _first5
+			_first5=$(echo "$operators" | cut -d, -f1-5 | sed 's/,/, /g')
+			_op_preview="$_first5"
+			if [[ $_op_count -gt 5 ]]; then
+				_op_preview="$_first5, ... (+$(( _op_count - 5 )) more)"
+			fi
+		elif [[ -z "$operator_count" ]]; then
+			# ISC not available — fall back to OP_BASKET
 			_op_count=${#OP_BASKET[@]}
 			_op_preview=""
 			if [[ $_op_count -gt 0 ]]; then
@@ -557,6 +579,9 @@ _mirror_op_confirm() {
 					_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
 				fi
 			fi
+		else
+			_op_count=0
+			_op_preview=""
 		fi
 	fi
 
@@ -572,12 +597,6 @@ _mirror_op_confirm() {
 	else
 		_summary+="Operators: none\n"
 	fi
-
-	# Size increase vs free disk, and the upgrade-path flags, from one status call.
-	local disk_save_summary="" disk_sync_summary="" disk_load_summary=""
-	local disk_save_short=false disk_sync_short=false disk_load_short=false
-	local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
-	eval "$(_tui_mirror_status_shell)"
 
 	# Upgrade path status from aba status (connected mode only, upgrade target set)
 	if [[ "$_TUI_MODE" != "DISCO" && -n "${_target:-}" ]]; then
@@ -710,7 +729,7 @@ _offer_excl_platform_for_save() {
 
 	# Don't offer if no operators are configured — excluding release images
 	# with no operators results in an empty ISC (nothing to mirror).
-	[[ -z "${operators:-}" ]] && return 1
+	[[ -z "${ops:-}${op_sets:-}" ]] && return 1
 
 	local _target="${ocp_upgrade_to:-}"
 	[[ -n "$_target" && "$_target" != "${ocp_version:-}" ]] && return 1
@@ -935,6 +954,7 @@ change your channel when selected." 0 0
 	items+=("-" "─────────────────────────────────")
 	items+=("m" "Manual entry (x.y or x.y.z)")
 	items+=("b" "Change base version (${_current_ver})")
+	items+=("h" "Change channel (${_channel})")
 	if [[ -n "$_existing_target" ]]; then
 		items+=("c" "Clear target (disable upgrade mode)")
 	fi
@@ -989,6 +1009,39 @@ change your channel when selected." 0 0
 					fi
 				done
 			[[ -z "$_target_ver" ]] && continue
+			;;
+		h)
+			local _ch_default="s"
+			case "$_channel" in
+				stable) _ch_default="s" ;; fast) _ch_default="f" ;;
+				candidate) _ch_default="c" ;; eus) _ch_default="e" ;;
+			esac
+			dlg --backtitle "$(ui_backtitle)" --title "Change OCP Channel" \
+				--default-item "$_ch_default" \
+				--ok-label "$TUI2_BTN_SELECT" \
+				--cancel-label "$TUI2_BTN_BACK" \
+				--menu "Current channel: $_channel\n\nSelect new channel:" 0 0 0 \
+				"s" "stable    — Recommended" \
+				"f" "fast      — Latest GA" \
+				"c" "candidate — Preview" \
+				"e" "eus       — Extended Update Support" \
+				2>"$_TUI_TMP"
+			[[ $? -ne 0 ]] && continue
+			local _new_channel
+			case "$(<"$_TUI_TMP")" in
+				s) _new_channel="stable" ;; f) _new_channel="fast" ;;
+				c) _new_channel="candidate" ;; e) _new_channel="eus" ;;
+				*) continue ;;
+			esac
+			if [[ "$_new_channel" != "$_channel" ]]; then
+				replace-value-conf -q -n ocp_channel -v "$_new_channel" -f "$ABA_ROOT/aba.conf"
+				ocp_channel="$_new_channel"
+				tui_log "Upgrade dialog: channel changed to $_new_channel"
+				# Re-enter with fresh targets for new channel
+				mirror_prep_upgrade
+				return $?
+			fi
+			continue
 			;;
 		b)
 			dlg --backtitle "$(ui_backtitle)" --title "Change Base Version" \
@@ -1732,6 +1785,7 @@ Selected operators will be included in the ImageSet config."
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Selection is already empty." 0 0
 				else
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLEAR_BASKET" \
+						--defaultno \
 						--yes-label "Clear" --no-label "$TUI2_BTN_CANCEL" \
 						--yesno "Remove all ${#OP_BASKET[@]} operators from selection?" 0 0
 					if [[ $? -eq 0 ]]; then
@@ -2480,6 +2534,7 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					continue
 				fi
 				dlg --backtitle "$(ui_backtitle)" --title "Clear All Images" \
+					--defaultno \
 					--yes-label "Clear All" \
 					--no-label "Cancel" \
 					--yesno "Remove all $_count image(s) from images.conf?\n\nThis cannot be undone." 0 0
@@ -2591,25 +2646,24 @@ mirror_create_bundle() {
 	if [[ -n "${transfer_upgrade_to:-}" && "$transfer_upgrade_to" != "$_ver" ]]; then
 		_ver="${_ver} → ${transfer_upgrade_to}"
 	fi
-	local _op_count _op_preview=""
+	# Operator count and transfer warnings from aba core (mirror-status.sh)
+	local transfer_excl_release="" operator_count="" operators="" isc_user_managed=""
+	eval "$(_tui_mirror_status_shell)"
 
-	if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
+	local _op_count _op_preview=""
+	if [[ "$isc_user_managed" == "true" ]]; then
 		_op_count=-1
+	elif [[ -n "$operator_count" ]]; then
+		_op_count=$operator_count
+		_op_preview=""
+		if [[ $_op_count -gt 0 ]]; then
+			local _first5
+			_first5=$(echo "$operators" | cut -d, -f1-5 | sed 's/,/, /g')
+			_op_preview="$_first5"
+			[[ $_op_count -gt 5 ]] && _op_preview="$_first5, ... (+$(( _op_count - 5 )) more)"
+		fi
 	else
 		_op_count=${#OP_BASKET[@]}
-		if [[ $_op_count -gt 0 ]]; then
-			local _shown=()
-			local _i=0
-			for _op in "${!OP_BASKET[@]}"; do
-				_shown+=("$_op")
-				_i=$(( _i + 1 ))
-				[[ $_i -ge 5 ]] && break
-			done
-			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-			if [[ $_op_count -gt 5 ]]; then
-				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
-			fi
-		fi
 	fi
 
 	local _summary="OCP: $_ver ($_chan)\n"
@@ -2620,6 +2674,14 @@ mirror_create_bundle() {
 	else
 		_summary+="Operators: none\n"
 	fi
+	if [[ "$transfer_excl_release" == "true" ]]; then
+		_summary+="\\Z1Release images: EXCLUDED\\Zn\n"
+		dlg --backtitle "$(ui_backtitle)" --title "Warning: No Release Images" \
+			--yes-label "Continue" --no-label "$TUI2_BTN_BACK" \
+			--yesno "Release images are EXCLUDED (excl_platform=true).\n\nThis bundle cannot install a new cluster — it only\ncontains operator images.\n\nTo include release images:\n  Mirror Payload (P) → Release Images toggle\n\nContinue with operator-only bundle?" 0 0
+		[[ $? -ne 0 ]] && return 1
+	fi
+
 	_summary+="\nEnter output path (version suffix added automatically):\n"
 	_summary+="\nTip: For best results, use a USB drive or a separate"
 	_summary+="\nfilesystem with plenty of free space."

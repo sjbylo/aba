@@ -757,7 +757,7 @@ _exec_in_terminal() {
 	fi
 
 	# When auto-answer is ON, append --yes (same as _exec_in_tui)
-	if [[ "$(_tui_abaconf_raw_ask)" == "yes" ]]; then
+	if [[ "$(_tui_abaconf_raw_ask)" == "true" ]]; then
 		[[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]] && cmd="$cmd --yes"
 	fi
 
@@ -829,7 +829,7 @@ mirror_available() {
 # Returns 0 on success, non-zero on failure or user cancel.
 _tui_install_mirror() {
 	local _vendor
-	_vendor=$(source <(normalize-mirror-conf) && echo "${reg_vendor:-auto}")
+	_vendor=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) && echo "${reg_vendor:-auto}")
 	local _label="Install ${_vendor} Mirror"
 	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
 	local rc=$?
@@ -1669,7 +1669,7 @@ _require_podman() {
 	# If still running, show "Please wait..." until it completes
 	if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"Verifying podman...\n\nPlease wait." 5 45
+			"One moment please..." 5 30
 	fi
 
 	# Block until result is available

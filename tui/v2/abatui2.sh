@@ -708,7 +708,7 @@ Navigation:
 		case "$choice" in
 		"$TUI2_CONNO_TAG_INSTALL_MIRROR")
 			if [[ "$mirr_avail" == "false" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --yesno \
+				dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
 					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && mirror_install
