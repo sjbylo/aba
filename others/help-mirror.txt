@@ -37,6 +37,9 @@ Related commands:
 
   aba [-d mirror] load [--retry #]     # Copy images from disk to the mirror registry (disk2mirror).
 
+  aba [-d mirror] stop                 # Stop the mirror registry (safe to copy data dir).
+  aba [-d mirror] start                # Start a previously stopped mirror registry.
+
   aba [-d mirror] verify               # Verify mirror registry connection credentials are working.
 
   aba [-d mirror] password             # Optional: Create pull secret file for existing mirror registry, if needed.

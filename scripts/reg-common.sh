@@ -1202,3 +1202,95 @@ reg_remote_post_install() {
 		To uninstall: cd $PWD && aba uninstall
 	BREADCRUMB
 }
+
+# --- reg_stop_vendor ----------------------------------------------------------
+# Stop a running registry without removing data or config.
+# Idempotent: if already stopped, prints info and returns 0.
+# Usage: reg_stop_vendor <vendor> [ssh_cmd]
+reg_stop_vendor() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	local port="${reg_port:-8443}"
+
+	# Already stopped?
+	if ! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_info "Registry on $_where is already stopped (port $port not listening)"
+		return 0
+	fi
+
+	aba_info "Stopping $vendor registry on $_where ..."
+
+	case "$vendor" in
+		docker)
+			_reg_host_run "$ssh_cmd" "podman stop registry-${port} 2>/dev/null || podman stop registry 2>/dev/null" || true
+			;;
+		quay)
+			_reg_host_run "$ssh_cmd" "podman stop quay-app quay-redis quay-postgres 2>/dev/null" || true
+			;;
+		"$_QUAY_NG_VENDOR"|quay-ng)
+			_reg_host_run "$ssh_cmd" "systemctl --user stop quay.service 2>/dev/null || sudo systemctl stop quay.service 2>/dev/null" || true
+			;;
+		*)
+			aba_abort "reg_stop_vendor: unknown vendor '$vendor'"
+			;;
+	esac
+
+	# Verify stopped
+	sleep 1
+	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening"
+	fi
+
+	aba_info "$vendor registry stopped on $_where"
+}
+
+# --- reg_start_vendor ---------------------------------------------------------
+# Start a previously stopped registry.
+# Idempotent: if already running, prints info and returns 0.
+# Usage: reg_start_vendor <vendor> [ssh_cmd]
+reg_start_vendor() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	local port="${reg_port:-8443}"
+
+	# Already running?
+	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_info "Registry on $_where is already running (port $port listening)"
+		return 0
+	fi
+
+	aba_info "Starting $vendor registry on $_where ..."
+
+	case "$vendor" in
+		docker)
+			_reg_host_run "$ssh_cmd" "podman start registry-${port} 2>/dev/null || podman start registry 2>/dev/null"
+			;;
+		quay)
+			_reg_host_run "$ssh_cmd" "podman start quay-postgres quay-redis quay-app"
+			;;
+		"$_QUAY_NG_VENDOR"|quay-ng)
+			_reg_host_run "$ssh_cmd" "systemctl --user start quay.service 2>/dev/null || sudo systemctl start quay.service 2>/dev/null"
+			;;
+		*)
+			aba_abort "reg_start_vendor: unknown vendor '$vendor'"
+			;;
+	esac
+
+	# Wait for port to come up (registry may need a moment)
+	local _attempts=0
+	while ! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; do
+		_attempts=$(( _attempts + 1 ))
+		if [ "$_attempts" -ge 10 ]; then
+			aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 10s"
+		fi
+		sleep 1
+	done
+
+	aba_info "$vendor registry started on $_where (port $port)"
+}
