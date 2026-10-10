@@ -40,4 +40,7 @@ fi
 
 aba_progress "DONE|stop_reg"
 aba_progress "START|stop_verify"
+
+replace-value-conf -q -n reg_running -v "false" -f "$regcreds_dir/state.sh"
+
 aba_progress "DONE|stop_verify"

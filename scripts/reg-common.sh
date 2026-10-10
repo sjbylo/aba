@@ -608,6 +608,7 @@ reg_post_install() {
 	reg_ssh_user=${reg_ssh_user:-}
 	reg_root_opts="${reg_root_opts:-}"
 	reg_fw_opened=${_reg_fw_opened:-}
+	reg_running=true
 	last_action=install
 	last_action_at='$(date '+%Y-%m-%d %H:%M:%S')'
 	reg_installed_at='$(date '+%Y-%m-%d %H:%M:%S')'

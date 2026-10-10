@@ -194,6 +194,7 @@ else
 fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n reg_running -v "true" -f "$regcreds_dir/state.sh"
 
 # Archive the entire cluster-resources/ directory per OCP minor version.
 # oc-mirror overwrites these files on every sync, so after an upgrade sync
