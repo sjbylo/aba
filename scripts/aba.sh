@@ -1459,24 +1459,28 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		day2)
-			$ABA_ROOT/scripts/day2.sh
-			_post_check_install
-			exit
+			_rc=0
+			$ABA_ROOT/scripts/day2.sh || _rc=$?
+			[ "$_rc" -eq 0 ] && _post_check_install
+			exit $_rc
 		;;
 		day2-ntp)
-			$ABA_ROOT/scripts/day2-config-ntp.sh
-			_post_check_install
-			exit
+			_rc=0
+			$ABA_ROOT/scripts/day2-config-ntp.sh || _rc=$?
+			[ "$_rc" -eq 0 ] && _post_check_install
+			exit $_rc
 		;;
 		day2-osus)
-			$ABA_ROOT/scripts/day2-config-osus.sh
-			_post_check_install
-			exit
+			_rc=0
+			$ABA_ROOT/scripts/day2-config-osus.sh || _rc=$?
+			[ "$_rc" -eq 0 ] && _post_check_install
+			exit $_rc
 		;;
 		day2-virt)
-			$ABA_ROOT/scripts/day2-config-virt.sh
-			_post_check_install
-			exit
+			_rc=0
+			$ABA_ROOT/scripts/day2-config-virt.sh || _rc=$?
+			[ "$_rc" -eq 0 ] && _post_check_install
+			exit $_rc
 		;;
 		upgrade)
 			upgrade_args=()
