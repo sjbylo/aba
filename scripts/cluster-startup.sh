@@ -16,8 +16,8 @@ if [ -z "$_kc" ]; then
 	aba_progress "FAIL|su_power"
 	aba_progress "ERROR|Cluster not installed"
 	aba_progress "DETAIL|Cannot find kubeconfig"
-	aba_progress "NEXT|Run 'aba clean; aba' to install this cluster"
-	aba_abort "Cluster not installed! Cannot find kubeconfig. Try running 'aba clean; aba' to install this cluster!"
+	aba_progress "NEXT|Run 'aba -d $(basename "$PWD") install' to install this cluster"
+	aba_abort "Cluster not installed! Cannot find kubeconfig. Run 'aba -d $(basename "$PWD") install' to install this cluster."
 fi
 export KUBECONFIG="$_kc"
 
