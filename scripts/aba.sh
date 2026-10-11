@@ -460,6 +460,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		echo
 		printf "  %-16s %s\n" "SET" "DESCRIPTION"
 		printf "  %-16s %s\n" "---" "-----------"
+		printf "  %-16s %s\n" "all" "All available operator sets combined"
 		for f in "$ABA_ROOT"/templates/operator-set-*; do
 			[ -f "$f" ] || continue
 			set_name="${f##*operator-set-}"   # extract set name from full path
@@ -912,7 +913,7 @@ for i in imgs:
 					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 				else
 					aba_warn "No such operator set: $1" >&2
-				aba_info -n "Available operator sets are: " >&2
+				aba_info -n "Available operator sets are: all " >&2
 				for _f in "$ABA_ROOT"/templates/operator-set-*; do [ -f "$_f" ] && echo -n "${_f##*operator-set-} "; done >&2
 				echo >&2
 				echo_white "(as defined in files: aba/templates/operator-set-*)" >&2
