@@ -511,7 +511,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 						aba_info "Added to $_img_file: $_img"
 					fi
 				done
-				[ $_added -gt 0 ] && aba_success "$_added image(s) added to $_img_file"
+				[ $_added -gt 0 ] && aba_success "$_added $( (( _added == 1 )) && echo image || echo images) added to $_img_file"
 				exit 0
 				;;
 			remove|rm)
@@ -530,7 +530,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 					fi
 				done
 				if [ $_removed -gt 0 ]; then
-					aba_success "$_removed image(s) removed from $_img_file"
+					aba_success "$_removed $( (( _removed == 1 )) && echo image || echo images) removed from $_img_file"
 					exit 0
 				else
 					exit 1

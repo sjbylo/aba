@@ -1435,7 +1435,7 @@ mirror_payload_menu() {
 		fi
 
 		local _payload_summary="OCP ${ocp_version:-?} ${ocp_channel:-}"
-		[[ $_op_count -gt 0 ]] && _payload_summary+=" · ${_op_count} operator(s)"
+		[[ $_op_count -gt 0 ]] && _payload_summary+=" · ${_op_count} $( (( _op_count == 1 )) && echo operator || echo operators)"
 		[[ "$_excl_plat" == "true" ]] && _payload_summary+=" · release: excluded"
 		[[ "$_excl_ops" == "true" ]] && _payload_summary+=" · operators: excluded"
 		[[ "$_excl_addl" == "true" ]] && _payload_summary+=" · additional: excluded"
@@ -1788,7 +1788,7 @@ Selected operators will be included in the ImageSet config."
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLEAR_BASKET" \
 						--defaultno \
 						--yes-label "Clear" --no-label "$TUI2_BTN_CANCEL" \
-						--yesno "Remove all ${#OP_BASKET[@]} operators from selection?" 0 0
+						--yesno "Remove all ${#OP_BASKET[@]} $( (( ${#OP_BASKET[@]} == 1 )) && echo operator || echo operators) from selection?" 0 0
 					if [[ $? -eq 0 ]]; then
 						OP_BASKET=()
 						OP_SET_ADDED=()
@@ -2414,7 +2414,7 @@ mirror_manage_images() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "Extra container images included in the mirror payload.\nCurrently: $_count image(s) in images.conf\n" 0 0 0 \
+			--menu "Extra container images included in the mirror payload.\nCurrently: $_count $( (( _count == 1 )) && echo image || echo images) in images.conf\n" 0 0 0 \
 			"${_menu_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -2538,7 +2538,7 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					--defaultno \
 					--yes-label "Clear All" \
 					--no-label "Cancel" \
-					--yesno "Remove all $_count image(s) from images.conf?\n\nThis cannot be undone." 0 0
+					--yesno "Remove all $_count $( (( _count == 1 )) && echo image || echo images) from images.conf?\n\nThis cannot be undone." 0 0
 				if [[ $? -eq 0 ]]; then
 					> "$_img_file"
 					tui_kick_isconf_regen
