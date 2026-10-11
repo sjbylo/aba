@@ -752,8 +752,10 @@ op)
 	if [ "$_tar_count" -gt 0 ]; then
 		if [ "$_tar_total" -ge 1073741824 ]; then
 			_tar_display="$(( _tar_total / 1073741824 ))GB"
-		else
+		elif [ "$_tar_total" -ge 1048576 ]; then
 			_tar_display="$(( _tar_total / 1048576 ))MB"
+		else
+			_tar_display="$(( (_tar_total + 1023) / 1024 ))KB"
 		fi
 		aba_info "  Archives:     ${_tar_count} file(s), ${_tar_display}"
 	fi

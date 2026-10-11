@@ -2101,7 +2101,7 @@ _tui_image_set_checklist() {
 		if [[ -n "$_detail" ]]; then
 			_label+=" ($_detail)"
 		fi
-		_label+=" — $_count images"
+		_label+=" — $_count $( (( _count == 1 )) && echo image || echo images)"
 		_items+=("$_set_name" "$_label" "$_state")
 	done < <(image_set_list)
 
@@ -2204,7 +2204,7 @@ _tui_image_set_checklist() {
 				continue
 			fi
 			# Confirm with image list
-			local _preview_msg="RHOAI $_ver — $_preview_count images:"
+			local _preview_msg="RHOAI $_ver — $_preview_count $( (( _preview_count == 1 )) && echo image || echo images):"
 			local _img_line _shown=0
 			while IFS= read -r _img_line; do
 				[[ -n "$_img_line" ]] || continue
@@ -2228,7 +2228,7 @@ _tui_image_set_checklist() {
 			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
 			_display=$(_image_set_display_name "$_add_name")
 			if [[ $_preview_count -gt 0 ]]; then
-				local _preview_msg="${_display} — $_preview_count images:\\n"
+				local _preview_msg="${_display} — $_preview_count $( (( _preview_count == 1 )) && echo image || echo images):\\n"
 				local _img_line
 				while IFS= read -r _img_line; do
 					[[ -n "$_img_line" ]] && _preview_msg+="\\n  ${_img_line}"
@@ -2245,8 +2245,8 @@ _tui_image_set_checklist() {
 			_add_count=$(image_set_add "$_add_name" 2>/dev/null) || _add_count=0
 		fi
 		if [[ $_add_count -gt 0 ]]; then
-			_add_msg+="  $_add_name: $_add_count images added\n"
-			tui_log "Added image set: $_add_name ($_add_count images)"
+			_add_msg+="  $_add_name: $_add_count $( (( _add_count == 1 )) && echo image || echo images) added\n"
+			tui_log "Added image set: $_add_name ($_add_count $( (( _add_count == 1 )) && echo image || echo images))"
 		fi
 	done
 
@@ -2306,7 +2306,7 @@ _tui_offer_companion_images() {
 			if [[ "$_sn" == "$_set_name" ]]; then
 				local _label="$_display"
 				[[ -n "$_detail" ]] && _label+=" ($_detail)"
-				_label+=" — $_count images"
+				_label+=" — $_count $( (( _count == 1 )) && echo image || echo images)"
 				_items+=("$_set_name" "$_label" "on")
 				_found=true
 				break
