@@ -1917,15 +1917,17 @@ cluster_delete() {
 
 	local _del_msg _del_help
 	if [[ "${platform:-bm}" == "bm" ]]; then
-		_del_msg="Delete cluster '$cl_display'?\n\nThis removes the local cluster directory and state files only.\nThe physical servers are left running — decommission them manually."
-		_del_help="Delete removes the cluster directory and all generated resources\n\
-(kubeconfig, manifests, ISOs, state markers).\n\n\
+		_del_msg="Delete cluster '$cl_display'?\n\nThis removes cluster state files only.\nThe physical servers are left running — decommission them manually."
+		_del_help="Delete removes cluster state and generated resources\n\
+(kubeconfig, manifests, ISOs, state markers).\n\
+The cluster directory and cluster.conf are kept.\n\n\
 On bare-metal, nodes are left powered — decommission them manually.\n\
 To fully decommission, reinstall or wipe the servers yourself."
 	else
 		_del_msg="Delete cluster '$cl_display'?\n\nThis removes all cluster state and destroys the VMs.\nThis action cannot be undone."
-		_del_help="Delete removes the cluster directory and all generated resources\n\
-(kubeconfig, manifests, ISOs, state markers).\n\n\
+		_del_help="Delete removes cluster state and generated resources\n\
+(kubeconfig, manifests, ISOs, state markers) and destroys the VMs.\n\
+The cluster directory and cluster.conf are kept.\n\n\
 On virtualized platforms (VMware, KVM), the VMs are also destroyed."
 	fi
 
@@ -2349,7 +2351,7 @@ _day2_status() {
 		echo ""
 		KUBECONFIG="$kc" oc get nodes --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 		echo ""
-		echo "═══ Pending Pods ($cl_display) ═══"
+		echo "═══ Non-Ready Pods ($cl_display) ═══"
 		echo ""
 		KUBECONFIG="$kc" oc get po -A --sort-by=.status.conditions[-1].lastTransitionTime --request-timeout=5s 2>&1 \
 			| awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print}' \
