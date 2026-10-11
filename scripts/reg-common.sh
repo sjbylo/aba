@@ -1229,7 +1229,9 @@ reg_stop_vendor() {
 			_reg_host_run "$ssh_cmd" "podman stop registry-${port} 2>/dev/null || podman stop registry 2>/dev/null" || true
 			;;
 		quay)
-			_reg_host_run "$ssh_cmd" "podman stop quay-app quay-redis quay-postgres 2>/dev/null" || true
+			# Quay runs as a pod; stopping individual containers leaves the
+			# pod infra container listening on the port.  Stop the pod.
+			_reg_host_run "$ssh_cmd" "podman pod stop quay-pod 2>/dev/null" || true
 			;;
 		"$_OMR_VENDOR"|omr)
 			_reg_host_run "$ssh_cmd" "systemctl --user stop quay.service 2>/dev/null || sudo systemctl stop quay.service 2>/dev/null" || true
@@ -1239,8 +1241,8 @@ reg_stop_vendor() {
 			;;
 	esac
 
-	# Verify stopped
-	sleep 1
+	# Verify stopped — pods may take a moment to release ports
+	sleep 2
 	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
 		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening"
 	fi
@@ -1273,7 +1275,7 @@ reg_start_vendor() {
 			_reg_host_run "$ssh_cmd" "podman start registry-${port} 2>/dev/null || podman start registry 2>/dev/null"
 			;;
 		quay)
-			_reg_host_run "$ssh_cmd" "podman start quay-postgres quay-redis quay-app"
+			_reg_host_run "$ssh_cmd" "podman pod start quay-pod"
 			;;
 		"$_OMR_VENDOR"|omr)
 			_reg_host_run "$ssh_cmd" "systemctl --user start quay.service 2>/dev/null || sudo systemctl start quay.service 2>/dev/null"
