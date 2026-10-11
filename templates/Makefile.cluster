@@ -44,7 +44,7 @@ else
 endif
 
 .PHONY: install
-install: $(TARGET_DEPENDENCIES)
+install: $(TARGET_DEPENDENCIES) ## Install the cluster (generate ISO, boot VMs, monitor)
 
 # Check cluster has been installed already and abort if it has
 .PHONY: check

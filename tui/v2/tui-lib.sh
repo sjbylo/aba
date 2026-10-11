@@ -1221,7 +1221,7 @@ Registry Type:
 
 Retry Count:
   How many times to retry failed oc-mirror operations.
-  0 = no retries, or set any count (default: 1)."
+  Toggle cycles: OFF → 1 → 2 → 5 → OFF (default: 1)."
 		fi
 
 		if [[ ${#_menu_items[@]} -eq 0 ]]; then
