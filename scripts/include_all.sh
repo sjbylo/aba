@@ -1454,8 +1454,8 @@ verify-cluster-conf() {
 	echo $master_prefix | grep -q -E '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: master_prefix is invalid in cluster.conf" >&2; ret=1; }
 	echo $worker_prefix | grep -q -E '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: worker_prefix is invalid in cluster.conf" >&2; ret=1; }
 
-	echo $num_masters | grep -q -E '^[0-9]+$' || { echo_red "Error: num_masters is invalid in cluster.conf" >&2; ret=1; }
-	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
+	echo $num_masters | grep -q -E '^[1-9][0-9]*$' || { echo_red "Error: num_masters is invalid in cluster.conf (must be 1 or 3, no leading zeros)" >&2; ret=1; }
+	echo $num_workers | grep -q -E '^(0|[1-9][0-9]*)$' || { echo_red "Error: num_workers is invalid in cluster.conf (no leading zeros)" >&2; ret=1; }
 
 	# Topology rules: num_masters must be 1 (SNO) or 3 (compact/standard)
 	if echo "$num_masters" | grep -q -E '^[0-9]+$'; then
