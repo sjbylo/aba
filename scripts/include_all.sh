@@ -793,9 +793,9 @@ normalize-cluster-conf()
 		local _ic _mn
 		# Optional legacy keys. A missing line makes grep exit 1; with pipefail
 		# that aborts this function under set -e and drops cluster_name.
-		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs) || true
+		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//' | xargs) || true
 		[[ "$_ic" == "none" ]] && _ic=""
-		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs) || true
+		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//' | xargs) || true
 		_mn=${_mn:-mirror}
 		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
 			_is="$_ic"
@@ -1108,7 +1108,9 @@ cluster_api_reachable() {
 	local _kc="${1:-$KUBECONFIG}"
 	[ -f "$_kc" ] || return 1
 	local _server _host _port
-	_server=$(grep ' server:' "$_kc" | awk '{print $NF}' | head -1)
+	_server=$(KUBECONFIG="$_kc" oc config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null) || true
+	# Fallback to grep if oc is not available
+	[ -z "$_server" ] && _server=$(grep ' server:' "$_kc" | awk '{print $NF}' | head -1)
 	[ -z "$_server" ] && return 1
 	_host=$(echo "$_server" | sed -E 's|https?://||; s|:[0-9]+.*||')
 	_port=$(echo "$_server" | grep -oE ':[0-9]+' | tr -d ':')
