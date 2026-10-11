@@ -1401,7 +1401,7 @@ verify-cluster-conf() {
 	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
 	else
-		echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: starting_ip is invalid in cluster.conf. Try using --starting-ip option." >&2; ret=1; }
+		validate_ip "$starting_ip" || { echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Try using --starting-ip option." >&2; ret=1; }
 
 		# Validate starting_ip falls within machine_network CIDR
 		if [[ $ret -eq 0 ]] && echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
@@ -1440,6 +1440,10 @@ verify-cluster-conf() {
 						echo_red "Error: ingress_vip ($ingress_vip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
 						ret=1
 					fi
+				fi
+				if [ -n "${api_vip:-}" ] && [ -n "${ingress_vip:-}" ] && [ "$api_vip" = "$ingress_vip" ]; then
+					echo_red "Error: api_vip and ingress_vip cannot be the same address ($api_vip)" >&2
+					ret=1
 				fi
 			fi
 		fi
