@@ -5,6 +5,12 @@ kind: AgentConfig
 metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
+{%- if arr_ntp_servers %}
+additionalNTPSources:
+{%- for ntp in arr_ntp_servers %}
+  - {{ ntp }}
+{%- endfor %}
+{%- endif %}
 hosts:
 {#--------------------------------------------------------------
   Compute offsets for MACs and IPs, ensure integers

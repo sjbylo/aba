@@ -128,9 +128,8 @@ aba_debug "ISO generation completed successfully"
 aba_info "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
 backup_auth_dir "$ASSETS_DIR/auth" "$ASSETS_DIR/auth.backup"
 
-# Add NTP config to ignition, if needed
-# Note that the built in 'additionalNTPSources' feature is not available for all latest ocp versions, so we use this still:
-scripts/add_ntp_ignition_to_iso.sh
+# NTP is now configured via additionalNTPSources in agent-config.yaml (supported since OCP 4.15).
+# The previous ignition injection (add_ntp_ignition_to_iso.sh) is no longer needed.
 
 echo 
 #aba_success "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"
