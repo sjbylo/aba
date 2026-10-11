@@ -1236,6 +1236,8 @@ for i in imgs:
 			aba_abort "$(basename $0): no such option $1" 
 		elif [ "$cur_target" ]; then
 			# cur_target already set — additional positionals are make arguments
+			# Guard: reject shell metacharacters to prevent eval injection (#1099)
+			[[ "$1" =~ ^[a-zA-Z0-9._=-]+$ ]] || aba_abort "invalid argument '$1'"
 			BUILD_COMMAND="$BUILD_COMMAND $1"
 			aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
 		else
