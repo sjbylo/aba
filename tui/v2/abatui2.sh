@@ -686,7 +686,7 @@ Cluster:
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
 Advanced:
-  • Configure — adjust settings (retry, editor, ask mode)
+  • Configure — adjust settings (registry type, retry count)
   • Rerun Wizard — re-run the initial setup wizard
   • Advanced — switch modes, uninstall, reset
   • Feedback — report bugs or request features
