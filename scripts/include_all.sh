@@ -40,6 +40,7 @@ export ARCH=$(uname -m)
 # Per-user temp directory for all ABA internal temp files (flag files, caches, debug logs)
 ABA_TMP="/tmp/.aba-${USER:-$(id -un)}"
 mkdir -p "$ABA_TMP"
+chmod 700 "$ABA_TMP"
 
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 

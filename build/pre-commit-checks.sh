@@ -120,7 +120,7 @@ echo -e "${YELLOW}[3/6] Checking shell script syntax...${NC}"
 failed=0
 checked=0
 
-for dir in scripts mirror templates bundles test/func; do
+for dir in scripts mirror templates bundles test/func tui/v2; do
     [ -d "$dir" ] || continue
     for script in "$dir"/*.sh; do
         [ -f "$script" ] || continue
