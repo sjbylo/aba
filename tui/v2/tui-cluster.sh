@@ -689,6 +689,19 @@ cluster_install_flow() {
 		_CL_STATE_INIT=true
 	fi
 
+	# Warn if the auto-detected cluster is already installed
+	if [ -f "$ABA_ROOT/$_cl_name/.install-complete" ]; then
+		local _inst_msg="Cluster '$_cl_name' is already installed"
+		[ -f "$ABA_ROOT/$_cl_name/.shutdown.log" ] && _inst_msg="$_inst_msg (shut down)"
+		if ! dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+			--yes-label "New Cluster" --no-label "$TUI2_BTN_CANCEL" \
+			--yesno "$_inst_msg.\n\nDo you want to create a new cluster instead?" 0 0; then
+			return 0
+		fi
+		_cl_name="ocp"
+		_CL_STATE_INIT=false
+	fi
+
 	# Always refresh platform from aba.conf (may have changed via Advanced menu)
 	_cl_platform="${platform:-bm}"
 
@@ -2791,9 +2804,16 @@ _day2_clean() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	local _clean_warn=""
+	if [ -f "$SELECTED_CLUSTER_DIR/.install-complete" ]; then
+		_clean_warn="\n\nWARNING: This cluster is installed"
+		[ -f "$SELECTED_CLUSTER_DIR/.shutdown.log" ] && _clean_warn="$_clean_warn (shut down)"
+		_clean_warn="$_clean_warn. Clean will remove\n.install-complete, kubeconfig, and shutdown state. VMs are NOT removed."
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
 		--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
-		--defaultno --yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
+		--defaultno --yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved.$_clean_warn" 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"
