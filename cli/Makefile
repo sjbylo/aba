@@ -184,10 +184,6 @@ endef
 ##@ Help & Initialization
 ########################################################################
 
-.PHONY: help
-help: ## Help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[\$\.\(\)\~\/a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-
 # Keep this like it is, otherwise the deps don't work!
 # ~/bin may be removed externally (e.g. E2E cleanup) while .init sentinel persists,
 # so every ~/bin/* target also depends on the ~/bin directory via order-only prerequisite.
