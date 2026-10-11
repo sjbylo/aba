@@ -132,7 +132,8 @@ agent-config.yaml: $(if $(wildcard .primed),,cluster.conf mirror.conf) | .init  
 
 
 .PHONY: verify
-verify: agentconf  ## Extract cluster configuration details from the generated agent-based configuration files for manual verification only.
+verify:  ## Extract cluster configuration details from the generated agent-based configuration files for manual verification only.
+	@[ -f install-config.yaml ] && [ -f agent-config.yaml ] || { echo "[ABA] Config files not yet generated. Run 'aba agentconf' first."; exit 1; }
 	$(SCRIPTS)/cluster-config.sh
 
 .PHONY: preflight
