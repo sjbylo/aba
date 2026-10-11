@@ -20,7 +20,7 @@ Options:
     -y, --yes                             # Answer yes to all prompts
     -n, --name <string>                   # The name of the cluster configuration to create
     -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'
-    -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>
+    -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|install|mon>
                                           # See steps (targets) with "aba --dir mycluster help"
     -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0)
     -A, --api-vip <ip>                    # IP address for cluster's API

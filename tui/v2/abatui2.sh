@@ -682,12 +682,14 @@ Transfer:
 
 Cluster:
   • Install Cluster — configure, review, and provision OpenShift
+  • Monitor Installation — watch install progress
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
 Advanced:
   • Configure — adjust settings (retry, editor, ask mode)
   • Rerun Wizard — re-run the initial setup wizard
   • Advanced — switch modes, uninstall, reset
+  • Feedback — report bugs or request features
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons

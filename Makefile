@@ -73,7 +73,7 @@ bm:
 #	@$(SCRIPTS)/make-bundle.sh -o $(out) $(light) $(force)
 
 .PHONY: tar
-tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
+tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup-$(USER).tar. Use --out - to send tar output to stdout. Used by aba bundle.
 	@$(SCRIPTS)/cli-download-all.sh --wait >&2
 	$(SCRIPTS)/backup.sh $(if $(clusters),--primed) $(out)
 

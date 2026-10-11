@@ -868,6 +868,11 @@ Workflow:
   2. Monitor Cluster — track install progress until completion
   3. Day-2 — post-install config (resources, NTP, update service, etc.)
 
+Other:
+  • Rerun Wizard — re-run the initial setup wizard
+  • Advanced — switch modes, platform settings
+  • Feedback — report bugs or request features
+
 Navigation:
   • Arrow keys / Tab — move between items and buttons
   • Enter — select highlighted item

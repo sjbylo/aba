@@ -16,5 +16,5 @@ After import, you can run:
   aba -d <name> day2-osus     Configure update service
   aba -d <name> upgrade       Upgrade the cluster
   aba -d <name> getco         Show cluster operators
-  aba -d <name> shell         Open oc shell
+  aba -d <name> shell         Print KUBECONFIG export command
   aba -d <name> shutdown      Graceful shutdown
