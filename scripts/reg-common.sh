@@ -604,6 +604,7 @@ reg_post_install() {
 	reg_user=$reg_user
 	reg_pw='$reg_pw'
 	reg_root=$reg_root
+	reg_path=$reg_path
 	reg_ssh_key=${reg_ssh_key:-}
 	reg_ssh_user=${reg_ssh_user:-}
 	reg_root_opts="${reg_root_opts:-}"
