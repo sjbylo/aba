@@ -27,6 +27,8 @@ source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
+
 _MIRROR_NAME="e2e-stop-start"
 _PORT=5333
 
@@ -75,7 +77,7 @@ test_begin "$_v: stop/start cycle"
 
 # --- Install ---
 e2e_run "Install $_v registry (port $_PORT)" \
-	"aba -d $_MIRROR_NAME install --vendor $_v --reg-port $_PORT -y"
+	"aba -d $_MIRROR_NAME install --vendor $_v --reg-port $_PORT -H $CON_HOST -y"
 
 e2e_run "Verify registry running" \
 	"aba -d $_MIRROR_NAME verify"
@@ -130,7 +132,7 @@ done
 test_begin "omr: stop → uninstall → reinstall (data preserved)"
 
 e2e_run "Install omr registry" \
-	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -y"
+	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -H $CON_HOST -y"
 
 e2e_run "Sync images (populate registry)" \
 	"aba -d $_MIRROR_NAME sync --retry"
@@ -154,7 +156,7 @@ e2e_run "Verify data dir still exists" \
 	"source \$HOME/.aba/mirror/$_MIRROR_NAME/state.sh 2>/dev/null || true; test -d \${reg_root:-/nonexistent} || test -f \$HOME/omr/auth/admin-password"
 
 e2e_run "Reinstall (should reuse existing data)" \
-	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -y"
+	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -H $CON_HOST -y"
 
 e2e_run "Verify registry running after reinstall" \
 	"aba -d $_MIRROR_NAME verify"
@@ -176,7 +178,7 @@ test_end
 test_begin "omr: --runtime state and status output"
 
 e2e_run "Install omr registry" \
-	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -y"
+	"aba -d $_MIRROR_NAME install --vendor omr --reg-port $_PORT -H $CON_HOST -y"
 
 # --- Running state ---
 e2e_run "Runtime: reg_state=installed when running (no sync)" \
