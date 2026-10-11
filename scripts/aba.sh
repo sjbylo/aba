@@ -1069,9 +1069,9 @@ for i in imgs:
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if [ "$cur_target" = "cluster" -o "$cur_target" = "mirror" ]; then
 			if [[ "$cur_target" = "cluster" ]]; then
-				_valid_cluster_name "$2" || aba_abort "--name: invalid cluster name '$2'"
+				_valid_cluster_name "$2" || exit 1
 			else
-				_valid_mirror_name "$2" || aba_abort "--name: invalid mirror name '$2'"
+				_valid_mirror_name "$2" || exit 1
 			fi
 			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 		else
