@@ -117,7 +117,7 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to o
 # that differ between the connected side (where the bundle was built) and the
 # disconnected side (where the mirror runs). backup.sh --primed resolves the
 # mirror.conf symlink to a real copy (newer timestamp), triggering this rebuild.
-install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf .infra-dns | .cli  ## Create the agent-based config file based on the cluster.conf file.
+install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf .infra-dns | .cli  ## Create the install-config.yaml file based on the cluster.conf file.
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh
 
@@ -267,7 +267,7 @@ mon:  ## Monitor for 'install complete' the agent-based installation of OpenShif
 bootstrap: .bootstrap-complete  ## Monitor for 'bootstrap complete' (runs config+ISO+VM chain first when needed).
 
 .PHONY: remove-cdrom
-remove-cdrom: vmware.conf  ## Remove the cdrom devise from all VMs (VMware only).
+remove-cdrom: vmware.conf  ## Remove the cdrom device from all VMs (VMware only).
 	$(SCRIPTS)/vmw-remove-cdrom-device.sh
 
 .PHONY: vmw
