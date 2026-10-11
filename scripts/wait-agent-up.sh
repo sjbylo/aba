@@ -23,7 +23,11 @@ if [ ! -f .install-complete ]; then
 	AGENT_PORT=8090
 	agent_url="http://$AGENT_IP:$AGENT_PORT/"
 
-	[ "$no_proxy" ] && no_proxy="$AGENT_IP,$no_proxy"
+	if [ "$no_proxy" ]; then
+		no_proxy="$AGENT_IP,$no_proxy"
+	elif [ "${http_proxy:-}${https_proxy:-}" ]; then
+		no_proxy="$AGENT_IP"
+	fi
 	[ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy"
 
 	# Agent returns 4xx when alive (API endpoints return 404 at root)
