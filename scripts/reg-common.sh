@@ -1295,5 +1295,27 @@ reg_start_vendor() {
 		sleep 1
 	done
 
+	# Quay uses nginx in front of quay-app; the port opens immediately (nginx)
+	# but the backend needs time to initialize.  Wait for a non-502 response.
+	if [ "$vendor" = "quay" ]; then
+		local _ready=0
+		for (( _i=0; _i<30; _i++ )); do
+			local _code
+			if [ -n "$ssh_cmd" ]; then
+				_code=$($ssh_cmd "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
+			else
+				_code=$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${port}/health/instance" 2>/dev/null) || _code="000"
+			fi
+			if [ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]; then
+				_ready=1
+				break
+			fi
+			sleep 2
+		done
+		if [ "$_ready" -eq 0 ]; then
+			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 60s"
+		fi
+	fi
+
 	aba_info "$vendor registry started on $_where (port $port)"
 }
