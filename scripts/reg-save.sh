@@ -253,6 +253,9 @@ echo >&2
 
 aba_progress "DONE|sv_finalize"
 
+replace-value-conf -q -n last_action -v "save" -f "$HOME/.aba/mirror/$(basename "$PWD")/state.sh"
+replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$HOME/.aba/mirror/$(basename "$PWD")/state.sh"
+
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info "Upgrade: ${ocp_version} → ${ocp_upgrade_to}"
 	echo
