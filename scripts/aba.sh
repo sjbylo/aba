@@ -1648,8 +1648,12 @@ if [ "$cur_target" ]; then
 			# without invoking make (avoids cascading dependency rebuilds
 			# that could recreate VMs on an already-running cluster).
 			if [ -f .install-complete ]; then
-				aba_info "Cluster already installed. Nothing to do."
-				aba_info "Run 'aba clean; aba install' to re-install, or 'aba delete' to remove VMs first."
+				if [ -f .shutdown.log ]; then
+					aba_info "Cluster is installed but shut down. Run 'aba -d $(basename "$PWD") startup' to power it on."
+				else
+					aba_info "Cluster already installed. Nothing to do."
+				fi
+				aba_info "To re-install: 'aba -d $(basename "$PWD") delete' then 'aba -d $(basename "$PWD") install'."
 				exit 0
 			fi
 			# Not yet installed — re-add target and fall through to generic make block
