@@ -88,6 +88,9 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 			"Switching excl_platform=false in aba.conf to include release images."
 		replace-value-conf -n excl_platform -v "false" -f "../aba.conf"
 		excl_platform=false
+		# Regenerate ISC since Make already built it with excl_platform=true
+		aba_info "Regenerating imageset to include release images..."
+		scripts/reg-create-imageset-config.sh
 	fi
 fi
 
