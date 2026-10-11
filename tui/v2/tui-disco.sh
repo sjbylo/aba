@@ -252,16 +252,17 @@ disco_main() {
 				show_help "$TUI2_HELP_TITLE_DISCO" \
 "You are in fully disconnected mode (no internet access).
 
-Typical workflow:
+Workflow:
   1. Install Registry — set up a local container registry
   2. Load Images — disk-to-mirror (d2m): load saved images into registry
   3. Install Cluster — configure and provision OpenShift
   4. Day-2 — apply cluster resources, NTP, update service, etc.
 
-Image transfer uses oc-mirror (disk2mirror). The saved archives
-were created on a connected host via 'Save images to disk' (mirror2disk).
-
-Use 'Advanced' to switch modes or manage platform settings.
+Other:
+  • Configure — adjust settings (registry type, retry count)
+  • View Mirror Payload — inspect imageset configuration
+  • Advanced — switch modes, manage platform settings
+  • Feedback — report bugs or request features
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
