@@ -5103,9 +5103,10 @@ aba_version_fetch_start() {
 
 # Returns 0 if the ISC file has been manually edited by the user (newer than .created).
 # The .created sentinel is touched after every ABA-managed ISC generation.
+# A missing .created means ABA never generated the ISC — not user-managed.
 aba_isc_is_user_managed() {
 	local _isc="${1:-mirror/data/imageset-config.yaml}"
-	[[ -f "$_isc" && "$_isc" -nt "${_isc%/*}/.created" ]]
+	[[ -f "$_isc" && -f "${_isc%/*}/.created" && "$_isc" -nt "${_isc%/*}/.created" ]]
 }
 
 # --- ISC generation ---
