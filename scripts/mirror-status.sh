@@ -246,14 +246,17 @@ _fmt_disk() {
 	local n=${1:-0}
 	local gb=$((1024 * 1024 * 1024))
 	local mb=$((1024 * 1024))
+	local kb=1024
 	if [ "$n" -le 0 ]; then
 		echo "0 MB"
 		return
 	fi
 	if [ "$n" -ge "$gb" ]; then
 		echo "$(( (n + gb - 1) / gb )) GB"
-	else
+	elif [ "$n" -ge "$mb" ]; then
 		echo "$(( (n + mb - 1) / mb )) MB"
+	else
+		echo "$(( (n + kb - 1) / kb )) KB"
 	fi
 }
 
@@ -750,14 +753,7 @@ op)
 		_tar_count=$(( _tar_count + 1 ))
 	done
 	if [ "$_tar_count" -gt 0 ]; then
-		if [ "$_tar_total" -ge 1073741824 ]; then
-			_tar_display="$(( _tar_total / 1073741824 ))GB"
-		elif [ "$_tar_total" -ge 1048576 ]; then
-			_tar_display="$(( _tar_total / 1048576 ))MB"
-		else
-			_tar_display="$(( (_tar_total + 1023) / 1024 ))KB"
-		fi
-		aba_info "  Archives:     ${_tar_count} file(s), ${_tar_display}"
+		aba_info "  Archives:     ${_tar_count} file(s), $(_fmt_disk "$_tar_total")"
 	fi
 
 	# Transfer bundle check: warn if mirror_*.tar exists but aba-transfer.tar is missing
