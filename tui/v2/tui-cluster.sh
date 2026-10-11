@@ -1700,13 +1700,18 @@ _cluster_execute() {
 	summary+="  SSH key:      ${cl_ssh_key:-~/.ssh/id_rsa}\n"
 	summary+="\n"
 	if [[ "$cl_platform" != "bm" ]]; then
-		summary+="  Master CPU:   ${cl_master_cpu:-(not set)}\n"
-		summary+="  Master Mem:   ${cl_master_mem:-(not set)} GB\n"
+		local _r_mcpu="${cl_master_cpu:-(not set)}"
+		local _r_mmem="${cl_master_mem:+${cl_master_mem} GB}"; _r_mmem="${_r_mmem:-(not set)}"
+		summary+="  Master CPU:   $_r_mcpu\n"
+		summary+="  Master Mem:   $_r_mmem\n"
 		if [[ "$cl_type" == "standard" ]]; then
-			summary+="  Worker CPU:   ${cl_worker_cpu:-(not set)}\n"
-			summary+="  Worker Mem:   ${cl_worker_mem:-(not set)} GB\n"
+			local _r_wcpu="${cl_worker_cpu:-(not set)}"
+			local _r_wmem="${cl_worker_mem:+${cl_worker_mem} GB}"; _r_wmem="${_r_wmem:-(not set)}"
+			summary+="  Worker CPU:   $_r_wcpu\n"
+			summary+="  Worker Mem:   $_r_wmem\n"
 		fi
-		summary+="  Data disk:    ${cl_disk:-(not set)} GB\n"
+		local _r_disk="${cl_disk:+${cl_disk} GB}"; _r_disk="${_r_disk:-(not set)}"
+		summary+="  Data disk:    $_r_disk\n"
 		summary+="  MAC template: ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
