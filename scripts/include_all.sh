@@ -1244,7 +1244,7 @@ _state_override_mirror() {
 	# and "day2-osus: channel set fails after cross-minor upgrade".
 	# mirror_ocp_version and mirror_ocp_upgrade_from are the mirror-fact equivalents:
 	# they track what's actually in the mirror registry (set by reg-sync.sh / reg-load.sh).
-	local _status="reg_host reg_port reg_root reg_user reg_pw mirror_ocp_version mirror_ocp_upgrade_from last_action last_action_at"
+	local _status="reg_host reg_port reg_path reg_root reg_user reg_pw mirror_ocp_version mirror_ocp_upgrade_from last_action last_action_at"
 	local _field _sval _cval _drifted=""
 
 	source "$_state"
