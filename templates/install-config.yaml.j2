@@ -6,8 +6,8 @@ baseDomain: {{ base_domain }}
 proxy:
   httpProxy: {{ http_proxy }}
   httpsProxy: {{ https_proxy }}
-  noProxy: {{ no_proxy -}}
-{% endif %}
+  noProxy: {{ no_proxy }},{{ machine_network }}/{{ prefix_length }},10.128.0.0/14,172.30.0.0/16
+{%- endif %}
 metadata:
   name: {{ cluster_name }}
 compute:
