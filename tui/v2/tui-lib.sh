@@ -67,33 +67,6 @@ _tui_redirect_activate() {
 # DISCO mode filters — strip public/internet values from config fields
 # =============================================================================
 
-# Filter comma-separated list, removing entries that are unreachable in DISCO mode.
-# Usage: filtered=$(filter_disco_values "$ntp_servers")
-filter_disco_values() {
-	local input="$1"
-	[[ -z "$input" ]] && return 0
-	[[ "$_TUI_MODE" != "DISCO" ]] && { echo "$input"; return 0; }
-
-	local result="" entry
-	IFS=',' read -ra entries <<< "$input"
-	for entry in "${entries[@]}"; do
-		entry=$(echo "$entry" | tr -d ' ')
-		[[ -z "$entry" ]] && continue
-		# Skip known public NTP pools and time servers
-		case "$entry" in
-			*.pool.ntp.org|time.google.com|time.cloudflare.com|time.apple.com) continue ;;
-			time.windows.com|ntp.ubuntu.com|clock.xfce.org) continue ;;
-		esac
-		# Skip well-known public DNS
-		case "$entry" in
-			8.8.8.8|8.8.4.4|1.1.1.1|1.0.0.1|9.9.9.9|208.67.222.222|208.67.220.220) continue ;;
-		esac
-		[[ -n "$result" ]] && result+=","
-		result+="$entry"
-	done
-	echo "$result"
-}
-
 # =============================================================================
 # Input validation helpers
 # =============================================================================
@@ -957,12 +930,6 @@ CLI:  aba --dir <cluster> day2\n\
 TUI:  Cluster > Day-2 > Configure OperatorHub" 0 0
 }
 
-# Is a cluster configured? (cluster.conf exists in given dir)
-cluster_configured() {
-	local dir="$1"
-	[[ -f "$ABA_ROOT/$dir/cluster.conf" ]]
-}
-
 # Is a cluster installed? (.install-complete is created by Makefile on success
 # and removed by 'aba delete')
 cluster_installed() {
@@ -1098,11 +1065,6 @@ cluster_display_name() {
 # Are there mirror archive tar files?
 mirror_has_archives() {
 	compgen -G "$ABA_ROOT/mirror/data/mirror_*.tar" >/dev/null 2>&1
-}
-
-# Is the bundle flag set?
-is_bundle_mode() {
-	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
 # Feedback: show all GitHub links in a single dialog.
@@ -1472,39 +1434,6 @@ select_installed_cluster() {
 # =============================================================================
 # Editor helper (offer $EDITOR or dialog editbox)
 # =============================================================================
-
-offer_editor() {
-	local filepath="$1"
-	local title="${2:-Edit File}"
-
-	dlg --backtitle "$(ui_backtitle)" --title "$title" \
-		--cancel-label "$TUI2_BTN_SKIP" \
-		--menu "$(printf "$TUI2_MSG_EDITOR_PROMPT" "$filepath")" 0 0 0 \
-		"1" "Edit in terminal (\$EDITOR)" \
-		"2" "Edit in TUI dialog" \
-		2>"$_TUI_TMP"
-	local rc=$?
-
-	[[ $rc -ne 0 ]] && return 1
-
-	local choice
-	choice=$(<"$_TUI_TMP")
-
-	case "$choice" in
-		1)
-			clear
-			${EDITOR:-vi} "$filepath" {ABA_TUI_FLOCK_FD}>&-
-			;;
-		2)
-			dlg --backtitle "$(ui_backtitle)" --title "$title" \
-				--editbox "$filepath" 0 0 2>"$_TUI_TMP"
-			if [[ $? -eq 0 ]]; then
-				cp "$_TUI_TMP" "$filepath"
-			fi
-			;;
-	esac
-	return 0
-}
 
 # =============================================================================
 # Exit summary
