@@ -5,6 +5,9 @@ kind: AgentConfig
 metadata:
   name: e2e-compact1
 rendezvousIP: 10.0.2.15
+additionalNTPSources:
+  - 10.0.1.8
+  - ntp.example.com
 hosts:
   - hostname: master1
     role: master
