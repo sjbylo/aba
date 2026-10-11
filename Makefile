@@ -84,7 +84,7 @@ tarrepo:  ## Archive the repo *excluding* the aba/mirror/mirror_*.tar files. Wor
 	@$(SCRIPTS)/backup.sh --repo $(if $(clusters),--primed) $(out)
 
 .PHONY: download
-download:  ## Download all required CLI install files without installing. 
+download:  ## Download all required CLI install files (use: aba -d cli download). 
 	@echo [ABA] "Run either one of:"
 	@echo [ABA] "  aba -d cli $@"
 	@echo [ABA] "  cd cli && aba $@"
