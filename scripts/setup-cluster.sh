@@ -98,7 +98,7 @@ _updated=""
 # cluster.conf -- the target file exists, so Make considers it up-to-date.
 source <(normalize-cluster-conf)
 if image_source_is_mirror; then
-	_mn=$(image_source_mirror_name)
+	_mn=${image_source:-mirror}
 	ln -sfn ../$_mn mirror
 	ln -sfn ~/.aba/mirror/$_mn regcreds
 fi

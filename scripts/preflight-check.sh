@@ -51,7 +51,7 @@ preflight_check_dns() {
 
 	# Verify cluster DNS can resolve the registry hostname (if mirror-based)
 	local _reg_host=""
-	if [ -f "$(image_source_mirror_name)/mirror.conf" ]; then
+	if [ -f "${image_source:-mirror}/mirror.conf" ]; then
 		_reg_host=$(source <(normalize-mirror-conf) && echo "$reg_host") 2>/dev/null || true
 	fi
 	if [ -n "$_reg_host" ]; then

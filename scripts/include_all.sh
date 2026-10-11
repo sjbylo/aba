@@ -776,73 +776,27 @@ resolved_reg_vendor() {
 
 normalize-cluster-conf()
 {
-	# Output only the values from cluster.conf (with defaults for backwards compat).
+	# Output only the values from cluster.conf (with defaults).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 
-	# --- image_source migration shim ---
-	# New clusters have image_source=.  Legacy clusters have int_connection + mirror_name.
-	# Emit image_source from whichever format is present.
-	# Capture _is here for the backward-compat shim below (int_connection/mirror_name).
-	local _is=""
-	if grep -q '^image_source=' cluster.conf 2>/dev/null; then
-		# New format — _normalize_export below will emit export image_source=...
-		# Extract the sanitized value for the backward-compat shim.
-		_is=$(grep -m1 '^image_source=' cluster.conf | _normalize_export | cut -d= -f2)
-	elif [ -s cluster.conf ]; then
-		# Legacy format — derive image_source from old keys
-		local _ic _mn
-		# Optional legacy keys. A missing line makes grep exit 1; with pipefail
-		# that aborts this function under set -e and drops cluster_name.
-		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//' | xargs) || true
-		[[ "$_ic" == "none" ]] && _ic=""
-		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//' | xargs) || true
-		_mn=${_mn:-mirror}
-		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
-			_is="$_ic"
-		elif [[ -z "$_ic" ]] && grep -E -q "^proxy=\S" cluster.conf 2>/dev/null; then
-			_is="proxy"
-		else
-			_is="$_mn"
-		fi
-		echo "export image_source=$_is"
-	else
-		_is="mirror"
-		echo "export image_source=mirror"
-	fi
-
 	if [ ! -s cluster.conf ]; then
-		echo 'export int_connection='
-		echo 'export mirror_name=mirror'
+		echo 'export image_source=mirror'
 		return 0
 	fi
 
 	# Sanitize config, then:
 	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
-	#   - Strip legacy int_connection and mirror_name (replaced by image_source)
 	#   - RFC 1123: base_domain must be lowercase for Kubernetes
 	_normalize_export < cluster.conf | \
 		sed -E	\
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
-			-e '/^export int_connection=/d' \
-			-e '/^export mirror_name=/d' \
 			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
-	# Add any missing default values, mainly for backwards compat.
-	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
+	# Default image_source if not in cluster.conf
+	grep -q '^image_source=' cluster.conf || echo 'export image_source=mirror'
 
-	# Backward compat: derive int_connection + mirror_name from image_source
-	# so scripts not yet migrated keep working.
-	_is="${_is:-mirror}"
-	case "$_is" in
-		direct|proxy)
-			echo "export int_connection=$_is"
-			echo "export mirror_name=mirror"
-			;;
-		*)
-			echo "export int_connection="
-			echo "export mirror_name=$_is"
-			;;
-	esac
+	# Default hostPrefix if not in cluster.conf
+	grep -q '^hostPrefix=' cluster.conf || echo 'export hostPrefix=23'
 
 	# Phase 3 (ADR-007): override immutable fields from installed state.
 	# Only apply if this cluster dir has the 'clusterstate' symlink — it points
@@ -861,9 +815,6 @@ image_source_is_mirror() {
 }
 
 # Print the mirror directory name.  Only meaningful when image_source_is_mirror.
-image_source_mirror_name() {
-	echo "${image_source:-mirror}"
-}
 
 # openshift-install wait-for status.
 # 0: finished, caller continues.
@@ -2669,7 +2620,7 @@ resolve_cluster_channel() {
 	local major
 	major=$(echo "$ver" | cut -d. -f1-2)
 
-	local isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
+	local isc_file="../${image_source:-mirror}/data/imageset-config.yaml"
 	local prefix=""
 
 	if [ -f "$isc_file" ]; then
@@ -4751,7 +4702,7 @@ check_release_image() {
 				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")  # strip :port
 			fi
 		fi
-		_release_check_extra+=("Config: $(image_source_mirror_name)/mirror.conf (reg_host=$reg_host)")
+		_release_check_extra+=("Config: ${image_source:-mirror}/mirror.conf (reg_host=$reg_host)")
 		_release_check_extra+=("Pull secret: ${regcreds_display:-$regcreds_dir}/pull-secret-mirror.json")
 		return 1
 	fi

@@ -22,7 +22,7 @@ aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."

@@ -97,7 +97,6 @@ _cluster_load_conf() {
 			ports)            cl_ports="$val" ;;
 			vlan)             cl_vlan="$val" ;;
 			image_source)     cl_connection="$val" ;;
-		int_connection)   cl_connection="$val"; [[ "$cl_connection" == "none" ]] && cl_connection="" ;;
 			mac_prefix)       cl_mac_template="$val" ;;
 			num_masters)      _nm="$val" ;;
 			num_workers)      _nw="$val" ;;
