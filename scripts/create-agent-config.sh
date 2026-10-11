@@ -161,6 +161,7 @@ else
 
 	mac_list=$(
 		for ((i=1; i <= num_nodes * num_ports; i++)); do
+			[ "$i" -gt 255 ] && aba_abort "MAC address overflow: need $((num_nodes * num_ports)) addresses but last octet max is 255 (ff)"
 			printf "%s%02x\n" "$mac_prefix" "$i"
 		done
 	)

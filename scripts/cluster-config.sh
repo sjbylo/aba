@@ -81,27 +81,27 @@ ICONF_TMP=$(yaml2json < "$ICONF")
 ACONF_TMP=$(yaml2json < "$ACONF")
 
 CLUSTER_NAME=$(echo "$ICONF_TMP" | jq -r .metadata.name)
-echo "$CLUSTER_NAME" | grep -q "null" && CLUSTER_NAME=
+[ "$CLUSTER_NAME" = "null" ] && CLUSTER_NAME=
 echo export CLUSTER_NAME=$CLUSTER_NAME
 
 BASE_DOMAIN=$(echo "$ICONF_TMP" | jq -r .baseDomain)
-echo "$BASE_DOMAIN" | grep -q "null" && BASE_DOMAIN=
+[ "$BASE_DOMAIN" = "null" ] && BASE_DOMAIN=
 echo export BASE_DOMAIN=$BASE_DOMAIN
 
 RENDEZVOUSIP=$(echo "$ACONF_TMP" | jq -r '.rendezvousIP')
-echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
+[ "$RENDEZVOUSIP" = "null" ] && RENDEZVOUSIP=
 echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
 CP_REPLICAS=$(echo "$ICONF_TMP" | jq -r .controlPlane.replicas)
-echo "$CP_REPLICAS" | grep -q "null" && CP_REPLICAS=
+[ "$CP_REPLICAS" = "null" ] && CP_REPLICAS=
 echo export CP_REPLICAS=$CP_REPLICAS
 
 CP_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" )| .hostname')
-echo "$CP_NAMES" | grep -q "null" && CP_NAMES=
+[ "$CP_NAMES" = "null" ] && CP_NAMES=
 echo export CP_NAMES=\"$CP_NAMES\"
 
 CP_MAC_ADDRS=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress')
-echo "$CP_MAC_ADDRS" | grep -q "null" && CP_MAC_ADDRS=
+[ "$CP_MAC_ADDRS" = "null" ] && CP_MAC_ADDRS=
 echo export CP_MAC_ADDRS=\"$CP_MAC_ADDRS\"
 
 CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
@@ -132,22 +132,22 @@ fi
 ### [ "$CP_MAC_ADDR_2ND" ] && echo export CP_MAC_ADDR_2ND=\"$CP_MAC_ADDR_2ND\"
 
 CP_IP_ADDRESSES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .networkConfig.interfaces[0].ipv4.address[0].ip')
-echo "$CP_IP_ADDRESSES" | grep -q "null" && CP_IP_ADDRESSES=
+[ "$CP_IP_ADDRESSES" = "null" ] && CP_IP_ADDRESSES=
 echo export CP_IP_ADDRESSES=\"$CP_IP_ADDRESSES\"
 
 WORKER_REPLICAS=$(echo "$ICONF_TMP" | jq -r .compute[0].replicas)
-echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
+[ "$WORKER_REPLICAS" = "null" ] && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
 err=
 
 if [ -n "$WORKER_REPLICAS" ] && [ "$WORKER_REPLICAS" -ne 0 ]; then
 	WORKER_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .hostname')
-	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
+	[ "$WORKER_NAMES" = "null" ] && WORKER_NAMES=
 	echo export WORKER_NAMES=\"$WORKER_NAMES\"
 
 	WKR_MAC_ADDRS=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[].macAddress')
-	echo "$WKR_MAC_ADDRS" | grep -q "null" && WKR_MAC_ADDRS=
+	[ "$WKR_MAC_ADDRS" = "null" ] && WKR_MAC_ADDRS=
 	echo export WKR_MAC_ADDRS=\"$WKR_MAC_ADDRS\"
 
 	[ "$WKR_MAC_ADDRS" ] && distribute_macs "$WKR_MAC_ADDRS" "$WORKER_REPLICAS" "WKR_"
@@ -157,7 +157,7 @@ if [ -n "$WORKER_REPLICAS" ] && [ "$WORKER_REPLICAS" -ne 0 ]; then
 	#[ "$WKR_MAC_ADDR_2ND" ] && echo export WKR_MAC_ADDR_2ND=\"$WKR_MAC_ADDR_2ND\"
 
 	WKR_IP_ADDR=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" ) | .networkConfig.interfaces[0].ipv4.address[0].ip')
-	echo "$WKR_IP_ADDR" | grep -q "null" && WKR_IP_ADDR=
+	[ "$WKR_IP_ADDR" = "null" ] && WKR_IP_ADDR=
 	echo export WKR_IP_ADDR=\"$WKR_IP_ADDR\"
 
 fi

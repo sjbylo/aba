@@ -419,8 +419,8 @@ _direct_channel() {
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
 "• stable — recommended for production, well-tested
-• fast — latest GA release, early access to new features
-• candidate — preview/beta for testing only"
+• fast — latest GA release, receives z-stream updates before stable
+• candidate — pre-release versions for testing only"
 			DIALOG_RC="repeat"
 			;;
 		1|255)
