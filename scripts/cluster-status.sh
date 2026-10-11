@@ -114,6 +114,12 @@ if [ "$_live" = "true" ] && [ ${#_clusters[@]} -gt 0 ]; then
 
 		# Background health check
 		(
+			# Skip API probe if cluster is known to be shut down
+			if [ -f "$_dir/.shutdown.log" ]; then
+				echo "shutdown|" > "$_tmpdir/$(basename "$_dir")"
+				exit 0
+			fi
+
 			_kc=""
 			# Check for kubeconfig inside the cluster dir
 			if [ -f "$_dir/iso-agent-based/auth/kubeconfig" ]; then
@@ -126,7 +132,9 @@ if [ "$_live" = "true" ] && [ ${#_clusters[@]} -gt 0 ]; then
 				exit 0
 			fi
 
-			_cv_json=$(KUBECONFIG="$_kc" oc get clusterversion version -o json --request-timeout=5s 2>/dev/null) || {
+			# Use the correct cluster context from the kubeconfig
+			_server=$(KUBECONFIG="$_kc" oc config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null) || true
+			_cv_json=$(KUBECONFIG="$_kc" oc get clusterversion version -o json --request-timeout=5s ${_server:+--server="$_server"} 2>/dev/null) || {
 				echo "unreachable|" > "$_tmpdir/$(basename "$_dir")"
 				exit 0
 			}
@@ -195,6 +203,7 @@ _format_cluster_line() {
 			progressing) _status_display="progressing" ;;
 			degraded)    _status_display="degraded" ;;
 			unreachable) _status_display="unreachable" ;;
+			shutdown)    _status_display="shut down" ;;
 			*)           _status_display="installed" ;;
 		esac
 	fi
