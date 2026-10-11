@@ -80,7 +80,7 @@ externalize_cluster_state
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 
 show_cluster_summary
 

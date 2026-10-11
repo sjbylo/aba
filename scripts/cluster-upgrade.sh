@@ -59,7 +59,7 @@ done
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 source <(normalize-mirror-conf)
 
 scripts/progress-plan.sh cluster-upgrade
