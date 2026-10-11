@@ -308,9 +308,13 @@ _configure_platform_file() {
 _configure_vmw_form() {
 	local conf_path="$ABA_ROOT/vmware.conf"
 
-	# Create from template if missing
+	# Populate from home cache or template if missing
 	if [[ ! -s "$conf_path" ]]; then
-		cp "$ABA_ROOT/templates/vmware.conf" "$conf_path"
+		if [[ -s "$HOME/.vmware.conf" ]]; then
+			cp "$HOME/.vmware.conf" "$conf_path"
+		else
+			cp "$ABA_ROOT/templates/vmware.conf" "$conf_path"
+		fi
 	fi
 
 	# Load current values
@@ -2042,7 +2046,7 @@ R - Clean ABA: Removes configuration and state files so you can\n\
 		"R")
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 				--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
-				--defaultno --yesno "Clean ABA configuration?\n\nThis will remove configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
+				--defaultno --yesno "Clean ABA configuration?\n\nThis will remove configuration, state files, and mirror installers.\nImage archives (mirror_*.tar) and CLI tools are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
 			[[ $? -ne 0 ]] && continue
 			confirm_and_execute "aba clean" "Clean ABA"
 			return 0
