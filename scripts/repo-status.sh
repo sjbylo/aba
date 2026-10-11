@@ -263,7 +263,11 @@ shell)
 	fi
 
 	if [ "$_aba_conf_exists" = "true" ] && [ "$_pull_secret_ok" = "true" ]; then
-		_milestone="OCP ${_ocp_version:-?} configured, pull secret ready"
+		if [ -n "${_ocp_version:-}" ]; then
+			_milestone="OCP $_ocp_version configured, pull secret ready"
+		else
+			_milestone="pull secret ready, OCP version not set"
+		fi
 	fi
 
 	if [ "$_mirror_installed" != "true" ] && [ "$_pull_secret_ok" = "true" ]; then
