@@ -1950,12 +1950,24 @@ ABA_CACHE_TTL="${ABA_CACHE_TTL:-100m}"
 # Convert human-readable duration string to seconds (e.g. 30m, 12h, 1d, 300s, or bare integer)
 parse_duration() {
 	local val="$1"
+	local num
 	case "$val" in
-		*d) echo $(( ${val%d} * 86400 )) ;;   # strip "d" suffix, convert days → seconds
-		*h) echo $(( ${val%h} * 3600 )) ;;    # strip "h" suffix, convert hours → seconds
-		*m) echo $(( ${val%m} * 60 )) ;;      # strip "m" suffix, convert minutes → seconds
-		*s) echo $(( ${val%s} )) ;;            # strip "s" suffix
-		*)  echo "$val" ;;
+		*d) num=${val%d} ;;
+		*h) num=${val%h} ;;
+		*m) num=${val%m} ;;
+		*s) num=${val%s} ;;
+		*)  num=$val ;;
+	esac
+	if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+		echo_red "Error: invalid duration '$val' — use a single unit: 30m, 12h, 1d, 300s, or a bare number of seconds" >&2
+		return 1
+	fi
+	case "$val" in
+		*d) echo $(( num * 86400 )) ;;
+		*h) echo $(( num * 3600 )) ;;
+		*m) echo $(( num * 60 )) ;;
+		*s) echo "$num" ;;
+		*)  echo "$num" ;;
 	esac
 }
 
