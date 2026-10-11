@@ -154,6 +154,12 @@ aba_progress "START|sync"
 
 scripts/mirror-status.sh op=sync
 
+# Abort early if imageset has no active content — oc-mirror would fail with "no images to copy"
+if ! sed -n '/^mirror:/,$ p' data/imageset-config.yaml 2>/dev/null | grep -q '^  [^#]'; then
+	aba_abort "Nothing to sync — the imageset has no active (uncommented) image sections." \
+		"Enable at least one section in aba.conf (excl_platform, excl_operators) or add images to images.conf."
+fi
+
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
 aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."

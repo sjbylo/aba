@@ -130,6 +130,12 @@ aba_debug "Removed any stale aba-transfer.tar from data/"
 # Disk need vs free space is printed by mirror-status (op=save).
 scripts/mirror-status.sh op=save
 
+# Abort early if imageset has no active content — oc-mirror would fail with "no images to copy"
+if ! sed -n '/^mirror:/,$ p' data/imageset-config.yaml 2>/dev/null | grep -q '^  [^#]'; then
+	aba_abort "Nothing to save — the imageset has no active (uncommented) image sections." \
+		"Enable at least one section in aba.conf (excl_platform, excl_operators) or add images to images.conf."
+fi
+
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
 aba_progress "DONE|sv_tools"

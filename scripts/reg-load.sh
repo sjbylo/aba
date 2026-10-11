@@ -248,6 +248,12 @@ ensure_sigstore_mirror_config "$reg_host:$reg_port"
 # invent a second ISC parser. Prefer transfer tar content when present.
 scripts/mirror-status.sh op=load
 
+# Abort early if imageset has no active content — oc-mirror would fail with "no images to copy"
+if ! sed -n '/^mirror:/,$ p' data/imageset-config.yaml 2>/dev/null | grep -q '^  [^#]'; then
+	aba_abort "Nothing to load — the imageset has no active (uncommented) image sections." \
+		"Enable at least one section in aba.conf (excl_platform, excl_operators) or add images to images.conf."
+fi
+
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 
 aba_progress "DONE|ld_registry"
