@@ -197,22 +197,20 @@ _auto_deploy_dev_branch() {
 		fi
 	fi
 
-	# Compare bastion HEAD against last-deployed commit FOR THIS POOL.
-	# Each pool gets its own marker so deploying to one pool doesn't
-	# suppress deploys to the others.
-	local _pool_meta="${_AUTO_DEPLOY_META_PREFIX}-${pool_num}"
+	# Compare bastion HEAD against per-pool markers.  If ANY pool is behind,
+	# build the tarball once and deploy to ALL stale pools.  This ensures a
+	# commit reaches every pool promptly — not just the one being dispatched.
 	local _head
 	_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+
+	# Quick check: does the triggering pool even need an update?
+	local _pool_meta="${_AUTO_DEPLOY_META_PREFIX}-${pool_num}"
 	local _last_deployed=""
 	[ -f "$_pool_meta" ] && _last_deployed=$(cat "$_pool_meta" 2>/dev/null)
-
-	# Nothing new since last deploy to THIS pool
 	[ "$_head" = "$_last_deployed" ] && return 0
 
-	# Deploy committed source (git archive, not disk) to this pool.
-	# This ensures uncommitted WIP is never pushed — only committed code.
-	# Use --dev for deploying uncommitted disk changes.
-	echo "    AUTO-DEPLOY: new code ($(echo "${_last_deployed:-none}" | head -c 8)..$(echo "$_head" | head -c 8)) -> con${pool_num}"
+	# Build the tarball once (committed code only — git archive, not disk).
+	# Uncommitted WIP is never pushed; use --dev for that.
 	local _tar _manifest _paths=()
 	_tar=$(mktemp /tmp/aba-auto-deploy.XXXXXX.tar.gz)
 	_manifest="$_ABA_ROOT/test/e2e/.deploy-manifest"
@@ -225,20 +223,37 @@ _auto_deploy_dev_branch() {
 	else
 		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
 	fi
-	if git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
-		if sync_source "$target" "$_tar"; then
-			echo "$_head" > "$_pool_meta"
-			# Update deploy meta so verify-code can track.  Checksum is from
-			# git archive content (may differ from disk if gitignored files exist).
-			local _cksum
-			_cksum=$(md5sum "$_tar" | cut -d' ' -f1)
-			echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') git:$(echo "$_head" | head -c 8)" > /tmp/e2e-last-deploy.meta
-			echo "    AUTO-DEPLOY: source deployed to con${pool_num} ($(echo "$_head" | head -c 8))"
-		else
-			echo "    AUTO-DEPLOY: source deploy FAILED to con${pool_num}"
-		fi
-	else
+	if ! git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
 		echo "    AUTO-DEPLOY: git archive failed -- skipping"
+		rm -f "$_tar"
+		return 0
+	fi
+
+	# Deploy to every pool that is behind HEAD
+	local _p _p_meta _p_last _p_target _deployed_any=""
+	for _p in $CLI_POOL_LIST; do
+		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
+		_p_last=""
+		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
+		[ "$_head" = "$_p_last" ] && continue
+
+		_export_pool_ssh_users "$_p"
+		_p_target=$(_con_target "$_p")
+		echo "    AUTO-DEPLOY: new code ($(echo "${_p_last:-none}" | head -c 8)..$(echo "$_head" | head -c 8)) -> con${_p}"
+		if sync_source "$_p_target" "$_tar"; then
+			echo "$_head" > "$_p_meta"
+			echo "    AUTO-DEPLOY: source deployed to con${_p} ($(echo "$_head" | head -c 8))"
+			_deployed_any=1
+		else
+			echo "    AUTO-DEPLOY: source deploy FAILED to con${_p}"
+		fi
+	done
+
+	# Update deploy meta once (for verify-code tracking)
+	if [ -n "$_deployed_any" ]; then
+		local _cksum
+		_cksum=$(md5sum "$_tar" | cut -d' ' -f1)
+		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') git:$(echo "$_head" | head -c 8)" > /tmp/e2e-last-deploy.meta
 	fi
 	rm -f "$_tar"
 }
