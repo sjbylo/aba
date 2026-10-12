@@ -743,7 +743,7 @@ op)
 	else
 		aba_info "  Operators:    none"
 	fi
-	aba_info "  ISC:          ${_isc_display}"
+	aba_info "  Image config: ${_isc_display}"
 	[ -n "$_excl_display" ] && aba_warn -p "  Excluded" "    ${_excl_display}"
 	# Payload contradiction warnings
 	[ "$_warn_ops_excluded" = "true" ] && aba_warn "  Operators:    selected but excluded — they won't be mirrored"
