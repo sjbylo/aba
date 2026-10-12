@@ -11,9 +11,9 @@
 #   lib/cleanup.sh    -- _e2e_process_cleanup_dir (aba delete/uninstall)
 #   lib/deploy.sh     -- sync_harness, sync_extras, sync_source, _make_source_tar
 #
-# Auto-deploy: _auto_deploy_dev_branch() runs at each dispatch and pushes
-# new dev branch commits to the pool being dispatched.  See the function
-# and README.md "Auto-deploy" section for details.
+# Auto-deploy: _auto_deploy_dev_branch() runs on every poll cycle and at
+# each dispatch, deploying new dev branch commits to ALL pools.  See the
+# function and README.md "Auto-deploy" section for details.
 #
 # Caller must declare these arrays before calling dispatcher functions:
 #   declare -A _completed=() _busy_pools=() _results=() _result_pool=()
@@ -167,9 +167,6 @@ _AUTO_DEPLOY_FETCH_INTERVAL=300
 _auto_deploy_last_fetch_s=0
 
 _auto_deploy_dev_branch() {
-	local pool_num="$1"
-	local target="$2"
-
 	# Only auto-deploy if bastion workspace is on the dev branch
 	local _branch
 	_branch=$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || return 0
@@ -203,11 +200,16 @@ _auto_deploy_dev_branch() {
 	local _head
 	_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
 
-	# Quick check: does the triggering pool even need an update?
-	local _pool_meta="${_AUTO_DEPLOY_META_PREFIX}-${pool_num}"
-	local _last_deployed=""
-	[ -f "$_pool_meta" ] && _last_deployed=$(cat "$_pool_meta" 2>/dev/null)
-	[ "$_head" = "$_last_deployed" ] && return 0
+	# Quick check: is any pool behind HEAD?
+	local _any_stale=""
+	local _p _p_meta _p_last
+	for _p in $CLI_POOL_LIST; do
+		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
+		_p_last=""
+		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
+		[ "$_head" != "$_p_last" ] && _any_stale=1 && break
+	done
+	[ -z "$_any_stale" ] && return 0
 
 	# Build the tarball once (committed code only — git archive, not disk).
 	# Uncommitted WIP is never pushed; use --dev for that.
@@ -328,7 +330,7 @@ _dispatch_suite() {
 	target=$(_con_target "$pool_num")
 
 	# Auto-deploy: if bastion HEAD has advanced past last deploy, push source
-	_auto_deploy_dev_branch "$pool_num" "$target"
+	_auto_deploy_dev_branch
 
 	if ! sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 		echo "    DIAG: sync_harness attempt 1 failed on pool ${pool_num} -- retrying in 5s" >&2
@@ -1286,6 +1288,9 @@ _dispatch_loop() {
 			_recheck_unreachable_pools
 			_last_ext_refresh=$SECONDS
 		fi
+
+		# Auto-deploy: check on every poll, even when all pools are busy
+		_auto_deploy_dev_branch
 
 		# Adaptive polling: short interval after state changes, back off when idle
 		if [ -n "$_state_changed" ]; then
