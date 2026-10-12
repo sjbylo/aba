@@ -2387,3 +2387,43 @@ _ensure_aba_conf_fresh() {
 - `tui/v2/tui-lib.sh` (new `_ensure_aba_conf_fresh`, `_ensure_mirror_conf_fresh`)
 - All TUI files that call `source <(normalize-*-conf)` (~30 call sites)
 
+## Support AWS IPI (openshift-install) as an infrastructure platform
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-12
+
+**Problem:** ABA currently supports vSphere, KVM (agent-based installer), and bare-metal. Users deploying on AWS cannot use ABA to create clusters, even though the mirror workflow (save/sync/load) already works for any platform.
+
+**Proposed approach:** Add AWS as an infrastructure platform option. The main difference is generating an `install-config.yaml` for AWS IPI (Installer-Provisioned Infrastructure) instead of the agent-based config used for vSphere/KVM/bare-metal. The standard `openshift-install create cluster` flow would be used instead of the agent-based flow.
+
+**Key changes:**
+- New `infra_platform=aws` option in `cluster.conf`
+- Generate AWS-specific `install-config.yaml` (region, instance types, VPC settings, etc.)
+- Use `openshift-install create cluster` instead of `openshift-install agent create image`
+- TUI: add AWS as a platform choice in the cluster creation wizard
+- Skip agent-based steps (ISO generation, MAC addresses, starting IPs, VIPs) for AWS
+
+**Notes:**
+- The mirror registry workflow (connected/disconnected) is platform-independent and already works
+- AWS credentials would be configured via `~/.aws/credentials` or environment variables (standard AWS SDK approach)
+- Could later extend to other cloud IPI platforms (GCP, Azure) using the same pattern
+
+## OMR health check timeout too short (30s hardcoded)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-12
+
+**Problem:** The OMR (`mirror-registry`) binary has a hardcoded 30s health check timeout during `install`. On slower environments (e.g. AWS instances), the quay container takes longer than 30s to become healthy, causing the install to fail with `"install failed","err":"health check: timeout after 30s"`. The quadlet, systemd service, and linger are all set up correctly — starting the service manually afterwards works fine.
+
+**Root cause:** The Go source in the quay/quay repo (`mirror-registry` binary) hardcodes the health check timeout at 30 seconds. There is no `--timeout` CLI flag to override it.
+
+**Proposed fix:** Patch the OMR Go source to either:
+1. Increase the default health check timeout to 120s (matching ABA's own registry readiness timeout)
+2. Add a `-health-timeout` CLI flag so the caller can configure it
+
+Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the patch.
+
+**Workaround:** If the install fails with this timeout, the service is actually set up correctly. Run `systemctl --user start quay.service` manually, then re-run `aba -d mirror install` (ABA detects the running registry and registers it).
+
