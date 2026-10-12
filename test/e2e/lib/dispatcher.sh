@@ -1257,3 +1257,4 @@ _dispatch_loop() {
 		sleep "$_poll_interval"
 	done
 }
+# Auto-deploy test: 2026-10-12 10:53:18
