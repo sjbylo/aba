@@ -5647,7 +5647,7 @@ Single quotes inside a double-quoted SSH string do not prevent shell expansion o
 **Severity:** Medium
 **Mode:** DISCO
 **File:** `tui/v2/abatui2.sh` (cleanup)
-**Status:** OPEN — known gap: `_tui_exit_cleanup()` only removes PID file, doesn't kill children.
+**Status:** FIXED — run prefetch under `setsid`, kill process group + `run_once -G` on error exit. Commit `7465652f`.
 **Steps to reproduce:**
 1. Launch `abatui` on a disconnected host without a bundle/registry.
 2. TUI shows "Internet Access Required" and exits.
