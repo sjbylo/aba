@@ -225,6 +225,11 @@ _auto_deploy_dev_branch() {
 	if git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
 		if sync_source "$target" "$_tar"; then
 			echo "$_head" > "$_AUTO_DEPLOY_META"
+			# Update deploy meta so verify-code can track.  Checksum is from
+			# git archive content (may differ from disk if gitignored files exist).
+			local _cksum
+			_cksum=$(md5sum "$_tar" | cut -d' ' -f1)
+			echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') git:$(echo "$_head" | head -c 8)" > /tmp/e2e-last-deploy.meta
 			echo "    AUTO-DEPLOY: source deployed to con${pool_num} ($(echo "$_head" | head -c 8))"
 		else
 			echo "    AUTO-DEPLOY: source deploy FAILED to con${pool_num}"
