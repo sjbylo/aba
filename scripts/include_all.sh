@@ -2000,42 +2000,23 @@ _prev_minor() {
 	echo "${x}.$((y - 1))"
 }
 
-############################################
-# Find the nth candidate-exclusive version (not yet promoted to fast).
-# Scans from CDN latest minor downward, comparing candidate vs fast.
-# A version is "candidate-exclusive" if it's on candidate but NOT on fast.
-# Args: $1 = position (1=previous, 2=older), $2 = max minors to scan (default 4)
-# Returns: the version string, or empty if not found within scan range.
-############################################
-_candidate_nth_exclusive() {
-	local pos="${1:-1}"
-	local max_scan="${2:-4}"
-	local minor scanned=0 found=0
+# Next minor in the same major: "4.22" -> "4.23" ; "5.0" -> "5.1"
+_next_minor() {
+	local minor="$1"
+	local x y
+	x="${minor%%.*}"
+	y="${minor#*.}"
+	[[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+	echo "${x}.$(( y + 1 ))"
+}
 
-	minor="$(fetch_latest_minor_version candidate)"
-	[[ -n "$minor" ]] || return 1
-
-	while [[ $scanned -lt $max_scan ]]; do
-		local cand fast
-		cand="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
-		[[ -n "$cand" ]] || break
-
-		fast="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
-
-		if [[ "$cand" != "${fast:-}" ]]; then
-			found=$(( found + 1 ))
-			if [[ $found -eq $pos ]]; then
-				_is_version_string "$cand" && echo "$cand" && return 0
-				return 1
-			fi
-		fi
-
-		minor="$(_prev_minor "$minor")"
-		[[ -n "$minor" ]] || break
-		scanned=$(( scanned + 1 ))
-	done
-
-	return 1
+# First minor of the next major: "4.22" -> "5.0" ; "5.7" -> "6.0"
+_next_major() {
+	local minor="$1"
+	local x
+	x="${minor%%.*}"
+	[[ "$x" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+	echo "$(( x + 1 )).0"
 }
 
 # return 0 if v contains prerelease suffix (has '-') else 1
@@ -2118,17 +2099,134 @@ fetch_all_versions() {
 }
 
 ############################################
-# Fetch latest version (includes pre-release on candidate channel)
-# Uses two data sources:
-#   - CDN release.txt: discovers the "recommended" minor (e.g. 4.22)
-#   - Cincinnati graph: provides the actual version list per channel-minor
-# On candidate, the CDN may lag behind Cincinnati — newer pre-release minors
-# (e.g. 5.0) exist in the graph but aren't advertised by the CDN. Discovery
-# via fetch_latest_prerelease_version() bridges this gap.
+# True when this version has an upgrade edge from a different minor.
+# Reads the candidate graph cache that fetch_all_versions just filled.
+# A build with no such edge is listed but nothing can upgrade to it.
+############################################
+_version_has_cross_minor_edge() {
+	local version="$1"
+	local minor src cache_file
+
+	minor="$(_ver_minor "$version")"
+	[[ -n "$minor" ]] || return 1
+
+	cache_file="${ABA_CACHE_DIR}/graph_candidate-${minor}_${ARCH}.json"
+	[[ -s "$cache_file" ]] || return 1
+
+	while IFS= read -r src; do
+		[[ -z "$src" ]] && continue
+		[[ "$(_ver_minor "$src")" != "$minor" ]] && return 0
+	done < <(jq -r --arg ver "$version" '
+		. as $g
+		| ($g.nodes | to_entries | map(select(.value.version == $ver)) | .[0].key) as $dst
+		| select($dst != null)
+		| $g.edges[]?
+		| select(.[1] == $dst)
+		| $g.nodes[.[0]].version
+	' "$cache_file" 2>/dev/null)
+
+	return 1
+}
+
+############################################
+# Candidate versions to offer, newest first, at most 3.
+# Starts at the newest stable minor and steps forward with _next_minor.
+# The first empty minor jumps once, via _next_major, then the next empty
+# minor stops. A minor is kept only when its newest build has an upgrade
+# edge from another minor and fast does not already list that same build.
+# This is not fetch_upgrade_targets: that walk starts from an installed
+# version and stops when that version is absent from the next graph.
+############################################
+_candidate_offer_compute() {
+	local anchor minor head fast_head jump
+	local -a heads=()
+	local crossed=0 steps=0
+	local n i start
+
+	anchor="$(fetch_latest_minor_version stable)"
+	[[ -n "$anchor" ]] || return 0
+	minor="$anchor"
+
+	while [[ $steps -lt 6 ]]; do
+		minor="$(_next_minor "$minor")"
+		[[ -n "$minor" ]] || break
+		steps=$(( steps + 1 ))
+
+		head="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
+		if [[ -z "$head" ]]; then
+			# First gap in this major: try the next major's .0 once.
+			[[ $crossed -eq 1 ]] && break
+			crossed=1
+			jump="$(_next_major "$minor")"
+			[[ -n "$jump" ]] || break
+			minor="$jump"
+			head="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
+			[[ -n "$head" ]] || break
+		fi
+
+		_is_version_string "$head" || continue
+		_version_has_cross_minor_edge "$head" || continue
+
+		fast_head="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
+		[[ "$head" == "${fast_head:-}" ]] && continue
+
+		heads+=("$head")
+	done
+
+	n=${#heads[@]}
+	[[ $n -eq 0 ]] && return 0
+	start=0
+	[[ $n -gt 3 ]] && start=$(( n - 3 ))
+	i=$(( n - 1 ))
+	while [[ $i -ge $start ]]; do
+		printf '%s\n' "${heads[$i]}"
+		i=$(( i - 1 ))
+	done
+}
+
+# Cached offer list. A file that is only a newline means the walk found nothing.
+# flock so the parallel latest/previous/older tasks compute this once.
+_candidate_offer() {
+	local cache_file="${ABA_CACHE_DIR}/candidate_offer_${ARCH}.txt"
+	local lock_file="${cache_file}.lock"
+	local ttl tmp
+
+	ttl="$(parse_duration "$ABA_CACHE_TTL")"
+	mkdir -p "${ABA_CACHE_DIR}" 2>/dev/null || true
+
+	(
+		flock -w 120 9 || exit 1
+		if _cache_fresh "$cache_file" "$ttl"; then
+			grep -v '^$' "$cache_file" || true
+			exit 0
+		fi
+		tmp="$(mktemp "${cache_file}.XXXXXX")" || exit 1
+		_candidate_offer_compute > "$tmp" || true
+		if [[ ! -s "$tmp" ]]; then
+			printf '\n' > "$tmp"
+		fi
+		mv -f "$tmp" "$cache_file"
+		grep -v '^$' "$cache_file" || true
+	) 9>"$lock_file"
+}
+
+############################################
+# Fetch latest version.
+# Stable and fast come from the channel release file.
+# Candidate uses _candidate_offer when that walk found a version, and
+# otherwise the same release-file path.
 ############################################
 fetch_latest_version() {
 	local channel="${1:-stable}"
-	local minor v prev prerel
+	local minor v prev offer
+
+	if [[ "$channel" = "candidate" ]]; then
+		offer="$(_candidate_offer | sed -n '1p' || true)"
+		if _is_version_string "$offer"; then
+			echo "$offer"
+			return 0
+		fi
+	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || return 1
@@ -2138,14 +2236,6 @@ fetch_latest_version() {
 		prev="$(_prev_minor "$minor")"
 		[[ -n "$prev" ]] || return 1
 		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
-	fi
-
-	# On candidate, a newer pre-release may exist on a higher minor
-	if [[ "$channel" = "candidate" && -n "$v" ]]; then
-		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
-		if [[ -n "$prerel" ]] && is_version_greater "$prerel" "$v"; then
-			v="$prerel"
-		fi
 	fi
 
 	_is_version_string "$v" && echo "$v" && return 0
@@ -2181,17 +2271,16 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
-# On candidate: returns the 1st candidate-exclusive version (not on fast),
-# scanning from CDN minor downward. Empty if none found.
+# On candidate: line 2 of _candidate_offer (the one before latest). Empty if none.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
-	local minor prev v
+	local minor prev v offer
 
-	# Candidate channel: show only versions not yet promoted to fast
 	if [[ "$channel" = "candidate" ]]; then
-		_candidate_nth_exclusive 1
-		return
+		offer="$(_candidate_offer | sed -n '2p' || true)"
+		_is_version_string "$offer" && echo "$offer" && return 0
+		return 1
 	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
@@ -2208,16 +2297,16 @@ fetch_previous_version() {
 ############################################
 # Fetch latest version of N-2 minor (older)
 # Example: if latest minor is 4.21 -> return latest 4.19.z
-# On candidate: returns the 2nd candidate-exclusive version (not on fast).
+# On candidate: line 3 of _candidate_offer. Empty if the walk found fewer than 3.
 ############################################
 fetch_older_version() {
 	local channel="${1:-stable}"
-	local minor prev older v
+	local minor prev older v offer
 
-	# Candidate channel: show only versions not yet promoted to fast
 	if [[ "$channel" = "candidate" ]]; then
-		_candidate_nth_exclusive 2
-		return
+		offer="$(_candidate_offer | sed -n '3p' || true)"
+		_is_version_string "$offer" && echo "$offer" && return 0
+		return 1
 	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
@@ -2234,41 +2323,6 @@ fetch_older_version() {
 	return 1
 }
 
-
-############################################
-# Fetch latest pre-release version (candidate channel only).
-# Discovery is needed because the CDN release.txt only advertises one "recommended"
-# minor (e.g. 4.22), while newer pre-release minors (e.g. 5.0) exist only in the
-# Cincinnati graph. Cincinnati requires a specific channel-minor pair — there is no
-# "give me all minors" query. So we probe: try next minor (4.23), then next major.0 (5.0).
-# Returns the latest pre-release version or empty string.
-############################################
-fetch_latest_prerelease_version() {
-	local channel="${1:-candidate}"
-	local minor v next_minor next_major
-
-	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || return 0
-
-	# Try next minor in same major (e.g. 4.22 → 4.23)
-	local x="${minor%%.*}" y="${minor#*.}"      # split "4.22" → major "4", minor "22"
-	next_minor="${x}.$((y + 1))"
-	v="$(fetch_all_versions "$channel" "$next_minor" 2>/dev/null | tail -n1)"
-	if [[ -n "$v" ]] && _is_prerelease "$v"; then
-		echo "$v"
-		return 0
-	fi
-
-	# Try next major.0 (e.g. 4.22 → 5.0)
-	next_major="$((x + 1)).0"
-	v="$(fetch_all_versions "$channel" "$next_major" 2>/dev/null | tail -n1)"
-	if [[ -n "$v" ]] && _is_prerelease "$v"; then
-		echo "$v"
-		return 0
-	fi
-
-	return 0
-}
 
 ############################################
 # Verify that an upgrade path exists from current → target in the Cincinnati graph.
@@ -2477,8 +2531,10 @@ fetch_upgrade_targets() {
 	local probed=0 next_label=0
 
 	while [[ $probed -lt $max_probe ]]; do
-		y=$(( y + 1 ))
-		local probe_minor="${x}.${y}"
+		local probe_minor
+		probe_minor="$(_next_minor "${x}.${y}")"
+		[[ -n "$probe_minor" ]] || break
+		y="${probe_minor#*.}"
 
 		local graph_versions
 		graph_versions=$(_fetch_graph_cached "$channel" "$probe_minor" 2>/dev/null |
@@ -2487,7 +2543,8 @@ fetch_upgrade_targets() {
 		if [[ -z "$graph_versions" ]]; then
 			# No graph for this minor — try next major.0 (e.g. 4.22 → 5.0) once
 			if [[ $probed -eq 0 || $y -gt 99 ]]; then
-				local next_major="$(( x + 1 )).0"
+				local next_major
+				next_major="$(_next_major "${x}.${y}")"
 				graph_versions=$(_fetch_graph_cached "$channel" "$next_major" 2>/dev/null |
 					jq -r '.nodes[].version' 2>/dev/null) || true
 				[[ -z "$graph_versions" ]] && break
