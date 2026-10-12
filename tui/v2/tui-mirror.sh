@@ -625,6 +625,14 @@ _mirror_op_confirm() {
 		fi
 	fi
 
+	# Payload contradiction warnings (from mirror-status.sh --shell)
+	if [[ "${warn_operators_excluded:-}" == "true" ]]; then
+		_summary+="\n\\Z1Operators selected but excluded — they won't be mirrored\\Zn"
+	fi
+	if [[ "${warn_additional_excluded:-}" == "true" ]]; then
+		_summary+="\n\\Z1Additional images configured but excluded — they won't be mirrored\\Zn"
+	fi
+
 	_summary+="\nContinue?"
 
 	# For "View ISC": show the ISC from the transfer tar if available
@@ -651,6 +659,12 @@ _mirror_op_confirm() {
 				fi
 				rm -f "$_tmp_isc"
 			elif [[ -f "$_isc_for_view" ]]; then
+				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+					dlg --backtitle "$(ui_backtitle)" --infobox \
+						"$TUI2_MSG_ISC_GENERATING" 0 0
+					run_once -q -w -i "aba:isconf:generate" -- \
+						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
+				fi
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc_for_view" 0 0
 			else
@@ -1445,6 +1459,10 @@ mirror_payload_menu() {
 		if [[ -f "$ABA_ROOT/images.conf" ]]; then
 			_img_count=$(_read_images_conf "$ABA_ROOT/images.conf" | wc -l)
 		fi
+
+		# Contradiction warnings
+		[[ $_op_count -gt 0 && "$_excl_ops" == "true" ]] && _payload_summary+="\n\\Z1WARNING: Operators selected but excluded — they won't be mirrored\\Zn"
+		[[ $_img_count -gt 0 && "$_excl_addl" == "true" ]] && _payload_summary+="\n\\Z1WARNING: Additional images configured but excluded — they won't be mirrored\\Zn"
 
 		local _op_suffix="" _img_suffix=""
 		[[ $_op_count -gt 0 ]] && _op_suffix=" (${_op_count})"
@@ -2702,6 +2720,12 @@ mirror_create_bundle() {
 			# Help button = View ISC
 			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
 			if [[ -f "$_isc" ]]; then
+				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+					dlg --backtitle "$(ui_backtitle)" --infobox \
+						"$TUI2_MSG_ISC_GENERATING" 0 0
+					run_once -q -w -i "aba:isconf:generate" -- \
+						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
+				fi
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc" 0 0
 			else
