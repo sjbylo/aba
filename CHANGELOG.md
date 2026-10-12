@@ -1,5 +1,94 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.7...HEAD)
 
+New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idempotent install, OCP 5.x readiness, and 60+ bug fixes across 198 commits.
+
+
+### Added
+
+- **OpenShift Mirror Registry (OMR) vendor** — Third registry option alongside Docker and Quay, using Red Hat's Go-based `mirror-registry` binary. Supports local and remote install, Quadlet-managed systemd services, and rootless operation with automatic linger. Renamed from internal "quay-ng" codename.
+- **TUI progress dialog** — Mirror install, save, sync, load, and bundle operations now show a live weighted progress bar with step-by-step status tracking. Includes PTY-based live output viewing (press any key to return), a Retry button on failure, and a Quit shortcut. Built on a PTY + FIFO + Make architecture with progress plan emitters in each Makefile.
+- **Mirror stop/start commands** — `aba -d mirror stop` and `aba -d mirror start` for all registry vendors (Docker, Quay, OMR). TUI Advanced menu shows the commands and detects stopped state. Uses `podman pod stop/start` for Quay, `podman stop/start` for Docker, and `systemctl --user stop/start quay.service` for OMR.
+- **Mirror registry lifecycle tracking** — `reg_running` state tracked in `state.sh` across start, stop, install, and uninstall. Enables accurate "Stopped" labels in TUI menus and `--runtime` status queries.
+- **`--runtime` mode for mirror-status.sh** — Queries live registry state (vendor inference + curl fallback) instead of relying on cached state. Used by TUI for real-time status display.
+- **Vendor-aware `check_release_image()`** — Release image verification now dispatches authentication to the correct vendor automatically (Bearer token for Quay/OMR, Basic auth for Docker).
+- **Idempotent mirror install** — Writes `reg_status=installing` marker before the vendor install. On retry: if the service came up, skips straight to credential setup; if it didn't, removes the marker and retries from scratch. Prevents "already installed" blocking after a timeout failure.
+- **Exclusion contradiction warnings** — CLI and TUI warn when operators or additional images are configured in `aba.conf` but excluded from mirroring (`excl_operators=true` / `excl_additional=true`). Warning replaces the summary bullet so users see why content won't be mirrored.
+- **`older` version keyword** — `aba.conf` and the TUI version prompt now accept `older` to select the previous-minus-one release (e.g. 4.16 when latest is 4.18).
+- **Per-vendor remote install scripts** — Each vendor (Docker, Quay, OMR) now has dedicated `reg-install-<vendor>-remote.sh` and `reg-uninstall-<vendor>-remote.sh` scripts, replacing the monolithic shared remote installer.
+- **Data-directory transfer workflow** — Documented in README: how to move registry data between hosts using `--data-dir`.
+- **Catalogs included in bundle** — `aba bundle` now includes `catalogs/` directory and `.index/` in transfer archives for air-gapped operator catalog access.
+- **TUI: Disable Upgrade button** — Release images dialog now offers a "Disable Upgrade" button to set `excl_platform=true` directly.
+- **TUI: mirror cache** — Single-read mirror status cache shared across TUI menu functions, invalidated on OCP version changes.
+- **Preserve user-edited ISC during load** — `aba load` detects a customized imageset-config (newer than `.created` marker) and preserves it instead of overwriting from the transfer archive.
+- **ISC disk space estimation** — New `estimate-isc-size.sh` estimates mirror disk usage from operator blob sizes in `catalogs/sizes/` data. Used by mirror status for disk space warnings.
+- **Version validation** — Rejects OCP versions not listed in the channel graph, preventing invalid version selection.
+- **Mirror status: archive and disk info** — Shows archive count and total size, warns when disk space under `data/` is below 20GB, lists installed clusters that may need day-2 after load, and shows `(user-edited, preserved on load)` for customized ISCs.
+- **Bundle disk space guidance** — Bundle README now shows total disk needed (~3× bundle size) alongside per-bundle size.
+- **Data-dir conflict detection** — Registry install detects when another mirror workdir already owns the same data directory on the same host, preventing data corruption from concurrent installs.
+- **Docker debug port isolation** — Multiple Docker registries on the same host get unique debug/metrics ports derived from their data port, preventing bind collisions.
+- **TUI: Tab navigation hint** — All input, editbox, and form dialogs automatically show "Use Tab to navigate to the buttons" in the footer.
+- **TUI: ISO-only hint for bare-metal** — Review page shows "Bare-metal (ISO only — you boot servers)" so users know they'll need to boot from the ISO.
+- **Functional test restructure** — 78 tests categorized into unit and integration tiers in a restructured test runner. New tests for mirror payload warnings (18 permutations), mirror status keys, derived flags, idempotent install (25 assertions), and registry auth.
+
+### Changed
+
+- **OCP 5.x readiness** — Fixed oc-mirror download URLs and channel handling (`stable-5.0` does not exist; uses `stable-5` instead). RC version URLs also corrected.
+- **NTP via ABI-native config** — Switched from writing chrony config files to using `additionalNTPSources` in `agent-config.yaml`, the native Agent-Based Installer mechanism.
+- **TUI progress replaces raw output** — Long-running operations (install, save, sync, load) now show progress dialogs instead of raw terminal scroll. Live output still viewable via "View Output" button.
+- **TUI upgrade dialog improvements** — Better operator count display, safety defaults (Cancel on destructive dialogs), SNO bare-metal boot guidance with correct node counts, conditional plurals for master/worker.
+- **TUI dialog conversions** — Several button-based dialogs converted to menu-based for better keyboard navigation. Extracted `_with_basket_dirty_check` helper (DRY).
+- **Quay startup timeout extended** — Increased from 60s to 120s to handle slower environments.
+- **OMR uninstall uses `-purge` flag** — Ensures complete cleanup of Quadlet files and container state.
+- **ISC terminology cleanup** — User-facing messages now say "imageset-config.yaml" or "image configuration" instead of internal jargon ("ISC", "digest-pinned").
+- **Registry backup uses hidden directory** — Credential backups now use dot-prefix (`.mirror.bk`) so the glob `~/.aba/mirror/*/state.sh` won't match stale backups. Backups are cleaned up after successful install.
+- **Container auth merging** — `create-containers-auth.sh` now merges existing container auth instead of replacing it, and checks for kubeconfig before upgrade rewrites.
+- **TUI: destructive dialog safety** — All destructive yesno dialogs (Delete Cluster, Clean ABA, Shutdown, Refresh, Clean Cluster, Reset ISC) now default to Cancel, requiring users to actively navigate to the destructive action.
+- **Quay pod management** — Uses `podman pod stop/start` instead of individual container stop/start. Fixes port-still-listening bug where the infra container held the port after stopping quay-app.
+- **Quay backend readiness** — After pod start, waits up to 60s for Quay backend to return a non-502/503 response before declaring success.
+- **Day-2 NTP checks cluster API first** — A down cluster no longer gets new chrony files written then aborts; the API check runs before any file changes.
+- **Stopped mirror started before uninstall** — `aba uninstall` detects a stopped registry and starts it first, so the vendor's uninstall tool can clean up properly.
+- **Verify is read-only** — `aba verify` no longer generates configs as a side effect.
+- **Help text overhaul** — Curated help text replaces awk-generated Makefile targets across CLI, RPM, and build systems. Clearer download, configure, and DISCO help. Operator help points to `show-operators` and `show-op-sets`.
+- **Legacy cleanup** — Removed legacy shim `image_source_mirror_name()`, old bundle scripts, broken TUI keystroke tests (3,956 lines), dead code TUI functions, and deprecated test scripts.
+
+### Fixed
+
+- **Proxy configuration** — Agent IPs added to `no_proxy` when proxy is set but `no_proxy` is empty. Cluster networks (service/cluster CIDR) included in `noProxy` list. Prevents bootstrap failures behind HTTP proxies.
+- **Security: eval injection guard** — Positional args sanitized against eval injection in CLI argument parsing.
+- **Security: ABA_TMP permissions** — Temporary directory permissions hardened to 700.
+- **Security: password masking** — `reg_pw` masked in all log messages (aba_info, aba_debug, progress events).
+- **Upgrade dialog bugs** — Fixed day2/preflight messaging, upgrade-mode messages suppressed when release images excluded, imageset regenerated after flipping `excl_platform` for upgrade.
+- **Cluster status for shut-down clusters** — Status now skips API probe for shut-down clusters and uses the correct server URL.
+- **VIP auto-allocation** — Fixed so an explicitly set VIP is preserved instead of being overwritten.
+- **SNO DNS** — Fixed check to test single-node before VIP fields, preventing false DNS failures.
+- **Divide-by-zero in cluster-config** — Fixed crash when MAC list is shorter than expected.
+- **Container auth nesting** — `auth.backup` replaced instead of nesting duplicate copies inside itself.
+- **Ctrl-C false success** — Install and bootstrap no longer stamp `.install-complete` after Ctrl-C.
+- **Catalog download stale sweep** — Moved above fast-path exit so stale directories are always cleaned.
+- **TUI channel dialog stuck** — Added Exit button and fixed ESC handling so users can leave the channel selection dialog.
+- **TUI Back button exits** — Back on the channel page no longer silently exits the entire TUI.
+- **Orphaned prefetch processes** — TUI error exit now cleans up background catalog prefetch processes.
+- **Day2 exit code propagation** — Failed day2 operations no longer create false `.install-complete` markers.
+- **Input validation** — Reject leading zeros in `num_masters`/`num_workers`, duplicate VIPs, invalid IP octets, out-of-range ports (1–65535), zero CPU/memory, and combined duration units. Require 64-hex SHA256 digest on `aba image add`.
+- **Legacy cluster.conf** — Strip inline comments in legacy reader. Fix init to read `image_source` only, removing fallback that could read wrong value.
+- **Platform Settings** — Now loads `~/.vmware.conf` correctly. Clean help text corrected.
+- **Registry state persistence** — `reg_path` now persisted in `state.sh`. `save` updates `last_action`.
+- **Data-dir clash guard** — Skips incomplete installs (`reg_status=installing`) from other workdirs. Skips stale entries where data dir no longer exists on disk.
+- **Quay backend readiness** — Waits for Quay backend to be ready after pod start before declaring success.
+- **USB device override** — `USB_DEVICE` now honored as the system-disk override for bare-metal installs.
+- **VLAN bond config** — Uses cluster `prefix_length` in the VLAN bond agent configuration.
+- **Multi-line dig answer** — Saves only the first IPv4 address from multi-line DNS responses.
+- **`.init` ordering** — Made `.init` an order-only prerequisite for `cluster.conf` to prevent spurious rebuilds.
+- **Upgrade dialog wrote to wrong config** — `ocp_upgrade_to` was written to `aba.conf` instead of `mirror.conf`.
+- **backup.sh infinite loop** — Unrecognized flags caused an infinite while loop because no shift branch matched. Replaced with a case statement that aborts on unknown options.
+- **Register/unregister missing source** — `reg-register.sh` and `reg-unregister.sh` did not source `reg-common.sh`, causing `_regcreds_bk()` not found errors on every call.
+- **Docker container detection port-specific** — Stale-state check and pre-install/uninstall detection now match the specific port's container instead of any Docker registry container, fixing concurrent registry scenarios.
+- **Quay stale detection** — `reg_stale_report()` used string match on multiline systemctl output that could misdetect active state. Now uses `grep -qx` for exact line match.
+- **Empty imageset abort** — `aba sync`/`save`/`load` now check for uncommented content in the imageset before running oc-mirror, preventing cryptic "no images to copy" failures when all sections are excluded.
+- **Transfer `.init` cleanup** — `transfer-primed.sh` created `.init` files in cluster dirs to prevent full init during bundling, but the cleanup trap didn't remove them, causing Make to skip the real init recipe.
+- **ISC user-managed detection** — `aba_isc_is_user_managed` now requires `.created` marker to exist; missing marker means ABA never generated the ISC, not that the user manages it.
+- **Imageset regenerated for upgrade** — After switching `excl_platform=false` for upgrade, the imageset config is now regenerated so oc-mirror doesn't use a stale version with the platform section commented out.
+
 ---
 
 ## [1.3.7](https://github.com/sjbylo/aba/releases/tag/v1.3.7) - 2026-10-03
