@@ -1033,6 +1033,14 @@ while true; do
 			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
 			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
+		# Re-copy suite/lib/scripts from staging so a hot-deploy before '0'
+		# takes effect (staging is updated by sync_harness, run/ is the
+		# execution snapshot).
+		cp -a "$_STAGING_DIR"/lib/* "$_RUN_DIR/lib/"
+		cp -a "$_STAGING_DIR"/suites/* "$_RUN_DIR/suites/"
+		cp -a "$_STAGING_DIR"/scripts/* "$_RUN_DIR/scripts/"
+		suite_file="$_RUNNER_DIR/suites/suite-${SUITE}.sh"
+
 		# Post-cleanup filesystem snapshot (debug: catch leftover files on restart)
 		_print_fs_snapshot
 		continue
