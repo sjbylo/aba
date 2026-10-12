@@ -60,7 +60,8 @@ assert_exists() {
 
 # --- Setup ---
 _tmp=$(mktemp -d)
-trap 'rm -rf "$_tmp"' EXIT
+_server_pid=""
+trap 'kill "$_server_pid" 2>/dev/null; wait "$_server_pid" 2>/dev/null; rm -rf "$_tmp"' EXIT
 
 # Minimal environment needed by reg-common.sh functions
 export regcreds_dir="$_tmp/regcreds"
@@ -131,21 +132,22 @@ mkdir -p "$_cert_dir"
 openssl req -x509 -newkey rsa:2048 -keyout "$_cert_dir/key.pem" \
 	-out "$_cert_dir/cert.pem" -days 1 -nodes -subj "/CN=localhost" 2>/dev/null
 
-# Use openssl s_server as a fake registry that returns 200 on /v2/
-# Run in background
-(
-	cd "$_cert_dir"
-	while true; do
-		echo -e "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}" | \
-			openssl s_server -key key.pem -cert cert.pem -accept 59999 \
-			-quiet -naccept 1 2>/dev/null || break
-	done
-) &
+# Use python3 as a reliable multi-request HTTPS server
+cat > "$_tmp/fake_reg.py" <<'PYEOF'
+import ssl, http.server, sys
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain(sys.argv[1], sys.argv[2])
+srv = http.server.HTTPServer(('', int(sys.argv[3])), http.server.BaseHTTPRequestHandler)
+srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+srv.serve_forever()
+PYEOF
+python3 "$_tmp/fake_reg.py" "$_cert_dir/cert.pem" "$_cert_dir/key.pem" 59999 &
 _server_pid=$!
 sleep 1
 
-# Verify the server is listening
-if curl -k -sS -o /dev/null -w "%{http_code}" --connect-timeout 2 "https://localhost:59999/v2/" 2>/dev/null | grep -q "200"; then
+# Verify the server is listening (python3 BaseHTTPRequestHandler returns 501 for GET,
+# but probe_host --any accepts any non-error HTTP response including 501)
+if curl -k -sS -o /dev/null -w "%{http_code}" --connect-timeout 2 "https://localhost:59999/" 2>/dev/null | grep -qE "200|501"; then
 	echo "  (test server listening on :59999)"
 else
 	echo "  WARNING: test server may not be ready"
@@ -211,6 +213,47 @@ assert_contains "error mentions state.sh" "state.sh" "$_output"
 # Restore port
 export reg_port="59999"
 export reg_url="https://localhost:59999"
+
+echo ""
+echo "=== Test: reg_setup_data_dir — skip clash guard for installing state ==="
+# Simulate another workdir (mirror.bk) having a state.sh with reg_status=installing
+# that claims the same reg_root. This should NOT block the current install.
+# reg_setup_data_dir computes reg_root = $data_dir/$vendor, so for omr: $data_dir/omr
+_fake_home="$_tmp/fake_home"
+_test_data_dir="$_tmp/test_dd"
+_expected_root="$_test_data_dir/omr"
+mkdir -p "$_fake_home/.aba/mirror/mirror.bk"
+cat > "$_fake_home/.aba/mirror/mirror.bk/state.sh" <<-EOF
+reg_status=installing
+reg_vendor=omr
+reg_root=$_expected_root
+reg_host=localhost
+EOF
+_orig_home="$HOME"
+export HOME="$_fake_home"
+export data_dir="$_test_data_dir"
+_rc=0
+_output=$( reg_setup_data_dir omr 2>&1 ) || _rc=$?
+assert_eq "data-dir clash guard skips installing state (rc=0)" "0" "$_rc"
+export HOME="$_orig_home"
+
+echo ""
+echo "=== Test: reg_setup_data_dir — blocks clash for installed state ==="
+# Same but with reg_status=installed — should abort
+cat > "$_fake_home/.aba/mirror/mirror.bk/state.sh" <<-EOF
+reg_status=installed
+reg_vendor=omr
+reg_root=$_expected_root
+reg_host=localhost
+EOF
+mkdir -p "$_expected_root"   # data dir must exist for local installs to trigger guard
+export HOME="$_fake_home"
+export data_dir="$_test_data_dir"
+_rc=0
+_output=$( reg_setup_data_dir omr 2>&1 ) || _rc=$?
+assert_eq "data-dir clash guard blocks installed state (rc=1)" "1" "$_rc"
+assert_contains "error mentions mirror.bk" "mirror.bk" "$_output"
+export HOME="$_orig_home"
 
 echo ""
 echo "========================================="
