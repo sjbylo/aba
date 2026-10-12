@@ -311,7 +311,8 @@ _ps_path="${pull_secret_file:-$HOME/.pull-secret.json}"
 _ps_path="${_ps_path/#\~/$HOME}"                         # ~/foo → /home/user/foo
 if [[ -f "$_ps_path" ]]; then
 	tui_log "Starting background catalog pre-fetch"
-	(aba_prefetch_catalogs >>"$_TUI_LOG_FILE" 2>&1) &
+	setsid bash -c "source scripts/include_all.sh 2>/dev/null; aba_prefetch_catalogs" >>"$_TUI_LOG_FILE" 2>&1 &
+	_PREFETCH_PID=$!
 fi
 
 # Background CLI tool downloads (non-blocking, uses run_once per tool)
@@ -476,12 +477,17 @@ _detect_mode() {
 			tui_log "Mode detected: DISCO (offline, payload ready)"
 		else
 			# No fallback possible — show detailed error and exit
-			local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"  # replace newlines with \n for dialog
+			local _err_details="${ERROR_DETAILS//$'\n'/\\n}"  # replace newlines with \n for dialog
 			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
 				--no-collapse \
 				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
 			_tui_redirect_restore
 			clear
+			if [[ -n "${_PREFETCH_PID:-}" ]]; then
+				kill -- -"$_PREFETCH_PID" 2>/dev/null; wait "$_PREFETCH_PID" 2>/dev/null
+				# Also clean up run_once tasks spawned by prefetch (they use setsid, so group kill doesn't reach them)
+				run_once -G 2>/dev/null || true
+			fi
 			exit 0
 		fi
 	fi
