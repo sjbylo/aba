@@ -905,6 +905,7 @@ _interactive_prompt() {
 
     local _paused_file="/tmp/e2e-paused-${_E2E_SUITE_NAME:-unknown}"
     echo "${_E2E_CURRENT_TEST:-$description}" > "$_paused_file"
+    _e2e_notify "PAUSED: $_E2E_SUITE_NAME -- ${_E2E_CURRENT_TEST:-$description} (waiting for input)"
     local _clock_stopped=""
 
     while true; do
@@ -1158,6 +1159,7 @@ e2e_run() {
     # Per-command output capture: write to a temp file so failure notifications
     # can read the last 20 lines without the tee-reading-own-log truncation bug.
     local _cmd_output_file="/tmp/e2e-cmd-output.$$.tmp"
+    local _first_fail_sent=""
 
     while true; do
         local sleep_time="$initial_delay"
@@ -1216,7 +1218,8 @@ e2e_run() {
             local _exi; _exi="$(_e2e_exit_info $ret)"
             _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
 
-            if [ $attempt -eq 1 ]; then
+            if [ $attempt -eq 1 ] && [ -z "$_first_fail_sent" ]; then
+                _first_fail_sent=1
                 (
                     echo "$(date '+%H:%M:%S') FIRST FAILURE"
                     echo "Suite: $_E2E_SUITE_NAME"
