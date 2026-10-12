@@ -266,12 +266,14 @@ latest committed code.
 
 | Mechanism | What it deploys | Trigger |
 |-----------|----------------|---------|
-| `--dev` | Whatever's on disk (including uncommitted changes) | Manual (`run.sh deploy --dev` or `run.sh run --dev`) |
-| Auto-deploy | Committed `dev` branch code (`git HEAD`) | Automatic at each dispatch |
+| `--dev` | Disk state (including uncommitted changes) | Manual (`run.sh deploy --dev` or `run.sh run --dev`) |
+| Auto-deploy | Only committed code (`git archive HEAD`) | Automatic at each dispatch |
 
 Both are independent. `--dev` is for testing work-in-progress code that hasn't
-been committed. Auto-deploy ensures committed and pushed changes reach pools
-without manual intervention.
+been committed — it deploys whatever is on disk. Auto-deploy uses `git archive`
+to deploy only committed code, so uncommitted WIP is never pushed to pools
+automatically. This means it's safe to have half-finished changes on disk while
+auto-deploy handles committed code.
 
 ### Test Profiles
 

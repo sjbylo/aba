@@ -1066,10 +1066,12 @@ dispatch time via `_auto_deploy_dev_branch()` in `lib/dispatcher.sh`.
 **Relationship with `--dev` mode:**
 
 `--dev` is a manual overlay that pushes whatever is on disk (including
-uncommitted changes) via `run.sh deploy --dev`. Auto-deploy is automatic and
-pushes only committed code. They are independent: auto-deploy runs regardless
-of whether `--dev` mode is active. `--dev` is for testing WIP; auto-deploy
-ensures committed changes reach pools without manual intervention.
+uncommitted changes) via `run.sh deploy --dev` using `_make_source_tar()`.
+Auto-deploy uses `git archive HEAD` to build the tarball, so it deploys
+**only committed code** — uncommitted WIP on bastion is never pushed
+automatically. They are independent: auto-deploy runs regardless of whether
+`--dev` mode is active. `--dev` is for testing WIP; auto-deploy ensures
+committed changes reach pools without manual intervention.
 
 ### Infra space vs user space
 
