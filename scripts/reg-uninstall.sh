@@ -144,7 +144,8 @@ fi
 
 # Back up credentials (after successful uninstall) then clear them
 if [ -d "$regcreds_dir" ]; then
-	rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
+	_bk=$(_regcreds_bk "$regcreds_dir")
+	rm -rf "$_bk" && mv "$regcreds_dir" "$_bk"
 else
 	rm -rf "${regcreds_dir:?}/"*
 fi

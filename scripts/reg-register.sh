@@ -95,10 +95,11 @@ else
 		"Run: aba -d $(basename $PWD) --reg-host <hostname> first."
 fi
 
-# Back up existing regcreds if present
+# Back up existing regcreds if present (hidden so it won't match glob)
 if [ -d "$regcreds_dir" ]; then
-	rm -rf "${regcreds_dir}.bk"
-	mv "$regcreds_dir" "${regcreds_dir}.bk"
+	_bk=$(_regcreds_bk "$regcreds_dir")
+	rm -rf "$_bk"
+	mv "$regcreds_dir" "$_bk"
 fi
 mkdir -p "$regcreds_dir"
 

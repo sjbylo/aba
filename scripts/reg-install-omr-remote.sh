@@ -136,4 +136,5 @@ fi  # end of skip_to_post_install guard
 
 reg_remote_post_install "$_OMR_VENDOR" "$reg_root/ssl.cert"
 
+reg_cleanup_backup
 aba_progress "DONE|reg_verify"

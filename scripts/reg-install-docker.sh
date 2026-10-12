@@ -203,4 +203,5 @@ if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi
 
+reg_cleanup_backup
 aba_progress "DONE|reg_verify"

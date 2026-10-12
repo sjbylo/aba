@@ -218,6 +218,8 @@ echo ""
 echo "=== Test: reg_setup_data_dir — skip clash guard for installing state ==="
 # Simulate another workdir (mirror.bk) having a state.sh with reg_status=installing
 # that claims the same reg_root. This should NOT block the current install.
+# NOTE: .mirror.bk (hidden) won't match the glob, but mirror.bk (visible) still
+# might exist from old ABA versions — the skip logic handles both.
 # reg_setup_data_dir computes reg_root = $data_dir/$vendor, so for omr: $data_dir/omr
 _fake_home="$_tmp/fake_home"
 _test_data_dir="$_tmp/test_dd"
@@ -254,6 +256,39 @@ _output=$( reg_setup_data_dir omr 2>&1 ) || _rc=$?
 assert_eq "data-dir clash guard blocks installed state (rc=1)" "1" "$_rc"
 assert_contains "error mentions mirror.bk" "mirror.bk" "$_output"
 export HOME="$_orig_home"
+
+echo ""
+echo "=== Test: hidden backup not matched by glob ==="
+# A hidden .mirror.bk dir should NOT be found by the */state.sh glob
+rm -rf "$_fake_home/.aba/mirror/mirror.bk"
+mkdir -p "$_fake_home/.aba/mirror/.mirror.bk"
+cat > "$_fake_home/.aba/mirror/.mirror.bk/state.sh" <<-EOF
+reg_status=installed
+reg_vendor=omr
+reg_root=$_expected_root
+reg_host=localhost
+EOF
+export HOME="$_fake_home"
+export data_dir="$_test_data_dir"
+_rc=0
+_output=$( reg_setup_data_dir omr 2>&1 ) || _rc=$?
+assert_eq "hidden .mirror.bk not matched by glob (rc=0)" "0" "$_rc"
+export HOME="$_orig_home"
+
+echo ""
+echo "=== Test: _regcreds_bk produces hidden path ==="
+_result=$(_regcreds_bk "/home/user/.aba/mirror/mirror")
+assert_eq "_regcreds_bk output" "/home/user/.aba/mirror/.mirror.bk" "$_result"
+
+echo ""
+echo "=== Test: reg_cleanup_backup removes hidden backup ==="
+mkdir -p "$_tmp/cleanup_test/.aba/mirror/.mirror.bk"
+touch "$_tmp/cleanup_test/.aba/mirror/.mirror.bk/state.sh"
+export regcreds_dir="$_tmp/cleanup_test/.aba/mirror/mirror"
+mkdir -p "$regcreds_dir"
+reg_cleanup_backup 2>/dev/null
+assert_not_exists "hidden backup removed" "$_tmp/cleanup_test/.aba/mirror/.mirror.bk"
+export regcreds_dir="$_tmp/regcreds"
 
 echo ""
 echo "========================================="

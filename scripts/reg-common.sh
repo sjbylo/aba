@@ -35,6 +35,14 @@ if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
 
 source scripts/include_all.sh
 
+# Hidden backup path for regcreds — uses a dot-prefix so the glob
+# ~/.aba/mirror/*/state.sh won't match it and won't interfere with
+# the data-dir clash guard.
+_regcreds_bk() {
+	local _dir="$1"
+	echo "$(dirname "$_dir")/.$(basename "$_dir").bk"
+}
+
 umask 077
 
 # SSH config file used by all registry SSH operations
@@ -610,10 +618,12 @@ reg_post_install() {
 	local via_ssh=""
 	if [ "${3:-}" = "--ssh" ]; then via_ssh=1; fi
 
-	# Back up existing regcreds if present
+	# Back up existing regcreds to hidden dir (won't match */state.sh glob)
+	local _bk
+	_bk=$(_regcreds_bk "$regcreds_dir")
 	if [ -d "$regcreds_dir" ]; then
-		rm -rf "${regcreds_dir}.bk"
-		mv "$regcreds_dir" "${regcreds_dir}.bk"
+		rm -rf "$_bk"
+		mv "$regcreds_dir" "$_bk"
 	fi
 	mkdir -p "$regcreds_dir"
 
@@ -682,6 +692,17 @@ reg_post_install() {
 	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"
 	aba_success "Registry installed/configured successfully!"
 	aba_info "$vendor registry at $_where, root: $reg_root"
+}
+
+# --- reg_cleanup_backup -------------------------------------------------------
+# Remove the hidden regcreds backup after a successful install + verify.
+reg_cleanup_backup() {
+	local _bk
+	_bk=$(_regcreds_bk "$regcreds_dir")
+	if [ -d "$_bk" ]; then
+		rm -rf "$_bk"
+		aba_debug "Removed regcreds backup: $_bk"
+	fi
 }
 
 # --- _reg_host_run ------------------------------------------------------------
