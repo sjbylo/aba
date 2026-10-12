@@ -178,7 +178,7 @@ ifneq ($(arch),aarch64)
 	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
 endif
 	@[ -f $(DOCKER_REG_FILE) ] || echo "[ABA] Warning: Docker registry image not available (docker.io may not be reachable). Bundle will not include Docker registry support."
-	@[ -f $(OMR_FILE) ] || echo "[ABA] Warning: OMR registry image not available. Bundle will not include omr registry support."
+	@[ -f $(OMR_FILE) ] || echo "[ABA] Warning: OMR registry image not available. Bundle will not include OMR registry support."
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 .PHONY: _progress_plan-save
