@@ -33,6 +33,24 @@ Issues or Pull Requests.
 
 ---
 
+## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-12
+
+**Problem:** The disk estimate for 4.22 amd64 only has blob sizes for the 99 redhat-operator packages that appear in an operator set. The catalog index has 151 packages. The other 52 are guessed from the median of the measured ones, so `op_sets=all` and any operator outside a set can be far off. There is no size data for OpenShift 5.x at all. Catalog indexes for 5.0 and 5.1 are already present.
+
+**Root cause:** `catalogs/sizes/` was filled from `templates/operator-set-*`, not from every package in `redhat-operator-index`. The estimator uses that blob index when it exists and falls back to a median when an operator has no row. No 5.x files were generated.
+
+**Proposed fix:**
+
+- Measure every package in redhat-operator for the current minor (4.22 amd64), including the 52 that are not in a set. Do not mirror certified or community in full.
+- Create the same full redhat-operator size data for 5.x. Start with 5.0 and 5.1, amd64 only.
+- Write `catalogs/sizes/redhat-operator-v<minor>-amd64.blobs` for each version. Keep the operator-set list as the source for certified-only packages.
+
+---
+
 ## TUI: OpenShift Channel dialog has no Back button and ESC doesn't exit
 
 **Severity:** MEDIUM
