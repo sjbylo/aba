@@ -26,6 +26,10 @@
 if [ "${_REG_COMMON_LOADED:-}" ]; then return 0; fi
 _REG_COMMON_LOADED=1
 
+# Return code from reg_detect_existing() meaning "previous install was
+# interrupted but the service is healthy — skip to post-install".
+readonly REG_RC_COMPLETING=90
+
 # Enable INFO messages when called from make (unless parent set --quiet)
 if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
 
@@ -136,6 +140,29 @@ reg_check_fqdn() {
 		"  dig $reg_host +short"
 }
 
+# --- reg_mark_installing ------------------------------------------------------
+# Write a minimal state.sh with reg_status=installing BEFORE the vendor install.
+# This lets reg_detect_existing() recognize a retry of a failed install and
+# either complete it (if the service came up) or retry from scratch.
+reg_mark_installing() {
+	local vendor="$1"
+	mkdir -p "$regcreds_dir"
+	cat > "$regcreds_dir/state.sh" <<-EOF
+	reg_status=installing
+	reg_vendor=$vendor
+	reg_host=$reg_host
+	reg_port=$reg_port
+	reg_user=$reg_user
+	reg_pw='$reg_pw'
+	reg_root=$reg_root
+	reg_path=$reg_path
+	reg_ssh_key=${reg_ssh_key:-}
+	reg_ssh_user=${reg_ssh_user:-}
+	last_action_at='$(date '+%Y-%m-%d %H:%M:%S')'
+	EOF
+	aba_debug "Wrote installing marker to $regcreds_dir/state.sh"
+}
+
 # --- reg_detect_existing ------------------------------------------------------
 # Safety check: abort if an unknown external registry is already running at
 # reg_url.  This prevents ABA from blindly installing on top of a registry
@@ -143,11 +170,30 @@ reg_check_fqdn() {
 #
 # Also aborts if ABA already manages a registry at this host (state.sh with
 # matching reg_host).  There is no "reinstall" -- user must uninstall first.
+#
+# If state.sh has reg_status=installing (previous install failed midway),
+# check if the service actually came up.  If healthy, complete the install
+# by returning REG_RC_COMPLETING that callers use to skip straight
+# to reg_post_install.  If not healthy, remove the partial state and retry.
 reg_detect_existing() {
-	# Skip install if ABA already manages a healthy registry at this host.
-	# After Phase 3 (ADR-007), $reg_host is already overridden from state.sh
-	# by normalize-mirror-conf, so no need to grep state.sh separately.
 	if [ -s "$regcreds_dir/state.sh" ]; then
+		local _reg_status=""
+		_reg_status=$(grep "^[[:space:]]*reg_status=" "$regcreds_dir/state.sh" 2>/dev/null | tail -1 | cut -d= -f2) || true
+
+		if [ "$_reg_status" = "installing" ]; then
+			# Previous install attempt was interrupted — check if the service came up
+			if probe_host --any "$reg_url/v2/" "registry from previous install" 2>/dev/null; then
+				aba_info "Previous install was interrupted but registry is healthy at $reg_host:$reg_port"
+				aba_info "Completing installation ..."
+				return $REG_RC_COMPLETING
+			else
+				aba_info "Previous install was interrupted and registry is not running — retrying ..."
+				rm -f "$regcreds_dir/state.sh"
+				return 0
+			fi
+		fi
+
+		# reg_status=installed (or legacy state.sh without reg_status field)
 		if probe_host --any "$reg_url/v2/" "existing registry"; then
 			aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
 			exit 0
@@ -172,7 +218,7 @@ reg_detect_existing() {
 	aba_info "Probing $reg_url/v2/"
 	if probe_host --any "$reg_url/v2/" "Docker registry API" 2>/dev/null; then
 		aba_abort \
-			"Existing Docker registry found at $reg_url/v2/" \
+			"Existing registry found at $reg_url" \
 			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
 			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
 			"See the README.md for further information."
@@ -598,6 +644,7 @@ reg_post_install() {
 
 	# Write persistent state for uninstall (survives aba clean/reset)
 	cat > "$regcreds_dir/state.sh" <<-EOF
+	reg_status=installed
 	reg_vendor=$vendor
 	reg_host=$reg_host
 	reg_port=$reg_port
@@ -1097,9 +1144,16 @@ reg_remote_pre_install() {
 
 	reg_load_config
 	reg_detect_existing
+	_skip_to_post_install=$?
+
 	reg_check_fqdn
 	reg_setup_data_dir "$vendor"
 	reg_generate_password
+
+	# If previous install was interrupted but healthy, skip SSH checks
+	if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+		return $REG_RC_COMPLETING
+	fi
 
 	aba_info "Registry configured for *remote* install (reg_ssh_key is defined in mirror.conf)."
 	aba_info "Verifying SSH access to $reg_ssh_user@$reg_host ..."

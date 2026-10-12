@@ -11,15 +11,30 @@ aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 reg_detect_existing
+_skip_to_post_install=$?
+
 reg_check_fqdn
 reg_setup_data_dir docker
 reg_generate_password
+
+if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+	# Previous install was interrupted but registry is healthy — skip to post_install
+	aba_progress "DONE|reg_env"
+	aba_progress "DONE|reg_firewall"
+	aba_progress "DONE|reg_download"
+	aba_progress "DONE|reg_install"
+	aba_progress "START|reg_postcfg"
+else
+
 reg_verify_localhost
+fi
 
 REGISTRY_NAME="registry-${reg_port}"
 REGISTRY_DATA_DIR="$reg_root/data"
 REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
+
+if [ "$_skip_to_post_install" -ne "$REG_RC_COMPLETING" ]; then
 
 ask "Install Docker registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
@@ -41,6 +56,9 @@ fi
 
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
+
+# Mark state as "installing" so a retry can detect and recover from a partial install
+reg_mark_installing docker
 
 mkdir -p "$REGISTRY_DATA_DIR" "$REGISTRY_CERTS_DIR" "$REGISTRY_AUTH_DIR"
 
@@ -137,6 +155,8 @@ fi
 
 aba_progress "DONE|reg_install"
 aba_progress "START|reg_postcfg"
+
+fi  # end of skip_to_post_install guard
 
 # Save credentials and state BEFORE the connectivity check, so the user
 # can recover with 'aba verify' or 'aba uninstall' if networking fails.
