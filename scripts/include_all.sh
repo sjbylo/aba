@@ -4181,7 +4181,7 @@ _run_oc_mirror_with_retry() {
 		# via aba-transfer.tar).
 		if [ -f "data/imageset-config-digest.yaml" ]; then
 			base_cmd="${base_cmd/--config imageset-config.yaml/--config imageset-config-digest.yaml}"
-			aba_info "Using transferred digest ISC for air-gap catalog pinning"
+			aba_info "Using image configuration from transfer bundle"
 		else
 			aba_warn "imageset-config-digest.yaml not found in mirror/data/." \
 				"On disconnected hosts, this file is required for catalog pinning." \

@@ -131,7 +131,7 @@ if [ -f "$_transfer_tar" ]; then
 	_tar_exclude=""
 	if [ -f "data/imageset-config.yaml" ] && [ -f "data/.created" ] \
 	   && [ "data/imageset-config.yaml" -nt "data/.created" ]; then
-		aba_warn "Local ISC has been edited — preserving your version."
+		aba_warn "Local imageset-config.yaml has been edited — preserving your version."
 		_tar_exclude="--exclude=mirror/data/imageset-config.yaml --exclude=mirror/data/imageset-config-digest.yaml"
 	fi
 

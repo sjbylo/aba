@@ -285,7 +285,7 @@ elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
 	aba_info "      cp /transfer-media/*.tar ~/aba/mirror/data/"
 	aba_info "      cd aba && ./install && aba (or abatui)"
 	echo
-	aba_info "  mirror_*.tar = images, aba-transfer.tar = config (ISC)"
+	aba_info "  mirror_*.tar = images, aba-transfer.tar = config (imageset-config)"
 	aba_info "  For ongoing updates, always use Option B (save/transfer/load)."
 fi
 echo >&2
