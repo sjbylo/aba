@@ -395,6 +395,12 @@ reg_setup_data_dir() {
 		_sf_root=$(grep '^reg_root=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
 		_sf_host=$(grep '^reg_host=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
 		if [ "$_sf_root" = "$reg_root" ] && [ "$_sf_host" = "$reg_host" ]; then
+			# Skip incomplete installs — reg_status=installing means the other
+			# workdir never finished, so it shouldn't block this one.
+			local _sf_status
+			_sf_status=$(grep '^reg_status=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
+			[ "$_sf_status" = "installing" ] && continue
+
 			# For local installs, skip stale state.sh entries where the data dir
 			# no longer exists (previous install was cleaned up or removed).
 			if [ -z "$reg_ssh_key" ] && [ ! -d "$reg_root" ]; then
