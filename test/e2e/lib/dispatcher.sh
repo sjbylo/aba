@@ -151,68 +151,69 @@ _process_pool_cleanup_files() {
 	_run_cleanup_on_host "$target" "    " "$allowed"
 }
 
-# --- Auto-pull dev branch if remote has new commits --------------------------
-# Checks origin/dev for new commits, pulls them to the bastion workspace,
-# and rebuilds+pushes the source tarball to the pool being dispatched.
-# Rate-limited: only git-fetches once per 5 minutes (not every dispatch).
-# Only acts when the workspace is on the dev branch with a clean tree.
-# This is independent of --dev mode (which overlays uncommitted local changes).
+# --- Auto-deploy dev branch when bastion HEAD advances -----------------------
+# Compares bastion HEAD against the last-deployed commit. Triggers when:
+#   (a) someone pushes to origin/dev (fetch pulls it, HEAD advances), OR
+#   (b) the user commits locally (HEAD advances past last deploy).
+# Also fetches origin/dev periodically (rate-limited) to pick up remote pushes.
+# Independent of --dev mode (which overlays uncommitted local changes).
 
-_AUTO_PULL_INTERVAL=300
-_auto_pull_last_fetch_s=0
-_auto_pull_last_commit=""
+_AUTO_DEPLOY_META="/tmp/e2e-auto-deploy-commit"
+_AUTO_DEPLOY_FETCH_INTERVAL=300
+_auto_deploy_last_fetch_s=0
 
-_auto_pull_dev_branch() {
+_auto_deploy_dev_branch() {
 	local pool_num="$1"
 	local target="$2"
 
-	# Rate-limit: skip fetch if checked recently
-	local _now=${SECONDS:-0}
-	if (( _now - _auto_pull_last_fetch_s < _AUTO_PULL_INTERVAL )); then
-		return 0
-	fi
-	_auto_pull_last_fetch_s=$_now
-
-	# Only auto-pull if bastion workspace is on the dev branch
+	# Only auto-deploy if bastion workspace is on the dev branch
 	local _branch
 	_branch=$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || return 0
 	[ "$_branch" = "dev" ] || return 0
 
-	# Fetch latest from origin (lightweight metadata only)
-	git -C "$_ABA_ROOT" fetch origin dev --quiet 2>/dev/null || return 0
+	# Periodically fetch origin/dev to detect remote pushes
+	local _now=${SECONDS:-0}
+	if (( _now - _auto_deploy_last_fetch_s >= _AUTO_DEPLOY_FETCH_INTERVAL )); then
+		_auto_deploy_last_fetch_s=$_now
+		git -C "$_ABA_ROOT" fetch origin dev --quiet 2>/dev/null || true
 
-	local _local_head _remote_head
-	_local_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
-	_remote_head=$(git -C "$_ABA_ROOT" rev-parse origin/dev 2>/dev/null) || return 0
-
-	# Nothing new
-	[ "$_local_head" = "$_remote_head" ] && return 0
-
-	# Don't pull if there are uncommitted changes (user may be editing)
-	if ! git -C "$_ABA_ROOT" diff --quiet 2>/dev/null || \
-	   ! git -C "$_ABA_ROOT" diff --cached --quiet 2>/dev/null; then
-		echo "    AUTO-PULL: origin/dev has new commits but workspace has uncommitted changes -- skipping"
-		return 0
+		# If origin is ahead of local, try to fast-forward
+		local _local_head _remote_head
+		_local_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+		_remote_head=$(git -C "$_ABA_ROOT" rev-parse origin/dev 2>/dev/null) || return 0
+		if [ "$_local_head" != "$_remote_head" ]; then
+			if ! git -C "$_ABA_ROOT" diff --quiet 2>/dev/null || \
+			   ! git -C "$_ABA_ROOT" diff --cached --quiet 2>/dev/null; then
+				echo "    AUTO-DEPLOY: origin/dev ahead but workspace has uncommitted changes -- skipping pull"
+			elif git -C "$_ABA_ROOT" merge --ff-only origin/dev 2>/dev/null; then
+				echo "    AUTO-DEPLOY: pulled origin/dev ($(echo "$_local_head" | head -c 8)..$(echo "$_remote_head" | head -c 8))"
+			else
+				echo "    AUTO-DEPLOY: fast-forward failed (local diverged?) -- skipping pull"
+			fi
+		fi
 	fi
 
-	# Fast-forward to origin/dev
-	echo "    AUTO-PULL: new commits on origin/dev ($(echo "$_local_head" | head -c 8)..$(echo "$_remote_head" | head -c 8))"
-	if ! git -C "$_ABA_ROOT" merge --ff-only origin/dev 2>/dev/null; then
-		echo "    AUTO-PULL: fast-forward failed (local diverged?) -- skipping"
-		return 0
-	fi
+	# Compare bastion HEAD against last-deployed commit
+	local _head
+	_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+	local _last_deployed=""
+	[ -f "$_AUTO_DEPLOY_META" ] && _last_deployed=$(cat "$_AUTO_DEPLOY_META" 2>/dev/null)
 
-	# Rebuild and push source to this pool
-	echo "    AUTO-PULL: deploying updated source to con${pool_num} ..."
+	# Nothing new since last deploy
+	[ "$_head" = "$_last_deployed" ] && return 0
+
+	# Deploy updated source to this pool
+	echo "    AUTO-DEPLOY: new code ($(echo "${_last_deployed:-none}" | head -c 8)..$(echo "$_head" | head -c 8)) -> con${pool_num}"
 	local _tar
 	_tar=$(_make_source_tar "$_ABA_ROOT")
 	if sync_source "$target" "$_tar"; then
+		echo "$_head" > "$_AUTO_DEPLOY_META"
 		local _cksum
 		_cksum=$(_source_checksum "$_ABA_ROOT")
 		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
-		echo "    AUTO-PULL: source deployed to con${pool_num}"
+		echo "    AUTO-DEPLOY: source deployed to con${pool_num} ($(echo "$_head" | head -c 8))"
 	else
-		echo "    AUTO-PULL: source deploy FAILED to con${pool_num}"
+		echo "    AUTO-DEPLOY: source deploy FAILED to con${pool_num}"
 	fi
 	rm -f "$_tar"
 }
@@ -286,8 +287,8 @@ _dispatch_suite() {
 	local target
 	target=$(_con_target "$pool_num")
 
-	# Auto-pull: if origin/dev has new pushed commits, pull and deploy source
-	_auto_pull_dev_branch "$pool_num" "$target"
+	# Auto-deploy: if bastion HEAD has advanced past last deploy, push source
+	_auto_deploy_dev_branch "$pool_num" "$target"
 
 	if ! sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 		echo "    DIAG: sync_harness attempt 1 failed on pool ${pool_num} -- retrying in 5s" >&2
