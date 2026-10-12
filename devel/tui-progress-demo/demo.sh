@@ -271,7 +271,7 @@ draw_progress() {
 	local pct=0
 	[ "$total" -gt 0 ] && pct=$((done_count * 100 / total))
 
-	local _subtitle="\n       < Output (Space) >       < Abort (Q) >\n"
+	local _subtitle="\n     < Output (Space) >      < Quit (Q/ESC) >\n"
 	if [ -n "$_subtitle_override" ]; then
 		_subtitle="$_subtitle_override"
 	elif [ -n "$_prompt_msg" ]; then
@@ -810,11 +810,11 @@ run_workflow() {
 			continue
 		fi
 
-		# Poll for user keypresses (Space=output view, Q=quit)
+		# Poll for user keypresses (Space=output view, Q or ESC=quit)
 		if IFS= read -rsn1 -t 0.4 key; then
 			case "$key" in
 				o|O|' ') show_output ;;
-				q|Q) break ;;
+				q|Q|$'\e') break ;;
 			esac
 		fi
 	done
