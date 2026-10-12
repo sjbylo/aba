@@ -230,7 +230,7 @@ _tp_draw() {
 	local pct=0
 	[ "$total_weight" -gt 0 ] && pct=$((done_weight * 100 / total_weight))
 
-	local _subtitle="\n       < Output (Space) >        < Quit (Q) >\n"
+	local _subtitle="\n     < Output (Space) >      < Quit (Q/ESC) >\n"
 	if [ -n "$_subtitle_override" ]; then
 		_subtitle="$_subtitle_override"
 	elif [ -n "$_tp_prompt_msg" ]; then
@@ -628,7 +628,12 @@ _exec_with_progress() {
 		if IFS= read -rsn1 -t 0.4 key; then
 			case "$key" in
 				o|O|' ') _tp_show_output ;;
-				q|Q) break ;;
+				q|Q|$'\e')
+					# Leave before the command finishes. Callers treat 0 as
+					# success and would offer Day-2 on a mirror that was not updated.
+					_rc=1
+					break
+					;;
 			esac
 		fi
 	done

@@ -626,6 +626,9 @@ _mirror_op_confirm() {
 	fi
 
 	# Payload contradiction warnings (from mirror-status.sh --shell)
+	if [[ "${excl_platform:-}" == "true" ]]; then
+		_summary+="\n\\Z1Release images excluded — they won't be mirrored\\Zn"
+	fi
 	if [[ "${warn_operators_excluded:-}" == "true" ]]; then
 		_summary+="\n\\Z1Operators selected but excluded — they won't be mirrored\\Zn"
 	fi
@@ -633,7 +636,7 @@ _mirror_op_confirm() {
 		_summary+="\n\\Z1Additional images configured but excluded — they won't be mirrored\\Zn"
 	fi
 
-	_summary+="\nContinue?"
+	_summary+="\n\nContinue?"
 
 	# For "View ISC": show the ISC from the transfer tar if available
 	_isc_for_view="$ABA_ROOT/mirror/data/imageset-config.yaml"
@@ -1450,9 +1453,6 @@ mirror_payload_menu() {
 
 		local _payload_summary="OCP ${ocp_version:-?} ${ocp_channel:-}"
 		[[ $_op_count -gt 0 ]] && _payload_summary+=" · ${_op_count} $( (( _op_count == 1 )) && echo operator || echo operators)"
-		[[ "$_excl_plat" == "true" ]] && _payload_summary+=" · release: excluded"
-		[[ "$_excl_ops" == "true" ]] && _payload_summary+=" · operators: excluded"
-		[[ "$_excl_addl" == "true" ]] && _payload_summary+=" · additional: excluded"
 
 		# Count additional images
 		local _img_count=0
@@ -1460,9 +1460,24 @@ mirror_payload_menu() {
 			_img_count=$(_read_images_conf "$ABA_ROOT/images.conf" | wc -l)
 		fi
 
-		# Contradiction warnings
-		[[ $_op_count -gt 0 && "$_excl_ops" == "true" ]] && _payload_summary+="\n\\Z1WARNING: Operators selected but excluded — they won't be mirrored\\Zn"
-		[[ $_img_count -gt 0 && "$_excl_addl" == "true" ]] && _payload_summary+="\n\\Z1WARNING: Additional images configured but excluded — they won't be mirrored\\Zn"
+		# Exclusion info + contradiction warnings:
+		# Summary bullets (non-contradiction) go on the OCP line.
+		# Contradiction warnings go on separate lines below.
+		if [[ "$_excl_ops" == "true" ]] && ! [[ -n "${op_sets:-}" || -n "${ops:-}" ]]; then
+			_payload_summary+=" · operators: excluded"
+		fi
+		if [[ "$_excl_addl" == "true" && $_img_count -eq 0 ]]; then
+			_payload_summary+=" · additional: excluded"
+		fi
+		if [[ "$_excl_plat" == "true" ]]; then
+			_payload_summary+="\n\\Z1WARNING: Release images excluded — they won't be mirrored\\Zn"
+		fi
+		if [[ ( -n "${op_sets:-}" || -n "${ops:-}" ) && "$_excl_ops" == "true" ]]; then
+			_payload_summary+="\n\\Z1WARNING: Operators selected but excluded — they won't be mirrored\\Zn"
+		fi
+		if [[ $_img_count -gt 0 && "$_excl_addl" == "true" ]]; then
+			_payload_summary+="\n\\Z1WARNING: Additional images configured but excluded — they won't be mirrored\\Zn"
+		fi
 
 		local _op_suffix="" _img_suffix=""
 		[[ $_op_count -gt 0 ]] && _op_suffix=" (${_op_count})"
