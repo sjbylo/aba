@@ -222,6 +222,9 @@ Options:
 # Deploy + run with local source (developer mode):
 ./run.sh run -a -p 1-4 -d
 
+# Note: The dispatcher auto-deploys committed dev branch changes.
+# See "Auto-deploy" section below.
+
 # List available suites:
 ./run.sh list
 
@@ -234,6 +237,41 @@ Options:
 # Include dummy suites alongside real suites:
 ./run.sh run -a -D -p 1-4
 ```
+
+### Auto-deploy (dev branch)
+
+The dispatcher automatically deploys new `dev` branch commits to pools at
+dispatch time — no manual action needed. This ensures pools always run the
+latest committed code.
+
+**How it works:**
+
+1. At each suite dispatch, the dispatcher compares bastion's `git HEAD` against
+   a marker file (`/tmp/e2e-auto-deploy-commit`) that records the last-deployed
+   commit.
+2. Every 5 minutes, it also runs `git fetch origin dev` to pick up remote
+   pushes. If origin is ahead and the workspace is clean, it fast-forwards.
+3. If HEAD differs from the marker, it builds a source tarball and pushes it to
+   the pool being dispatched.
+4. Each pool gets the update when it receives its next dispatched suite.
+
+**Safety guards:**
+
+- Only acts when the bastion workspace is on the `dev` branch.
+- If there are **uncommitted changes on disk**, the fetch/pull is skipped (won't
+  clobber your work). The deploy still fires if HEAD advanced past the marker.
+- Fast-forward only — if local and remote have diverged, the pull is skipped.
+
+**Relationship with `--dev`:**
+
+| Mechanism | What it deploys | Trigger |
+|-----------|----------------|---------|
+| `--dev` | Whatever's on disk (including uncommitted changes) | Manual (`run.sh deploy --dev` or `run.sh run --dev`) |
+| Auto-deploy | Committed `dev` branch code (`git HEAD`) | Automatic at each dispatch |
+
+Both are independent. `--dev` is for testing work-in-progress code that hasn't
+been committed. Auto-deploy ensures committed and pushed changes reach pools
+without manual intervention.
 
 ### Test Profiles
 

@@ -1034,6 +1034,43 @@ suite lifecycle** -- no operation may wipe or overwrite `~/aba`:
   into `~/aba`, or otherwise replace the contents of `~/aba` when
   `E2E_DEV_MODE=1` is set.
 
+### Auto-deploy: automatic dev branch deployment
+
+The dispatcher automatically deploys new `dev` branch commits to pools at
+dispatch time via `_auto_deploy_dev_branch()` in `lib/dispatcher.sh`.
+
+**Mechanism:**
+
+1. At each `_dispatch_suite()` call, the function compares bastion's `git HEAD`
+   against `/tmp/e2e-auto-deploy-commit` (the last-deployed commit marker).
+2. Every 5 minutes (`_AUTO_DEPLOY_FETCH_INTERVAL`), it fetches `origin/dev` to
+   detect remote pushes. If origin is ahead and the working tree is clean, it
+   fast-forwards bastion (`git merge --ff-only`).
+3. If HEAD differs from the marker, it calls `_make_source_tar()` +
+   `sync_source()` to push the updated code to the pool being dispatched.
+4. On success, the marker is updated to HEAD. Subsequent dispatches skip
+   (HEAD == marker) until the next commit.
+
+**Triggers:**
+
+- Someone pushes to `origin/dev` (detected via periodic fetch)
+- User commits locally on bastion (HEAD advances past the marker)
+
+**Safety guards:**
+
+- Only fires when bastion is on the `dev` branch
+- Uncommitted changes block the `git pull` (won't clobber WIP)
+- Fast-forward only — diverged branches are skipped
+- Rate-limited fetch (5-minute interval, not every dispatch)
+
+**Relationship with `--dev` mode:**
+
+`--dev` is a manual overlay that pushes whatever is on disk (including
+uncommitted changes) via `run.sh deploy --dev`. Auto-deploy is automatic and
+pushes only committed code. They are independent: auto-deploy runs regardless
+of whether `--dev` mode is active. `--dev` is for testing WIP; auto-deploy
+ensures committed changes reach pools without manual intervention.
+
 ### Infra space vs user space
 
 The test framework enforces a strict separation between infrastructure-owned

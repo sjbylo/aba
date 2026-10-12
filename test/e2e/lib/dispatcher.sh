@@ -9,7 +9,11 @@
 #   lib/constants.sh  -- E2E_TMUX_SESSION, E2E_RC_PREFIX, E2E_DISPATCH_STATE, etc.
 #   lib/remote.sh     -- _essh, _escp, _ssh_con, _con_target, _dis_target, _wait_for_ssh
 #   lib/cleanup.sh    -- _e2e_process_cleanup_dir (aba delete/uninstall)
-#   lib/deploy.sh     -- sync_harness, sync_extras
+#   lib/deploy.sh     -- sync_harness, sync_extras, sync_source, _make_source_tar
+#
+# Auto-deploy: _auto_deploy_dev_branch() runs at each dispatch and pushes
+# new dev branch commits to the pool being dispatched.  See the function
+# and README.md "Auto-deploy" section for details.
 #
 # Caller must declare these arrays before calling dispatcher functions:
 #   declare -A _completed=() _busy_pools=() _results=() _result_pool=()
