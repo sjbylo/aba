@@ -2805,9 +2805,10 @@ _day2_clean() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	local _clean_warn=""
-	if [ -f "$SELECTED_CLUSTER_DIR/.install-complete" ]; then
+	local _cl_path="$ABA_ROOT/$SELECTED_CLUSTER"
+	if [ -f "$_cl_path/.install-complete" ]; then
 		_clean_warn="\n\nWARNING: This cluster is installed"
-		[ -f "$SELECTED_CLUSTER_DIR/.shutdown.log" ] && _clean_warn="$_clean_warn (shut down)"
+		[ -f "$_cl_path/.shutdown.log" ] && _clean_warn="$_clean_warn (shut down)"
 		_clean_warn="$_clean_warn. Clean will remove\n.install-complete, kubeconfig, and shutdown state. VMs are NOT removed."
 	fi
 
