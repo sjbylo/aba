@@ -178,19 +178,14 @@ _auto_deploy_dev_branch() {
 		_auto_deploy_last_fetch_s=$_now
 		git -C "$_ABA_ROOT" fetch origin dev --quiet 2>/dev/null || true
 
-		# If origin is ahead of local, try to fast-forward
+		# If origin is ahead of local, notify but NEVER merge.
+		# The daemon must not modify the user's working tree — that
+		# clobbers uncommitted edits.  The user pulls when ready.
 		local _local_head _remote_head
 		_local_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
 		_remote_head=$(git -C "$_ABA_ROOT" rev-parse origin/dev 2>/dev/null) || return 0
 		if [ "$_local_head" != "$_remote_head" ]; then
-			if ! git -C "$_ABA_ROOT" diff --quiet 2>/dev/null || \
-			   ! git -C "$_ABA_ROOT" diff --cached --quiet 2>/dev/null; then
-				echo "    AUTO-DEPLOY: origin/dev ahead but workspace has uncommitted changes -- skipping pull"
-			elif git -C "$_ABA_ROOT" merge --ff-only origin/dev 2>/dev/null; then
-				echo "    AUTO-DEPLOY: pulled origin/dev ($(echo "$_local_head" | head -c 8)..$(echo "$_remote_head" | head -c 8))"
-			else
-				echo "    AUTO-DEPLOY: fast-forward failed (local diverged?) -- skipping pull"
-			fi
+			echo "    AUTO-DEPLOY: origin/dev ($(echo "$_remote_head" | head -c 8)) ahead of local ($(echo "$_local_head" | head -c 8)) -- run 'git pull' to deploy remote changes"
 		fi
 	fi
 
