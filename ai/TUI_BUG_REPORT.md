@@ -557,10 +557,10 @@ Full details of prior bugs: `ai/TUI_BUG_REPORT_2026-09.md`
 
 ### Bug #987 — Bundle keeps the connected host's machine network on the air-gapped host
 
-**Severity:** High
+**Severity:** Medium (downgraded from High — user can correct values in wizard)
 **Mode:** DISCO
 **File:** cluster wizard network defaults; `aba.conf` `machine_network` shipped in the bundle
-**Status:** New
+**Status:** BACKLOG — design decision needed, see analysis below
 **Steps to reproduce:**
 1. On a dual-homed connected host, let the wizard store `machine_network=192.168.2.0/24` in `aba.conf`.
 2. Bundle that tree and open it on disco, which has only ens224 `10.0.0.20/20` up. The default route is `default dev ens224 scope link`.
@@ -568,6 +568,25 @@ Full details of prior bugs: `ai/TUI_BUG_REPORT_2026-09.md`
 **Expected:** The network page follows the host's live NIC: `10.0.0.0/20`.
 **Actual:** Machine network `192.168.2.0/24`, starting IP `192.168.2.100`, gateway `192.168.2.1`. DNS stayed `10.0.1.8`. Those values match `aba.conf` from the bundle, not this host.
 **Notes:** Verified 2026-10-03 before any install. Related to #975, which is the connected host choosing its default route. This one is the air-gapped host inheriting that choice. Corrected in the TUI to `10.0.0.0/20` and `10.0.1.202` before install.
+
+**Analysis (2026-10-12):**
+The 4 network values in `aba.conf` (`machine_network`, `dns_servers`, `next_hop_address`, `ntp_servers`) are global defaults auto-detected from the connected host. They're bundled as-is in `backup.sh` (line 175 includes `aba.conf`). On disco, the TUI wizard reads them (`tui-cluster.sh` line 741: `cl_network="${machine_network:-}"`) and pre-fills the cluster form with the wrong host's network.
+
+Cases considered:
+- **Normal bundle**: values are auto-detected from conno, wrong for disco → should strip.
+- **Primed bundle**: cluster dirs have their own `cluster.conf` with correct values. Stripping `aba.conf` defaults is safe — primed clusters don't read them. But if the user creates a NEW cluster beyond the primed ones, stale defaults would still be wrong.
+- **User intentionally pre-sets aba.conf for disco**: stripping would lose their work. But the comments say "Auto-detected at cluster creation" — these aren't meant for manual target-host config.
+
+Mitigations already in place:
+- `.aba.conf.seen` is removed in the bundle so user is prompted to review `aba.conf` on disco.
+- The wizard always shows network values and allows editing before install.
+- The worst case is inconvenience (wrong defaults), not data loss or failed install.
+
+Possible fixes (not yet decided):
+1. Strip the 4 values from `aba.conf` in `backup.sh` before tarring (restore after). Primed clusters unaffected.
+2. In the wizard, prefer live host detection over `aba.conf` when `.bundle` exists.
+3. Don't store these in `aba.conf` at all — keep them only in `cluster.conf`.
+Each adds complexity. Downgraded to Medium since the user always sees and can correct the values.
 
 ### Bug #988 — `aba status --all` drops mirror readiness and the next step
 
