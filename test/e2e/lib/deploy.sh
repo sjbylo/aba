@@ -92,8 +92,15 @@ _remote_source_md5sums() {
 	_essh "$target" "cd ~/aba && echo '$_filelist' | xargs md5sum 2>/dev/null"
 }
 
-# Push test harness to ~/.e2e-harness/ on conN.
+# Push test harness to the STAGING area (~/.e2e-harness/) on conN.
 # Preserves logs/ directory (only code is replaced).
+#
+# NOTE: This updates STAGING only — the runner executes from a separate
+# run/ snapshot.  Changes here take effect on the NEXT suite dispatch
+# (runner.sh copies staging → run/ at startup) or when the user presses
+# '0' to restart (the restart handler re-copies staging → run/).
+# See the "Two-tier staging/run layout" comment in runner.sh.
+#
 # Usage: sync_harness <user@host> <aba_root> <deploy_config_env>
 sync_harness() {
 	local target="$1"

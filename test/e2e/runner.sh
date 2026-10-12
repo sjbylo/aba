@@ -22,9 +22,24 @@ set -u
 _STAGING_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _RUN_DIR="$_STAGING_DIR/run"
 
-# Copy harness from staging to run dir so deploy can update staging at any
-# time without clobbering scripts mid-execution.  This copy happens once,
-# before the suite starts, so nothing in run/ is executing yet.
+# DESIGN: Two-tier staging/run layout
+#
+#   ~/.e2e-harness/           (STAGING — updated by sync_harness / deploy)
+#   ~/.e2e-harness/run/       (EXECUTION — snapshot copied from staging)
+#
+# sync_harness() (in lib/deploy.sh) pushes files to the STAGING dirs
+# (suites/, lib/, scripts/).  The runner copies staging → run/ here at
+# startup to create an execution-stable snapshot.  This ensures that a
+# hot-deploy (sync_harness during a running suite) does NOT corrupt the
+# running bash process by overwriting the script it is currently sourcing.
+#
+# lib/, suites/, scripts/ are COPIED (not symlinked) — they contain
+# executable code that must not change mid-execution.
+# logs/ and config files are symlinked — they are data, not executable.
+#
+# When the user presses '0' (restart-suite), the restart handler below
+# re-copies staging → run/ so that any hot-deployed changes take effect.
+# See the '_rc eq 4' block near the end of this file.
 rm -rf "$_RUN_DIR"
 mkdir -p "$_RUN_DIR"
 cp -a "$_STAGING_DIR"/lib "$_RUN_DIR/"
@@ -1033,9 +1048,9 @@ while true; do
 			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
 			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
-		# Re-copy suite/lib/scripts from staging so a hot-deploy before '0'
-		# takes effect (staging is updated by sync_harness, run/ is the
-		# execution snapshot).
+		# Re-copy staging → run/ so hot-deployed changes take effect on
+		# restart.  See the "Two-tier staging/run layout" comment at the
+		# top of this file for why run/ is a copy, not a symlink.
 		cp -a "$_STAGING_DIR"/lib/* "$_RUN_DIR/lib/"
 		cp -a "$_STAGING_DIR"/suites/* "$_RUN_DIR/suites/"
 		cp -a "$_STAGING_DIR"/scripts/* "$_RUN_DIR/scripts/"
