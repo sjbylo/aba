@@ -185,6 +185,25 @@ _operators=$(_isc_operator_list "$_isc")
 # Additional images from ISC
 _add_count=$(_isc_additional_count "$_isc")
 
+# Payload contradiction flags: content configured in aba.conf but excluded
+# Operators: configured if op_sets or ops is non-empty
+_warn_ops_excluded=false
+if { [ -n "${op_sets:-}" ] || [ -n "${ops:-}" ]; } && [ "$_excl_operators" = "true" ]; then
+	_warn_ops_excluded=true
+fi
+# Additional images: configured if images.conf has content
+_warn_add_excluded=false
+if [ "$_excl_additional" = "true" ]; then
+	# Check both repo-wide and per-mirror images.conf (same logic as _merge_images_conf)
+	_add_conf_count=0
+	for _icf in ../images.conf images.conf; do
+		if [ -f "$_icf" ]; then
+			_add_conf_count=$(( _add_conf_count + $(_read_images_conf "$_icf" 2>/dev/null | wc -l) )) || true
+		fi
+	done
+	[ "${_add_conf_count:-0}" -gt 0 ] && _warn_add_excluded=true
+fi
+
 # ISC state
 _isc_exists=false
 _isc_user_managed=false
@@ -565,6 +584,8 @@ shell)
 	echo "isc_user_managed=$_isc_user_managed"
 	echo "upgrade_needs_platform=$_upgrade_needs_platform"
 	echo "transfer_excl_release=$_transfer_excl_release"
+	echo "warn_operators_excluded=$_warn_ops_excluded"
+	echo "warn_additional_excluded=$_warn_add_excluded"
 	echo "upgrade_path_exists=$_upgrade_path_exists"
 	echo "upgrade_path_conditional=$_upgrade_path_conditional"
 	echo "upgrade_risks=$_upgrade_risks"
@@ -654,6 +675,9 @@ op)
 		[ "$_excl_operators" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }operators"
 		[ "$_excl_additional" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }additional images"
 		[ -n "$_excl_list" ] && aba_warn -p "Excluded" "$_excl_list"
+		# Payload contradiction warnings
+		[ "$_warn_ops_excluded" = "true" ] && aba_warn "Operators selected but operator images are excluded — they won't be mirrored"
+		[ "$_warn_add_excluded" = "true" ] && aba_warn "Additional images configured but excluded — they won't be mirrored"
 	fi
 	;;
 
@@ -721,6 +745,9 @@ op)
 	fi
 	aba_info "  ISC:          ${_isc_display}"
 	[ -n "$_excl_display" ] && aba_warn -p "  Excluded" "    ${_excl_display}"
+	# Payload contradiction warnings
+	[ "$_warn_ops_excluded" = "true" ] && aba_warn "  Operators:    selected but excluded — they won't be mirrored"
+	[ "$_warn_add_excluded" = "true" ] && aba_warn "  Additional:   configured but excluded — they won't be mirrored"
 	if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
 		if [ "$_upgrade_path_exists" = "true" ]; then
 			if [ "$_upgrade_path_conditional" = "true" ]; then
