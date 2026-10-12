@@ -448,11 +448,11 @@ reg_generate_password() {
 		_stored_pw=$(cat "$_ng_pw")
 		if [ -n "$_stored_pw" ]; then
 			if [ "$reg_pw" ] && [ "$reg_pw" != "$_stored_pw" ]; then
-				aba_warn "Using the omr login stored with the data directory. The existing database user is unchanged."
+				aba_warn "Using the OMR login stored with the data directory. The existing database user is unchanged."
 			fi
 			[ -n "$_saved_user" ] && reg_user="$_saved_user"
 			reg_pw="$_stored_pw"
-			aba_info "Reusing the omr login stored with the data directory."
+			aba_info "Reusing the OMR login stored with the data directory."
 		fi
 	elif [ ! "$reg_pw" ] && [ -n "$_saved_pw" ]; then
 		[ -n "$_saved_user" ] && reg_user="$_saved_user"
