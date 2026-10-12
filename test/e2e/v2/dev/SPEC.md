@@ -1042,7 +1042,7 @@ dispatch time via `_auto_deploy_dev_branch()` in `lib/dispatcher.sh`.
 **Mechanism:**
 
 1. At each `_dispatch_suite()` call, the function compares bastion's `git HEAD`
-   against `/tmp/e2e-auto-deploy-commit` (the last-deployed commit marker).
+   against `/tmp/e2e-auto-deploy-commit-N` (per-pool last-deployed commit marker).
 2. Every 5 minutes (`_AUTO_DEPLOY_FETCH_INTERVAL`), it fetches `origin/dev` to
    detect remote pushes. If origin is ahead and the working tree is clean, it
    fast-forwards bastion (`git merge --ff-only`).
