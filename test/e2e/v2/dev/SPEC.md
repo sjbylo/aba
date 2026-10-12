@@ -1046,10 +1046,11 @@ dispatch time via `_auto_deploy_dev_branch()` in `lib/dispatcher.sh`.
 2. Every 5 minutes (`_AUTO_DEPLOY_FETCH_INTERVAL`), it fetches `origin/dev` to
    detect remote pushes. If origin is ahead and the working tree is clean, it
    fast-forwards bastion (`git merge --ff-only`).
-3. If HEAD differs from the marker, it calls `_make_source_tar()` +
-   `sync_source()` to push the updated code to the pool being dispatched.
-4. On success, the marker is updated to HEAD. Subsequent dispatches skip
-   (HEAD == marker) until the next commit.
+3. If HEAD differs from any pool's marker, it builds the tarball once
+   (`git archive HEAD`) and deploys to **all pools** that are behind — not
+   just the one being dispatched.
+4. On success, each pool's marker is updated to HEAD. Subsequent dispatches
+   skip (HEAD == marker) until the next commit.
 
 **Triggers:**
 

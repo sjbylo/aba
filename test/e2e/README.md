@@ -247,13 +247,14 @@ latest committed code.
 **How it works:**
 
 1. At each suite dispatch, the dispatcher compares bastion's `git HEAD` against
-   a per-pool marker file (`/tmp/e2e-auto-deploy-commit-N`) that records the
-   last-deployed commit for that pool.
+   per-pool marker files (`/tmp/e2e-auto-deploy-commit-N`).
 2. Every 5 minutes, it also runs `git fetch origin dev` to pick up remote
    pushes. If origin is ahead and the workspace is clean, it fast-forwards.
-3. If HEAD differs from the marker, it builds a source tarball and pushes it to
-   the pool being dispatched.
-4. Each pool gets the update when it receives its next dispatched suite.
+3. If HEAD differs from any pool's marker, it builds the source tarball once
+   and deploys to **all pools** that are behind — not just the one being
+   dispatched.
+4. Per-pool markers track which commit each pool has; a pool is only
+   deployed to when it's behind HEAD.
 
 **Safety guards:**
 
