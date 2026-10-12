@@ -158,4 +158,5 @@ REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 
 reg_remote_post_install "docker" "$REGISTRY_CERTS_DIR/ca.crt"
 
+reg_cleanup_backup
 aba_progress "DONE|reg_verify"

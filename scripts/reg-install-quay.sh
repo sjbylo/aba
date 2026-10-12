@@ -192,4 +192,5 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 BREADCRUMB
 
 aba_progress "DONE|reg_postcfg"
+reg_cleanup_backup
 aba_progress "DONE|reg_verify"

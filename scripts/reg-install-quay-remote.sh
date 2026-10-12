@@ -89,4 +89,5 @@ fi  # end of skip_to_post_install guard
 
 reg_remote_post_install "quay" "$reg_root/quay-rootCA/rootCA.pem"
 
+reg_cleanup_backup
 aba_progress "DONE|reg_verify"

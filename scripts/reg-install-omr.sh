@@ -166,4 +166,5 @@ if ! reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi
 
+reg_cleanup_backup
 aba_progress "DONE|reg_verify"
