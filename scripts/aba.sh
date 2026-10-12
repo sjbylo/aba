@@ -433,6 +433,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		shift
 		_prev_s="" ; _prev_f="" ; _prev_c=""
 		_lat_s="" ; _lat_f="" ; _lat_c=""
+		_old_c=""
 		echo_yellow "Available OpenShift versions:"
 		_lat_s=$(fetch_latest_version stable) || true
 		_lat_f=$(fetch_latest_version fast) || true
@@ -447,6 +448,8 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		[ -n "$_prev_s" ] && echo_white  "Previous stable:    $_prev_s"
 		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
 		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
+		_old_c=$(fetch_older_version candidate) || true
+		[ -n "$_old_c" ] && [ "$_old_c" != "$_prev_c" ] && [ "$_old_c" != "$_lat_c" ] && echo_white "Older candidate:    $_old_c"
 
 		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 		[ "$os_inst" ] && \
@@ -606,9 +609,9 @@ for i in imgs:
 		arg=$2
 		ver=$arg
 		# Reject obvious format errors immediately (before any network lookups)
-		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p"
+		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p", "older", "o"
 		if ! [[ "$arg" =~ ^[0-9]+\.[0-9]+(\.[0-9]+(-[a-z]+\.[0-9]+)?)?$ ]] && \
-		   ! [[ "$arg" =~ ^(latest|l|previous|p)$ ]]; then
+		   ! [[ "$arg" =~ ^(latest|l|previous|p|older|o)$ ]]; then
 			aba_abort "incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
 		fi
 		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
@@ -621,6 +624,10 @@ for i in imgs:
 			previous | p)
 				tmp_out="previous "
 				ver=$(fetch_previous_version "$chan") || true
+			;;
+			older | o)
+				tmp_out="older "
+				ver=$(fetch_older_version "$chan") || true
 			;;
 		esac
 
@@ -689,6 +696,10 @@ for i in imgs:
 			previous | p)
 				tgt_tmp_out="previous "
 				tgt_ver=$(fetch_previous_version "$chan") || true
+			;;
+			older | o)
+				tgt_tmp_out="older "
+				tgt_ver=$(fetch_older_version "$chan") || true
 			;;
 		esac
 		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
@@ -1853,6 +1864,7 @@ fi
 	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast'
 	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
+	run_once -i ocp:candidate:latest_version_older		-- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate'
 
 	# Start: download+install oc-mirror in background. Wait: ensure_oc_mirror()
 	aba_debug "Installing oc-mirror in the background ..."
@@ -1939,6 +1951,10 @@ fi
 		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version_previous)
 		aba_abort "Failed to fetch previous OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi
+	# Older is a third choice. A miss here leaves the prompt without it.
+	if [ "$ocp_channel" = "candidate" ]; then
+		run_once -w -q -i ocp:candidate:latest_version_older || true
+	fi
 #	if [ "$ocp_channel" = "stable" ]; then
 #		run_once -w -i ocp:stable:latest_version
 #		run_once -w -i ocp:stable:latest_version_previous
@@ -1969,6 +1985,14 @@ fi
 	aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel"
 
 	channel_ver_prev=$(fetch_previous_version "$ocp_channel") || true
+
+	# Third choice. Stable and fast prompts stay as they were; candidate can offer the extra minor.
+	channel_ver_older=""
+	if [ "$ocp_channel" = "candidate" ]; then
+		channel_ver_older=$(fetch_older_version candidate) || true
+		[ "$channel_ver_older" = "$channel_ver" ] && channel_ver_older=""
+		[ "$channel_ver_older" = "$channel_ver_prev" ] && channel_ver_older=""
+	fi
 
 	# Determine any already installed tool versions
 	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -2009,6 +2033,7 @@ fi
 						echo_red "Try:" >&2
 						[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
 						[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+						[ -n "$channel_ver_older" ] && echo_red "  • Older: $channel_ver_older (press 'o')" >&2
 						echo_red "  • List all: aba ocp-versions" >&2
 						target_ver=""  # Reset to loop again
 					fi
@@ -2021,6 +2046,7 @@ fi
 					echo_red "Try:" >&2
 					[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
 					[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+					[ -n "$channel_ver_older" ] && echo_red "  • Older: $channel_ver_older (press 'o')" >&2
 					echo_red "  • List all: aba ocp-versions" >&2
 					target_ver=""  # Reset to loop again
 				fi
@@ -2033,13 +2059,20 @@ fi
 
 		[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
 		[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
+		or_o=""
+		_keys="l/p"
+		if [ "$channel_ver_older" ]; then
+			or_o="or $channel_ver_older (o)lder "
+			_keys="l/p/o"
+		fi
 
-		aba_info -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
+		aba_info -n "Enter x.y.z or x.y version $or_s$or_p$or_o(<version>/$_keys/Enter) [$default_ver]: "
 		read target_ver
 
 		[ ! "$target_ver" ] && target_ver=$default_ver && aba_debug "Using default: $default_ver"
 		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver && aba_debug "User selected latest: $channel_ver"
 		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev && aba_debug "User selected previous: $channel_ver_prev"
+		[ "$target_ver" = "o" -a "$channel_ver_older" ] && target_ver=$channel_ver_older && aba_debug "User selected older: $channel_ver_older"
 
 		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OpenShift
 		if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
@@ -2057,6 +2090,7 @@ fi
 				echo_red "Try:" >&2
 				[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
 				[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+				[ -n "$channel_ver_older" ] && echo_red "  • Older: $channel_ver_older (press 'o')" >&2
 				echo_red "  • List all: aba ocp-versions" >&2
 				target_ver=""  # Reset to loop again
 			fi
