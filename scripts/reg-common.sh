@@ -882,9 +882,9 @@ reg_omr_remove() {
 		local _remote_bin="$reg_root/../$_bin_dir/mirror-registry"
 		aba_info "Running: mirror-registry uninstall on $reg_host ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve" || _uninst_rc=$?
+			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
 		else
-			$ssh_cmd "echo y | $_remote_bin uninstall -data-dir $reg_root" || _uninst_rc=$?
+			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve" || _uninst_rc=$?
 		fi
 	else
 		# Local
@@ -896,9 +896,9 @@ reg_omr_remove() {
 
 		aba_info "Running: mirror-registry uninstall -data-dir $reg_root ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
+			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve -purge || _uninst_rc=$?
 		else
-			echo y | ./"$_bin" uninstall -data-dir "$reg_root" || _uninst_rc=$?
+			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
 		fi
 	fi
 
@@ -1300,7 +1300,7 @@ reg_start_vendor() {
 	# but the backend needs time to initialize.  Wait for a non-502 response.
 	if [ "$vendor" = "quay" ]; then
 		local _ready=0
-		for (( _i=0; _i<30; _i++ )); do
+		for (( _i=0; _i<60; _i++ )); do
 			local _code
 			if [ -n "$ssh_cmd" ]; then
 				_code=$($ssh_cmd "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
@@ -1314,7 +1314,7 @@ reg_start_vendor() {
 			sleep 2
 		done
 		if [ "$_ready" -eq 0 ]; then
-			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 60s"
+			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 120s"
 		fi
 	fi
 
