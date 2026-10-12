@@ -162,7 +162,7 @@ _process_pool_cleanup_files() {
 # Also fetches origin/dev periodically (rate-limited) to pick up remote pushes.
 # Independent of --dev mode (which overlays uncommitted local changes).
 
-_AUTO_DEPLOY_META="/tmp/e2e-auto-deploy-commit"
+_AUTO_DEPLOY_META_PREFIX="/tmp/e2e-auto-deploy-commit"
 _AUTO_DEPLOY_FETCH_INTERVAL=300
 _auto_deploy_last_fetch_s=0
 
@@ -197,13 +197,16 @@ _auto_deploy_dev_branch() {
 		fi
 	fi
 
-	# Compare bastion HEAD against last-deployed commit
+	# Compare bastion HEAD against last-deployed commit FOR THIS POOL.
+	# Each pool gets its own marker so deploying to one pool doesn't
+	# suppress deploys to the others.
+	local _pool_meta="${_AUTO_DEPLOY_META_PREFIX}-${pool_num}"
 	local _head
 	_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
 	local _last_deployed=""
-	[ -f "$_AUTO_DEPLOY_META" ] && _last_deployed=$(cat "$_AUTO_DEPLOY_META" 2>/dev/null)
+	[ -f "$_pool_meta" ] && _last_deployed=$(cat "$_pool_meta" 2>/dev/null)
 
-	# Nothing new since last deploy
+	# Nothing new since last deploy to THIS pool
 	[ "$_head" = "$_last_deployed" ] && return 0
 
 	# Deploy committed source (git archive, not disk) to this pool.
@@ -224,7 +227,7 @@ _auto_deploy_dev_branch() {
 	fi
 	if git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
 		if sync_source "$target" "$_tar"; then
-			echo "$_head" > "$_AUTO_DEPLOY_META"
+			echo "$_head" > "$_pool_meta"
 			# Update deploy meta so verify-code can track.  Checksum is from
 			# git archive content (may differ from disk if gitignored files exist).
 			local _cksum
