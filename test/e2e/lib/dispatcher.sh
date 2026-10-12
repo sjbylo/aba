@@ -206,18 +206,31 @@ _auto_deploy_dev_branch() {
 	# Nothing new since last deploy
 	[ "$_head" = "$_last_deployed" ] && return 0
 
-	# Deploy updated source to this pool
+	# Deploy committed source (git archive, not disk) to this pool.
+	# This ensures uncommitted WIP is never pushed — only committed code.
+	# Use --dev for deploying uncommitted disk changes.
 	echo "    AUTO-DEPLOY: new code ($(echo "${_last_deployed:-none}" | head -c 8)..$(echo "$_head" | head -c 8)) -> con${pool_num}"
-	local _tar
-	_tar=$(_make_source_tar "$_ABA_ROOT")
-	if sync_source "$target" "$_tar"; then
-		echo "$_head" > "$_AUTO_DEPLOY_META"
-		local _cksum
-		_cksum=$(_source_checksum "$_ABA_ROOT")
-		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
-		echo "    AUTO-DEPLOY: source deployed to con${pool_num} ($(echo "$_head" | head -c 8))"
+	local _tar _manifest _paths=()
+	_tar=$(mktemp /tmp/aba-auto-deploy.XXXXXX.tar.gz)
+	_manifest="$_ABA_ROOT/test/e2e/.deploy-manifest"
+	if [ -f "$_manifest" ]; then
+		while IFS= read -r _line; do
+			_line="${_line%%#*}"; _line="${_line## }"; _line="${_line%% }"
+			[ -z "$_line" ] && continue
+			_paths+=("$_line")
+		done < "$_manifest"
 	else
-		echo "    AUTO-DEPLOY: source deploy FAILED to con${pool_num}"
+		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
+	fi
+	if git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
+		if sync_source "$target" "$_tar"; then
+			echo "$_head" > "$_AUTO_DEPLOY_META"
+			echo "    AUTO-DEPLOY: source deployed to con${pool_num} ($(echo "$_head" | head -c 8))"
+		else
+			echo "    AUTO-DEPLOY: source deploy FAILED to con${pool_num}"
+		fi
+	else
+		echo "    AUTO-DEPLOY: git archive failed -- skipping"
 	fi
 	rm -f "$_tar"
 }
