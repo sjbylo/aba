@@ -1296,4 +1296,4 @@ _dispatch_loop() {
 		fi
 		sleep "$_poll_interval"
 	done
-}# auto-deploy test 21:57:28
+}
