@@ -13,9 +13,21 @@ aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 reg_detect_existing
+_skip_to_post_install=$?
+
 reg_check_fqdn
 reg_setup_data_dir "$_OMR_VENDOR"
 reg_generate_password
+
+if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+	# Previous install was interrupted but registry is healthy — skip to post_install
+	aba_progress "DONE|reg_env"
+	aba_progress "DONE|reg_download"
+	aba_progress "DONE|reg_install"
+	aba_progress "DONE|reg_firewall"
+	aba_progress "START|reg_postcfg"
+else
+
 reg_verify_localhost
 
 aba_progress "DONE|reg_env"
@@ -56,6 +68,9 @@ fi
 
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
+
+# Mark state as "installing" so a retry can detect and recover from a partial install
+reg_mark_installing "$_OMR_VENDOR"
 
 # Install or reinstall via the tool's own 'install' command.
 # Fresh install: pass -init-user/-init-password-stdin for admin setup.
@@ -104,6 +119,8 @@ reg_open_firewall
 
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
+
+fi  # end of skip_to_post_install guard
 
 reg_post_install "$reg_root/ssl.cert" "$_OMR_VENDOR"
 

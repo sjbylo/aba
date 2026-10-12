@@ -7,6 +7,19 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_remote_pre_install "quay"
+_skip_to_post_install=$?
+
+if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+	# Previous install was interrupted but registry is healthy — skip to post_install
+	aba_progress "DONE|reg_config"
+	aba_progress "DONE|reg_env"
+	aba_progress "DONE|reg_firewall"
+	aba_progress "DONE|reg_download"
+	aba_progress "DONE|reg_install"
+	aba_progress "DONE|reg_postcfg"
+	aba_progress "START|reg_verify"
+else
+
 aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
@@ -50,6 +63,9 @@ $_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
 
+# Mark state as "installing" so a retry can detect and recover from a partial install
+reg_mark_installing quay
+
 # printf '%q' safely escapes all shell metacharacters for remote evaluation
 _escaped_pw=$(printf '%q' "$reg_pw")
 cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword \"\$_reg_pw\" $reg_root_opts"
@@ -68,6 +84,8 @@ aba_progress "DONE|reg_install"
 aba_progress "START|reg_postcfg"
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
+
+fi  # end of skip_to_post_install guard
 
 reg_remote_post_install "quay" "$reg_root/quay-rootCA/rootCA.pem"
 
