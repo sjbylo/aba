@@ -623,7 +623,7 @@ _direct_version() {
 
 • Latest: most recent release in the channel
 • Previous: one release back (good for stability)
-• Older: two releases back
+• Older: the one before Previous
 • Manual: enter a version that exists on this channel (x.y, x.y.z, or x.y.z-rc.N)
 
 A pre-release (rc or ec) is accepted only when this channel lists it. That is the candidate channel."
