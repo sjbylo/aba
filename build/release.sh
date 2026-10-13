@@ -278,20 +278,60 @@ if ! $HOTFIX && [ -z "$REF_COMMIT" ]; then
     [ "$_had_stash" = "1" ] && git stash pop -q 2>/dev/null || true
 fi
 
+# -----------------------------------------------------------------------------
+# Pre-flight: Pre-commit checks (read-only validation)
+# -----------------------------------------------------------------------------
+# Run pre-commit checks early so dry-run catches failures too.
+# In --ref mode, skip here (needs temp branch); will run in step 1 instead.
+# The --update-build flag (which writes files) is only used in the real run.
+if [ -z "$REF_COMMIT" ]; then
+    if $HOTFIX; then
+        echo -e "${YELLOW}Running pre-commit checks (hotfix on main)...${NC}"
+        build/pre-commit-checks.sh --release-branch
+    else
+        echo -e "${YELLOW}Running pre-commit checks...${NC}"
+        build/pre-commit-checks.sh
+    fi
+    echo
+fi
+
+# -----------------------------------------------------------------------------
+# Pre-flight: Verify operator set dependencies (read-only)
+# -----------------------------------------------------------------------------
+# Runs tools/verify-operator-deps.sh to ensure every operator set has all OLM
+# dependencies included.  Uses the latest GA v4.x catalog.
+if command -v podman >/dev/null 2>&1; then
+    _dep_ver=""
+    for _f in $(ls catalogs/redhat-operator-index-v4.* 2>/dev/null | sort -rV); do
+        [ "$(wc -l < "$_f")" -ge 100 ] && _dep_ver=$(echo "$_f" | grep -oE '[0-9]+\.[0-9]+') && break
+    done
+    if [ -n "$_dep_ver" ]; then
+        echo -e "${YELLOW}Checking per-set dependencies (OCP ${_dep_ver})...${NC}"
+        if tools/verify-operator-deps.sh "$_dep_ver"; then
+            echo
+        else
+            echo -e "${RED}       ✗ Operator set dependency check failed!${NC}"
+            echo -e "${RED}         Fix missing dependencies before releasing.${NC}\n"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}Skipping operator dep check (no GA catalog found)${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}Skipping operator dep check (podman not available)${NC}\n"
+fi
+
 # =============================================================================
 # Dry-run: show a summary then exit — nothing is written to disk or git.
+# All read-only checks have already run above.
 # =============================================================================
 if $DRY_RUN; then
     echo -e "${CYAN}--- Dry Run Summary ---${NC}\n"
 
     echo -e "${YELLOW}Steps 1-9 (build):${NC}"
-    if $HOTFIX; then
-        echo -e "   1. Pre-commit checks (hotfix on main; skip branch/pull checks)"
-    elif [ -n "$REF_COMMIT" ]; then
-        echo -e "   1. Pre-commit checks (RPM sync, syntax; skip pull)"
-        echo -e "      Create temp branch _release-v$NEW_VERSION from $REF_COMMIT"
-    else
-        echo -e "   1. Pre-commit checks (RPM sync, syntax)"
+    if [ -n "$REF_COMMIT" ]; then
+        echo -e "   1. Create temp branch _release-v$NEW_VERSION from $REF_COMMIT"
+        echo -e "      Re-run pre-commit checks on temp branch"
     fi
     echo -e "   2-5. Update VERSION, aba.sh, README.md"
     echo -e "   6. Update CHANGELOG.md ([Unreleased] -> [$NEW_VERSION])"
@@ -369,16 +409,11 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# Step 1: Pre-commit checks
+# Step 1: Pre-commit checks (with --update-build for real run)
 # -----------------------------------------------------------------------------
-# In --ref mode we:
-#   a) Save dev's CHANGELOG and pre-commit script to a temp dir (they may be
-#      newer than the target commit and are needed on the temp branch).
-#   b) Create a temporary branch from the target commit.
-#   c) Copy those saved files onto the temp branch.
-#   d) Run pre-commit checks with --release-branch (skips branch and pull checks).
-#
-# In default mode we simply run pre-commit checks on dev as-is.
+# Default/hotfix: pre-commit already ran in pre-flight; re-run with
+# --update-build to apply any build file updates.
+# --ref mode: needs a temp branch, so the full check runs here.
 #
 # Pre-set ABA_VERSION to the target semver now.  Step 3 does this formally,
 # but the pre-commit semver guard runs first and will reject a stale/corrupt
@@ -397,39 +432,13 @@ if [ -n "$REF_COMMIT" ]; then
     rm -rf "$_tmp"
     build/pre-commit-checks.sh --release-branch --update-build
 elif $HOTFIX; then
-    echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks (hotfix on main)...${NC}"
+    echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks (--update-build)...${NC}"
     build/pre-commit-checks.sh --release-branch --update-build
 else
-    echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
+    echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks (--update-build)...${NC}"
     build/pre-commit-checks.sh --update-build
 fi
 echo
-
-# -----------------------------------------------------------------------------
-# Step 1b: Verify operator set dependencies (requires podman + registry access)
-# -----------------------------------------------------------------------------
-# Runs tools/verify-operator-deps.sh to ensure every operator set has all OLM
-# dependencies included.  Uses the latest GA v4.x catalog.
-if command -v podman >/dev/null 2>&1; then
-    _dep_ver=""
-    for _f in $(ls catalogs/redhat-operator-index-v4.* 2>/dev/null | sort -rV); do
-        [ "$(wc -l < "$_f")" -ge 100 ] && _dep_ver=$(echo "$_f" | grep -oE '[0-9]+\.[0-9]+') && break
-    done
-    if [ -n "$_dep_ver" ]; then
-        echo -e "${YELLOW}[1b] Verifying operator set dependencies (OCP ${_dep_ver})...${NC}"
-        if tools/verify-operator-deps.sh "$_dep_ver"; then
-            echo
-        else
-            echo -e "${RED}       ✗ Operator set dependency check failed!${NC}"
-            echo -e "${RED}         Fix missing dependencies before releasing.${NC}\n"
-            exit 1
-        fi
-    else
-        echo -e "${YELLOW}[1b] Skipping operator dep check (no GA catalog found)${NC}\n"
-    fi
-else
-    echo -e "${YELLOW}[1b] Skipping operator dep check (podman not available)${NC}\n"
-fi
 
 # -----------------------------------------------------------------------------
 # Step 2: Update VERSION file
