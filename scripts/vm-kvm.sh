@@ -19,6 +19,15 @@
 
 vmp_exists() {
 	local vm=$1
+	# Probe hypervisor reachability first so callers can distinguish
+	# "VM not found" (exit 1) from "can't connect" (exit 2).
+	# virsh returns exit 1 for BOTH cases, so without this pre-check
+	# a connection failure looks like "no VMs" and cleanup silently
+	# skips VM deletion, orphaning the VM on the remote KVM host.
+	if ! virsh -c "$LIBVIRT_URI" version >/dev/null 2>&1; then
+		aba_debug "vmp_exists: cannot reach hypervisor at $LIBVIRT_URI"
+		return 2
+	fi
 	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $vm"
 	virsh -c "$LIBVIRT_URI" dominfo "$vm" >/dev/null 2>&1
 }
