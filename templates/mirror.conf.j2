@@ -2,7 +2,7 @@
 #
 # Review all values carefully and update them for your internal or air-gapped environment.
 # Set the values according to your existing registry OR the target host where
-# a mirror registry (Quay or Docker) will be installed.
+# a mirror registry will be installed.
 
 reg_host={{ hostname }}.{{ domain }}		# FQDN of the registry host (no IP address). Can be local or remote.
 					# Ensure a DNS A record resolves to an IP address that allows connections to this host.
@@ -31,7 +31,7 @@ data_dir=~				# Optional: Absolute path to storage for images and temporary file
 					# Defaults to the user's home directory. '~' is supported after '='.
 
 # The following two values are only required for installing a registry on a *remote* host.
-# Both Quay and Docker registries support remote installation.
+# All registry vendors support remote installation.
 
 #reg_ssh_key=~/.ssh/id_rsa		# Optional: SSH private key for remote registry installation.
 					# If unset (default), the registry is installed locally.

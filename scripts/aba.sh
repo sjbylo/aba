@@ -6,7 +6,7 @@
 # =============================================================================
 # ABA always starts on a CONNECTED workstation with internet access.
 # It downloads all required artifacts: CLI tools, container images,
-# mirror registry tarballs (Quay + Docker), and operator catalogs.
+# mirror registry installers, and operator catalogs.
 #
 # These are packaged into an "ABA Bundle" (via 'aba bundle' or 'aba tar')
 # which is transferred into a FULLY DISCONNECTED environment (the "DISCO").
