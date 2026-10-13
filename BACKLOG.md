@@ -33,6 +33,25 @@ Issues or Pull Requests.
 
 ---
 
+## Review all aba_progress calls for correctness and completeness
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-13
+
+**Problem:** The TUI progress dialog relies on `aba_progress` calls in scripts
+to drive the weighted progress bar. If calls are missing, misordered, or have
+wrong weights, the progress bar stalls, jumps, or finishes early — confusing
+the user.
+
+**Proposed fix:** Audit every script that emits `aba_progress` (mirror install,
+save, sync, load, bundle) against its corresponding `_progress_plan-*` Makefile
+target. Verify that: (1) every step in the plan has a matching `aba_progress`
+call, (2) weights reflect actual wall-clock proportions, (3) no calls are
+missing for new code paths added since the initial implementation.
+
+---
+
 ## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
 
 **Severity:** MEDIUM
