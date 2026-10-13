@@ -25,60 +25,50 @@ echo
 echo "=== Testing: cluster_is_ready() ==="
 echo
 
-# Helper to create a mock oc that returns specific jsonpath values
-# Args: cv_available cv_progressing degraded_statuses
+# Helper to create a mock oc that returns cluster operator status lines.
+# cluster_is_ready() makes a single 'oc get co' call and expects each line
+# to be "Available Progressing Degraded" for one CO.
 _create_mock_oc() {
-	local cv_available="$1" cv_progressing="$2" degraded_list="$3"
+	local status_lines="$1"
 	cat > "$_mock_dir/oc" <<MOCK
 #!/bin/bash
-# Parse arguments to determine what's being queried
-args="\$*"
-case "\$args" in
-	*clusterversion*Available*)
-		echo "$cv_available" ;;
-	*clusterversion*Progressing*)
-		echo "$cv_progressing" ;;
-	*co*Degraded*)
-		echo "$degraded_list" ;;
-	*)
-		exit 0 ;;
-esac
+echo "$status_lines"
 MOCK
 	chmod +x "$_mock_dir/oc"
 }
 
-# Test 1: fully ready cluster
-_create_mock_oc "True" "False" "False
-False
-False"
+# Test 1: fully ready cluster (3 operators, all healthy)
+_create_mock_oc "True False False
+True False False
+True False False"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
 ) && test_pass "Fully ready cluster returns 0" \
   || test_fail "Fully ready cluster returns 0" "expected rc=0"
 
-# Test 2: ClusterVersion not available
-_create_mock_oc "False" "False" "False
-False"
+# Test 2: one CO unavailable
+_create_mock_oc "False False False
+True False False"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
-) && test_fail "CV not available should return 1" "expected rc=1 but got 0" \
-  || test_pass "CV not available returns 1"
+) && test_fail "CO not available should return 1" "expected rc=1 but got 0" \
+  || test_pass "CO not available returns 1"
 
-# Test 3: ClusterVersion still progressing
-_create_mock_oc "True" "True" "False
-False"
+# Test 3: one CO still progressing
+_create_mock_oc "True True False
+True False False"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
-) && test_fail "CV progressing should return 1" "expected rc=1 but got 0" \
-  || test_pass "CV still progressing returns 1"
+) && test_fail "CO progressing should return 1" "expected rc=1 but got 0" \
+  || test_pass "CO still progressing returns 1"
 
 # Test 4: one operator degraded
-_create_mock_oc "True" "False" "False
-True
-False"
+_create_mock_oc "True False False
+True False True
+True False False"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
@@ -86,9 +76,9 @@ False"
   || test_pass "Degraded operator returns 1"
 
 # Test 5: multiple operators degraded
-_create_mock_oc "True" "False" "True
-True
-False"
+_create_mock_oc "True False True
+True False True
+True False False"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
@@ -96,7 +86,7 @@ False"
   || test_pass "Multiple degraded operators returns 1"
 
 # Test 6: everything broken (not available, progressing, degraded)
-_create_mock_oc "False" "True" "True"
+_create_mock_oc "False True True"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
@@ -127,13 +117,13 @@ chmod +x "$_mock_dir/oc"
 ) && test_fail "Empty oc output should return 1" "expected rc=1 but got 0" \
   || test_pass "Empty oc output returns 1"
 
-# Test 9: no degraded operators at all (fresh small cluster)
-_create_mock_oc "True" "False" ""
+# Test 9: no operators listed (zero lines = empty cluster)
+_create_mock_oc "True False False"
 (
 	export PATH="$_mock_dir:$PATH"
 	cluster_is_ready
-) && test_pass "No operators listed (zero degraded) returns 0" \
-  || test_fail "No operators listed (zero degraded) returns 0" "expected rc=0"
+) && test_pass "Single healthy CO returns 0" \
+  || test_fail "Single healthy CO returns 0" "expected rc=0"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary

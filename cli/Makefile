@@ -184,10 +184,6 @@ endef
 ##@ Help & Initialization
 ########################################################################
 
-.PHONY: help
-help: ## Help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[\$\.\(\)\~\/a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-
 # Keep this like it is, otherwise the deps don't work!
 # ~/bin may be removed externally (e.g. E2E cleanup) while .init sentinel persists,
 # so every ~/bin/* target also depends on the ~/bin directory via order-only prerequisite.
@@ -370,23 +366,23 @@ $(openshift_install_file):
 # oc-mirror must be well-tested before adoption.
 #
 # Logic:
-#   - EC (engineering candidate): use the exact dev-preview path for that version
-#     (EC builds may bundle an oc-mirror with unreleased features needed for that EC)
-#   - OCP 5.x (non-EC): use stable-5.0 (first stable 5.x channel)
-#   - OCP 4.x (non-EC): use stable-4.22 (tested, known-good)
-#   - No version set: fall back to stable-4.22 (safe default for --no-version path)
-#
-# When a new oc-mirror version is tested and validated, bump the pin here.
+#   - EC (engineering candidate): use the dev-preview path for that version
+#     (EC builds bundle oc-mirror with unreleased features for that release)
+#   - All other versions (RC, GA, ...): use the pinned channel below.
+#     As of Oct 2026, only EC and stable-4.x carry oc-mirror.
+#     RC and candidate channels do NOT include it.
+#     When Red Hat publishes oc-mirror under stable-5.x, re-add the ocp_major
+#     branch here (see git log for the removed ifeq block).
+#   - No version set: fall back to the pinned channel (safe default)
+oc_mirror_pin = stable-4.22
 ifneq ($(ocp_version),)
   ifneq ($(findstring -ec.,$(ocp_version)),)
     oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp-dev-preview/$(ocp_version)
-  else ifeq ($(ocp_major),5)
-    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v5/$(arch)/clients/ocp/stable-5.0
   else
-    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)
   endif
 else
-  oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
+  oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)
 endif
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
@@ -396,6 +392,16 @@ oc-mirror.tar.gz:
 
 oc-mirror.rhel9.tar.gz:
 	@echo [ABA] Downloading $(oc_mirror_base_url)/$@
+	@if [ "$(ocp_version)" ]; then \
+		_major_minor=$$(echo "$(ocp_version)" | cut -d. -f1,2); \
+		if [ "stable-$$_major_minor" != "$(oc_mirror_pin)" ]; then \
+			( _url="https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/stable-$$_major_minor/$@"; \
+			  curl -sfI --connect-timeout 5 "$$_url" >/dev/null 2>&1 && \
+			  echo "[ABA] Note: oc-mirror is now published under stable-$$_major_minor." && \
+			  echo "[ABA]       Consider updating ABA (set oc_mirror_pin in cli/Makefile) to use the stable-$$_major_minor channel." \
+			) & \
+		fi; \
+	fi
 	$(call atomic-download,$(oc_mirror_base_url)/$@,$(oc_mirror_sha256sum))
 
 # govc tarball (from GitHub, not mirror.openshift.com)

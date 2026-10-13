@@ -92,31 +92,23 @@ _remote_source_md5sums() {
 	_essh "$target" "cd ~/aba && echo '$_filelist' | xargs md5sum 2>/dev/null"
 }
 
-# Push test harness to ~/.e2e-harness/ on conN.
+# Push test harness to the STAGING area (~/.e2e-harness/) on conN.
 # Preserves logs/ directory (only code is replaced).
+#
+# NOTE: This updates STAGING only — the runner executes from a separate
+# run/ snapshot.  Changes here take effect on the NEXT suite dispatch
+# (runner.sh copies staging → run/ at startup) or when the user presses
+# '0' to restart (the restart handler re-copies staging → run/).
+# See the "Two-tier staging/run layout" comment in runner.sh.
+#
 # Usage: sync_harness <user@host> <aba_root> <deploy_config_env>
 sync_harness() {
 	local target="$1"
 	local aba_root="$2"
 	local deploy_config="$3"
 
-	# Refuse to clobber a live runner -- scp truncates in place and bash will
-	# execute garbage from the replaced file (seen as "final: command not found").
-	if _essh "$target" '
-		for _lf in /tmp/e2e-suite-*.lock; do
-			[ -f "$_lf" ] || continue
-			read -r _pid _ < "$_lf" || continue
-			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
-				echo "live-lock: $_lf pid=$_pid"
-				exit 0
-			fi
-		done
-		exit 1
-	'; then
-		echo "    ERROR: suite still running on ${target} -- cannot sync harness" >&2
-		return 1
-	fi
-
+	# Staging area is always safe to overwrite — runner.sh copies staging to a
+	# separate run/ dir before executing, so scp here never clobbers live scripts.
 	if ! _essh "$target" "mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}"; then
 		echo "    DIAG: sync_harness: dir create failed on ${target}" >&2
 		return 1
@@ -126,8 +118,8 @@ sync_harness() {
 	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
 	_essh "$target" "cd ~/.e2e-harness/logs && for f in *-summary.log summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
 
-	# Atomic replace of runner.sh (scp to tmp + mv) so a still-open bash FD cannot
-	# observe a truncated in-place write if the lock check races.
+	# Atomic replace of runner.sh (scp to tmp + mv) so a concurrent bash reading
+	# the old runner.sh never sees a truncated in-place write.
 	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh.new" || { echo "    DIAG: sync_harness: scp runner.sh failed to ${target}" >&2; return 1; }
 	_essh "$target" "mv -f ~/.e2e-harness/runner.sh.new ~/.e2e-harness/runner.sh"            || { echo "    DIAG: sync_harness: mv runner.sh failed on ${target}" >&2; return 1; }
 	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env"   || { echo "    DIAG: sync_harness: scp config.env failed to ${target}" >&2; return 1; }
@@ -293,7 +285,7 @@ sync_extras() {
 	# Re-run _vm_setup_dnsmasq() (single source of truth) if stale.
 	if [ -n "$pool_num" ]; then
 		if ! _essh "$_root_target" "grep -q 'primed-sno' /etc/dnsmasq.d/e2e-pool.conf"; then
-			if type _vm_setup_dnsmasq >/dev/null; then
+			if type _vm_setup_dnsmasq &>/dev/null; then
 				_vm_setup_dnsmasq "con${pool_num}" "${user}" "con${pool_num}"
 			else
 				local _lib_dir

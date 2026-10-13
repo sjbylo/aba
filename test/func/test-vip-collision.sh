@@ -22,12 +22,13 @@ source scripts/include_all.sh
 _pass=0
 _fail=0
 _total=0
-_test_dirs=()
+
+# All test dirs live under a single tmpdir — one rm cleans everything,
+# even if the test is interrupted.
+_test_tmpdir=$(mktemp -d)
 
 _cleanup() {
-	for d in "${_test_dirs[@]}"; do
-		[ -d "$d" ] && rm -rf "$d"
-	done
+	rm -rf "$_test_tmpdir"
 }
 trap _cleanup EXIT
 
@@ -37,11 +38,8 @@ _orig_verify_conf=$(grep '^verify_conf=' aba.conf 2>/dev/null | head -1 \
 	| sed 's/^verify_conf=//; s/[[:space:]].*//; s/#.*//')
 
 _restore_verify_conf() {
-	if [ -n "${_orig_verify_conf:-}" ]; then
-		replace-value-conf -n verify_conf -v "$_orig_verify_conf" -f aba.conf
-	else
-		replace-value-conf -n verify_conf -v "all" -f aba.conf
-	fi
+	local _val="${_orig_verify_conf:-all}"
+	replace-value-conf -n verify_conf -v "$_val" -f aba.conf 2>/dev/null || true
 }
 trap '_restore_verify_conf; _cleanup' EXIT
 
@@ -63,17 +61,19 @@ _test_vip() {
 	_total=$(( _total + 1 ))
 
 	local cname="viptest$_total"
-	local cdir="$ABA_ROOT/$cname"
+	local cdir="$_test_tmpdir/$cname"
 
 	# Clean up any previous run
 	[ -d "$cdir" ] && rm -rf "$cdir"
-	_test_dirs+=("$cdir")
 
 	# Create a proper cluster dir via make init (sets up symlinks)
 	mkdir -p "$cdir"
 	cd "$cdir"
-	ln -fs ../templates/Makefile.cluster Makefile
-	make -s init 2>/dev/null || true
+	ln -fs "$ABA_ROOT/templates/Makefile.cluster" Makefile
+	ln -fs "$ABA_ROOT/scripts" scripts
+	ln -fs "$ABA_ROOT/templates" templates
+	ln -fs "$ABA_ROOT/cli" cli
+	ln -fs "$ABA_ROOT/aba.conf" "$_test_tmpdir/aba.conf"
 
 	# Write cluster.conf with the test values
 	source <(normalize-aba-conf)
@@ -85,10 +85,10 @@ _test_vip() {
 	starting_ip=$starting_ip
 	num_masters=$num_masters
 	num_workers=$num_workers
-	machine_network=${machine_network:-10.0.0.0}
-	prefix_length=${prefix_length:-20}
-	next_hop_address=${next_hop_address:-10.0.0.1}
-	dns_servers=${dns_servers:-10.0.1.8}
+	machine_network=10.0.0.0
+	prefix_length=20
+	next_hop_address=10.0.0.1
+	dns_servers=10.0.1.8
 	hostPrefix=23
 	mac_prefix=00:50:56:2x:xx:
 	master_prefix=master
@@ -132,7 +132,7 @@ _test_vip() {
 			_pass=$(( _pass + 1 ))
 		else
 			# Check if it failed on VIP collision (our code) vs other (acceptable)
-			if echo "$output" | grep -qE 'must be different|falls within the node IP range'; then
+			if echo "$output" | grep -qE 'cannot be the same address|falls within the node IP range'; then
 				echo "FAIL: $test_name — VIP check wrongly rejected valid config!"
 				echo "  Output: $(echo "$output" | tail -5)"
 				_fail=$(( _fail + 1 ))
@@ -153,7 +153,7 @@ echo ""
 # -----------------------------------------------------------------------
 
 _test_vip "api_vip == ingress_vip" \
-	10.0.2.100  10.0.2.90  10.0.2.90  3 2  1  "must be different"
+	10.0.2.100  10.0.2.90  10.0.2.90  3 2  1  "cannot be the same address"
 
 _test_vip "api_vip == starting_ip (first node)" \
 	10.0.2.100  10.0.2.100  10.0.2.91  3 2  1  "falls within the node IP range"
@@ -177,7 +177,7 @@ _test_vip "VIP in wrapped range (253+5, VIP=10.0.1.1)" \
 
 # Compact cluster (3 masters, 0 workers)
 _test_vip "compact: api_vip == ingress_vip" \
-	10.0.2.100  10.0.2.90  10.0.2.90  3 0  1  "must be different"
+	10.0.2.100  10.0.2.90  10.0.2.90  3 0  1  "cannot be the same address"
 
 _test_vip "compact: api_vip in node range (3m, last=.102)" \
 	10.0.2.100  10.0.2.101  10.0.2.91  3 0  1  "falls within the node IP range"
@@ -231,33 +231,37 @@ _test_auto_alloc() {
 	local expect_fail="${8:-0}"      # 1=expect abort, 0=expect auto-alloc
 	local expect_api="${9:-}"        # expected api_vip (empty = just check non-empty)
 	local expect_ing="${10:-}"       # expected ingress_vip
+	local preset_api="${11:-}"       # VIP already set before resolve (empty = unset)
+	local preset_ing="${12:-}"
 
 	_total=$(( _total + 1 ))
 
 	local cname="autotest$_total"
-	local cdir="$ABA_ROOT/$cname"
+	local cdir="$_test_tmpdir/$cname"
 
 	[ -d "$cdir" ] && rm -rf "$cdir"
-	_test_dirs+=("$cdir")
 
 	mkdir -p "$cdir"
 	cd "$cdir"
-	ln -fs ../templates/Makefile.cluster Makefile
-	make -s init 2>/dev/null || true
+	ln -fs "$ABA_ROOT/templates/Makefile.cluster" Makefile
+	ln -fs "$ABA_ROOT/scripts" scripts
+	ln -fs "$ABA_ROOT/templates" templates
+	ln -fs "$ABA_ROOT/cli" cli
+	ln -fs "$ABA_ROOT/aba.conf" "$_test_tmpdir/aba.conf"
 
 	source <(normalize-aba-conf)
 	cat > cluster.conf <<-EOF
 	cluster_name=$cname
 	base_domain=${domain:-example.com}
-	api_vip=
-	ingress_vip=
+	api_vip=$preset_api
+	ingress_vip=$preset_ing
 	starting_ip=$starting_ip
 	num_masters=$num_masters
 	num_workers=$num_workers
 	machine_network=$machine_net
 	prefix_length=$prefix_len
-	next_hop_address=${next_hop_address:-10.0.0.1}
-	dns_servers=${dns_servers:-10.0.1.8}
+	next_hop_address=10.0.0.1
+	dns_servers=10.0.1.8
 	hostPrefix=23
 	mac_prefix=00:50:56:2x:xx:
 	master_prefix=master
@@ -345,6 +349,11 @@ _test_auto_alloc "auto-alloc: fallback to after (starting_ip near bottom)" \
 # after: 10.0.0.2+5+10=10.0.0.17, ing=10.0.0.18
 _test_auto_alloc "auto-alloc: fallback to after (starting_ip=.2)" \
 	10.0.0.2  3 2  10.0.0.0 20  1  0  10.0.0.17  10.0.0.18
+
+# One VIP already set must stay. Only the empty one is filled.
+# starting_ip=10.0.1.201 on 10.0.0.0/20 → candidates api=10.0.1.199 ing=10.0.1.200
+_test_auto_alloc "auto-alloc: keep set api_vip, fill ingress only" \
+	10.0.1.201  3 2  10.0.0.0 20  1  0  10.0.1.50  10.0.1.200  10.0.1.50
 
 # --- No ABA-managed DNS → should abort ---
 _test_auto_alloc "auto-alloc: abort when external DNS (no dnsmasq marker)" \

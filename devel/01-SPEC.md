@@ -36,6 +36,8 @@ flowchart TD
   Make. The `aba` CLI is convenience; Make is the foundation.
 - **TUI** (`tui/v2/abatui2.sh`): Interactive wizard. Sources `include_all.sh` but
   must never call `aba_abort` or `exit` from functions (kills the dialog UI).
+  Long-running commands can use `_exec_with_progress()` for structured
+  multi-step display (see ADR-016).
 
 ### Dispatch: Make-backed vs script-backed
 
@@ -182,7 +184,7 @@ FROM config.
 | File | Scope | Key values |
 |------|-------|------------|
 | `aba.conf` | Global | `ocp_version` (user intent), `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
-| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_upgrade_to` (upgrade) |
+| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker/omr), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_upgrade_to` (upgrade) |
 | `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `starting_ip`, `machine_network`, master/worker counts, `vlan`, `image_source` (mirror/proxy/direct/name) |
 
 **Read the config variable, not the file existence.** Config files created by ABA
@@ -434,7 +436,7 @@ remove these -- only Makefiles may.
 
 Installed-object state lives outside the working dir in `~/.aba/`:
 
-- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw), operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened), and version tracking (mirror_ocp_version, last_action, last_action_at, reg_installed_at)
+- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw), operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened, reg_running), and version tracking (mirror_ocp_version, last_action, last_action_at, reg_installed_at)
 - **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
 
 State files use lowercase vars matching config file names. Normalize functions
@@ -489,6 +491,57 @@ is unaffected.
 
 **Invariant**: All intelligence lives in the status script. The TUI and other
 consumers are dumb readers of `--shell` output.
+
+**`--runtime` mode** (ADR-008): Lightweight registry runtime state for TUI
+menu rendering. Infers `reg_state` (ready|installed|stopped|absent) from
+`.available` marker + `state.sh` fields (`reg_running`, `mirror_ocp_version`,
+`last_action`). Only calls `check_release_image()` when state is ambiguous.
+Self-heals `reg_running` on crash detection (registry unreachable but
+`reg_running=true`). Cached via `run_once` (`aba:mirror:runtime`) with
+`aba_mirror_runtime_*` wrapper functions in `include_all.sh`.
+
+---
+
+## TUI Progress Dialog
+
+Long-running workflows (mirror save/sync/load, cluster install) display
+structured multi-step progress via `dialog --mixedgauge`. See ADR-016.
+
+### How it works
+
+Scripts call `aba_progress()` to emit events (PLAN, START, DONE, FAIL, etc.)
+to a FIFO. The TUI reads the FIFO in a single-process event loop — no state
+files, no background reader, no races. The command runs in a real PTY
+(`pty-run.py`) so it gets full terminal behavior; output is captured to a log
+for the "View Output" feature.
+
+### Adding progress to a workflow
+
+1. **Makefile**: Add a PHONY `_plan-<target>` prerequisite that emits PLAN events:
+   ```makefile
+   _plan-save:
+   	@scripts/plan.sh save
+
+   save: _plan-save .init .rpmsext status-preflight data/imageset-config.yaml
+   ```
+
+2. **Script**: Call `aba_progress` at phase boundaries:
+   ```bash
+   aba_progress "START|mirror"
+   # ... do the work ...
+   aba_progress "DONE|mirror"
+   ```
+
+3. **TUI**: Call `_exec_with_progress "command" "Title"` instead of
+   `_exec_in_tui`.
+
+`aba_progress()` is a no-op when `ABA_PROGRESS_FIFO` is unset (CLI mode).
+PHONY `_plan` targets only write to the FIFO — no filesystem side effects,
+no-op without the FIFO.
+
+**Invariant**: Progress reporting must never change the behavior of a command.
+A workflow must produce identical results whether or not `ABA_PROGRESS_FIFO`
+is set.
 
 ---
 

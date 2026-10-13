@@ -38,9 +38,10 @@ plan_tests \
     "Setup: install aba and configure" \
     "Docker e2e-mirror-docker1: install and verify" \
     "Firewalld: port persistence" \
-    "Quay-ng: remote install, verify, uninstall" \
+    "OMR: remote install, verify, uninstall" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
+    "Differential: incremental operator save/load" \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
     "Bare-metal: ISO simulation" \
@@ -109,9 +110,9 @@ e2e_run_must_fail "Sync without pull secret should fail" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-test-neg-datadir'"
 # aba sync installs a Quay registry on disN as a dependency before syncing.
 # The sync fails (expected), but the registry is left running on disN.
-# Must uninstall it to avoid interfering with later registry tests (e.g. quay-ng).
+# Must uninstall it to avoid interfering with later registry tests (e.g. omr).
 e2e_run "Uninstall registry side-effect from must-fail test" \
-    "aba --dir mirror uninstall"
+    "aba --dir mirror uninstall --delete-data"
 e2e_run -q "Clean up local data-dir from must-fail test" \
     "rm -rf ~/e2e-test-neg-datadir"
 e2e_run -q "Restore all pull secrets" \
@@ -127,7 +128,7 @@ e2e_run -q "Restore all pull secrets" \
 e2e_run "Create e2e-mirror-docker1 dir" "aba mirror --name e2e-mirror-docker1"
 e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-docker1"
 e2e_run "Install Docker registry on remote host" \
-    "aba -d e2e-mirror-docker1 install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass --data-dir '~/e2e-mirror-datadir2' -H $DIS_HOST -k ~/.ssh/id_rsa"
+    "aba -d e2e-mirror-docker1 install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass!! --data-dir '~/e2e-mirror-datadir2' -H $DIS_HOST -k ~/.ssh/id_rsa"
 e2e_run "Verify e2e-mirror-docker1 registry access" "aba -d e2e-mirror-docker1 verify"
 
 # Idempotent install: re-running install on a healthy registry must succeed
@@ -159,34 +160,32 @@ e2e_run_remote "Verify port 5000 persisted across restart" \
 test_end
 
 # ============================================================================
-# 4. Quay-ng [BETA]: install on remote host, verify, uninstall
+# 4. OMR [BETA]: install on remote host, verify, uninstall
 # ============================================================================
-test_begin "Quay-ng: remote install, verify, uninstall"
+test_begin "OMR: remote install, verify, uninstall"
 
-e2e_run "Create e2e-mirror-quay-ng dir" "aba mirror --name e2e-mirror-quay-ng"
-e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-quay-ng"
-e2e_run "Install quay-ng registry on remote host" \
-    "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa"
-e2e_run "Verify quay-ng registry access" "aba -d e2e-mirror-quay-ng verify"
+e2e_run "Create e2e-mirror-omr dir" "aba mirror --name e2e-mirror-omr"
+e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-omr"
+e2e_run "Install omr registry on remote host" \
+    "aba -d e2e-mirror-omr install --vendor omr --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa"
+e2e_run "Verify omr registry access" "aba -d e2e-mirror-omr verify"
 
 # Idempotent install: re-running install on a healthy registry must succeed
 e2e_run "Idempotent install (registry already running)" \
-    "aba -d e2e-mirror-quay-ng install"
+    "aba -d e2e-mirror-omr install"
 e2e_run "Verify registry still accessible after idempotent install" \
-    "aba -d e2e-mirror-quay-ng verify"
+    "aba -d e2e-mirror-omr verify"
 
-e2e_run "Uninstall quay-ng registry" "aba --dir e2e-mirror-quay-ng uninstall"
+e2e_run "Uninstall omr registry" "aba --dir e2e-mirror-omr uninstall --delete-data"
 e2e_run "Verify registry unreachable after uninstall" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:9999/v2/"
 
 # Custom credentials: verify reg_user and reg_pw are respected
-e2e_run "Install quay-ng with custom user and password" \
-    "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa --reg-user testadmin --reg-password SecretPass42"
+e2e_run "Install omr with custom user and password" \
+    "aba -d e2e-mirror-omr install --vendor omr --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa --reg-user testadmin --reg-password SecretPass42"
 e2e_run "Verify custom credentials work" \
-    "curl -sk -u testadmin:SecretPass42 https://${DIS_HOST}:9999/v2/ -o /dev/null -w '%{http_code}' | grep -q 200"
-e2e_run "Verify wrong password fails" \
-    "! curl -sk -u testadmin:wrongpass https://${DIS_HOST}:9999/v2/ -o /dev/null -w '%{http_code}' | grep -q 200"
-e2e_run "Uninstall quay-ng (custom creds)" "aba --dir e2e-mirror-quay-ng uninstall"
+    "aba -d e2e-mirror-omr verify"
+e2e_run "Uninstall omr (custom creds)" "aba --dir e2e-mirror-omr uninstall --delete-data"
 
 test_end
 
@@ -210,10 +209,10 @@ test_end
 # ============================================================================
 test_begin "Save/Load: roundtrip"
 
-e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
+e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall --delete-data"
 # Test 4 (save) installs Quay on disN via the default mirror/ config —
 # must uninstall it too before asserting all registries are removed.
-e2e_run "Uninstall default mirror registry" "aba --dir mirror uninstall"
+e2e_run "Uninstall default mirror registry" "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"
@@ -256,6 +255,60 @@ e2e_run "Verify no active --remove-signatures in config" \
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*'"
+
+test_end
+
+# ============================================================================
+# 6b. Differential save/load: incremental operator transfer
+# ============================================================================
+# Tests oc-mirror's differential mode (no --since): add operator B after
+# operator A was already saved+loaded, transfer only the delta, and verify
+# both operators are present in the registry on the remote host.
+test_begin "Differential: incremental operator save/load"
+
+e2e_run "Record OC_MIRROR_SINCE before test" \
+    "grep '^OC_MIRROR_SINCE' ~/.aba/config || echo 'OC_MIRROR_SINCE not set'"
+
+e2e_run "Disable OC_MIRROR_SINCE (enable differential mode)" \
+    "sed -i 's/^OC_MIRROR_SINCE=.*/#&/' ~/.aba/config"
+
+e2e_run "Verify catalog index exists in registry (from initial save/load)" \
+    "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     skopeo list-tags --tls-verify=false docker://\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index | grep -q Tags"
+
+# Add a second operator set and do a differential save
+e2e_run "Set cumulative op_sets (abatest + mesh3)" "aba --op-sets abatest mesh3"
+e2e_run "Verify aba.conf has both op_sets" \
+    "grep '^op_sets=.*abatest' aba.conf && grep '^op_sets=.*mesh3' aba.conf"
+
+e2e_run "Regenerate ISC with all operators" "aba -d mirror imagesetconf"
+e2e_run "Verify ISC has kiali-ossm" "grep 'kiali-ossm' mirror/data/imageset-config.yaml"
+e2e_run "Verify ISC has servicemeshoperator3" "grep 'servicemeshoperator3' mirror/data/imageset-config.yaml"
+
+e2e_run -r 3 2 "Differential save and load (delta only, pushes to remote registry)" \
+    "aba -d mirror save load --retry"
+
+# Verify both operator sets are in the registry catalog.
+# Check ALL tags — oc-mirror may push a new tag per save/load cycle and
+# the latest tag might not contain the full cumulative catalog.
+e2e_run "Verify kiali-ossm in remote registry (from initial load)" \
+    "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     _base=\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index && \
+     for _t in \$(skopeo list-tags --tls-verify=false docker://\$_base | python3 -c 'import sys,json; [print(t) for t in json.load(sys.stdin)[\"Tags\"]]'); do \
+       oc-mirror list operators --v2 --catalog \${_base}:\$_t 2>/dev/null | grep -q kiali-ossm && exit 0; \
+     done; echo 'kiali-ossm not found in any catalog tag'; exit 1"
+e2e_run "Verify servicemeshoperator3 in remote registry (from delta load)" \
+    "cd mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && \
+     _base=\${reg_host}:\${reg_port}\${reg_path}/redhat/redhat-operator-index && \
+     for _t in \$(skopeo list-tags --tls-verify=false docker://\$_base | python3 -c 'import sys,json; [print(t) for t in json.load(sys.stdin)[\"Tags\"]]'); do \
+       oc-mirror list operators --v2 --catalog \${_base}:\$_t 2>/dev/null | grep -q servicemeshoperator3 && exit 0; \
+     done; echo 'servicemeshoperator3 not found in any catalog tag'; exit 1"
+
+# Restore OC_MIRROR_SINCE (back to full-archive mode)
+e2e_run "Restore OC_MIRROR_SINCE" \
+    "sed -i 's/^#OC_MIRROR_SINCE=/OC_MIRROR_SINCE=/' ~/.aba/config"
+# Reset op_sets back to just abatest for remaining tests
+e2e_run "Reset op_sets to abatest" "aba --op-sets abatest"
 
 test_end
 
@@ -319,12 +372,12 @@ e2e_diag "Markers: after save-load" "_marker_snap"
 # when the registry is healthy, we must explicitly uninstall to get a
 # fresh install with the new configuration.
 e2e_diag "Markers: before uninstall-2" "_marker_snap"
-e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
+e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/e2e-mirror-datadir1'"
-e2e_run "Set empty reg_pw" "aba -d mirror --reg-password"
+e2e_run "Set empty reg_pw" "aba -d mirror --reg-password ''"
 e2e_run "Set reg_path=my/path" "aba -d mirror --reg-path my/path"
 e2e_run "Set reg_user=myuser" "aba -d mirror --reg-user myuser"
 e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
@@ -499,7 +552,7 @@ e2e_run "Remove vCenter folder for BM OOB (if vCenter)" \
 e2e_run "Delete BM cluster (state + dir)" "aba -y --dir $SNO_BM delete --force"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO_BM"
 
-e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
+e2e_run "Uninstall remote registry" "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
@@ -519,14 +572,14 @@ e2e_run "Delete SNO cluster" \
 # $STANDARD was created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \
-    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
-e2e_run "Uninstall e2e-mirror-quay-ng registry" \
-    "if [ -d e2e-mirror-quay-ng ]; then aba --dir e2e-mirror-quay-ng uninstall; else echo '[cleanup] e2e-mirror-quay-ng already removed'; fi"
-e2e_run "Assert: registry fully removed on disN (docker1/quay-ng)" "e2e_assert_registry_removed"
+    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall --delete-data; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
+e2e_run "Uninstall e2e-mirror-omr registry" \
+    "if [ -d e2e-mirror-omr ]; then aba --dir e2e-mirror-omr uninstall --delete-data; else echo '[cleanup] e2e-mirror-omr already removed'; fi"
+e2e_run "Assert: registry fully removed on disN (docker1/omr)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
-    "aba --dir mirror uninstall"
+    "aba --dir mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN (mirror)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir1 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"

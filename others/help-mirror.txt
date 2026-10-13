@@ -12,9 +12,10 @@ Options:
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.
   -U, --reg-ssh-user <string>          # Username to use to access the remote host via ssh.
   -u, --reg-user string                # The username used to access the registry (default is 'init').
-      --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
+      --data-dir </path/to/dir>        # Parent directory for registry data (default: ~). Registry is created under <dir>/<vendor-subdir>.
+      --delete-data                    # Delete registry data directory during uninstall (default: keep).
       --reg-path <string>              # The path to store images inside the mirror registry.
-      --vendor <auto|quay|docker>      # Registry type: auto (default), quay, or docker.
+      --vendor <auto|quay|docker|omr>  # Registry type: auto (default), quay, docker, or omr.
       --reg-port <number>              # Port of the mirror registry (default 8443).
       --pull-secret-mirror <file>      # Path to an existing registry's pull secret JSON file.
       --ca-cert <file>                 # Path to an existing registry's root CA certificate.
@@ -35,6 +36,9 @@ Related commands:
   aba [-d mirror] save [--retry #]     # Copy images from the Internet to disk (mirror2disk).
 
   aba [-d mirror] load [--retry #]     # Copy images from disk to the mirror registry (disk2mirror).
+
+  aba [-d mirror] stop                 # Stop the mirror registry (safe to copy data dir).
+  aba [-d mirror] start                # Start a previously stopped mirror registry.
 
   aba [-d mirror] verify               # Verify mirror registry connection credentials are working.
 

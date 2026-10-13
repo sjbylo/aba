@@ -3,7 +3,7 @@
 # reg-common.sh -- Shared functions for registry install/uninstall
 # =============================================================================
 # Sourced by vendor-specific scripts (reg-install-quay.sh, reg-install-docker.sh,
-# reg-install-quay-ng.sh, etc.) and dispatchers. Provides common pre-checks,
+# reg-install-omr.sh, etc.) and dispatchers. Provides common pre-checks,
 # post-install, firewall, and configuration functions so vendor scripts only
 # contain vendor-specific logic.
 #
@@ -26,10 +26,22 @@
 if [ "${_REG_COMMON_LOADED:-}" ]; then return 0; fi
 _REG_COMMON_LOADED=1
 
+# Return code from reg_detect_existing() meaning "previous install was
+# interrupted but the service is healthy — skip to post-install".
+readonly REG_RC_COMPLETING=90
+
 # Enable INFO messages when called from make (unless parent set --quiet)
 if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
 
 source scripts/include_all.sh
+
+# Hidden backup path for regcreds — uses a dot-prefix so the glob
+# ~/.aba/mirror/*/state.sh won't match it and won't interfere with
+# the data-dir clash guard.
+_regcreds_bk() {
+	local _dir="$1"
+	echo "$(dirname "$_dir")/.$(basename "$_dir").bk"
+}
 
 umask 077
 
@@ -136,6 +148,29 @@ reg_check_fqdn() {
 		"  dig $reg_host +short"
 }
 
+# --- reg_mark_installing ------------------------------------------------------
+# Write a minimal state.sh with reg_status=installing BEFORE the vendor install.
+# This lets reg_detect_existing() recognize a retry of a failed install and
+# either complete it (if the service came up) or retry from scratch.
+reg_mark_installing() {
+	local vendor="$1"
+	mkdir -p "$regcreds_dir"
+	cat > "$regcreds_dir/state.sh" <<-EOF
+	reg_status=installing
+	reg_vendor=$vendor
+	reg_host=$reg_host
+	reg_port=$reg_port
+	reg_user=$reg_user
+	reg_pw='$reg_pw'
+	reg_root=$reg_root
+	reg_path=$reg_path
+	reg_ssh_key=${reg_ssh_key:-}
+	reg_ssh_user=${reg_ssh_user:-}
+	last_action_at='$(date '+%Y-%m-%d %H:%M:%S')'
+	EOF
+	aba_debug "Wrote installing marker to $regcreds_dir/state.sh"
+}
+
 # --- reg_detect_existing ------------------------------------------------------
 # Safety check: abort if an unknown external registry is already running at
 # reg_url.  This prevents ABA from blindly installing on top of a registry
@@ -143,11 +178,30 @@ reg_check_fqdn() {
 #
 # Also aborts if ABA already manages a registry at this host (state.sh with
 # matching reg_host).  There is no "reinstall" -- user must uninstall first.
+#
+# If state.sh has reg_status=installing (previous install failed midway),
+# check if the service actually came up.  If healthy, complete the install
+# by returning REG_RC_COMPLETING that callers use to skip straight
+# to reg_post_install.  If not healthy, remove the partial state and retry.
 reg_detect_existing() {
-	# Skip install if ABA already manages a healthy registry at this host.
-	# After Phase 3 (ADR-007), $reg_host is already overridden from state.sh
-	# by normalize-mirror-conf, so no need to grep state.sh separately.
 	if [ -s "$regcreds_dir/state.sh" ]; then
+		local _reg_status=""
+		_reg_status=$(grep "^[[:space:]]*reg_status=" "$regcreds_dir/state.sh" 2>/dev/null | tail -1 | cut -d= -f2) || true
+
+		if [ "$_reg_status" = "installing" ]; then
+			# Previous install attempt was interrupted — check if the service came up
+			if probe_host --any "$reg_url/v2/" "registry from previous install" 2>/dev/null; then
+				aba_info "Previous install was interrupted but registry is healthy at $reg_host:$reg_port"
+				aba_info "Completing installation ..."
+				return $REG_RC_COMPLETING
+			else
+				aba_info "Previous install was interrupted and registry is not running — retrying ..."
+				rm -f "$regcreds_dir/state.sh"
+				return 0
+			fi
+		fi
+
+		# reg_status=installed (or legacy state.sh without reg_status field)
 		if probe_host --any "$reg_url/v2/" "existing registry"; then
 			aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
 			exit 0
@@ -172,7 +226,7 @@ reg_detect_existing() {
 	aba_info "Probing $reg_url/v2/"
 	if probe_host --any "$reg_url/v2/" "Docker registry API" 2>/dev/null; then
 		aba_abort \
-			"Existing Docker registry found at $reg_url/v2/" \
+			"Existing registry found at $reg_url" \
 			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
 			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
 			"See the README.md for further information."
@@ -284,7 +338,7 @@ reg_setup_data_dir() {
 	case "$vendor" in
 		quay)   reg_root="$data_dir/quay-install" ;;
 		docker) reg_root="$data_dir/docker-reg" ;;
-		$_QUAY_NG_VENDOR) reg_root="$data_dir/$_QUAY_NG_VENDOR" ;;
+		$_OMR_VENDOR) reg_root="$data_dir/$_OMR_VENDOR" ;;
 		*)      reg_root="$data_dir/$vendor" ;;
 	esac
 
@@ -296,29 +350,115 @@ reg_setup_data_dir() {
 	fi
 
 	# Build Quay-specific root options
+	# Explicitly set --quayStorage and --sqliteStorage to subdirectories of reg_root.
+	# Without these, mirror-registry defaults to Podman named volumes, which scatters
+	# data outside the data dir and requires root to uninstall.
 	if [ "$vendor" = "quay" ]; then
 		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 	else
 		reg_root_opts=""
 	fi
 
-	# Detect leftover data directory with wrong ownership (local installs only).
-	# A previous install creates files owned by the container UID (e.g. 1001).
-	# After uninstall, the directory may remain and the next install fails with
-	# PermissionError on subdirectories like quay-storage/uploads.
+	# Quay's installer chmods the storage tree as the login user (`file: recurse`).
+	# Blob and sqlite files are owned by the container's host UID, so that chmod
+	# fails with PermissionError unless we give the tree back first. The sqlite
+	# mount uses :U, which returns the database to the container when it starts.
 	if [ -z "$reg_ssh_key" ] && [ -d "$reg_root" ] && \
 	   [ "$(find "$reg_root" -maxdepth 2 ! -user "$(id -u)" -print -quit 2>/dev/null)" ]; then
-		aba_abort \
-			"Registry data directory $reg_root contains files not owned by $(whoami) (UID $(id -u))." \
-			"Likely left over from a previous install (container UID)." \
-			"Fix with:  sudo rm -rf $reg_root"
+		aba_info "Preparing existing registry data at $reg_root for reinstall ..."
+		if ! $SUDO chown -R "$(id -un):$(id -gn)" "$reg_root"; then
+			aba_abort \
+				"Registry data at $reg_root has files owned by the container user, and chown failed." \
+				"The installer cannot reuse that tree until those files belong to $(whoami)." \
+				"Fix with:  sudo chown -R $(whoami) $reg_root"
+		fi
 	fi
+
+	# Note other vendor data directories under the same data_dir.
+	local _other_suffix _other_root _others=""
+	local _all_suffixes="docker-reg quay-install $_OMR_VENDOR"
+	for _other_suffix in $_all_suffixes; do
+		_other_root="$data_dir/$_other_suffix"
+		[ "$_other_root" = "$reg_root" ] && continue
+		if [ -z "$reg_ssh_key" ]; then
+			[ -d "$_other_root" ] && _others+=" $_other_root"
+		else
+			ssh -i "$reg_ssh_key" -F "$ssh_conf_file" "$reg_ssh_user@$reg_host" \
+				"test -d '$_other_root'" 2>/dev/null && _others+=" $_other_root" || true
+		fi
+	done
+	[ -n "$_others" ] && aba_info "Other registry data also under $data_dir:$_others"
+
+	# Guard: detect if another mirror workdir already owns this reg_root on the
+	# same host.  Different vendors under the same data_dir are fine because each
+	# gets its own subdirectory (docker-reg, quay-install, etc.) — reg_root is
+	# already vendor-qualified at this point.  Parse state.sh with grep rather
+	# than sourcing it to avoid clobbering the caller's variables.
+	local _current_mirror _sf _sf_mirror _sf_root _sf_host
+	_current_mirror=$(basename "$PWD")
+	for _sf in "$HOME/.aba/mirror"/*/state.sh; do
+		[ -f "$_sf" ] || continue
+		_sf_mirror=$(basename "$(dirname "$_sf")")
+		[ "$_sf_mirror" = "$_current_mirror" ] && continue  # reinstall of same workdir is fine
+		_sf_root=$(grep '^reg_root=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
+		_sf_host=$(grep '^reg_host=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
+		if [ "$_sf_root" = "$reg_root" ] && [ "$_sf_host" = "$reg_host" ]; then
+			# Skip incomplete installs — reg_status=installing means the other
+			# workdir never finished, so it shouldn't block this one.
+			local _sf_status
+			_sf_status=$(grep '^reg_status=' "$_sf" | head -1 | cut -d= -f2 | tr -d "'\"")
+			[ "$_sf_status" = "installing" ] && continue
+
+			# For local installs, skip stale state.sh entries where the data dir
+			# no longer exists (previous install was cleaned up or removed).
+			if [ -z "$reg_ssh_key" ] && [ ! -d "$reg_root" ]; then
+				continue
+			fi
+			aba_abort \
+				"Data directory '$reg_root' on host '$reg_host' is already in use by mirror workdir '$_sf_mirror'." \
+				"Each registry instance of the same vendor needs its own data directory." \
+				"Use --data-dir to specify a unique path:" \
+				"  aba -d $(basename "$PWD") install --data-dir ~/my-data-dir"
+		fi
+	done
 }
 
 # --- reg_generate_password ----------------------------------------------------
 # Generate a random password if reg_pw is empty or unset.
 # Sets: reg_pw
 reg_generate_password() {
+	local _saved _saved_user _saved_pw _ng_pw _stored_pw
+	_saved="${reg_root:-}/.aba-reuse-creds"
+	_ng_pw="${reg_root:-}/auth/admin-password"
+	# Quay stores the user in its database. A new random password does not replace it.
+	# Docker rewrites htpasswd, so an explicit new password is allowed to win.
+	# omr keeps the password in auth/admin-password and skips init when that file exists.
+	if [ -s "$_saved" ]; then
+		_saved_user=$(sed -n "s/^reg_user='\(.*\)'/\1/p" "$_saved" | head -1)
+		_saved_pw=$(sed -n "s/^reg_pw='\(.*\)'/\1/p" "$_saved" | head -1)
+	fi
+	if [ -f "${reg_root}/sqlite-storage/quay_sqlite.db" ] && [ -n "$_saved_pw" ]; then
+		if [ "$reg_pw" ] && [ "$reg_pw" != "$_saved_pw" ]; then
+			aba_warn "Using the Quay login saved with the data directory. The existing database user is unchanged."
+		fi
+		[ -n "$_saved_user" ] && reg_user="$_saved_user"
+		reg_pw="$_saved_pw"
+		aba_info "Reusing the Quay login saved with the data directory."
+	elif [ -s "$_ng_pw" ]; then
+		_stored_pw=$(cat "$_ng_pw")
+		if [ -n "$_stored_pw" ]; then
+			if [ "$reg_pw" ] && [ "$reg_pw" != "$_stored_pw" ]; then
+				aba_warn "Using the OMR login stored with the data directory. The existing database user is unchanged."
+			fi
+			[ -n "$_saved_user" ] && reg_user="$_saved_user"
+			reg_pw="$_stored_pw"
+			aba_info "Reusing the OMR login stored with the data directory."
+		fi
+	elif [ ! "$reg_pw" ] && [ -n "$_saved_pw" ]; then
+		[ -n "$_saved_user" ] && reg_user="$_saved_user"
+		reg_pw="$_saved_pw"
+		aba_info "Reusing the registry login saved with the data directory."
+	fi
 	if [ ! "$reg_pw" ]; then
 		reg_pw=$(openssl rand -base64 12)
 		aba_info "Generated random registry password."
@@ -478,19 +618,29 @@ reg_post_install() {
 	local via_ssh=""
 	if [ "${3:-}" = "--ssh" ]; then via_ssh=1; fi
 
-	# Back up existing regcreds if present
+	# Back up existing regcreds to hidden dir (won't match */state.sh glob)
+	local _bk
+	_bk=$(_regcreds_bk "$regcreds_dir")
 	if [ -d "$regcreds_dir" ]; then
-		rm -rf "${regcreds_dir}.bk"
-		mv "$regcreds_dir" "${regcreds_dir}.bk"
+		rm -rf "$_bk"
+		mv "$regcreds_dir" "$_bk"
 	fi
 	mkdir -p "$regcreds_dir"
 
 	# Copy CA certificate to regcreds
 	if [ "$via_ssh" ]; then
 		aba_info "Fetching root CA from remote host: $ca_source"
-		if ! scp -i "$reg_ssh_key" -F "$ssh_conf_file" -p "$ca_source" "$regcreds_dir/rootCA.pem"; then
+		# Use ssh+cat instead of scp: podman :Z relabels volume files to
+		# container_file_t, which SELinux blocks sshd/sftp from reading.
+		# ssh+cat runs as the user shell (not sshd subsystem) so it works.
+		local _remote_host="${ca_source%%:*}"
+		local _remote_path="${ca_source#*:}"
+		if ! ssh -i "$reg_ssh_key" -F "$ssh_conf_file" "$_remote_host" "cat '$_remote_path'" > "$regcreds_dir/rootCA.pem"; then
 			aba_abort "Failed to fetch root CA from remote host: $ca_source" \
 				"The registry install may have failed — check the output above."
+		fi
+		if [ ! -s "$regcreds_dir/rootCA.pem" ]; then
+			aba_abort "Root CA from $ca_source is empty — the registry may not have generated certificates."
 		fi
 	else
 		cp "$ca_source" "$regcreds_dir/rootCA.pem"
@@ -510,16 +660,19 @@ reg_post_install() {
 
 	# Write persistent state for uninstall (survives aba clean/reset)
 	cat > "$regcreds_dir/state.sh" <<-EOF
+	reg_status=installed
 	reg_vendor=$vendor
 	reg_host=$reg_host
 	reg_port=$reg_port
 	reg_user=$reg_user
 	reg_pw='$reg_pw'
 	reg_root=$reg_root
+	reg_path=$reg_path
 	reg_ssh_key=${reg_ssh_key:-}
 	reg_ssh_user=${reg_ssh_user:-}
 	reg_root_opts="${reg_root_opts:-}"
 	reg_fw_opened=${_reg_fw_opened:-}
+	reg_running=true
 	last_action=install
 	last_action_at='$(date '+%Y-%m-%d %H:%M:%S')'
 	reg_installed_at='$(date '+%Y-%m-%d %H:%M:%S')'
@@ -539,6 +692,17 @@ reg_post_install() {
 	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"
 	aba_success "Registry installed/configured successfully!"
 	aba_info "$vendor registry at $_where, root: $reg_root"
+}
+
+# --- reg_cleanup_backup -------------------------------------------------------
+# Remove the hidden regcreds backup after a successful install + verify.
+reg_cleanup_backup() {
+	local _bk
+	_bk=$(_regcreds_bk "$regcreds_dir")
+	if [ -d "$_bk" ]; then
+		rm -rf "$_bk"
+		aba_debug "Removed regcreds backup: $_bk"
+	fi
 }
 
 # --- _reg_host_run ------------------------------------------------------------
@@ -575,9 +739,14 @@ _reg_probe_set() {
 	esac
 }
 
+# --- reg_ask_delete_data — REMOVED -------------------------------------------
+# Data directory is now preserved by default during uninstall.
+# Deletion requires explicit --delete-data flag (sets REG_DELETE_DATA=1).
+# See ADR: "uninstall should not destroy data by default."
+
 # --- reg_rm_data_dir ----------------------------------------------------------
 # Remove registry data directory, using sudo only for vendors that need it.
-# Docker and quay-ng use rootless podman (all files user-owned); quay v2 uses
+# Docker and omr use rootless podman (all files user-owned); quay v2 uses
 # Ansible with become:yes (root-owned + postgres-owned files).
 #
 # Usage: reg_rm_data_dir <vendor> <dir>
@@ -608,7 +777,7 @@ reg_rm_data_dir() {
 # state.sh. Optional ssh_cmd probes a remote host instead of localhost.
 # Probe/tool/SSH failures abort (fail closed) -- they must not look like "gone".
 #
-# Usage: _stale=$(reg_stale_report quay|docker|quay-ng [ssh_cmd])
+# Usage: _stale=$(reg_stale_report quay|docker|omr [ssh_cmd])
 reg_stale_report() {
 	local vendor="$1"
 	local ssh_cmd="${2:-}"
@@ -621,8 +790,11 @@ reg_stale_report() {
 	# even under pipefail (rightmost non-zero wins).
 	case "$vendor" in
 		quay)
-			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
-				stale+="  reg_root ($reg_root) still exists"$'\n'
+			# Data dir is preserved by default; only check if --delete-data was used
+			if [ "${REG_DELETE_DATA:-}" ]; then
+				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+					stale+="  reg_root ($reg_root) still exists"$'\n'
+			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
 			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE 'quay-app|quay-redis|quay-postgres'" "quay containers" && \
@@ -631,26 +803,33 @@ reg_stale_report() {
 				stale+="  redis_pass podman secret still exists"$'\n'
 			;;
 		docker)
-			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
-				stale+="  reg_root ($reg_root) still exists"$'\n'
+			if [ "${REG_DELETE_DATA:-}" ]; then
+				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+					stale+="  reg_root ($reg_root) still exists"$'\n'
+			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
-			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -q '^registry$'" "registry container" && \
+			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE '^registry(-$port)?$'" "registry container" && \
 				stale+="  registry container still present"$'\n'
 			;;
-		"$_QUAY_NG_VENDOR"|quay-ng)
-			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
-				stale+="  reg_root ($reg_root) still exists"$'\n'
+		"$_OMR_VENDOR"|omr)
+			if [ "${REG_DELETE_DATA:-}" ]; then
+				_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+					stale+="  reg_root ($reg_root) still exists"$'\n'
+			fi
 			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
 				stale+="  Port $port still listening"$'\n'
 			# systemctl is-active: 0 + "active" = present; 3/"inactive" = gone.
 			# SSH failure (255) or missing systemctl (127) must not look like gone.
+			# Check both user-level and system-level (root creates system Quadlets).
+			# Output may be multiline (user prints "inactive", then system prints
+			# "active"), so grep for any "active" line instead of exact match.
 			rc=0
-			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay.service 2>/dev/null") || rc=$?
+			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay.service 2>/dev/null || sudo systemctl is-active quay.service 2>/dev/null") || rc=$?
 			if [ "$rc" -eq 255 ] || [ "$rc" -eq 127 ]; then
 				aba_abort "Registry probe failed (quay.service, rc=$rc)"
 			fi
-			[ "$state" = "active" ] && stale+="  quay.service still active"$'\n'
+			echo "$state" | grep -qx "active" && stale+="  quay.service still active"$'\n'
 			;;
 		*)
 			aba_abort "reg_stale_report: unknown vendor '$vendor'"
@@ -663,6 +842,261 @@ reg_stale_report() {
 	return 0
 }
 
+# --- reg_pre_uninstall ---------------------------------------------------------
+# Shared config setup for all uninstall scripts (local and remote).
+# Loads config, sources state.sh, makes regcreds_dir available.
+# Sets: regcreds_dir, regcreds_display, plus all state.sh variables.
+# Usage: reg_pre_uninstall <vendor_label>
+reg_pre_uninstall() {
+	local vendor_label="${1:-registry}"
+
+	source <(normalize-aba-conf)
+	source <(normalize-mirror-conf)
+	export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+	export regcreds_display="regcreds"
+
+	if [ ! -s "$regcreds_dir/state.sh" ]; then
+		aba_abort "No $vendor_label registry state found in $regcreds_display/state.sh"
+	fi
+
+	source "$regcreds_dir/state.sh"
+}
+
+# --- reg_remote_pre_uninstall -------------------------------------------------
+# Shared setup for remote uninstall scripts: config + SSH verification.
+# Extends reg_pre_uninstall with SSH connectivity check.
+# Sets: $_ssh, ssh_conf_file (in addition to everything from reg_pre_uninstall)
+# Usage: reg_remote_pre_uninstall <vendor_label>
+reg_remote_pre_uninstall() {
+	local vendor_label="${1:-registry}"
+
+	reg_pre_uninstall "$vendor_label"
+
+	ssh_conf_file=~/.aba/ssh.conf
+	_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
+
+	if ! $_ssh true; then
+		aba_abort \
+			"Cannot SSH to '$reg_ssh_user@$reg_host' using key '$reg_ssh_key'" \
+			"The registry was installed remotely but SSH access has failed." \
+			"Fix SSH connectivity and try again."
+	fi
+}
+
+# =============================================================================
+# Core vendor-specific uninstall helpers
+# =============================================================================
+# Stop the service, remove data (if approved), and verify clean.
+# Called by both the per-vendor scripts and the fallback in reg-uninstall.sh.
+#
+# Each helper expects these globals to be set:
+#   reg_root      Registry data directory
+#   reg_port      Registry port (used by stale checks)
+# For remote helpers, also: $_ssh (the SSH command prefix)
+#
+# Returns 0 on success, aborts on failure (stale state left behind).
+# =============================================================================
+
+# --- reg_docker_remove --------------------------------------------------------
+# Core Docker uninstall: stop container + delete data + verify.
+# Usage: reg_docker_remove [ssh_cmd]
+reg_docker_remove() {
+	local ssh_cmd="${1:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	aba_info "Removing Docker registry on $_where ..."
+	# Remove both new (registry-PORT) and legacy (registry) container names
+	_reg_host_run "$ssh_cmd" "podman rm -f registry-${reg_port} 2>/dev/null; podman rm -f registry 2>/dev/null" || true
+
+	if [ "${REG_DELETE_DATA:-}" ]; then
+		reg_rm_data_dir docker "$reg_root" "$ssh_cmd"
+	fi
+
+	local _stale
+	_stale=$(reg_stale_report docker "$ssh_cmd")
+	if [ -n "$_stale" ]; then
+		aba_abort \
+			"Docker registry uninstall left stale state on $_where:" \
+			"$_stale" \
+			"Investigate and clean up manually before retrying."
+	fi
+}
+
+# --- reg_omr_remove -------------------------------------------------------
+# Core omr uninstall: call the tool's own 'uninstall' command.
+# Same pattern as reg_quay_remove — use the tool, then verify clean.
+# Usage: reg_omr_remove [ssh_cmd]
+reg_omr_remove() {
+	local ssh_cmd="${1:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	aba_info "Uninstalling $_OMR_VENDOR registry on $_where ..."
+
+	local _uninst_rc=0
+	if [ -n "$ssh_cmd" ]; then
+		# Remote: ensure mirror-registry binary is on remote host
+		local _bin_dir="omr"
+		local _bin="$_bin_dir/mirror-registry"
+
+		if ! $ssh_cmd "test -x $reg_root/../$_bin_dir/mirror-registry 2>/dev/null"; then
+			aba_info "mirror-registry binary not found on remote host, uploading ..."
+			if [ ! -x "$_bin" ]; then
+				aba_abort "$_OMR_VENDOR binary '$_bin' not found locally." \
+					"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
+			fi
+			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
+			local _target="$reg_ssh_user@$reg_host"
+			$ssh_cmd "mkdir -p $reg_root/../$_bin_dir" || true
+			$_scp "$_bin" "$_target:$reg_root/../$_bin_dir/" || \
+				aba_abort "Failed to copy mirror-registry binary to $reg_host"
+		fi
+
+		local _remote_bin="$reg_root/../$_bin_dir/mirror-registry"
+		aba_info "Running: mirror-registry uninstall on $reg_host ..."
+		if [ "${REG_DELETE_DATA:-}" ]; then
+			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
+		else
+			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve" || _uninst_rc=$?
+		fi
+	else
+		# Local
+		local _bin="omr/mirror-registry"
+		if [ ! -x "$_bin" ]; then
+			aba_abort "$_OMR_VENDOR binary '$_bin' not found." \
+				"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
+		fi
+
+		aba_info "Running: mirror-registry uninstall -data-dir $reg_root ..."
+		if [ "${REG_DELETE_DATA:-}" ]; then
+			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve -purge || _uninst_rc=$?
+		else
+			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
+		fi
+	fi
+
+	local _stale
+	_stale=$(reg_stale_report "$_OMR_VENDOR" "$ssh_cmd")
+	if [ -n "$_stale" ]; then
+		if [ "$_uninst_rc" -ne 0 ]; then
+			aba_abort \
+				"mirror-registry uninstall failed (exit=$_uninst_rc) and left stale state on $_where:" \
+				"$_stale" \
+				"Investigate the uninstall failure above. Do not force-clean past an aba failure."
+		fi
+		aba_abort \
+			"mirror-registry uninstall reported success but left stale state on $_where:" \
+			"$_stale" \
+			"Investigate and clean up manually before retrying."
+	fi
+}
+
+# --- reg_quay_remove ----------------------------------------------------------
+# Core Quay (mirror-registry) uninstall.
+# Local: runs ./mirror-registry uninstall directly.
+# Remote: ensures binary is on remote host, then runs via SSH.
+# Usage: reg_quay_remove [ssh_cmd]
+reg_quay_remove() {
+	local ssh_cmd="${1:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	aba_info "Uninstalling Quay registry on $_where ..."
+
+	if [ -n "$ssh_cmd" ]; then
+		# Remote: ensure mirror-registry binary + supporting files are on remote host
+		local _mirror_dir
+		_mirror_dir="$(dirname "$reg_root")"
+
+		if ! $ssh_cmd "test -f $_mirror_dir/mirror-registry && test -f $_mirror_dir/execution-environment.tar"; then
+			aba_info "mirror-registry or supporting files not found on remote host, uploading ..."
+			local tarball=""
+			for f in mirror-registry-*.tar.gz; do
+				[ -f "$f" ] && tarball="$f" && break
+			done
+			if [ -z "$tarball" ]; then
+				aba_abort "mirror-registry tarball not found in $(pwd). Run 'aba -d mirror uninstall' so the Makefile provides it."
+			fi
+
+			local remote_tmp="/tmp/.aba-${reg_ssh_user}/reg-uninstall-$$"
+			$ssh_cmd "mkdir -p $remote_tmp" || aba_abort "Failed to create temp dir on $reg_host"
+			trap '$ssh_cmd "rm -rf $remote_tmp" 2>/dev/null' EXIT
+
+			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
+			$_scp "$tarball" "$reg_ssh_user@$reg_host:$remote_tmp/" || \
+				aba_abort "Failed to copy mirror-registry tarball to $reg_host"
+			$ssh_cmd "mkdir -p $_mirror_dir && tar -C $_mirror_dir --no-same-owner -xmzf $remote_tmp/$tarball" || \
+				aba_abort "Failed to extract mirror-registry on $reg_host"
+			$ssh_cmd "rm -rf $remote_tmp"
+		fi
+
+		# mirror-registry hardcodes --name ansible_runner_instance without --replace
+		$ssh_cmd "podman rm -f ansible_runner_instance 2>/dev/null" || true
+
+		aba_info "Running: mirror-registry uninstall on $reg_host ..."
+		local _uninst_rc=0
+		if [ "${REG_DELETE_DATA:-}" ]; then
+			$ssh_cmd "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?
+		else
+			$ssh_cmd "cd $_mirror_dir && printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opts" || _uninst_rc=$?
+		fi
+	else
+		# Local
+		ensure_quay_registry
+		podman rm -f ansible_runner_instance 2>/dev/null || true
+
+		local _uninst_rc=0
+		if [ "${REG_DELETE_DATA:-}" ]; then
+			aba_info "Running command: ./mirror-registry uninstall -v --autoApprove $reg_root_opts"
+			./mirror-registry uninstall -v --autoApprove $reg_root_opts || _uninst_rc=$?
+		else
+			aba_info "Running command: ./mirror-registry uninstall -v $reg_root_opts  (keeping data)"
+			printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opts || _uninst_rc=$?
+		fi
+	fi
+
+	# mirror-registry's Ansible playbook does not remove podman secrets.
+	# Clean up redis_pass to prevent stale-state detection on next install.
+	if [ -n "$ssh_cmd" ]; then
+		$ssh_cmd "podman secret rm redis_pass 2>/dev/null" || true
+	else
+		podman secret rm redis_pass 2>/dev/null || true
+	fi
+
+	local _stale
+	_stale=$(reg_stale_report quay "$ssh_cmd")
+	if [ -n "$_stale" ]; then
+		if [ "$_uninst_rc" -ne 0 ]; then
+			aba_abort \
+				"mirror-registry uninstall failed (exit=$_uninst_rc) and left stale state on $_where:" \
+				"$_stale" \
+				"Investigate the uninstall failure above. Do not force-clean past an aba failure."
+		fi
+		aba_abort \
+			"mirror-registry uninstall reported success but left stale state on $_where:" \
+			"$_stale" \
+			"Investigate why mirror-registry's Ansible playbook did not fully clean up."
+	fi
+	[ "${_uninst_rc:-0}" -ne 0 ] && \
+		aba_info "mirror-registry uninstall exited $_uninst_rc but registry is fully gone -- treating as success"
+
+	# When keeping data (no REG_DELETE_DATA), fix ownership of persisted files.
+	# Quay containers run in a user namespace, creating files owned by mapped UIDs
+	# (e.g. 101000) that the host user cannot modify.  Without this, re-install
+	# fails with PermissionError on quay-storage/uploads.
+	# Inside 'podman unshare', UID 0 maps to the host user — so chown 0:0 gives
+	# the files back to the calling user.
+	if [ -z "${REG_DELETE_DATA:-}" ]; then
+		aba_debug "Fixing ownership of persisted data in $reg_root"
+		if [ -n "$ssh_cmd" ]; then
+			$ssh_cmd "podman unshare chown -R 0:0 $reg_root" 2>/dev/null || true
+		else
+			podman unshare chown -R 0:0 "$reg_root" 2>/dev/null || true
+		fi
+	fi
+}
+
 # --- reg_finish_uninstall -----------------------------------------------------
 # Clear persistent regcreds after a verified-clean uninstall (or already-gone).
 # Usage: reg_finish_uninstall <vendor> ["already uninstalled"|"uninstall successful"]
@@ -670,6 +1104,300 @@ reg_finish_uninstall() {
 	local vendor="$1"
 	local msg="${2:-uninstall successful}"
 
+	# Data dir is preserved by default.  Remember the login, because Quay will
+	# not apply a newly generated password to a user that already exists.
+	if [ -z "${REG_DELETE_DATA:-}" ] && [ -n "${reg_root:-}" ] && [ -d "$reg_root" ] && [ -n "${reg_pw:-}" ]; then
+		printf "reg_user='%s'\nreg_pw='%s'\n" "$reg_user" "$reg_pw" > "$reg_root/.aba-reuse-creds"
+		chmod 600 "$reg_root/.aba-reuse-creds"
+		aba_info "Saved the registry login in $reg_root/.aba-reuse-creds for the next install."
+	fi
+
 	rm -rf "${regcreds_dir:?}/"*
 	aba_success "${vendor} registry ${msg}"
+}
+
+# --- reg_check_v2_auth --------------------------------------------------------
+# Verify registry is reachable and credentials are valid via /v2/.
+# Handles both Basic auth (Docker) and Bearer token exchange (Quay/OMR).
+# Usage: reg_check_v2_auth <url> <user> <password>
+#   url       Base registry URL, e.g. https://host:port
+#   user      Registry username
+#   password  Registry password
+# Returns 0 on success, 1 on failure.
+reg_check_v2_auth() {
+	local url="$1" user="$2" pw="$3"
+
+	# Try Basic auth first (works for Docker registry)
+	local code
+	code=$(curl -k -sS -o /dev/null -w "%{http_code}" \
+		--connect-timeout 3 -u "$user:$pw" "$url/v2/" 2>/dev/null) || return 1
+	if [ "$code" = "200" ]; then
+		return 0
+	fi
+
+	# Basic auth returned 401 — try Bearer token exchange (Quay/OMR)
+	# Parse service from the challenge header but always use the known-reachable
+	# registry URL for the token endpoint.  OMR in port-mapped containers may
+	# advertise a realm on port 443 which is unreachable externally.
+	if [ "$code" = "401" ]; then
+		local hdr service token
+		hdr=$(curl -k -sS -D- -o /dev/null --connect-timeout 3 "$url/v2/" 2>/dev/null) || return 1
+		service=$(printf '%s\n' "$hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p' | head -1)
+		if [ -z "$service" ]; then
+			return 1
+		fi
+
+		token=$(curl -k -fsS --connect-timeout 3 -u "$user:$pw" \
+			"$url/v2/auth?service=${service}" 2>/dev/null \
+			| sed -n 's/.*"token":"\([^"]*\)".*/\1/p') || return 1
+		if [ -z "$token" ]; then
+			return 1
+		fi
+
+		curl -k -fsS --connect-timeout 3 -o /dev/null \
+			-H "Authorization: Bearer $token" "$url/v2/"
+		return $?
+	fi
+
+	return 1
+}
+
+# --- reg_remote_pre_install ---------------------------------------------------
+# Shared SSH pre-checks for all remote registry installs.
+# Sets globals: _ssh, remote_dir, remote_tmp
+# Usage: reg_remote_pre_install <vendor>
+reg_remote_pre_install() {
+	local vendor="$1"
+
+	reg_load_config
+	reg_detect_existing
+	_skip_to_post_install=$?
+
+	reg_check_fqdn
+	reg_setup_data_dir "$vendor"
+	reg_generate_password
+
+	# If previous install was interrupted but healthy, skip SSH checks
+	if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+		return $REG_RC_COMPLETING
+	fi
+
+	aba_info "Registry configured for *remote* install (reg_ssh_key is defined in mirror.conf)."
+	aba_info "Verifying SSH access to $reg_ssh_user@$reg_host ..."
+
+	_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
+
+	local flag_file="/tmp/.aba-ssh-probe-${reg_ssh_user}.$$.$RANDOM"
+	rm -f "$flag_file" 2>/dev/null || sudo rm -f "$flag_file" 2>/dev/null || true
+
+	if ! $_ssh "touch $flag_file"; then
+		aba_abort \
+			"Cannot SSH to '$reg_ssh_user@$reg_host' using key '$reg_ssh_key'" \
+			"Tested with command: ssh -i $reg_ssh_key $reg_ssh_user@$reg_host" \
+			"Ensure password-less SSH to '$reg_ssh_user@$reg_host' is working." \
+			"You might also need to set 'reg_ssh_user' in mirror.conf."
+	fi
+
+	if [ -f "$flag_file" ]; then
+		rm -f "$flag_file" 2>/dev/null || sudo rm -f "$flag_file" 2>/dev/null || true
+		aba_abort \
+			"Registry configured for *remote* install (reg_ssh_key is defined)." \
+			"But $reg_host ($fqdn_ip) reaches this localhost ($(hostname -s)) instead!" \
+			"Options:" \
+			"1. Undefine 'reg_ssh_key' in mirror.conf for local installation." \
+			"2. Update DNS so '$reg_host' resolves to the actual remote host."
+	fi
+
+	$_ssh rm -f "$flag_file"
+	aba_info "SSH access to $reg_ssh_user@$reg_host is working."
+
+	aba_info "Checking prerequisites on remote host $reg_host (see .remote_host_check.out) ..."
+
+	> .remote_host_check.out
+	$_ssh "set -x; ip a" >> .remote_host_check.out 2>&1
+
+	reg_ensure_remote_pkgs "$_ssh" podman jq hostname tar openssl
+
+	$_ssh "podman images" >> .remote_host_check.out 2>&1 || \
+		aba_abort "podman is not working on remote host '$reg_host'." \
+			"See .remote_host_check.out for details."
+
+	# Resolve reg_root on remote host (~ may expand differently than localhost)
+	reg_root=$($_ssh "echo $reg_root")
+
+	# Rebuild reg_root_opts with resolved path (see reg_setup_data_dir comment)
+	if [ "$vendor" = "quay" ]; then
+		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
+	fi
+
+	aba_info "Using registry root dir on remote: $reg_root"
+
+	reg_open_firewall --ssh
+
+	# Create remote working directory
+	remote_tmp="/tmp/.aba-${reg_ssh_user}"
+	remote_dir="$remote_tmp/reg-install-$$"
+	$_ssh "mkdir -p $remote_dir"
+	trap '$_ssh "rm -rf $remote_dir" 2>/dev/null' EXIT
+
+	_scp="scp -i $reg_ssh_key -F $ssh_conf_file"
+	_target="$reg_ssh_user@$reg_host"
+}
+
+# --- reg_remote_post_install --------------------------------------------------
+# Shared post-install for all remote registry installs.
+# Fetches CA, generates pull secret, verifies connectivity, writes breadcrumb.
+# Usage: reg_remote_post_install <vendor> <remote_ca_path>
+reg_remote_post_install() {
+	local vendor="$1"
+	local remote_ca="$2"
+
+	reg_post_install "$_target:$remote_ca" "$vendor" --ssh
+
+	# Phase 1: Wait for the registry HTTP endpoint to respond (no auth = no
+	# lockout risk).  Safe to retry freely — just checks connectivity + TLS.
+	if ! try_cmd -n 12 -d 5 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
+		probe_host --any "https://${reg_host}:${reg_port}/v2/" "registry readiness"; then
+		aba_abort \
+			"Registry on $reg_host is not responding on port $reg_port after 60s." \
+			"Check firewall rules and that the registry service started correctly." \
+			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+	fi
+
+	# Phase 2: Single auth check — NO retry to avoid Quay brute-force lockout.
+	# Quay locks accounts after ~5 failed login attempts; retrying auth when
+	# the registry is slow to initialize burns through that budget fast.
+	if ! reg_check_v2_auth "https://${reg_host}:${reg_port}" "$reg_user" "$reg_pw"; then
+		aba_abort \
+			"Registry on $reg_host is reachable but authentication failed." \
+			"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
+			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+	fi
+
+	# Leave breadcrumb on remote
+	$_ssh "cat > $reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
+		Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
+		Installed from: $(hostname -f):$PWD
+		Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+		On host $(hostname -f):
+		To verify:    cd $PWD && aba verify
+		To uninstall: cd $PWD && aba uninstall
+	BREADCRUMB
+}
+
+# --- reg_stop_vendor ----------------------------------------------------------
+# Stop a running registry without removing data or config.
+# Idempotent: if already stopped, prints info and returns 0.
+# Usage: reg_stop_vendor <vendor> [ssh_cmd]
+reg_stop_vendor() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	local port="${reg_port:-8443}"
+
+	# Already stopped?
+	if ! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_info "Registry on $_where is already stopped (port $port not listening)"
+		return 0
+	fi
+
+	aba_info "Stopping $vendor registry on $_where ..."
+
+	case "$vendor" in
+		docker)
+			_reg_host_run "$ssh_cmd" "podman stop registry-${port} 2>/dev/null || podman stop registry 2>/dev/null" || true
+			;;
+		quay)
+			# Quay runs as a pod; stopping individual containers leaves the
+			# pod infra container listening on the port.  Stop the pod.
+			_reg_host_run "$ssh_cmd" "podman pod stop quay-pod 2>/dev/null" || true
+			;;
+		"$_OMR_VENDOR"|omr)
+			_reg_host_run "$ssh_cmd" "systemctl --user stop quay.service 2>/dev/null || sudo systemctl stop quay.service 2>/dev/null" || true
+			;;
+		*)
+			aba_abort "reg_stop_vendor: unknown vendor '$vendor'"
+			;;
+	esac
+
+	# Verify stopped — pods may take a moment to release ports
+	sleep 2
+	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening"
+	fi
+
+	aba_info "$vendor registry stopped on $_where"
+}
+
+# --- reg_start_vendor ---------------------------------------------------------
+# Start a previously stopped registry.
+# Idempotent: if already running, prints info and returns 0.
+# Usage: reg_start_vendor <vendor> [ssh_cmd]
+reg_start_vendor() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+	local _where="localhost"
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+
+	local port="${reg_port:-8443}"
+
+	# Already running?
+	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_info "Registry on $_where is already running (port $port listening)"
+		return 0
+	fi
+
+	aba_info "Starting $vendor registry on $_where ..."
+
+	case "$vendor" in
+		docker)
+			_reg_host_run "$ssh_cmd" "podman start registry-${port} 2>/dev/null || podman start registry 2>/dev/null"
+			;;
+		quay)
+			_reg_host_run "$ssh_cmd" "podman pod start quay-pod"
+			;;
+		"$_OMR_VENDOR"|omr)
+			_reg_host_run "$ssh_cmd" "systemctl --user start quay.service 2>/dev/null || sudo systemctl start quay.service 2>/dev/null"
+			;;
+		*)
+			aba_abort "reg_start_vendor: unknown vendor '$vendor'"
+			;;
+	esac
+
+	# Wait for port to come up (registry may need a moment)
+	local _attempts=0
+	while ! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; do
+		_attempts=$(( _attempts + 1 ))
+		if [ "$_attempts" -ge 10 ]; then
+			aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 10s"
+		fi
+		sleep 1
+	done
+
+	# Quay uses nginx in front of quay-app; the port opens immediately (nginx)
+	# but the backend needs time to initialize.  Wait for a non-502 response.
+	if [ "$vendor" = "quay" ]; then
+		local _ready=0
+		for (( _i=0; _i<60; _i++ )); do
+			local _code
+			if [ -n "$ssh_cmd" ]; then
+				_code=$($ssh_cmd "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
+			else
+				_code=$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${port}/health/instance" 2>/dev/null) || _code="000"
+			fi
+			if [ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]; then
+				_ready=1
+				break
+			fi
+			sleep 2
+		done
+		if [ "$_ready" -eq 0 ]; then
+			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 120s"
+		fi
+	fi
+
+	aba_info "$vendor registry started on $_where (port $port)"
 }

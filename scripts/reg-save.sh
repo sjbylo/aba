@@ -19,6 +19,9 @@ aba_debug "try_tot=$try_tot"
 
 umask 077
 
+# PLANs are emitted by _progress_plan-save Makefile target (scripts/progress-plan.sh)
+aba_progress "START|sv_preflight"
+
 aba_debug "Loading and validating configuration"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
@@ -31,7 +34,7 @@ require_internet_and_pull_secret
 
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
 _verify_versions="v${ocp_version}"
-[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
+[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && [ "${excl_platform:-}" != "true" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
 aba_info "Verifying release image availability for ${_verify_versions} ..."
 if ! verify_release_version_exists "$ocp_version"; then
 	aba_abort \
@@ -80,6 +83,10 @@ fi
 # Still downloading?
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
+
+aba_progress "DONE|sv_preflight"
+aba_progress "START|sv_tools"
+
 aba_info "Ensuring CLI installation binaries are available"
 #pwd
 sleep 1
@@ -114,37 +121,27 @@ aba_debug "oc-mirror is ready"
 aba_debug "Creating containers auth file"
 scripts/create-containers-auth.sh || exit 1
 
-# Check disk space before downloading images
-aba_debug "Checking disk space in data/ directory"
 mkdir -p data
 
 # Remove stale aba-transfer.tar to prevent mismatch if this save fails partway
 rm -f data/aba-transfer.tar data/aba-transfer-metadata.json
 aba_debug "Removed any stale aba-transfer.tar from data/"
 
-avail=$(df -m data | awk '{print $4}' | tail -1)
-aba_debug "Available disk space: $avail MB"
-
-# Stark warning if very low (incremental saves may still succeed, so don't abort)
-if [ $avail -lt 20500 ]; then
-	aba_warn "Very low disk space under $PWD/data (only $(( avail / 1024 ))GB free)" \
-		"A first-time save requires at least 20GB for the base platform alone" \
-		"Operators require additional 40-400GB of space" \
-		"Incremental saves may succeed with less space"
-	echo >&2
-elif [ $avail -lt 51250 ]; then
-	aba_warn "Less than 50GB of space available under $PWD/data (only $(( avail / 1024 ))GB free)" \
-		"Operator images require between ~40 to ~400GB of disk space!"
-	echo >&2
-fi
-
+# Disk need vs free space is printed by mirror-status (op=save).
 scripts/mirror-status.sh op=save
+
+# Abort early if imageset has no active content — oc-mirror would fail with "no images to copy"
+if ! sed -n '/^mirror:/,$ p' data/imageset-config.yaml 2>/dev/null | grep -q '^  [^#]'; then
+	aba_abort "Nothing to save — the imageset has no active (uncommented) image sections." \
+		"Enable at least one section in aba.conf (excl_platform, excl_operators) or add images to images.conf."
+fi
 
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
-aba_warn \
-	"Ensure there is enough disk space under $PWD/data." \
-	"This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
+aba_progress "DONE|sv_tools"
+aba_progress "START|sv_save"
+
+aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install
@@ -177,12 +174,22 @@ _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd" || _save_rc=$?
 echo "$_save_rc" > .oc-mirror-exit-code
 
 if [ $_save_rc -ne 0 ]; then
+	aba_progress "FAIL|sv_save"
 	exit $_save_rc
 fi
 
-# Ensure all CLI downloads are complete before packing aba-transfer.tar
+aba_progress "DONE|sv_save"
+
+# Wait for all background CLI downloads before packing aba-transfer.tar.
+# Downloads were kicked off in sv_tools (non-blocking run_once).
+# This is a visible background wait — if downloads are still running,
+# the progress dialog shows "Wait for CLI tools [In Progress]".
+aba_progress "START|sv_cli_wait"
 scripts/cli-download-all.sh --wait
 cli_download_extra_clis --wait
+aba_progress "DONE|sv_cli_wait"
+
+aba_progress "START|sv_finalize"
 
 # Create aba-transfer.tar: always includes ISC files so 'cp mirror/data/*.tar'
 # transfers the correct imageset config to the disconnected host.
@@ -198,6 +205,11 @@ _bundle_files=()
 # ISC files are always included (relative to aba root)
 [ -f "data/imageset-config.yaml" ] && _bundle_files+=("mirror/data/imageset-config.yaml")
 [ -f "data/imageset-config-digest.yaml" ] && _bundle_files+=("mirror/data/imageset-config-digest.yaml")
+
+# Catalog indexes — keeps disco's operator knowledge fresh on each transfer
+for _idx in ../.index/*-operator-index-v*; do
+	[ -f "$_idx" ] && _bundle_files+=(".index/$(basename "$_idx")")
+done
 
 if [ "$_is_upgrade" ]; then
 	_bundle_ver="$ocp_upgrade_to"
@@ -244,6 +256,12 @@ fi
 rm -f data/aba-transfer-metadata.json
 
 echo >&2
+
+aba_progress "DONE|sv_finalize"
+
+replace-value-conf -q -n last_action -v "save" -f "$HOME/.aba/mirror/$(basename "$PWD")/state.sh"
+replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$HOME/.aba/mirror/$(basename "$PWD")/state.sh"
+
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info "Upgrade: ${ocp_version} → ${ocp_upgrade_to}"
 	echo
@@ -267,7 +285,7 @@ elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
 	aba_info "      cp /transfer-media/*.tar ~/aba/mirror/data/"
 	aba_info "      cd aba && ./install && aba (or abatui)"
 	echo
-	aba_info "  mirror_*.tar = images, aba-transfer.tar = config (ISC)"
+	aba_info "  mirror_*.tar = images, aba-transfer.tar = config (imageset-config)"
 	aba_info "  For ongoing updates, always use Option B (save/transfer/load)."
 fi
 echo >&2

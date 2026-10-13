@@ -25,7 +25,7 @@ RUN dnf install -y \
 	python3 python3-jinja2 python3-pyyaml \
 	ncurses which dialog file hostname diffutils \
 	bind-utils nmstate net-tools \
-	skopeo openssl coreos-installer \
+	skopeo openssl \
 	httpd acl polkit \
 	openssh-clients \
 	&& dnf clean all \

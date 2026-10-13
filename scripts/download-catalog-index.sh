@@ -167,6 +167,13 @@ _get_content_layer_digest() {
 #
 # Net effect: repeat runs go from ~15s to ~1s per catalog (3 catalogs = ~3s vs ~45s).
 
+# Sweep stale containers and temp dirs from previous interrupted runs.
+# Must run before the fast-path exit so cleanup happens even when cached.
+podman ps -a --format '{{.Names}}' | grep '^aba-catalog-' | while read -r _stale; do
+	podman rm -f "$_stale" >/dev/null 2>&1
+done
+find "$ABA_TMP" -maxdepth 1 \( -name 'catalog-*' -o -name 'list-ops-*' -o -name 'render-registry-*' -o -name 'render-unpack-*' \) -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+
 # Fast-path: if local index exists and remote content layer hasn't changed, skip download.
 # Probe is ~2s (metadata only) vs ~15s for full podman pull + extract.
 if [[ -s "$index_file" && -f "$content_layer_file" ]]; then
@@ -181,12 +188,6 @@ fi
 
 container_name="aba-catalog-${catalog_name}-v${ocp_ver_major}-$$"
 tmp_dir=$(mktemp -d "$ABA_TMP/catalog-XXXXXX")
-
-# Sweep stale containers and temp dirs from previous interrupted runs
-podman ps -a --format '{{.Names}}' | grep '^aba-catalog-' | while read -r _stale; do
-	podman rm -f "$_stale" >/dev/null 2>&1
-done
-find "$ABA_TMP" -maxdepth 1 \( -name 'catalog-*' -o -name 'list-ops-*' -o -name 'render-registry-*' -o -name 'render-unpack-*' \) -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
 
 aba_debug "catalog_url=$catalog_url"
 aba_debug "container_name=$container_name"

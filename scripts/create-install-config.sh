@@ -42,8 +42,8 @@ aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
-export regcreds_display="$(image_source_mirror_name)/regcreds"
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
+export regcreds_display="${image_source:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 [ "$platform" = "vmw" ] && source <(normalize-vmware-conf)  # vSphere values needed for install-config.yaml
 [ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
@@ -137,7 +137,7 @@ if [ "$use_mirror" ]; then
 			aba_warn \
 				"Pull secret has no credentials for $reg_host:$reg_port" \
 				"Pull secret contains: ${_ps_hosts:-(empty)}" \
-				"Check that reg_host/reg_port in $(image_source_mirror_name)/mirror.conf match your registry" \
+				"Check that reg_host/reg_port in ${image_source:-mirror}/mirror.conf match your registry" \
 				"Pull secret: $regcreds_display/pull-secret-mirror.json"
 		fi
 

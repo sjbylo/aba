@@ -222,6 +222,9 @@ Options:
 # Deploy + run with local source (developer mode):
 ./run.sh run -a -p 1-4 -d
 
+# Note: The dispatcher auto-deploys committed dev branch changes.
+# See "Auto-deploy" section below.
+
 # List available suites:
 ./run.sh list
 
@@ -234,6 +237,44 @@ Options:
 # Include dummy suites alongside real suites:
 ./run.sh run -a -D -p 1-4
 ```
+
+### Auto-deploy (dev branch)
+
+The dispatcher automatically deploys new `dev` branch commits to pools at
+dispatch time — no manual action needed. This ensures pools always run the
+latest committed code.
+
+**How it works:**
+
+1. At each suite dispatch, the dispatcher compares bastion's `git HEAD` against
+   per-pool marker files (`/tmp/e2e-auto-deploy-commit-N`).
+2. Every 5 minutes, it also runs `git fetch origin dev` to pick up remote
+   pushes. If origin is ahead and the workspace is clean, it fast-forwards.
+3. If HEAD differs from any pool's marker, it builds the source tarball once
+   and deploys to **all pools** that are behind — not just the one being
+   dispatched.
+4. Per-pool markers track which commit each pool has; a pool is only
+   deployed to when it's behind HEAD.
+
+**Safety guards:**
+
+- Only acts when the bastion workspace is on the `dev` branch.
+- If there are **uncommitted changes on disk**, the fetch/pull is skipped (won't
+  clobber your work). The deploy still fires if HEAD advanced past the marker.
+- Fast-forward only — if local and remote have diverged, the pull is skipped.
+
+**Relationship with `--dev`:**
+
+| Mechanism | What it deploys | Trigger |
+|-----------|----------------|---------|
+| `--dev` | Disk state (including uncommitted changes) | Manual (`run.sh deploy --dev` or `run.sh run --dev`) |
+| Auto-deploy | Only committed code (`git archive HEAD`) | Automatic at each dispatch |
+
+Both are independent. `--dev` is for testing work-in-progress code that hasn't
+been committed — it deploys whatever is on disk. Auto-deploy uses `git archive`
+to deploy only committed code, so uncommitted WIP is never pushed to pools
+automatically. This means it's safe to have half-finished changes on disk while
+auto-deploy handles committed code.
 
 ### Test Profiles
 

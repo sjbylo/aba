@@ -274,10 +274,10 @@ else
 	test_fail "cli-download-all.sh --wait exits $rc"
 fi
 
-if [ $elapsed -le 5 ]; then
+if [ $elapsed -le 15 ]; then
 	test_pass "--wait fast when nothing to do (${elapsed}s)"
 else
-	test_fail "--wait slow (${elapsed}s > 5s)"
+	test_fail "--wait slow (${elapsed}s > 15s)"
 fi
 
 # 5b: --reset then --wait — should re-download

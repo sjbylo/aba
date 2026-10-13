@@ -11,6 +11,10 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# PLANs are emitted by _progress_plan-sync Makefile target (scripts/progress-plan.sh)
+
+aba_progress "START|preflight"
+
 try_tot=1  # def. value
 #[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
 [ "$1" ] && [ $1 -gt 0 ] && try_tot=$(( $1 + 1 )) && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
@@ -31,9 +35,12 @@ aba_debug "Configuration validated"
 # Pass mirror-specific pull secret as fallback for hosts without a global pull secret.
 require_internet_and_pull_secret "$regcreds_dir/pull-secret-mirror.json"
 
+aba_progress "DONE|preflight"
+aba_progress "START|versions"
+
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
 _verify_versions="v${ocp_version}"
-[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
+[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && [ "${excl_platform:-}" != "true" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
 aba_info "Verifying release image availability for ${_verify_versions} ..."
 if ! verify_release_version_exists "$ocp_version"; then
 	aba_abort \
@@ -79,18 +86,27 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	if [ "${excl_platform:-}" = "true" ]; then
 		aba_warn "Upgrade target set (${ocp_upgrade_to}) but excl_platform=true — release images would be missing." \
 			"Switching excl_platform=false in aba.conf to include release images."
-		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+		replace-value-conf -n excl_platform -v "false" -f "../aba.conf"
 		excl_platform=false
+		# Regenerate ISC since Make already built it with excl_platform=true
+		aba_info "Regenerating imageset to include release images..."
+		scripts/reg-create-imageset-config.sh
 	fi
 fi
 
 # Be sure a download has started ..
+aba_progress "DONE|versions"
+aba_progress "START|tools"
+
 aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
 	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 aba_debug "oc-mirror is ready"
+
+aba_progress "DONE|tools"
+aba_progress "START|registry"
 
 # Check for mirror-specific pull secret override
 pull_secret_mirror_file=pull-secret-mirror.json
@@ -108,13 +124,13 @@ aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port reg_path=$reg_
 [ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host" && aba_debug "Adjusted no_proxy=$no_proxy"
 
 # Can the registry mirror already be reached?
-# Support both Quay and Docker registries with different health endpoints
-aba_info "Probing mirror registry at $reg_url"
+# Support all registry vendors with different health endpoints
+aba_debug "Probing mirror registry at $reg_url"
 
 if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
 	aba_debug "Quay registry detected and accessible"
 elif probe_host --any "$reg_url/v2/" "Docker registry API"; then
-	# 401 is expected on /v2/ without credentials (Docker, quay-ng, GCR all behave this way)
+	# 401 is expected on /v2/ without credentials (Docker, omr, GCR all behave this way)
 	aba_debug "Docker/OCI registry detected and accessible"
 elif probe_host "$reg_url/" "registry root"; then
 	aba_debug "Generic registry detected and accessible"
@@ -136,16 +152,20 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
+aba_progress "DONE|registry"
+aba_progress "START|sync"
+
 scripts/mirror-status.sh op=sync
+
+# Abort early if imageset has no active content — oc-mirror would fail with "no images to copy"
+if ! sed -n '/^mirror:/,$ p' data/imageset-config.yaml 2>/dev/null | grep -q '^  [^#]'; then
+	aba_abort "Nothing to sync — the imageset has no active (uncommented) image sections." \
+		"Enable at least one section in aba.conf (excl_platform, excl_operators) or add images to images.conf."
+fi
 
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
-# Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
-if [ -s ./reg-uninstall.sh ]; then
-	aba_warn \
-		"Ensure there is enough disk space under $reg_root." \
-		"This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
-fi
+aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
 
 # NOTE: that the cache is always used *except* for mirror-to-mirror (sync) workflows, where it is not used! See reg-save.sh and reg-load.sh.
 # Set TMPDIR path (defer mkdir to just before oc-mirror needs it)
@@ -163,8 +183,12 @@ _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd" || _sync_rc=$?
 echo "$_sync_rc" > .oc-mirror-exit-code
 
 if [ $_sync_rc -ne 0 ]; then
+	aba_progress "FAIL|sync"
 	exit $_sync_rc
 fi
+
+aba_progress "DONE|sync"
+aba_progress "START|finalize"
 
 # After successful sync: update state.sh with mirror facts.
 # mirror_ocp_version tracks what's actually in the mirror (highest synced version).
@@ -179,6 +203,7 @@ else
 fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n reg_running -v "true" -f "$regcreds_dir/state.sh"
 
 # Archive the entire cluster-resources/ directory per OCP minor version.
 # oc-mirror overwrites these files on every sync, so after an upgrade sync
@@ -193,6 +218,8 @@ if [ -d "data/working-dir/cluster-resources" ]; then
 	cp -a "data/working-dir/cluster-resources" "$_cs_archive_dir"
 	aba_debug "Archived cluster-resources to $_cs_archive_dir"
 fi
+
+aba_progress "DONE|finalize"
 
 echo
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then

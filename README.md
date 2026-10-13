@@ -66,6 +66,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Air-Gapped Transfer](#air-gapped-transfer)
   - [Custom Bundles](#custom-bundles)
   - [Light Bundles](#light-bundles-when-disk-space-or-portable-media-is-limited)
+  - [Data-Directory Transfer](#data-directory-transfer-workflow)
 - [Connected Installation (No Mirror)](#connected-installation-no-mirror)
 - [Installing a Cluster](#installing-a-cluster)
   - [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup)
@@ -122,7 +123,8 @@ ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat
 
 **Mirror Registry**
 
-- Installs Quay or Docker registry locally or remotely, or connects to an existing registry
+- Three vendor choices: **OMR** (v3, Tech Preview), **Quay** (v1, stable), or **Docker** registry — locally or remotely, or connect to an existing registry
+- **OMR** (*OpenShift Mirror Registry* v3) is the next-generation mirror registry, currently in Tech Preview and available from [quay.io](https://quay.io)
 - Handles pull secret merging and registry certificate trust automatically
 - Works with oc-mirror v2; incremental image and Operator loading (day-1/day-2)
 - [Named mirror directories](#named-mirror-directories-enclaves) for multiple enclaves
@@ -210,7 +212,7 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 # Install Bundles
 
 An ABA `Install Bundle` is a single archive containing everything required to install OpenShift in an air-gapped environment for a specific use case. 
-It includes platform and operator images, matching OpenShift CLI installation tools, registry configuration for Quay and Docker, and automation to set up a mirror registry and generate the configuration files needed for installation — tested, repeatable, and ready to use.
+It includes platform and operator images, matching OpenShift CLI installation tools, registry configuration for OMR, Quay, and Docker, and automation to set up a mirror registry and generate the configuration files needed for installation — tested, repeatable, and ready to use.
 
 Download the latest Install Bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy)
 
@@ -251,9 +253,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.7.tar.gz
-tar xzf v1.3.7.tar.gz
-cd aba-1.3.7
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.0.tar.gz
+tar xzf v1.4.0.tar.gz
+cd aba-1.4.0
 ./install
 aba
 ```
@@ -261,7 +263,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.3.7 https://github.com/sjbylo/aba.git
+git clone --branch v1.4.0 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -294,7 +296,7 @@ abatui --conno     # Force partially disconnected mode
 
 The `abatui` command is installed to your `$PATH` alongside `aba` and can be run from any directory within the ABA repository.
 
-The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror installation (local or remote Quay/Docker), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
+The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror installation (local or remote OMR/Quay/Docker), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
 
 Navigate using `Tab`, `Enter`, arrow keys, `Space` (to toggle selections), and `Escape` (to go back or quit). Menu items have single-key shortcuts shown as highlighted letters.
 
@@ -327,7 +329,7 @@ This command:
 
   - triggers `aba -d mirror install` (to configure or install the mirror registry).
   - for an existing registry, checks that the connection is available and working.
-  - or, installs *Mirror Registry for Red Hat OpenShift* (Quay) or Docker Registry on the local bastion. For remote host installation, see [Load images to a remote host](#load-images-to-a-remote-host).
+  - or, installs *Mirror Registry for Red Hat OpenShift* (OMR, Quay, or Docker) on the local bastion. For remote host installation, see [Load images to a remote host](#load-images-to-a-remote-host).
   - pulls images from the Internet and stores them in the registry.
 
 ```
@@ -392,10 +394,10 @@ aba -d mirror load -H registry.example.com --retry 3
 - The `-H` flag sets the registry FQDN (in this case, `registry.example.com` resolves to the local bastion).
 - Uses the install bundle to:
   - check if the mirror registry is already installed and accessible. If not, installs it.
-  - install *Mirror Registry for Red Hat OpenShift* (Quay) or Docker Registry onto the local bastion and load the images.
+  - install *Mirror Registry for Red Hat OpenShift* (OMR, Quay, or Docker) onto the local bastion and load the images.
   - verify the FQDN `registry.example.com` is resolvable *and* reachable via SSH.
 
-> Tip: If you experience issues pushing images into Quay, consider using the Docker Registry instead — set `reg_vendor=docker` in `mirror.conf` or select Docker in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
+> Tip: If you experience issues pushing images into Quay, consider using OMR (v3, Tech Preview) or Docker Registry instead — set `reg_vendor=omr` or `reg_vendor=docker` in `mirror.conf`, or select the vendor in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
 
 ### Load images to a remote host
 
@@ -404,7 +406,7 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
 ```
 
 - `-k ~/.ssh/id_rsa` specifies the private SSH key used to connect to the remote host for registry installation and image loading.
-- Installs Quay or Docker Registry onto the remote host `registry.example.com` and loads the images.
+- Installs OMR, Quay, or Docker Registry onto the remote host `registry.example.com` and loads the images.
 
 After loading, verify connectivity: `aba -d mirror verify`
 
@@ -585,6 +587,83 @@ aba
 ```
 
 Then continue from the [Load the images from disk into the mirror registry](#load-the-images-from-disk-into-the-mirror-registry-on-the-local-bastion) step above.
+
+[Back to top](#quick-start)
+
+## Data-Directory Transfer Workflow
+
+> **Note:** This is a new workflow that is currently being tested. Please report any issues.
+
+An alternative to `aba bundle` for air-gapped environments: instead of saving images to tar archives, copy the registry's **data directory** directly.
+This avoids the extra disk space requirements when using the oc-mirror workflow, which can be useful when the registry data is very large.
+
+### How it works
+
+1. Install a mirror registry on the connected side and sync images into it.
+2. Stop the registry so the data directory is consistent (no writes during copy).
+3. Transfer the data directory and a small metadata directory to the disconnected side.
+4. Install (or restart) the registry on the disconnected side using the transferred data.
+5. Run `aba day2` to configure OperatorHub, IDMS/ITMS, and release signatures.
+
+### Scenario A: Fresh install on disconnected side
+
+When the disconnected side does **not** yet have a registry:
+
+```bash
+# ── Connected side ──
+aba -d mirror install
+aba -d mirror sync
+aba -d mirror stop                  # Quiesce registry for safe copy
+
+# Transfer to portable media:
+#   1. Registry data dir (e.g. ~/omr/)                         — large
+#   2. mirror/data/working-dir/cluster-resources/                   — ~20KB (needed for day2)
+
+aba -d mirror start                 # Resume connected registry
+
+# ── Disconnected side ──
+# ABA already installed (via an earlier 'aba bundle' install)
+# Copy data dir from portable media to the disconnected host
+
+aba -d mirror install --reg-host registry.disco.com --vendor omr --data-dir /path/to/data
+
+# Copy cluster-resources into the ABA tree:
+cp -a /media/cluster-resources/ mirror/data/working-dir/cluster-resources/
+
+# Now cluster install + day2 work:
+aba -d <cluster> install
+aba -d <cluster> day2
+```
+
+### Scenario B: Update an existing registry on disconnected side
+
+When the disconnected side **already has a running registry** (from an earlier bundle, data-dir transfer, or `aba load`):
+
+```bash
+# ── Connected side ──
+aba -d mirror sync                  # Get latest images
+aba -d mirror stop
+
+# Transfer to portable media:
+#   1. Registry data dir
+#   2. mirror/data/working-dir/cluster-resources/
+
+aba -d mirror start
+
+# ── Disconnected side ──
+aba -d mirror stop                  # Quiesce existing registry
+# Replace data dir contents from portable media (cp or rsync)
+# Copy cluster-resources:
+cp -a /media/cluster-resources/ mirror/data/working-dir/cluster-resources/
+aba -d mirror start                 # Restart with updated data
+aba -d <cluster> day2               # Apply updated IDMS/CatalogSource/signatures
+```
+
+### Important notes
+
+- **Stop before copying:** `aba -d mirror stop` ensures the data directory is consistent (no in-flight writes). `aba -d mirror start` brings it back afterward.
+- **cluster-resources is required for day2:** The `mirror/data/working-dir/cluster-resources/` directory (~20KB, 5 files) contains IDMS/ITMS, CatalogSource, and release signature manifests generated by oc-mirror. Without it, `aba day2` cannot configure the cluster.
+- **Subsequent updates:** After the initial data-dir transfer, you can either repeat the data-dir transfer workflow or switch to the standard [save/transfer/load](#air-gapped-transfer) protocol.
 
 [Back to top](#quick-start)
 
@@ -1473,11 +1552,15 @@ These commands control VMs directly without performing any OpenShift-level drain
 
 #### Registry Host Resources
 
-The registry (mirror) host is the server that runs your container image registry (Quay or Docker Registry) and stores all mirrored OpenShift and operator images.
+The registry (mirror) host is the server that runs your container image registry (OMR, Quay, or Docker) and stores all mirrored OpenShift and operator images.
 
 - **Minimum**: 4 vCPUs, 8 GB RAM — sufficient for platform release images and most operators.
 - **Recommended for large operator workloads** (e.g. RHOAI, GPU, AI/ML): 16 GB RAM minimum, ideally 24+ GB. These operators include very large image layers that cause Quay's gunicorn workers to buffer significant data in memory during upload. Insufficient RAM can trigger OOM kills mid-upload, leading to mirroring failures and corrupted image data in the registry that persists across retries — see the [troubleshooting FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai).
 - **Docker Registry** has a much lower memory footprint than Quay and is a good alternative when resources are constrained.
+
+#### Registry Password
+
+The registry password (`reg_pw` in `mirror.conf`) is auto-generated if left empty. If you set a custom password, avoid these characters: single quote, double quote, backslash, backtick, dollar sign, and exclamation mark. These are known to cause failures during registry installation and are blocked by ABA for all registry vendors.
 
 #### Registry Storage
 
@@ -1586,8 +1669,8 @@ To install OpenShift in a fully disconnected environment, you need one connected
 - RHEL 8, 9, or 10 within the disconnected environment.
 - Sudo or root access; passwordless sudo recommended (see [Common Requirements](#common-requirements)).
 - Install RPMs listed in `aba/templates/rpms-internal.txt`. See [Installing RPMs](#installing-rpms).
-- For Quay or Docker on the Internal Bastion: passwordless SSH from the bastion to itself.
-- For Quay or Docker on a remote host: passwordless SSH from the Internal Bastion to that host.
+- For OMR, Quay, or Docker on the Internal Bastion: passwordless SSH from the bastion to itself.
+- For OMR, Quay, or Docker on a remote host: passwordless SSH from the Internal Bastion to that host.
 
 After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
@@ -1604,8 +1687,8 @@ In a *partially disconnected environment*, the *connected bastion* has limited (
 - [Install ABA](#install-aba).
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
-- For Quay or Docker locally: passwordless SSH from the bastion to itself.
-- For Quay or Docker on a remote host: passwordless SSH from the bastion to that host.
+- For OMR, Quay, or Docker locally: passwordless SSH from the bastion to itself.
+- For OMR, Quay, or Docker on a remote host: passwordless SSH from the bastion to that host.
 
 After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
@@ -1616,7 +1699,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 
 | Command                    | Description                                                   |
 | -------------------------- | ------------------------------------------------------------- |
-| `aba -d mirror install`    | Install Quay or Docker registry (locally or remotely)         |
+| `aba -d mirror install`    | Install OMR, Quay, or Docker registry (locally or remotely)   |
 | `aba -d mirror sync`       | Copy images from the Internet into the mirror (mirror2mirror) |
 | `aba -d mirror save`       | Copy images from the Internet to disk (mirror2disk)           |
 | `aba -d mirror load`       | Copy images from disk to the mirror (disk2mirror)             |
@@ -1626,7 +1709,10 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba -d mirror password`   | Regenerate pull secret for existing registry                  |
 | `aba -d mirror tidy`       | Clean up stale metadata from a previous run                   |
 | `aba -d mirror transfer-info` | Inspect a pending transfer config (version, operators, upgrade target) |
-| `aba -d mirror uninstall`  | Uninstall the registry                                        |
+| `aba -d mirror uninstall`  | Uninstall the registry (data directory is preserved)          |
+| `aba -d mirror uninstall --delete-data` | Uninstall the registry and remove all data          |
+| `aba -d mirror stop`      | Stop the mirror registry (data preserved; safe to copy data dir) |
+| `aba -d mirror start`     | Start a previously stopped mirror registry                    |
 
 
 ### Cluster Commands
@@ -1695,6 +1781,8 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba clean`           | Remove generated files, preserving configuration                   |
 | `aba reset --force`   | Full reset — returns directory to unpacked state (**destructive**) |
 | `aba --help`          | Show help and available options                                    |
+| `aba help`            | Alias for `--help`                                                 |
+| `aba --version`       | Print ABA version                                                  |
 
 
 [Back to top](#quick-start)
@@ -1806,7 +1894,7 @@ bash-5.1# cd aba
 bash-5.1# aba
 ```
 
-Tested on Mac M1 (`arm64`). Caveats: installing *Mirror Registry for Red Hat OpenShift* (Quay) on a remote host from inside the container may not work on arm64.
+Tested on Mac M1 (`arm64`). Caveats: installing *Mirror Registry for Red Hat OpenShift* (OMR or Quay) on a remote host from inside the container may not work on arm64.
 
 **Tested use case:** An ISO generated from within the arm64 container successfully installed OpenShift on an M1 Mac using VMware Fusion.
 
@@ -1920,13 +2008,15 @@ Run on the disconnected bastion:
 
 ```
 cd aba
-aba -d mirror uninstall    # Uninstall the registry if installed by ABA
+aba -d mirror uninstall    # Uninstall the registry (data directory is preserved by default)
 aba -d mirror unregister   # Or, deregister an existing registry (removes creds only)
 cd ..
 rm -rf aba
 sudo rm -f "$(which aba)" "$(which abatui 2>/dev/null)"
 rm -rf ~/.aba              # Remove externalized state (kubeconfigs, cache, runner state, logs)
 ```
+
+> **Note:** `aba -d mirror uninstall` preserves the registry data directory so you can reinstall later without re-mirroring images. To remove everything: `aba -d mirror uninstall --delete-data`.
 
 Run on the workstation or laptop:
 
@@ -2141,9 +2231,17 @@ aba -d mirror install --vendor docker          # Install Docker Registry
 aba -d mirror verify                           # Verify, then use as usual
 ```
 
+Or try OMR (v3, Tech Preview) — the next-generation mirror registry:
+
+```
+aba -d mirror uninstall                        # Uninstall Quay
+aba -d mirror install --vendor omr             # Install OMR (Tech Preview)
+aba -d mirror verify                           # Verify, then use as usual
+```
+
 To uninstall: `aba -d mirror uninstall`
 
-Note: The Quay mirror registry is supported by Red Hat but the Docker Registry is not.
+Note: The Quay mirror registry is supported by Red Hat. OMR (v3) is in Tech Preview. Docker Registry is not officially supported by Red Hat.
 
 ---
 
@@ -2220,7 +2318,9 @@ See [Controlling validation with verify_conf](#controlling-validation-with-verif
 
 ## Q: I accidentally uninstalled my mirror registry, how can I recover?
 
-1. Re-install Quay and push the same set and version of images.
+Since `aba -d mirror uninstall` preserves the data directory by default, simply re-install and your images are intact:
+
+1. Re-install: `aba -d mirror install`
 2. Verify: `aba -d mirror verify`
 3. Start the cluster. Check `oc whoami`.
 4. Delete old config:
@@ -2231,6 +2331,8 @@ See [Controlling validation with verify_conf](#controlling-validation-with-verif
 5. Re-create cluster.conf: `rm -rf sno; aba cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf`
 6. Run: `aba -d sno day2`
 7. Wait 2-3 minutes and check OperatorHub in the Console.
+
+> If you used `--delete-data`, the image data is gone. You will need to re-mirror images with `aba -d mirror sync` or `aba -d mirror load` before the registry is usable again.
 
 ---
 

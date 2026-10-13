@@ -18,6 +18,7 @@
 # -----------------------------------------------------------------------------
 # ABA runtime state
 # -----------------------------------------------------------------------------
+*.drawio
 aba.conf*
 .aba.conf.seen
 target-ocp-version.conf
@@ -67,7 +68,10 @@ mirror/.??*
 mirror/.redhat-operator-index*
 mirror/mirror.conf*
 mirror/docker-reg-image.tgz
+mirror/omr-image.tgz
+mirror/omr/
 mirror/quay-ng-image.tgz
+mirror/quay-ng/
 mirror/cli
 mirror/mirror
 mirror/reg-uninstall.sh.provision
@@ -155,6 +159,8 @@ ai/
 # -----------------------------------------------------------------------------
 *.md.bak
 *.bak
+__pycache__/
+*.pyc
 .backup/
 .bundle
 .??*.log

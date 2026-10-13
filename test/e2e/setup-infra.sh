@@ -131,8 +131,8 @@ _verify_con_vm() {
 		firewall-cmd --list-services | grep -q dns || _fail "dns not in firewall"
 		echo "  PASS: firewall dns service"
 
-		# No stale test ports (only pool registry 8443/tcp and ssh 22/tcp expected)
-		_stale=\$(firewall-cmd --list-ports | tr ' ' '\n' | grep -vE '^(8443/tcp|22/tcp)?\$' || true)
+		# No stale test ports (only pool registry ${POOL_REG_PORT}/tcp and ssh 22/tcp expected)
+		_stale=\$(firewall-cmd --list-ports | tr ' ' '\n' | grep -vE '^(${POOL_REG_PORT}/tcp|22/tcp)?\$' || true)
 		[ -z "\$_stale" ] || _fail "stale firewall ports: \$_stale"
 		echo "  PASS: no stale firewall ports"
 
@@ -266,14 +266,14 @@ _verify_con_vm() {
 		echo "  PASS: / disk usage \${_root_pct}%"
 
 		# --- Podman clean ---
-		# Pool registry runs as ${user} with images, containers, and port 8443
+		# Pool registry runs as ${user} with images, containers, and port ${POOL_REG_PORT}
 		if [ -d $POOL_REG_DIR ]; then
 			echo "  SKIP: podman/port checks for ${user} (pool registry present)"
 		else
 			! sudo -u ${user} podman ps -q | grep -q . || _fail "running containers (${user})"
 			echo "  PASS: no running containers (${user})"
-			! ss -tlnp | grep -q ':8443 ' || _fail "port 8443 in use"
-			echo "  PASS: port 8443 free"
+			! ss -tlnp | grep -q ':${POOL_REG_PORT} ' || _fail "port ${POOL_REG_PORT} in use"
+			echo "  PASS: port ${POOL_REG_PORT} free"
 		fi
 		! podman ps -q | grep -q . || _fail "running containers (root)"
 		echo "  PASS: no running containers (root)"

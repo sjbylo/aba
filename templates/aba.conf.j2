@@ -8,13 +8,13 @@ platform=bm			# Deployment platform: 'vmw' (vCenter/ESXi), 'kvm' (KVM/libvirt), 
 
 # Set the following values only if they are known.
 
-op_sets=			# Optional: Comma-separated operator sets, such as: op_sets=odf,virt,acm,mesh3).
+op_sets=			# Optional: Comma-separated operator sets, such as: op_sets=odf,virt,acm,mesh3.
 				# Operator sets are defined under 'templates/operator-set-*'. Add or edit as needed.
-				# Valid values: ocp,acm,virt,odf,appdev,mesh2,mesh3,odfdr,quay,sec,ai
+				# Run 'aba show-op-sets' for the full list.
 				# 'all' includes every operator in redhat-operator-index (ensure sufficient disk space!).
 
 ops=				# Optional: Comma-separated individual operator names such as: ops=web-terminal,devworkspace-operator
-				# If needed, fetch operator names from the files: mirror/imageset-config-*.yaml, generate by: aba catalog
+				# If needed, list operator names with: aba show-operators
 
 # Set the following values for the target network, if known.
 # If left empty, they will be auto-detected when installing a cluster on the target network.

@@ -19,8 +19,8 @@ echo
 echo "=== Testing: Phase 1 Externalized Targets ==="
 echo
 
-# All 19 externalized targets
-ALL_TARGETS="info login shell getco day2 day2-ntp day2-osus shutdown startup rescue create ls start stop kill poweroff delete refresh upload"
+# All externalized targets (must match the guard in aba.sh)
+ALL_TARGETS="info login shell terminal term getco unstick day2 day2-ntp day2-osus day2-virt upgrade upgrade-mon shutdown startup rescue create ls kill poweroff delete refresh upload write-usb deploy-primed deploy"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Group 1: Cluster directory guard (static + runtime)
@@ -37,7 +37,7 @@ for t in $ALL_TARGETS; do
 	fi
 done
 if [ -z "$missing_guard" ]; then
-	test_pass "Guard case covers all 19 targets"
+	test_pass "Guard case covers all 26 targets"
 else
 	test_fail "Guard case missing targets:$missing_guard"
 fi
@@ -52,7 +52,7 @@ for t in $ALL_TARGETS; do
 	fi
 done
 if [ -z "$missing_bypass" ]; then
-	test_pass "Dispatch bypass covers all 19 targets"
+	test_pass "Dispatch bypass covers all 26 targets"
 else
 	test_fail "Dispatch bypass missing targets:$missing_bypass"
 fi
@@ -95,9 +95,9 @@ if echo "$out" | grep -q "Not in a cluster directory"; then
 	test_fail "'aba --dir sno ls' wrongly rejected as not in cluster dir"
 elif echo "$out" | grep -q "vmware.conf not found"; then
 	test_fail "'aba --dir sno ls' can't find vmware.conf (dispatch error)"
-elif echo "$out" | grep -q "agent-config.yaml not found"; then
-	test_fail "'aba --dir sno ls' can't find agent-config.yaml (dispatch error)"
 else
+	# Reaching vmw-ls.sh is success — runtime errors (agent-config.yaml missing,
+	# govc unreachable, etc.) are expected without a live cluster/vCenter.
 	test_pass "'aba --dir sno ls' dispatched to vmw-ls.sh (no guard/dispatch errors)"
 fi
 

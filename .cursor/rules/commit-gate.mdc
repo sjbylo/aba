@@ -5,13 +5,37 @@
 After making code changes, the agent runs pre-commit checks, they pass,
 and the agent commits+pushes WITHOUT asking. This has happened repeatedly.
 
+## Permission tiers
+
+### ALWAYS requires explicit user permission (any time, any day)
+
+Changes to critical/core code or many-line changes in:
+
+- `scripts/*` (all ABA core scripts)
+- `tui/*` (TUI code)
+- `cli/*` (CLI Makefiles/scripts)
+- `mirror/*` (mirror Makefiles/scripts)
+- `catalogs/*` (catalog indexes)
+- `others/*` (help files, templates)
+- Top-level files (`aba/*` files only, e.g. Makefile, aba.conf, README.md)
+
+**No exceptions. Not even out of office hours.**
+
+### Agent may commit autonomously — out of office hours only
+
+- `test/func/*` (functional tests)
+- `test/e2e/*` (E2E test harness)
+- `.cursor/*` (rules, skills)
+- `ai/*` (AI working files)
+- `devel/*` (design docs, ADRs)
+
 ## The rule
 
 After ANY file edit or pre-commit check:
 1. Show the diff (`git diff --stat` + key changes)
-2. Say: "Ready to commit. Should I commit and push?"
-3. STOP. Do not run `git commit` or `git push`.
-4. Wait for the user to say one of: "commit", "push", "commit and push"
+2. If ANY changed file is in the "always requires permission" tier: **STOP and ask.**
+3. If ALL changed files are in the "autonomous" tier AND it's out of office hours: agent may commit.
+4. If in doubt: **STOP and ask.**
 
 ## What is NOT permission
 - "ok" → NOT permission (means "acknowledged")

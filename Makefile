@@ -11,7 +11,7 @@ SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
 type     ?=		# cluster type (sno|compact|standard), empty = use existing or template default
 #light    ?=		# by def. do not create light install bundle
-MIRROR_CMDS := save load sync verify status
+MIRROR_CMDS := save load sync verify status register unregister password pw uninstall
 
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
@@ -29,7 +29,7 @@ version: ## Show ABA version
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@cat others/help-aba.txt
 
 init: aba .init
 .init: 
@@ -73,7 +73,7 @@ bm:
 #	@$(SCRIPTS)/make-bundle.sh -o $(out) $(light) $(force)
 
 .PHONY: tar
-tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
+tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup-$(USER).tar. Use --out - to send tar output to stdout. Used by aba bundle.
 	@$(SCRIPTS)/cli-download-all.sh --wait >&2
 	$(SCRIPTS)/backup.sh $(if $(clusters),--primed) $(out)
 
@@ -84,7 +84,7 @@ tarrepo:  ## Archive the repo *excluding* the aba/mirror/mirror_*.tar files. Wor
 	@$(SCRIPTS)/backup.sh --repo $(if $(clusters),--primed) $(out)
 
 .PHONY: download
-download:  ## Download all required CLI install files without installing. 
+download:  ## Download all required CLI install files (use: aba -d cli download). 
 	@echo [ABA] "Run either one of:"
 	@echo [ABA] "  aba -d cli $@"
 	@echo [ABA] "  cd cli && aba $@"

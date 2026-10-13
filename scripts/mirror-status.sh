@@ -9,7 +9,8 @@
 # CWD:       mirror/ directory
 # REQUIRES:  scripts/include_all.sh (normalize functions, ask(), ISC helpers)
 # PRODUCES:  Human-readable summary (default), sourceable key=value (--shell),
-#            compact operation summary (op=save, op=sync),
+#            compact operation summary (op=save, op=sync, op=load),
+#            disk verdicts with the summary (--disk),
 #            or interactive preflight checks (--preflight)
 # SIDE EFFECTS: --preflight may update aba.conf and regenerate ISC
 # IDEMPOTENT: Yes (default and --shell are read-only)
@@ -22,15 +23,114 @@ source scripts/include_all.sh
 
 _mode="human"
 _op=""
+_show_disk=false
 for arg in "$@"; do
 	case "$arg" in
 		shell|--shell)         _mode="shell" ;;
+		runtime|--runtime)     _mode="runtime" ;;
 		preflight|--preflight) _mode="preflight" ;;
+		disk|--disk)           _show_disk=true ;;
 		op=save)               _mode="op"; _op="save" ;;
 		op=sync)               _mode="op"; _op="sync" ;;
 		op=load)               _mode="op"; _op="load" ;;
 	esac
 done
+
+# --- Lightweight runtime state (fast path for TUI menu) ---
+# Infers reg_state from .available + state.sh (reg_running, mirror_ocp_version,
+# last_action). Only calls check_release_image() when ambiguous.
+# Output: ~9 key=value fields. No ISC, operators, disk, or upgrade path.
+if [ "$_mode" = "runtime" ]; then
+	source <(normalize-aba-conf)
+	source <(normalize-mirror-conf)
+
+	_mirror_name=$(basename "$PWD")
+	_state_file="$HOME/.aba/mirror/$_mirror_name/state.sh"
+
+	# Layer 1: .available marker
+	if [ ! -f .available ]; then
+		echo "reg_state=absent"
+		echo "mirror_installed=false"
+		echo "release_image_available=unknown"
+		exit 0
+	fi
+
+	# Layer 2: state.sh fields
+	_reg_running=""
+	_reg_vendor=""
+	_mirror_ocp_version=""
+	_last_action=""
+	_last_action_at=""
+	if [ -s "$_state_file" ]; then
+		_reg_running=$(grep '^reg_running=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_reg_vendor=$(grep '^reg_vendor=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_mirror_ocp_version=$(grep '^mirror_ocp_version=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_last_action=$(grep '^last_action=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2-) || true
+		_last_action_at=$(grep '^last_action_at=' "$_state_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"") || true
+	fi
+
+	# Layer 2b: stopped?
+	if [ "$_reg_running" = "false" ]; then
+		echo "reg_state=stopped"
+		echo "mirror_installed=true"
+		echo "reg_vendor=${_reg_vendor:-}"
+		echo "mirror_host=${reg_host:-}"
+		echo "mirror_port=${reg_port:-}"
+		echo "reg_listening=false"
+		echo "release_image_available=unknown"
+		echo "mirror_last_action=${_last_action:-}"
+		echo "mirror_last_action_at=\"${_last_action_at:-}\""
+		exit 0
+	fi
+
+	# Layer 3: can we infer release image availability from state.sh?
+	_release_avail="unknown"
+	_reg_state="installed"
+	_need_curl=false
+
+	if [ "${_mirror_ocp_version:-}" = "${ocp_version:-}" ]; then
+		case "$_last_action" in
+			sync|load)
+				_reg_state="ready"
+				_release_avail="true"
+				;;
+			*)
+				_need_curl=true
+				;;
+		esac
+	else
+		_need_curl=true
+	fi
+
+	# Layer 4: live probe only when ambiguous
+	_reg_listening=true
+	if [ "$_need_curl" = "true" ]; then
+		export regcreds_dir=$HOME/.aba/mirror/$_mirror_name
+		if check_release_image "${_reg_vendor:-}" 2>/dev/null; then
+			_reg_state="ready"
+			_release_avail="true"
+		elif [ "${_release_http_code:-}" = "000" ]; then
+			# Crash detection: state.sh says running but registry is unreachable
+			_reg_state="stopped"
+			_reg_listening=false
+			_release_avail="unknown"
+			replace-value-conf -q -n reg_running -v "false" -f "$_state_file" 2>/dev/null || true
+		else
+			_release_avail="false"
+		fi
+	fi
+
+	echo "reg_state=$_reg_state"
+	echo "mirror_installed=true"
+	echo "reg_vendor=${_reg_vendor:-}"
+	echo "mirror_host=${reg_host:-}"
+	echo "mirror_port=${reg_port:-}"
+	echo "reg_listening=$_reg_listening"
+	echo "release_image_available=$_release_avail"
+	echo "mirror_last_action=${_last_action:-}"
+	echo "mirror_last_action_at=\"${_last_action_at:-}\""
+	exit 0
+fi
 
 # --- Gather state ---
 
@@ -60,9 +160,12 @@ fi
 _mirror_name=$(basename "$PWD")
 _last_action=""
 _last_action_at=""
+_reg_running=""
 if [ -s "$HOME/.aba/mirror/$_mirror_name/state.sh" ]; then
-	_last_action=$(grep '^last_action=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2-)
-	_last_action_at=$(grep '^last_action_at=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"")
+	# grep exits 1 when the field is absent. That must not abort status.
+	_last_action=$(grep '^last_action=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2-) || true
+	_last_action_at=$(grep '^last_action_at=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"") || true
+	_reg_running=$(grep '^reg_running=' "$HOME/.aba/mirror/$_mirror_name/state.sh" 2>/dev/null | head -1 | cut -d= -f2-) || true
 fi
 
 # OCP version
@@ -81,6 +184,25 @@ _operators=$(_isc_operator_list "$_isc")
 
 # Additional images from ISC
 _add_count=$(_isc_additional_count "$_isc")
+
+# Payload contradiction flags: content configured in aba.conf but excluded
+# Operators: configured if op_sets or ops is non-empty
+_warn_ops_excluded=false
+if { [ -n "${op_sets:-}" ] || [ -n "${ops:-}" ]; } && [ "$_excl_operators" = "true" ]; then
+	_warn_ops_excluded=true
+fi
+# Additional images: configured if images.conf has content
+_warn_add_excluded=false
+if [ "$_excl_additional" = "true" ]; then
+	# Check both repo-wide and per-mirror images.conf (same logic as _merge_images_conf)
+	_add_conf_count=0
+	for _icf in ../images.conf images.conf; do
+		if [ -f "$_icf" ]; then
+			_add_conf_count=$(( _add_conf_count + $(_read_images_conf "$_icf" 2>/dev/null | wc -l) )) || true
+		fi
+	done
+	[ "${_add_conf_count:-0}" -gt 0 ] && _warn_add_excluded=true
+fi
 
 # ISC state
 _isc_exists=false
@@ -114,9 +236,329 @@ if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
 fi
 
 # Derived flags
+_disk_save_summary=""
+_disk_save_short=false
+_disk_save_level=""
+_disk_sync_summary=""
+_disk_sync_short=false
+_disk_sync_level=""
+_disk_load_summary=""
+_disk_load_short=false
+_disk_load_level=""
 _upgrade_needs_platform=false
 if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ] && [ "$_excl_platform" = "true" ]; then
 	_upgrade_needs_platform=true
+fi
+
+# Transfer warning: release images excluded (bundle/save can't install a new cluster).
+# Skip when ISC is user-managed — user owns the config, we don't second-guess.
+_transfer_excl_release=false
+if [ "$_excl_platform" = "true" ] && [ "$_isc_user_managed" != "true" ]; then
+	_transfer_excl_release=true
+fi
+
+# How much more disk this ISC needs, from the one size estimate.
+# save writes an archive and the oc-mirror cache. sync writes the registry
+# only. load writes the registry and the cache; the archive is already here.
+# Whole GB or MB, rounded up. A decimal would look like a measurement.
+_fmt_disk() {
+	local n=${1:-0}
+	local gb=$((1024 * 1024 * 1024))
+	local mb=$((1024 * 1024))
+	local kb=1024
+	if [ "$n" -le 0 ]; then
+		echo "0 MB"
+		return
+	fi
+	if [ "$n" -ge "$gb" ]; then
+		echo "$(( (n + gb - 1) / gb )) GB"
+	elif [ "$n" -ge "$mb" ]; then
+		echo "$(( (n + mb - 1) / mb )) MB"
+	else
+		echo "$(( (n + kb - 1) / kb )) KB"
+	fi
+}
+
+_path_probe() {
+	local p=$1
+	while [ -n "$p" ] && [ ! -e "$p" ] && [ "$p" != "/" ]; do
+		p=$(dirname "$p")
+	done
+	printf '%s\n' "${p:-/}"
+}
+
+_local_free() {
+	df -B1 --output=avail "$(_path_probe "$1")" 2>/dev/null | awk 'NR==2 { print $1 }' || true
+}
+
+_local_dev() {
+	df -P "$(_path_probe "$1")" 2>/dev/null | awk 'NR==2 { print $1 }' || true
+}
+
+_local_mount() {
+	df -P "$(_path_probe "$1")" 2>/dev/null | awk 'NR==2 { print $NF }' || true
+}
+
+_cache_root() {
+	local root="${OC_MIRROR_CACHE:-}"
+	if [ -z "$root" ]; then
+		root="${data_dir:-}"
+	fi
+	if [ -z "$root" ] || [ "$root" = "~" ]; then
+		root=$HOME
+	else
+		root=$(_expand_tilde "$root")
+	fi
+	printf '%s\n' "$root"
+}
+
+_cache_used_bytes() {
+	local dir="$1/.oc-mirror/.cache"
+	if [ ! -d "$dir" ]; then
+		echo 0
+		return
+	fi
+	du -sb "$dir" 2>/dev/null | awk '{ print $1 }' || true
+}
+
+# Registry data directory. Installed state wins. Otherwise mirror.conf,
+# unless the registry is external and its data directory is not known.
+_registry_place() {
+	_reg_disk=""
+	_reg_remote=""
+	_reg_ssh_target=""
+	local st="$HOME/.aba/mirror/$(basename "$PWD")/state.sh"
+	local vendor=""
+	if [ -s "$st" ]; then
+		vendor=$(grep '^reg_vendor=' "$st" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'\"") || true
+	fi
+	# An external registry has no ABA data directory. Do not invent one.
+	if [ "$vendor" = "existing" ]; then
+		return
+	fi
+	if [ -z "$vendor" ]; then
+		vendor=$(resolved_reg_vendor)
+	fi
+	case "$vendor" in
+		""|existing) return ;;
+	esac
+	local root_name=$vendor
+	case "$vendor" in
+		quay) root_name=quay-install ;;
+		docker) root_name=docker-reg ;;
+	esac
+	local dd="${data_dir:-}"
+	if [ -n "${reg_ssh_key:-}" ]; then
+		[ -z "$dd" ] && dd='~'
+		_reg_disk="$dd/$root_name"
+		_reg_remote=1
+		_reg_ssh_target="${reg_ssh_user:-$(whoami)}@${reg_host}"
+	else
+		[ -z "$dd" ] && dd=$HOME
+		dd=$(_expand_tilde "$dd")
+		_reg_disk="$dd/$root_name"
+	fi
+}
+
+_remote_free() {
+	local target=$1 path=$2 out=""
+	# A leading ~ must expand on the registry host, so it is left unquoted.
+	local qpath
+	if [[ "$path" == "~"* ]]; then
+		qpath=$path
+	else
+		qpath=$(printf '%q' "$path")
+	fi
+	out=$(ssh -F ~/.aba/ssh.conf -i "$reg_ssh_key" -o ConnectTimeout=8 -o BatchMode=yes "$target" \
+		"df -B1 --output=avail -- $qpath 2>/dev/null" | awk 'NR==2 { print $1 }') || true
+	printf '%s\n' "$out"
+}
+
+# ok: free is at least 30% above need. tight: free covers need, but by less.
+# short: free is below need. unknown: free space could not be read.
+_disk_level() {
+	local need=$1 free=$2 bar
+	if [ -z "$free" ]; then
+		echo unknown
+		return
+	fi
+	if [ "$free" -lt "$need" ]; then
+		echo short
+		return
+	fi
+	bar=$(( need * 13 / 10 ))
+	if [ "$free" -ge "$bar" ]; then
+		echo ok
+	else
+		echo tight
+	fi
+}
+
+_disk_sentence() {
+	local op=$1 how=$2 need=$3 where=$4 free=$5 from=$6
+	# "may need" is an estimate. A comfortable margin prints nothing.
+	if [ -z "$free" ]; then
+		if [ "$from" = "@unknown" ]; then
+			printf 'Estimate: this %s may need %s %s more on %s. The registry data directory is not known, so free space was not checked.' \
+				"$op" "$how" "$(_fmt_disk "$need")" "$where"
+		else
+			# A local miss must not name this machine as if it were remote.
+			[ -n "$from" ] || from="this host"
+			printf 'Estimate: this %s may need %s %s more on %s. Free space could not be read from %s.' \
+				"$op" "$how" "$(_fmt_disk "$need")" "$where" "$from"
+		fi
+	else
+		printf 'Estimate: this %s may need %s %s more on %s (%s free).' \
+			"$op" "$how" "$(_fmt_disk "$need")" "$where" "$(_fmt_disk "$free")"
+	fi
+}
+
+# Drop places that are fine. A short place becomes DISK SPACE WARNING.
+_op_reset() {
+	_bad=""
+	_any_short=false
+}
+
+_op_add() {
+	local level=$1 sentence=$2
+	[ "$level" = ok ] && return 0
+	[ -z "$level" ] && return 0
+	_bad="${_bad:+$_bad }$sentence"
+	[ "$level" = short ] && _any_short=true
+}
+
+_op_finish() {
+	local which=$1 summary short level
+	if [ -z "$_bad" ]; then
+		# A comfortable margin is not a promise that the copy will fit.
+		summary=""
+		short=false
+		level=ok
+	elif [ "$_any_short" = true ]; then
+		summary="DISK SPACE WARNING. $_bad"
+		short=true
+		level=short
+	else
+		summary=$_bad
+		short=false
+		level=tight
+		case "$_bad" in
+			*"Free space could not be read from "*|*"data directory is not known"*) level=unknown ;;
+		esac
+	fi
+	case "$which" in
+		save)
+			_disk_save_summary=$summary
+			_disk_save_short=$short
+			_disk_save_level=$level
+			;;
+		sync)
+			_disk_sync_summary=$summary
+			_disk_sync_short=$short
+			_disk_sync_level=$level
+			;;
+		load)
+			_disk_load_summary=$summary
+			_disk_load_short=$short
+			_disk_load_level=$level
+			;;
+	esac
+}
+
+_measure_local() {
+	local path=$1
+	_ml_dev=$(_local_dev "$path")
+	_ml_where=$(_local_mount "$path")
+	_ml_free=$(_local_free "$path")
+	if [ -z "$_ml_where" ]; then
+		_ml_where=$path
+	elif [ "$_ml_where" = "/" ]; then
+		# "/" alone is easy to miss. Name the root filesystem.
+		_ml_where="/ (root)"
+	fi
+}
+
+_prepare_disk_summaries() {
+	[ -s "$_isc" ] || return 0
+	local est=""
+	est=$(scripts/estimate-isc-size.sh --shell --isc "$_isc" 2>/dev/null) || est=""
+	[ -n "$est" ] || return 0
+	# shellcheck disable=SC2163
+	eval "$est"
+	local content="${estimate_bytes:-0}"
+	[ "$content" -gt 0 ] || return 0
+
+	local cache_root archive_dir cache_have cache_need
+	cache_root=$(_cache_root)
+	archive_dir="$PWD/data"
+	cache_have=$(_cache_used_bytes "$cache_root")
+	cache_need=$content
+	if [ "${cache_have:-0}" -ge "$content" ]; then
+		cache_need=0
+	else
+		cache_need=$((content - ${cache_have:-0}))
+	fi
+
+	_measure_local "$archive_dir"
+	local arch_dev=$_ml_dev arch_where=$_ml_where arch_free=$_ml_free
+	_measure_local "$cache_root"
+	local cache_dev=$_ml_dev cache_where=$_ml_where cache_free=$_ml_free
+
+	_registry_place
+	local reg_where="" reg_free="" reg_from=""
+	if [ -n "$_reg_disk" ]; then
+		if [ -n "$_reg_remote" ]; then
+			reg_where="${reg_host}:${_reg_disk}"
+			reg_free=$(_remote_free "$_reg_ssh_target" "$_reg_disk")
+			[ -n "$reg_free" ] || reg_from="${reg_host:-unknown}"
+		else
+			_measure_local "$_reg_disk"
+			reg_where=$_ml_where
+			reg_free=$_ml_free
+			[ -n "$reg_free" ] || reg_from="this host"
+		fi
+	else
+		reg_where="the mirror registry (${reg_host:-unknown}:${reg_port:-})"
+		reg_free=""
+		reg_from="@unknown"
+	fi
+
+	local lvl save_need
+	# save: archive plus the cache still to fill. Same volume is one number.
+	_op_reset
+	if [ -n "$arch_dev" ] && [ "$arch_dev" = "$cache_dev" ]; then
+		save_need=$((content + cache_need))
+		lvl=$(_disk_level "$save_need" "$arch_free")
+		_op_add "$lvl" "$(_disk_sentence save about "$save_need" "$arch_where" "$arch_free")"
+	else
+		lvl=$(_disk_level "$content" "$arch_free")
+		_op_add "$lvl" "$(_disk_sentence save about "$content" "$arch_where" "$arch_free")"
+		if [ "$cache_need" -gt 0 ]; then
+			lvl=$(_disk_level "$cache_need" "$cache_free")
+			_op_add "$lvl" "$(_disk_sentence save about "$cache_need" "$cache_where" "$cache_free")"
+		fi
+	fi
+	_op_finish save
+
+	# sync: registry only. "up to" because blobs already stored are skipped.
+	_op_reset
+	lvl=$(_disk_level "$content" "$reg_free")
+	_op_add "$lvl" "$(_disk_sentence sync "up to" "$content" "$reg_where" "$reg_free" "$reg_from")"
+	_op_finish sync
+
+	# load: registry plus cache. The archive is already on disk.
+	_op_reset
+	lvl=$(_disk_level "$content" "$reg_free")
+	_op_add "$lvl" "$(_disk_sentence load "up to" "$content" "$reg_where" "$reg_free" "$reg_from")"
+	if [ "$cache_need" -gt 0 ]; then
+		lvl=$(_disk_level "$cache_need" "$cache_free")
+		_op_add "$lvl" "$(_disk_sentence load about "$cache_need" "$cache_where" "$cache_free")"
+	fi
+	_op_finish load
+}
+
+if [ "$_mode" = shell ] || [ "$_mode" = op ] || [ "$_show_disk" = true ]; then
+	_prepare_disk_summaries || true
 fi
 
 # --- Output ---
@@ -141,25 +583,29 @@ shell)
 	echo "isc_exists=$_isc_exists"
 	echo "isc_user_managed=$_isc_user_managed"
 	echo "upgrade_needs_platform=$_upgrade_needs_platform"
+	echo "transfer_excl_release=$_transfer_excl_release"
+	echo "warn_operators_excluded=$_warn_ops_excluded"
+	echo "warn_additional_excluded=$_warn_add_excluded"
 	echo "upgrade_path_exists=$_upgrade_path_exists"
 	echo "upgrade_path_conditional=$_upgrade_path_conditional"
 	echo "upgrade_risks=$_upgrade_risks"
+	printf 'disk_save_summary=%q\n' "$_disk_save_summary"
+	echo "disk_save_short=$_disk_save_short"
+	echo "disk_save_level=$_disk_save_level"
+	printf 'disk_sync_summary=%q\n' "$_disk_sync_summary"
+	echo "disk_sync_short=$_disk_sync_short"
+	echo "disk_sync_level=$_disk_sync_level"
+	printf 'disk_load_summary=%q\n' "$_disk_load_summary"
+	echo "disk_load_short=$_disk_load_short"
+	echo "disk_load_level=$_disk_load_level"
 	;;
 
 preflight)
 	# Interactive checks -- fix blocking issues using ask()
 	if [ "$_upgrade_needs_platform" = "true" ]; then
 		aba_warn "Upgrade target set (${_ver} → ${_upgrade_to}) but release images are excluded." \
-			"The upgrade will fail without release images."
-		if ask "Include release images"; then
-			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
-			_excl_platform=false
-			aba_info "Enabled release images in aba.conf (excl_platform=false)."
-			aba_info "Regenerating ImageSet configuration..."
-			scripts/reg-create-imageset-config.sh -f 1
-		else
-			aba_warn "Continuing WITHOUT release images. The upgrade may fail on the disconnected side."
-		fi
+			"The upgrade will fail without release images on the disconnected side." \
+			"To fix: set excl_platform=false in aba.conf, or clear ocp_upgrade_to in mirror.conf."
 	fi
 	;;
 
@@ -181,10 +627,15 @@ op)
 		else
 			aba_info "Loading to registry: ${_reg_host}:${_reg_port}${_reg_path}"
 		fi
+		if [ "$_disk_load_short" = true ]; then
+			aba_warn "$_disk_load_summary"
+		elif [ -n "$_disk_load_summary" ]; then
+			aba_info "$_disk_load_summary"
+		fi
 	else
 		# Save/sync read from config + ISC
 		_ver_display="$_ver"
-		if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
+		if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ] && [ "$_excl_platform" != "true" ]; then
 			_ver_display="$_ver → $_upgrade_to"
 		fi
 		[ -n "$_chan" ] && _ver_display="$_ver_display ($_chan)"
@@ -204,8 +655,18 @@ op)
 
 		if [ "$_op" = "save" ]; then
 			aba_info "Saving to disk: OCP $_ver_display — $_parts"
+			if [ "$_disk_save_short" = true ]; then
+				aba_warn "$_disk_save_summary"
+			elif [ -n "$_disk_save_summary" ]; then
+				aba_info "$_disk_save_summary"
+			fi
 		else
 			aba_info "Syncing to registry: OCP $_ver_display — $_parts"
+			if [ "$_disk_sync_short" = true ]; then
+				aba_warn "$_disk_sync_summary"
+			elif [ -n "$_disk_sync_summary" ]; then
+				aba_info "$_disk_sync_summary"
+			fi
 		fi
 
 		# Warn about exclusions
@@ -213,7 +674,10 @@ op)
 		[ "$_excl_platform" = "true" ] && _excl_list="release images"
 		[ "$_excl_operators" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }operators"
 		[ "$_excl_additional" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }additional images"
-		[ -n "$_excl_list" ] && aba_warn "Excluded: $_excl_list"
+		[ -n "$_excl_list" ] && aba_warn -p "Excluded" "$_excl_list"
+		# Payload contradiction warnings
+		[ "$_warn_ops_excluded" = "true" ] && aba_warn "Operators selected but operator images are excluded — they won't be mirrored"
+		[ "$_warn_add_excluded" = "true" ] && aba_warn "Additional images configured but excluded — they won't be mirrored"
 	fi
 	;;
 
@@ -230,7 +694,11 @@ op)
 	if [ -n "$_reg_host" ]; then
 		_reg_display="${_reg_host}:${_reg_port}${_reg_path}"
 		if [ "$_mirror_installed" = "true" ]; then
-			_reg_display="$_reg_display (installed)"
+			if [ "$_reg_running" = "false" ]; then
+				_reg_display="$_reg_display (stopped)"
+			else
+				_reg_display="$_reg_display (installed)"
+			fi
 		else
 			_reg_display="$_reg_display (not installed)"
 		fi
@@ -256,23 +724,30 @@ op)
 	_isc_display="not found"
 	if [ "$_isc_exists" = "true" ]; then
 		_isc_display="data/imageset-config.yaml"
-		[ "$_isc_user_managed" = "true" ] && _isc_display="$_isc_display (user-managed)"
+		if [ "$_isc_user_managed" = "true" ]; then
+			_isc_display="$_isc_display (user-edited, preserved on load)"
+		fi
 	fi
 
 	echo
 	aba_info "Mirror status:"
 	aba_info "  OCP:          ${local_ver_display}"
 	aba_info "  Registry:     ${_reg_display}"
-	if [ "$_mirror_installed" = "true" ] && [ "$_mirror_has_release" != "true" ]; then
-		aba_warn "  Release:      MISSING (v${_ver:-?} not found in registry)"
+	if [ "$_mirror_installed" = "true" ] && [ "$_reg_running" = "false" ]; then
+		aba_warn -p "  Release" "     unknown (registry is stopped)"
+	elif [ "$_mirror_installed" = "true" ] && [ "$_mirror_has_release" != "true" ]; then
+		aba_warn -p "  Release" "     MISSING (v${_ver:-?} not found in registry)"
 	fi
 	if [ "$_op_count" -gt 0 ]; then
 		aba_info "  Operators (${_op_count}): ${_ops_display}"
 	else
 		aba_info "  Operators:    none"
 	fi
-	aba_info "  ISC:          ${_isc_display}"
-	[ -n "$_excl_display" ] && aba_warn "  Excluded:     ${_excl_display}"
+	aba_info "  Image config: ${_isc_display}"
+	[ -n "$_excl_display" ] && aba_warn -p "  Excluded" "    ${_excl_display}"
+	# Payload contradiction warnings
+	[ "$_warn_ops_excluded" = "true" ] && aba_warn "  Operators:    selected but excluded — they won't be mirrored"
+	[ "$_warn_add_excluded" = "true" ] && aba_warn "  Additional:   configured but excluded — they won't be mirrored"
 	if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
 		if [ "$_upgrade_path_exists" = "true" ]; then
 			if [ "$_upgrade_path_conditional" = "true" ]; then
@@ -288,11 +763,76 @@ op)
 		fi
 	fi
 	if [ "$_upgrade_needs_platform" = "true" ]; then
-		aba_warn "  Warning:      upgrade requires release images but they are excluded!"
+		aba_warn "  Upgrade:      requires release images but they are excluded!"
+	elif [ "$_transfer_excl_release" = "true" ]; then
+		aba_warn "  Release:      excluded — bundles/saves are operator-only"
 	fi
 	if [ -n "$_last_action" ]; then
 		aba_info "  Last action:  ${_last_action}${_last_action_at:+ (${_last_action_at})}"
 	fi
+
+	# Archive size: total of mirror_*.tar + aba-transfer.tar
+	_tar_total=0
+	_tar_count=0
+	for _tf in data/mirror_*.tar data/aba-transfer.tar; do
+		[ -f "$_tf" ] || continue
+		_tar_total=$(( _tar_total + $(stat -c %s "$_tf" 2>/dev/null || echo 0) ))
+		_tar_count=$(( _tar_count + 1 ))
+	done
+	if [ "$_tar_count" -gt 0 ]; then
+		aba_info "  Archives:     ${_tar_count} file(s), $(_fmt_disk "$_tar_total")"
+	fi
+
+	# Transfer bundle check: warn if mirror_*.tar exists but aba-transfer.tar is missing
+	if ls data/mirror_*.tar >/dev/null 2>&1 && [ ! -f data/aba-transfer.tar ]; then
+		aba_warn "  Transfer:     aba-transfer.tar missing (needed on disconnected side)"
+	fi
+
+	# Disk lines stay off the default summary. status --disk prints them.
+	if [ "$_show_disk" = true ]; then
+		if [ -n "$_disk_save_summary" ]; then
+			if [ "$_disk_save_short" = true ]; then aba_warn "  $_disk_save_summary"; else aba_info "  $_disk_save_summary"; fi
+		fi
+		if [ -n "$_disk_sync_summary" ]; then
+			if [ "$_disk_sync_short" = true ]; then aba_warn "  $_disk_sync_summary"; else aba_info "  $_disk_sync_summary"; fi
+		fi
+		if [ -n "$_disk_load_summary" ]; then
+			if [ "$_disk_load_short" = true ]; then aba_warn "  $_disk_load_summary"; else aba_info "  $_disk_load_summary"; fi
+		fi
+	fi
+
+	# Detect unloaded archives: any mirror_*.tar newer than the last load?
+	if [ "$_last_action" = "load" ] && [ -n "$_last_action_at" ]; then
+		_load_epoch=$(date -d "$_last_action_at" +%s 2>/dev/null || echo 0)
+		_has_new_tar=""
+		for _tf in data/mirror_*.tar; do
+			[ -f "$_tf" ] || continue
+			_tf_epoch=$(stat -c %Y "$_tf" 2>/dev/null || echo 0)
+			if [ "$_tf_epoch" -gt "$_load_epoch" ]; then
+				_has_new_tar=1
+				break
+			fi
+		done
+		if [ "$_has_new_tar" ]; then
+			aba_info "  New archives: detected (copied after last load)"
+			aba_info "  Next step:    aba -d mirror load"
+		fi
+	fi
+
+	# Day2 reminder: after a load, installed clusters may need day2
+	if [ "$_last_action" = "load" ] && [ -n "$_last_action_at" ]; then
+		_load_epoch=${_load_epoch:-$(date -d "$_last_action_at" +%s 2>/dev/null || echo 0)}
+		_clusters_need_day2=""
+		for _cd in ../*; do
+			[ -d "$_cd" ] && [ -f "$_cd/.install-complete" ] || continue
+			_ic_epoch=$(stat -c %Y "$_cd/.install-complete" 2>/dev/null || echo 0)
+			[ "$_ic_epoch" -lt "$_load_epoch" ] && _clusters_need_day2="${_clusters_need_day2:+$_clusters_need_day2, }$(basename "$_cd")"
+		done
+		if [ -n "$_clusters_need_day2" ]; then
+			aba_info "  Clusters:     may need day2: $_clusters_need_day2"
+		fi
+	fi
+
 	echo
 	;;
 esac

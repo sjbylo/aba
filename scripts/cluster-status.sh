@@ -58,8 +58,15 @@ _scan_cluster_dir() {
 	if [ -f "$_dir/.install-complete" ]; then
 		_status="installed"
 		_installed_count=$(( _installed_count + 1 ))
-	else
+	elif [ -d "$_dir/iso-agent-based" ]; then
+		_status="installing"
 		_installing_count=$(( _installing_count + 1 ))
+	elif [ -f "$_dir/.init" ]; then
+		_status="configured"
+		_configured_count=$(( _configured_count + 1 ))
+	else
+		_status="configured"
+		_configured_count=$(( _configured_count + 1 ))
 	fi
 
 	_cluster_count=$(( _cluster_count + 1 ))
@@ -71,6 +78,7 @@ _scan_cluster_dir() {
 _cluster_count=0
 _installed_count=0
 _installing_count=0
+_configured_count=0
 _clusters=()
 
 if [ -n "$_single_dir" ]; then
@@ -106,6 +114,12 @@ if [ "$_live" = "true" ] && [ ${#_clusters[@]} -gt 0 ]; then
 
 		# Background health check
 		(
+			# Skip API probe if cluster is known to be shut down
+			if [ -f "$_dir/.shutdown.log" ]; then
+				echo "shutdown|" > "$_tmpdir/$(basename "$_dir")"
+				exit 0
+			fi
+
 			_kc=""
 			# Check for kubeconfig inside the cluster dir
 			if [ -f "$_dir/iso-agent-based/auth/kubeconfig" ]; then
@@ -118,7 +132,9 @@ if [ "$_live" = "true" ] && [ ${#_clusters[@]} -gt 0 ]; then
 				exit 0
 			fi
 
-			_cv_json=$(KUBECONFIG="$_kc" oc get clusterversion version -o json --request-timeout=5s 2>/dev/null) || {
+			# Use the correct cluster context from the kubeconfig
+			_server=$(KUBECONFIG="$_kc" oc config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null) || true
+			_cv_json=$(KUBECONFIG="$_kc" oc get clusterversion version -o json --request-timeout=5s ${_server:+--server="$_server"} 2>/dev/null) || {
 				echo "unreachable|" > "$_tmpdir/$(basename "$_dir")"
 				exit 0
 			}
@@ -187,6 +203,7 @@ _format_cluster_line() {
 			progressing) _status_display="progressing" ;;
 			degraded)    _status_display="degraded" ;;
 			unreachable) _status_display="unreachable" ;;
+			shutdown)    _status_display="shut down" ;;
 			*)           _status_display="installed" ;;
 		esac
 	fi
@@ -204,6 +221,7 @@ shell)
 	echo "cluster_count=$_cluster_count"
 	echo "cluster_installed_count=$_installed_count"
 	echo "cluster_installing_count=$_installing_count"
+	echo "cluster_configured_count=$_configured_count"
 	for _entry in "${_clusters[@]}"; do
 		IFS='|' read -r _dir _status _type _cname _bdomain <<< "$_entry"
 		_h="${_health_map[$_dir]:-}"
@@ -229,7 +247,7 @@ shell)
 		if [ $_cluster_count -eq 0 ]; then
 			aba_info "  No clusters configured"
 		else
-			aba_info "  Total: $_cluster_count  (installed: $_installed_count, installing: $_installing_count)"
+			aba_info "  Total: $_cluster_count  (installed: $_installed_count, installing: $_installing_count, configured: $_configured_count)"
 			echo
 
 			for _entry in "${_clusters[@]}"; do

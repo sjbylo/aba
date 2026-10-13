@@ -39,6 +39,15 @@ distribute_macs() {
 
 	ports=$(( ${#mac_array[@]} / nodes ))
 
+	# A short list divides to 0 ports. The loop below uses that as a modulus.
+	# An empty list is left for the missing-field checks later in this script.
+	if [ "$ports" -eq 0 ]; then
+		if [ "${#mac_array[@]}" -gt 0 ]; then
+			aba_abort "Too few MAC addresses (${#mac_array[@]}) for $nodes nodes"
+		fi
+		return 0
+	fi
+
 	# Distribute MACs column-wise
 	for ((i=0; i<${#mac_array[@]}; i++)); do
 		pidx=$(( i % ports ))
@@ -72,34 +81,46 @@ ICONF_TMP=$(yaml2json < "$ICONF")
 ACONF_TMP=$(yaml2json < "$ACONF")
 
 CLUSTER_NAME=$(echo "$ICONF_TMP" | jq -r .metadata.name)
-echo "$CLUSTER_NAME" | grep -q "null" && CLUSTER_NAME=
+[ "$CLUSTER_NAME" = "null" ] && CLUSTER_NAME=
 echo export CLUSTER_NAME=$CLUSTER_NAME
 
 BASE_DOMAIN=$(echo "$ICONF_TMP" | jq -r .baseDomain)
-echo "$BASE_DOMAIN" | grep -q "null" && BASE_DOMAIN=
+[ "$BASE_DOMAIN" = "null" ] && BASE_DOMAIN=
 echo export BASE_DOMAIN=$BASE_DOMAIN
 
 RENDEZVOUSIP=$(echo "$ACONF_TMP" | jq -r '.rendezvousIP')
-echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
+[ "$RENDEZVOUSIP" = "null" ] && RENDEZVOUSIP=
 echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
 CP_REPLICAS=$(echo "$ICONF_TMP" | jq -r .controlPlane.replicas)
-echo "$CP_REPLICAS" | grep -q "null" && CP_REPLICAS=
+[ "$CP_REPLICAS" = "null" ] && CP_REPLICAS=
 echo export CP_REPLICAS=$CP_REPLICAS
 
 CP_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" )| .hostname')
-echo "$CP_NAMES" | grep -q "null" && CP_NAMES=
+[ "$CP_NAMES" = "null" ] && CP_NAMES=
 echo export CP_NAMES=\"$CP_NAMES\"
 
 CP_MAC_ADDRS=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress')
-echo "$CP_MAC_ADDRS" | grep -q "null" && CP_MAC_ADDRS=
+[ "$CP_MAC_ADDRS" = "null" ] && CP_MAC_ADDRS=
 echo export CP_MAC_ADDRS=\"$CP_MAC_ADDRS\"
 
 CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
-PORTS_PER_NODE=$(expr ${#CP_MAC_ADDRS_ARRAY[@]} / $CP_REPLICAS)
-echo export PORTS_PER_NODE=\"$PORTS_PER_NODE\"
-
-distribute_macs "$CP_MAC_ADDRS" $CP_REPLICAS "CP_"
+# 0 is set, so the missing-count check below does not see it. expr would divide by it.
+if [ "$CP_REPLICAS" = 0 ]; then
+	aba_abort "Control Plane replica count .controlPlane.replicas must be at least 1"
+fi
+# A missing count is reported below. expr also exits 1 when the quotient is 0,
+# which used to stop the script before that message or the short-list message.
+if [ "$CP_REPLICAS" ]; then
+	PORTS_PER_NODE=$(expr ${#CP_MAC_ADDRS_ARRAY[@]} / $CP_REPLICAS) || [ "$PORTS_PER_NODE" = "0" ]
+	if [ "${#CP_MAC_ADDRS_ARRAY[@]}" -gt 0 ] && [ "$PORTS_PER_NODE" -eq 0 ]; then
+		aba_abort "Too few MAC addresses (${#CP_MAC_ADDRS_ARRAY[@]}) for $CP_REPLICAS nodes"
+	fi
+	if [ "$PORTS_PER_NODE" -gt 0 ]; then
+		echo export PORTS_PER_NODE=\"$PORTS_PER_NODE\"
+		distribute_macs "$CP_MAC_ADDRS" "$CP_REPLICAS" "CP_"
+	fi
+fi
 
 ### CP_MAC_ADDR=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress'`
 ### echo "$CP_MAC_ADDR" | grep -q "null" && CP_MAC_ADDR=
@@ -111,22 +132,22 @@ distribute_macs "$CP_MAC_ADDRS" $CP_REPLICAS "CP_"
 ### [ "$CP_MAC_ADDR_2ND" ] && echo export CP_MAC_ADDR_2ND=\"$CP_MAC_ADDR_2ND\"
 
 CP_IP_ADDRESSES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .networkConfig.interfaces[0].ipv4.address[0].ip')
-echo "$CP_IP_ADDRESSES" | grep -q "null" && CP_IP_ADDRESSES=
+[ "$CP_IP_ADDRESSES" = "null" ] && CP_IP_ADDRESSES=
 echo export CP_IP_ADDRESSES=\"$CP_IP_ADDRESSES\"
 
 WORKER_REPLICAS=$(echo "$ICONF_TMP" | jq -r .compute[0].replicas)
-echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
+[ "$WORKER_REPLICAS" = "null" ] && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
 err=
 
-if [ $WORKER_REPLICAS -ne 0 ]; then
+if [ -n "$WORKER_REPLICAS" ] && [ "$WORKER_REPLICAS" -ne 0 ]; then
 	WORKER_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .hostname')
-	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
+	[ "$WORKER_NAMES" = "null" ] && WORKER_NAMES=
 	echo export WORKER_NAMES=\"$WORKER_NAMES\"
 
 	WKR_MAC_ADDRS=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[].macAddress')
-	echo "$WKR_MAC_ADDRS" | grep -q "null" && WKR_MAC_ADDRS=
+	[ "$WKR_MAC_ADDRS" = "null" ] && WKR_MAC_ADDRS=
 	echo export WKR_MAC_ADDRS=\"$WKR_MAC_ADDRS\"
 
 	[ "$WKR_MAC_ADDRS" ] && distribute_macs "$WKR_MAC_ADDRS" "$WORKER_REPLICAS" "WKR_"
@@ -136,7 +157,7 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 	#[ "$WKR_MAC_ADDR_2ND" ] && echo export WKR_MAC_ADDR_2ND=\"$WKR_MAC_ADDR_2ND\"
 
 	WKR_IP_ADDR=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" ) | .networkConfig.interfaces[0].ipv4.address[0].ip')
-	echo "$WKR_IP_ADDR" | grep -q "null" && WKR_IP_ADDR=
+	[ "$WKR_IP_ADDR" = "null" ] && WKR_IP_ADDR=
 	echo export WKR_IP_ADDR=\"$WKR_IP_ADDR\"
 
 fi
@@ -154,7 +175,7 @@ echo export ASSETS_DIR=$ASSETS_DIR
 [ ! "$CP_IP_ADDRESSES" ] && echo_red "Control Plane ip addresses .hosts[].role.master.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2  && err=1
 [ ! "$WORKER_REPLICAS" ] && echo_red "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
 
-if [ $WORKER_REPLICAS -ne 0 ]; then
+if [ -n "$WORKER_REPLICAS" ] && [ "$WORKER_REPLICAS" -ne 0 ]; then
 	# basic checks
 	[ ! "$WORKER_NAMES" ] && echo_red ".hosts[].role.worker.hostname missing in $ACONF" >&2 && err=1
 	[ ! "$WKR_MAC_ADDRS" ] && echo_red ".hosts[].role.worker.interfaces[].macAddress missing in $ACONF" >&2 && err=1
@@ -162,7 +183,7 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 fi
 
 if [ "$err" ]; then
-	aba_abort "Error: Validation of values in files 'install-config.yaml' and/or 'agent-config.yaml' failed."
+	aba_abort "Validation of values in files 'install-config.yaml' and/or 'agent-config.yaml' failed."
 fi
 
 exit 0

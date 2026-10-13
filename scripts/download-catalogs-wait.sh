@@ -54,11 +54,31 @@ fi
 _skip_val=""
 [[ "$_have_all" == true ]] && _skip_val="-S"
 
+# Mark the catalogs row when this wait will block. Shipped indexes make
+# _have_all true while a live refresh is still running, and a pure cache
+# hit (every task already finished) stays unmarked.
+# PLAN is emitted by _progress_plan-sync Makefile target (scripts/progress-plan.sh)
+_catalogs_progress=false
+if [[ "$_have_all" != true ]]; then
+	_catalogs_progress=true
+else
+	for _ver in "${_versions_to_wait[@]}"; do
+		for catalog in redhat-operator certified-operator community-operator; do
+			if ! run_once -p -i "catalog:${_ver}:${catalog}"; then
+				_catalogs_progress=true
+				break 2
+			fi
+		done
+	done
+fi
+[[ "$_catalogs_progress" == true ]] && aba_progress "START|catalogs_dl"
+
 for _ver in "${_versions_to_wait[@]}"; do
 	for catalog in redhat-operator certified-operator community-operator; do
 		task_id="catalog:${_ver}:${catalog}"
 
 		if ! run_once $_skip_val -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then
+			[[ "$_catalogs_progress" == true ]] && aba_progress "FAIL|catalogs_dl"
 			error_output=$(run_once -e -i "$task_id" | head -20)
 			aba_abort "Failed to download ${catalog} catalog for OCP ${_ver}" \
 				"Error details from download task:" \
@@ -66,5 +86,7 @@ for _ver in "${_versions_to_wait[@]}"; do
 		fi
 	done
 done
+
+[[ "$_catalogs_progress" == true ]] && aba_progress "DONE|catalogs_dl"
 
 aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]}"

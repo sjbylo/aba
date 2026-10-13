@@ -3,6 +3,17 @@
 
 source scripts/include_all.sh
 
+# cp into an existing directory nests a second copy inside it. Replace the
+# backup so auth.backup matches the auth directory just written.
+backup_auth_dir() {
+	local src="$1" dest="$2"
+	rm -rf "$dest"
+	cp -rp "$src" "$dest"
+}
+
+# Tests source this file to call backup_auth_dir. Do not build an ISO.
+[ "${BASH_SOURCE[0]}" != "$0" ] && return 0
+
 ensure_openshift_install
 
 aba_debug "Starting: $0 $*"
@@ -11,7 +22,7 @@ aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
@@ -115,11 +126,10 @@ aba_debug "ISO generation completed successfully"
 #$openshift_install_mirror agent create pxe-files --dir $ASSETS_DIR
 
 aba_info "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
-cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
+backup_auth_dir "$ASSETS_DIR/auth" "$ASSETS_DIR/auth.backup"
 
-# Add NTP config to ignition, if needed
-# Note that the built in 'additionalNTPSources' feature is not available for all latest ocp versions, so we use this still:
-scripts/add_ntp_ignition_to_iso.sh
+# NTP is now configured via additionalNTPSources in agent-config.yaml (supported since OCP 4.15).
+# The previous ignition injection (add_ntp_ignition_to_iso.sh) is no longer needed.
 
 echo 
 #aba_success "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"

@@ -4,7 +4,13 @@ apiVersion: v1beta1
 kind: AgentConfig                                                                       
 metadata:                 
   name: {{ cluster_name }}
-rendezvousIP: {{ rendezvous_ip }}           
+rendezvousIP: {{ rendezvous_ip }}
+{%- if arr_ntp_servers %}
+additionalNTPSources:
+{%- for ntp in arr_ntp_servers %}
+  - {{ ntp }}
+{%- endfor %}
+{%- endif %}
 hosts:
 {#--------------------------------------------------------------
   Precompute offsets so they scale dynamically
@@ -48,7 +54,7 @@ hosts:
             enabled: true
             address:
               - ip: {{ arr_ips[hostcnt + ip_offset] }}
-                prefix-length: 24
+                prefix-length: {{ prefix_length }}
             dhcp: false
         - name: bond0 
           type: bond 

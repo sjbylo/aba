@@ -33,6 +33,97 @@ Issues or Pull Requests.
 
 ---
 
+## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-12
+
+**Problem:** The disk estimate for 4.22 amd64 only has blob sizes for the 99 redhat-operator packages that appear in an operator set. The catalog index has 151 packages. The other 52 are guessed from the median of the measured ones, so `op_sets=all` and any operator outside a set can be far off. There is no size data for OpenShift 5.x at all. Catalog indexes for 5.0 and 5.1 are already present.
+
+**Root cause:** `catalogs/sizes/` was filled from `templates/operator-set-*`, not from every package in `redhat-operator-index`. The estimator uses that blob index when it exists and falls back to a median when an operator has no row. No 5.x files were generated.
+
+**Proposed fix:**
+
+- Measure every package in redhat-operator for the current minor (4.22 amd64), including the 52 that are not in a set. Do not mirror certified or community in full.
+- Create the same full redhat-operator size data for 5.x. Start with 5.0 and 5.1, amd64 only.
+- Write `catalogs/sizes/redhat-operator-v<minor>-amd64.blobs` for each version. Keep the operator-set list as the source for certified-only packages.
+
+---
+
+## TUI: OpenShift Channel dialog has no Back button and ESC doesn't exit
+
+**Severity:** MEDIUM
+**Status:** Done
+**Added:** 2026-10-10
+
+**Problem:** The "OpenShift Channel" radiolist dialog (channel selection in the wizard) has only `Next` and `Help` buttons — no `Back` button. Pressing ESC does not exit the dialog either. The user gets stuck in a loop with no way to go back or cancel.
+
+**Root cause:** The dialog is likely called in a `while` loop that re-displays on ESC (rc=255) and Cancel (rc=1) without distinguishing between the two, or the Cancel/Back button is missing from the dialog definition entirely.
+
+**Proposed fix:** Add a `--cancel-label Back` button and handle rc=1 as "go back to previous step". Ensure ESC (rc=255) also exits the loop (return to parent menu or confirm quit).
+
+---
+
+## verify-*-conf: machine_network should validate octet ranges
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** `verify-aba-conf()` and `verify-cluster-conf()` check `machine_network` with a regex that accepts invalid octets (e.g. `999.999.999.999`). The at-source CLI validation uses `validate_cidr()` which properly checks octet ranges 0-255 and prefix 0-32, but the verify functions only check format after `normalize` has split the CIDR into `machine_network` (IP) and `prefix_length`.
+
+**Root cause:** The verify regex `^([0-9]{1,3}\.){3}[0-9]{1,3}$` matches the pattern but does not check that each octet is ≤ 255. This allows hand-edited configs with bogus IPs to pass verification.
+
+**Proposed fix:** Replace the inline regex in both `verify-aba-conf()` and `verify-cluster-conf()` with `_valid_ipv4()` (which already validates octet ranges). Also use `_valid_ipv4` for `starting_ip`, `next_hop_address`, `api_vip`, and `ingress_vip` checks in `verify-cluster-conf()`.
+
+---
+
+## Uninstall: keep the mirror data directory unless the user asks to delete it
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-10-06
+
+**Problem:** `aba uninstall` removes the registry and then deletes its data directory. That directory is the mirror: often hundreds of GB of images. One confirmation today means the images are gone. Putting the same vendor back means downloading them again.
+
+**Root cause:** Docker and OMR call `reg_rm_data_dir`, which is `rm -rf` of the vendor root. Quay delegates the wipe to `mirror-registry uninstall`, which removes `quay-install` including `quay-storage` and `sqlite-storage`. Afterwards `reg_stale_report` treats "the data directory still exists" as a failed uninstall, so the directory is not allowed to remain on purpose.
+
+The three vendors do not share a directory. Each lives under `data_dir`:
+
+- Quay: `quay-install`
+- Docker: `docker-reg`
+- OMR: `omr`
+
+A leftover Docker directory does not block a new Quay install, or the reverse. It only uses disk. Reusing images means reinstalling the **same** vendor and leaving that vendor's directory in place.
+
+**Proposed fix:** After the registry process is stopped, ask whether to delete the data directory:
+
+```
+ask -n --auto-yes "Delete the registry data at <reg_root>"
+```
+
+Enter means no. A non-interactive run (`ask=false`, or `aba -y`) deletes, so automation and the test pools still get a clean host.
+
+If the user keeps the directory, uninstall still succeeds when the container and the port are gone. "Directory still exists" is no longer a stale-state failure.
+
+Reinstall then has to honor what is already on disk:
+
+- **Docker.** Mount the existing `docker-reg/data` again. The blobs are in that directory, so the images come back. Keep `registry.crt` when its name matches `reg_host`. The htpasswd file is rewritten from the current user and password, and the new pull secret matches that password. Clients that still have the old pull secret must be given the new one.
+- **OMR.** `init` is skipped when `omr/auth/admin-password` already exists, so the old database, certificate, and password stay. A newly generated password will not log in. Read the password from that data directory and use it. Run `init` again only when the hostname changed, because the certificate was created for the hostname used the first time.
+- **Quay.** Do not `chown` the tree to the login user. Quay's own files are owned by the container user, and the database will not start if those owners change. The early check in `reg_setup_data_dir` that aborts on container-owned files must allow a complete leftover Quay tree. Keep `quay-storage` and `sqlite-storage` and run `mirror-registry install` on that same `quayRoot`. That is the path that keeps the images. A full `mirror-registry uninstall` deletes those directories, so there is nothing left to repair afterwards.
+
+**Workaround:** Copy the vendor directory aside before `aba uninstall`, then move it back. For Quay, copying after uninstall is too late: `mirror-registry uninstall` has already removed it.
+
+**Files likely affected:**
+
+- `scripts/reg-uninstall-docker.sh`, `scripts/reg-uninstall-omr.sh`, `scripts/reg-uninstall-quay.sh`, `scripts/reg-uninstall-remote.sh`: ask, and skip the wipe when the answer is no
+- `scripts/reg-common.sh`: `reg_stale_report` and the ownership check in `reg_setup_data_dir`
+- `scripts/reg-install-omr.sh`: reuse the stored password; re-init only when the hostname changed
+- `scripts/reg-install-docker.sh`: already remounts `docker-reg/data` and rewrites htpasswd; confirm that path once uninstall can leave the directory behind
+
+---
+
 ## Bundle without release images: warn the user
 
 **Severity:** MEDIUM
@@ -714,24 +805,24 @@ in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 ---
 
-## quay-ng: transition to GA (mirror-registry v3.0)
+## omr: transition to GA (mirror-registry v3.0)
 
 **Severity:** LOW — tracking item, no action until upstream ships GA
 **Status:** Waiting on upstream
 **Added:** 2026-07-21
 
-**Context:** The Go-based mirror-registry rewrite (currently `quay-ng` in ABA)
+**Context:** The Go-based mirror-registry rewrite (currently `omr` in ABA)
 will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
 
 **When GA ships, ABA needs:**
-- Switch `_QUAY_NG_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
+- Switch `_OMR_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
 - Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
 - Re-test `-init-password-stdin` flag (merged upstream, not in current image)
 - Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
-- Rename vendor display from "quay-ng [BETA]" to GA (internal name can stay)
+- Rename vendor display from "omr [BETA]" to GA (internal name can stay)
 - Update bundle workflow for official offline delivery format
 
-**Design doc:** `ai/DESIGN-quay-ng-vendor.md`
+**Design doc:** `ai/DESIGN-omr-vendor.md`
 
 ---
 
@@ -1920,6 +2011,70 @@ the ISC's `data/.created`.
 - `test/` and `test/e2e/examples/`: update all `.example` files
 - `test/func/test-tui-v2-04-isconf.sh`: may need updates for label checks
 
+## Post-sync/load: offer to run day2 on selected clusters
+
+**Severity:** MEDIUM — reduces manual steps after every sync/load
+**Status:** Planned
+**Added:** 2026-10-06
+
+**Problem:** After `aba sync` or `aba load`, the "Configure OperatorHub" dialog
+lists all installed clusters using this mirror and tells the user to run
+`aba day2` on each one. The user must dismiss the dialog, then manually run
+`aba --dir <cluster> day2` for each cluster — tedious when 5-7 clusters exist.
+
+**Proposed fix:**
+
+### TUI path
+Replace the static msgbox with an interactive checklist of clusters.
+The user selects which clusters to update, then ABA runs `aba day2`
+on each selected cluster sequentially (with progress):
+
+```
+┌─────────── Configure OperatorHub ──────────────┐
+│                                                 │
+│ Mirror updated. Select clusters to configure:   │
+│                                                 │
+│ [X] sno.example.com                             │
+│ [X] ocp.example.com                             │
+│ [X] mesh1.example.com                           │
+│ [ ] demo2.example.com                           │
+│                                                 │
+│         < Run Day-2 >    < Skip >               │
+└─────────────────────────────────────────────────┘
+```
+
+All clusters pre-selected by default. User deselects any they want to skip.
+"Run Day-2" iterates the selected list, running `aba --dir <cluster> day2`
+for each one (with progress dialog per cluster, or a combined progress view).
+"Skip" dismisses — same as current behavior.
+
+### CLI path
+After sync/load completes, prompt interactively (unless `--yes`):
+
+```
+[ABA] Run 'aba day2' on these clusters? [Y/n]:
+  - sno.example.com
+  - ocp.example.com
+  - mesh1.example.com
+```
+
+With `--yes`: auto-run on all clusters without prompting.
+
+### Architecture
+- Cluster discovery via `clusters_using_mirror()` (see "Cluster-mirror
+  auto-actions" backlog item — prerequisite)
+- All iteration and day2 invocation logic in ABA core, not TUI
+- TUI is a dumb consumer: calls core, shows checklist, reports results
+
+**Files likely affected:**
+- `scripts/reg-sync.sh` / `scripts/reg-load.sh`: post-action hook
+- `scripts/include_all.sh`: `clusters_using_mirror()` (prerequisite)
+- `tui/v2/tui-lib.sh`: replace `_offer_day2_after_mirror_update()` msgbox
+  with checklist + sequential day2 runner
+- `tui/v2/tui-mirror.sh`: wire new flow into sync/load completion
+
+---
+
 ## Clean up cluster install output (like save/sync/load cleanup)
 
 The `aba -d <cluster> install` output is ~49 [ABA] lines from ~10 scripts in the Make chain.
@@ -1937,3 +2092,338 @@ create-agent-config.sh, preflight-check.sh, generate-image.sh, vmw-*.sh/kvm-*.sh
 wait-agent-up.sh, monitor-install.sh
 
 Reference: mirror save/sync/load cleanup (commit 55c22607) for the pattern to follow.
+
+---
+
+## Refactor: Docker and Quay vendor files into mirror/<sub-dir>
+
+**Severity:** LOW — consistency and cleanliness
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** The OMR vendor already installs into `mirror/<data_dir>/omr/`,
+but Docker and Quay (legacy) scatter files directly in `mirror/` or use
+inconsistent subdirectory patterns:
+
+- **Docker:** `docker-reg-image.tgz` in `mirror/`, data in `<data_dir>/docker-reg/`
+- **Quay (legacy):** `mirror-registry-amd64.tar.gz` + extracted `mirror-registry`,
+  `execution-environment.tar`, `image-archive.tar`, `sqlite3.tar`, `quay.tar`,
+  `pause.tar`, `postgres.tar`, `redis.tar` all loose in `mirror/`; data in
+  `<data_dir>/quay-install/`
+- **OMR:** `omr-image.tgz` in `mirror/`, data in `<data_dir>/omr/`
+  — cleanest of the three
+
+The loose Quay files in `mirror/` require many per-file exclusions in
+`backup.sh` (lines 208-214) and clutter `ls mirror/`.
+
+**Proposed fix:** Move vendor-specific files into per-vendor subdirectories
+under `mirror/`:
+
+- `mirror/docker/` — `docker-reg-image.tgz`
+- `mirror/quay/` — `mirror-registry-*.tar.gz`, extracted `mirror-registry`,
+  `execution-environment.tar`, `image-archive.tar`, `sqlite3.tar`, etc.
+- `mirror/omr/` — `omr-image.tgz`
+
+**Benefits:**
+- `backup.sh` per-file exclusions become one `! -path "*/vendor/*"` or similar
+- `mirror/` directory is clean (only `data/`, `mirror.conf`, `state.sh`, etc.)
+- Each vendor's files are self-contained and easy to reason about
+- `make reset` / `make clean` can wipe vendor dirs cleanly
+
+**Files likely affected:**
+- `templates/Makefile.mirror`: download targets, file paths, clean/reset recipes
+- `scripts/reg-install-docker.sh`, `scripts/reg-install-quay.sh`,
+  `scripts/reg-install-omr.sh`: load paths for tarballs/images
+- `scripts/reg-common.sh`: any shared vendor file references
+- `scripts/backup.sh`: simplify exclusions
+- `scripts/include_all.sh`: download command paths (`CMD_DL_*`)
+- `.gitignore`: update vendor file patterns
+
+---
+
+## Audit: Error handling and exit code propagation
+
+**Severity:** MEDIUM — silent failures lead to partial state
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** Some scripts may use `echo_red` + `exit 1` instead of `aba_abort`
+for fatal errors (inconsistent abort pattern). Make targets that call multiple
+scripts may silently succeed when an intermediate step fails if `set -e` is not
+active or if errors are swallowed by pipes, subshells, or `|| true`.
+
+**Audit scope:**
+- Search for `echo_red.*; exit` patterns (should be `aba_abort`)
+- Verify `set -e` / `set -eo pipefail` is active in all scripts
+- Check Make recipes for unguarded multi-command chains
+- Verify `run_once` properly propagates exit codes from background tasks
+- Check that `oc` command failures in day2/upgrade scripts are caught
+
+**Files likely affected:**
+- All `scripts/*.sh` — grep for `echo_red.*exit`
+- `templates/Makefile.*` — check recipe error handling
+- `scripts/include_all.sh` (`run_once`): exit code propagation
+
+---
+
+## Audit: Race conditions and concurrency in run_once / parallel downloads
+
+**Severity:** MEDIUM — potential data corruption or stale results
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** `run_once` manages background tasks via PID files and state
+markers. Concurrent invocations (e.g. TUI spawning multiple background tasks,
+parallel CLI downloads, multiple `aba` invocations) may collide on shared
+state files. The per-vendor download split introduced new parallelism that
+needs verification.
+
+**Audit scope:**
+- Verify `run_once` task ID uniqueness — can two tasks with the same ID run
+  simultaneously and corrupt each other's output?
+- Check for TOCTOU races in PID file checks (read PID → check alive → act)
+- Verify atomic writes in `run_once` output files (mktemp + mv pattern)
+- Audit `cli-download-all.sh` parallel downloads — do they share temp dirs?
+- Check TUI background tasks that write to the same config files
+
+**Files likely affected:**
+- `scripts/include_all.sh` (`run_once`, `run_once_wait`, `run_once_peek`)
+- `scripts/cli-download-all.sh`, `scripts/cli-download-extra.sh`
+- `scripts/reg-download-all.sh` (per-vendor parallel downloads)
+
+---
+
+## Audit: Config migration and backward compatibility
+
+**Severity:** MEDIUM — upgrades from older ABA versions may break
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** ABA has migrated config formats over time (e.g. `int_connection` +
+`mirror_name` → `image_source`). The `normalize-*-conf` functions handle
+migration, but edge cases may exist: empty values, corrupt files, mixed old/new
+keys, partially migrated configs from interrupted upgrades.
+
+**Audit scope:**
+- Test `normalize-cluster-conf` with legacy keys (`int_connection`, `mirror_name`)
+- Test `normalize-mirror-conf` with missing or empty `reg_vendor`
+- Verify `aba.conf` migration from pre-1.2 formats (missing keys, old defaults)
+- Check what happens when config files have Windows line endings (CRLF)
+- Verify `.bundle` marker and `state.sh` survive across ABA version upgrades
+- Test `--primed` bundles created with older ABA versions on newer ABA
+
+**Files likely affected:**
+- `scripts/include_all.sh` (`normalize-cluster-conf`, `normalize-mirror-conf`,
+  `normalize-aba-conf`)
+- `scripts/create-cluster-conf.sh`
+- `scripts/create-mirror-conf.sh`
+
+---
+
+## Audit: Security surface — unescaped input, temp files, credential leaks
+
+**Severity:** HIGH — potential command injection or credential exposure
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** User-controlled values (hostnames, mirror names, cluster names,
+paths, passwords) are embedded in shell commands, SSH invocations, `oc` calls,
+and Make variables. Improper quoting or escaping could allow command injection.
+Temp files may have overly permissive permissions. Credentials (registry
+passwords, pull secrets) may leak to stdout or log files.
+
+**Audit scope:**
+- Check all `ssh` commands for unquoted variable expansion in remote commands
+- Verify `reg_password` / `reg_user` are never logged to stdout
+  (only stderr via `aba_debug`)
+- Check temp file creation (`mktemp`) for secure permissions (0600)
+- Verify pull secret files have restricted permissions
+- Audit `eval` usage — any user-controlled strings reaching `eval`?
+- Check `replace-value-conf` for values containing shell metacharacters
+  (e.g. passwords with `$`, `!`, backticks)
+- Verify `.netrc` / `.docker/config.json` permissions after creation
+
+**Files likely affected:**
+- `scripts/reg-install-*.sh` (password handling)
+- `scripts/include_all.sh` (`replace-value-conf`, SSH helpers)
+- `scripts/reg-common.sh` (credential management)
+- `scripts/create-pull-secret.sh`
+- `tui/v2/tui-mirror.sh` (password input dialog)
+
+---
+
+## Audit: TUI edge cases — ESC/Cancel, empty states, corrupt config
+
+**Severity:** MEDIUM — crashes or undefined behavior on unexpected input
+**Status:** Planned
+**Added:** 2026-10-08
+
+**Problem:** The TUI (dialog-based) may not handle all edge cases gracefully:
+pressing ESC or Cancel at unexpected points, encountering missing or corrupt
+config files, empty operator lists, no clusters defined, no mirror installed.
+The TUI should degrade gracefully rather than crash or show raw error output.
+
+**Audit scope:**
+- Press ESC/Cancel at every dialog and verify clean exit (no partial state)
+- Test TUI startup with missing `aba.conf`, `mirror.conf`, `cluster.conf`
+- Test TUI with empty `ops=` (no operators selected)
+- Test cluster menu with no cluster directories
+- Test mirror menu with no mirror directory
+- Verify all `dialog` exit code checks (`$?`) handle 1 (Cancel) and 255 (ESC)
+- Check `--default-button` correctness (destructive dialogs should default to No)
+- Test wizard flow with all fields empty / at defaults
+
+**Files likely affected:**
+- `tui/v2/tui-mirror.sh`, `tui/v2/tui-cluster.sh`, `tui/v2/tui-direct.sh`
+- `tui/v2/tui-lib.sh` (shared dialog helpers)
+- `tui/v2/abatui2.sh` (main entry, config loading)
+
+---
+
+## TUI: Interactive cluster checklist after mirror sync/load
+
+**Priority:** MEDIUM
+**Effort:** MEDIUM
+
+After mirror sync or load, `_offer_day2_after_mirror_update()` offers to run
+Day-2 (OperatorHub config) on clusters using that mirror. Currently:
+- 0 clusters → "Success" msgbox
+- 1 cluster → "Run Day-2 now?" yesno → runs day2
+- **Multiple clusters → static msgbox telling user to run day2 manually (useless)**
+
+**Change:** Replace the multi-cluster msgbox with an interactive checklist:
+1. Find all installed clusters whose `image_source` is `mirror`
+2. Quick TCP probe of each cluster's API (3s timeout)
+3. Show checklist: reachable clusters pre-checked, offline ones unchecked with
+   `(offline)` annotation
+4. User selects which to update → sequential `_exec_with_progress` per cluster
+5. After all done, brief summary
+
+**Design decisions:**
+- **Sequential, not parallel** — Day-2 is fast (10-30s per cluster) and
+  interleaved progress output would be confusing
+- **Foreground** — user just finished sync/load and is right there
+- **Only reachable clusters pre-checked** — offline clusters can still be
+  checked manually by the user if they know the cluster is coming up
+- **Uses existing `_exec_with_progress` → `confirm_and_execute` fallback**
+
+**Files likely affected:**
+- `tui/v2/tui-lib.sh` (`_offer_day2_after_mirror_update`)
+
+---
+
+## Cache pre-operation mirror summary (ADR-008)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-10
+
+**Problem:** The pre-operation confirmation dialog (before save/sync/load)
+calls `mirror-status.sh --shell` synchronously (~2s), blocking the UI every
+time the user opens it.
+
+**Proposed fix:** Cache the full `mirror-status.sh --shell` output via
+run_once (`aba:mirror:full-status`). Refresh after state-changing operations.
+Pre-op dialog reads from cache instead of blocking. See ADR-008.
+
+**Files likely affected:**
+- `scripts/mirror-status.sh` (already exists, just needs caching wrapper)
+- `scripts/include_all.sh` (new `aba_mirror_full_status_*` wrappers)
+- `tui/v2/tui-mirror.sh` (`_tui_mirror_status_shell` reads from cache)
+
+---
+
+## Cluster state cache for TUI (ADR-008)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-10
+
+**Problem:** The TUI cluster list and day-2 menu read `.install-complete`
+marker files directly (~15 places) and probe the cluster API (`oc get`)
+synchronously. This mixes business logic into the TUI and makes the cluster
+menu slow when clusters are unreachable.
+
+**Proposed fix:** New `cluster-status.sh --state` (or extend existing
+cluster status) that produces `cluster_state=installing|ready|degraded|unreachable`.
+Cache per-cluster via run_once (`aba:cluster:<name>:state`). TUI reads
+cached state only. See ADR-008.
+
+**Files likely affected:**
+- New: `scripts/cluster-status.sh` (or extend existing)
+- `scripts/include_all.sh` (new `aba_cluster_state_*` wrappers)
+- `tui/v2/tui-cluster.sh` (replace `.install-complete` reads)
+- `tui/v2/tui-lib.sh` (replace cluster state queries)
+
+---
+
+## Config mtime caching to avoid redundant subshell spawns (ADR-008)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-10
+
+**Problem:** The TUI calls `source <(normalize-aba-conf)` and
+`source <(normalize-mirror-conf)` ~30 times per menu cycle. Each spawns a
+subshell + sources include_all.sh (~0.15s each). Config rarely changes during
+a menu cycle.
+
+**Proposed fix:** Check file mtime before re-sourcing. Cache parsed values in
+shell variables. Re-source only when mtime changes. No run_once needed — this
+is in-process caching. See ADR-008.
+
+```bash
+_aba_conf_mtime=0
+_ensure_aba_conf_fresh() {
+    local _mt
+    _mt=$(stat -c %Y "$ABA_ROOT/aba.conf" 2>/dev/null) || return
+    [[ "$_mt" == "$_aba_conf_mtime" ]] && return
+    source <(normalize-aba-conf)
+    _aba_conf_mtime="$_mt"
+}
+```
+
+**Files likely affected:**
+- `tui/v2/tui-lib.sh` (new `_ensure_aba_conf_fresh`, `_ensure_mirror_conf_fresh`)
+- All TUI files that call `source <(normalize-*-conf)` (~30 call sites)
+
+## Support AWS IPI (openshift-install) as an infrastructure platform
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-12
+
+**Problem:** ABA currently supports vSphere, KVM (agent-based installer), and bare-metal. Users deploying on AWS cannot use ABA to create clusters, even though the mirror workflow (save/sync/load) already works for any platform.
+
+**Proposed approach:** Add AWS as an infrastructure platform option. The main difference is generating an `install-config.yaml` for AWS IPI (Installer-Provisioned Infrastructure) instead of the agent-based config used for vSphere/KVM/bare-metal. The standard `openshift-install create cluster` flow would be used instead of the agent-based flow.
+
+**Key changes:**
+- New `infra_platform=aws` option in `cluster.conf`
+- Generate AWS-specific `install-config.yaml` (region, instance types, VPC settings, etc.)
+- Use `openshift-install create cluster` instead of `openshift-install agent create image`
+- TUI: add AWS as a platform choice in the cluster creation wizard
+- Skip agent-based steps (ISO generation, MAC addresses, starting IPs, VIPs) for AWS
+
+**Notes:**
+- The mirror registry workflow (connected/disconnected) is platform-independent and already works
+- AWS credentials would be configured via `~/.aws/credentials` or environment variables (standard AWS SDK approach)
+- Could later extend to other cloud IPI platforms (GCP, Azure) using the same pattern
+
+## OMR health check timeout too short (30s hardcoded)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-12
+
+**Problem:** The OMR (`mirror-registry`) binary has a hardcoded 30s health check timeout during `install`. On slower environments (e.g. AWS instances), the quay container takes longer than 30s to become healthy, causing the install to fail with `"install failed","err":"health check: timeout after 30s"`. The quadlet, systemd service, and linger are all set up correctly — starting the service manually afterwards works fine.
+
+**Root cause:** The Go source in the quay/quay repo (`mirror-registry` binary) hardcodes the health check timeout at 30 seconds. There is no `--timeout` CLI flag to override it.
+
+**Proposed fix:** Patch the OMR Go source to either:
+1. Increase the default health check timeout to 120s (matching ABA's own registry readiness timeout)
+2. Add a `-health-timeout` CLI flag so the caller can configure it
+
+Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the patch.
+
+**Workaround:** If the install fails with this timeout, the service is actually set up correctly. Run `systemctl --user start quay.service` manually, then re-run `aba -d mirror install` (ABA detects the running registry and registers it).
+
