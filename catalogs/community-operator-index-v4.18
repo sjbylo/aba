@@ -145,6 +145,7 @@ flux Flux stable
 flux-operator Flux Operator stable
 fossul-operator Fossul Operator alpha
 fqdn-egress-operator FQDN Egress Operator stable
+frappe-operator Frappe Operator alpha
 github-arc-operator github-arc-operator alpha
 gitlab-operator-kubernetes GitLab stable
 gitlab-runner-operator GitLab Runner stable
@@ -232,6 +233,7 @@ nsm-operator nsm-operator alpha
 oadp-operator OADP Operator stable
 observability-operator Observability Operator stable
 oci-ccm-operator oci-ccm-operator alpha
+oc-mirror oc-mirror Operator alpha
 ocp-kea-dhcp Kea DHCP Operator alpha
 odf-node-recovery-operator ODF Node Recovery Operator alpha
 odoo-operator Odoo Operator alpha

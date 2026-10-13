@@ -135,6 +135,7 @@ flink-kubernetes-operator Flink Kubernetes Operator alpha
 flux Flux stable
 fossul-operator Fossul Operator alpha
 fqdn-egress-operator FQDN Egress Operator stable
+frappe-operator Frappe Operator alpha
 github-arc-operator github-arc-operator alpha
 gitops-primer gitops-primer alpha
 gitwebhook-operator GitWebhook operator alpha
@@ -146,6 +147,7 @@ headscale-operator Headscale Operator alpha
 hedvig-operator Hedvig Operator stable
 hermes-operator Hermes Operator stable
 horreum-operator Horreum alpha
+hostzero-keycloak-operator Keycloak Operator stable
 hyperfoil-bundle Hyperfoil alpha
 ibm-block-csi-operator-community IBM block storage CSI driver operator stable
 ibmcloud-operator IBM Cloud Operator stable
@@ -232,6 +234,7 @@ sap-hana-express-operator SAP Hana Express Operator stable
 seldon-operator Seldon Operator stable
 self-node-remediation Self Node Remediation Operator - Community Edition stable
 service-binding-operator Service Binding Operator stable
+shiftwise-operator ShiftWise Operator stable
 sigstore-helm-operator sigstore alpha
 silicom-sts-operator Silicom STS Operator alpha
 simplyblock-operator Simplyblock Operator alpha

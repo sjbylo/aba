@@ -147,6 +147,7 @@ flux Flux stable
 flux-operator Flux Operator stable
 fossul-operator Fossul Operator alpha
 fqdn-egress-operator FQDN Egress Operator stable
+frappe-operator Frappe Operator alpha
 github-arc-operator github-arc-operator alpha
 gitlab-operator-kubernetes GitLab stable
 gitlab-runner-operator GitLab Runner stable
@@ -161,6 +162,7 @@ hedvig-operator Hedvig Operator stable
 hermes-operator Hermes Operator stable
 hive-operator Hive for Red Hat OpenShift alpha
 horreum-operator Horreum alpha
+hostzero-keycloak-operator Keycloak Operator stable
 hyperfoil-bundle Hyperfoil alpha
 ibm-block-csi-operator-community IBM block storage CSI driver operator stable
 ibmcloud-operator IBM Cloud Operator stable
@@ -237,6 +239,7 @@ nsm-operator nsm-operator alpha
 oadp-operator OADP Operator stable
 observability-operator Observability Operator stable
 oci-ccm-operator oci-ccm-operator alpha
+oc-mirror oc-mirror Operator alpha
 ocp-kea-dhcp Kea DHCP Operator alpha
 odoo-operator Odoo Operator alpha
 openclaw-operator OpenClaw Operator stable
