@@ -47,7 +47,7 @@ test_fail() { echo -e "${RED}FAIL${NC}: $1"; exit 1; }
 source "${REPO_ROOT}/test/func/lib/bmc-redfish-stub.sh"
 
 # ---------------------------------------------------------------------------
-# Source runtime helpers (aba_info_ok / aba_warning / aba_abort / aba_debug,
+# Source runtime helpers (aba_success / aba_warn / aba_abort / aba_debug,
 # normalize-bmc-conf, bmc_redact_env). MUST come before bmc-redfish / adapters.
 # ---------------------------------------------------------------------------
 source "${REPO_ROOT}/scripts/include_all.sh"

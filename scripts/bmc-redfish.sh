@@ -31,7 +31,7 @@ _bm_build_auth() {
 	# Credential construction for BMC Authorization header. Single grep-able audit surface.
 	# Arg: node name (bmc_host_<node> suffix).
 	# Stdout: base64(user:pass) with NO trailing newline and NO line wrap.
-	# Return: 0 on success; 1 on missing user/pass (with aba_warning).
+	# Return: 0 on success; 1 on missing user/pass (with aba_warn).
 	#
 	# D-06 invariants:
 	# - Every password read uses ${!pass_var} indirection (grep-auditable).
@@ -46,7 +46,7 @@ _bm_build_auth() {
 	user="${!user_var}"
 	pass="${!pass_var}"
 	if [ -z "$user" ] || [ -z "$pass" ]; then
-		aba_warning "BMC: $node bmc_user_${node} or bmc_password_${node} not set in bmc.conf"
+		aba_warn "BMC: $node bmc_user_${node} or bmc_password_${node} not set in bmc.conf"
 		_REDFISH_LAST_REASON="bmc_user_${node} or bmc_password_${node} not set in bmc.conf"
 		return 1
 	fi
@@ -421,7 +421,7 @@ bmc_session_login() {
 
 	local auth
 	auth=$(_bm_build_auth "$node") || {
-		aba_warning "BMC: $node phase=session-login adapter=$adapter http=0 reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=session-login adapter=$adapter http=0 reason=\"$_REDFISH_LAST_REASON\""
 		return 1
 	}
 
@@ -469,7 +469,7 @@ bmc_session_login() {
 			*) reason="HTTP $code on session login" ;;
 		esac
 		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "$reason")
-		aba_warning "BMC: $node phase=session-login adapter=$adapter http=$code reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=session-login adapter=$adapter http=$code reason=\"$_REDFISH_LAST_REASON\""
 		rm -f "$hdr_tmp" "$resp_tmp" "$err_tmp"
 		return 1
 	fi
@@ -482,7 +482,7 @@ bmc_session_login() {
 
 	if [ -z "$token" ] || [ -z "$session_uri" ]; then
 		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "X-Auth-Token or Location header missing in 201 response")
-		aba_warning "BMC: $node phase=session-login adapter=$adapter http=$code reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=session-login adapter=$adapter http=$code reason=\"$_REDFISH_LAST_REASON\""
 		return 1
 	fi
 
@@ -517,7 +517,7 @@ bmc_session_logout() {
 	if [ "$code" = "204" ] || [ "$code" = "200" ] || [ "$code" = "404" ]; then
 		aba_debug "BMC: $node session-logout ok (http=$code)"
 	else
-		aba_warning "BMC: $node session-logout failed (http=$code) - session may linger on BMC"
+		aba_warn "BMC: $node session-logout failed (http=$code) - session may linger on BMC"
 	fi
 	rm -f ".bmc-session.$node"
 	unset "SESSION_TOKEN_${node}" "SESSION_URI_${node}"

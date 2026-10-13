@@ -13,7 +13,7 @@
 #     or 409/500 which the adapter layer (bmc_eject_media in scripts/bmc-adapter-generic.sh)
 #     translates to success.
 #
-# Exit 0 always (D-13 best-effort contract). Per-node failures emit aba_warning and continue.
+# Exit 0 always (D-13 best-effort contract). Per-node failures emit aba_warn and continue.
 
 source scripts/include_all.sh
 
@@ -45,7 +45,7 @@ _bm_node_list() {
 
 # -----------------------------------------------------------------------------
 # Per-node unmount sequence. Never returns non-zero to the caller; every failure
-# surfaces as aba_warning and the loop continues.
+# surfaces as aba_warn and the loop continues.
 # -----------------------------------------------------------------------------
 total=0
 ok_count=0
@@ -81,7 +81,7 @@ for node in $node_list; do
 
 	# Discover IDs (needed for both the PATCH and the EjectMedia targets).
 	if ! bmc_discover_ids "$node"; then
-		aba_warning "BMC: $node phase=discover (unmount) adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=discover (unmount) adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		failed_list="$failed_list $node"
 		continue
@@ -90,14 +90,14 @@ for node in $node_list; do
 	# Step A: BMC-06 - PATCH BootSourceOverrideEnabled=Disabled. Do NOT skip step B on failure.
 	bso_rc=0
 	if ! bmc_boot_override_disable "$node"; then
-		aba_warning "BMC: $node phase=boot-override-disable (unmount) adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=boot-override-disable (unmount) adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bso_rc=1
 	fi
 
 	# Step B: BMC-07 - POST VirtualMedia.EjectMedia. Adapter layer tolerates nothing-to-eject.
 	eject_rc=0
 	if ! bmc_eject_media "$node"; then
-		aba_warning "BMC: $node phase=eject (unmount) adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=eject (unmount) adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		eject_rc=1
 	fi
 
@@ -114,9 +114,9 @@ done
 # Final summary line. Success line is quiet-on-success-ish; UX-04 says quiet is default
 # but for a cleanup action an explicit confirmation helps operators know it ran.
 if [ "$ok_count" = "$total" ]; then
-	aba_info_ok "BMC: unmount $ok_count/$total nodes"
+	aba_success "BMC: unmount $ok_count/$total nodes"
 else
-	aba_warning "BMC: unmount $ok_count/$total nodes (failed:$failed_list)"
+	aba_warn "BMC: unmount $ok_count/$total nodes (failed:$failed_list)"
 fi
 
 exit 0

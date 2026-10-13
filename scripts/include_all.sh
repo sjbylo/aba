@@ -1578,7 +1578,7 @@ normalize-bmc-conf()
 		_mdnode="${_mdv#mac_discovery_}"
 		_macvar="mac_${_mdnode}"
 		if [ -z "${!_macvar:-}" ]; then
-			aba_warning "BMC: mac_discovery_${_mdnode}=disabled but mac_${_mdnode} not set in bmc.conf - cluster.conf must provide mac_master*/mac_worker* (final check in preflight)"
+			aba_warn "BMC: mac_discovery_${_mdnode}=disabled but mac_${_mdnode} not set in bmc.conf - cluster.conf must provide mac_master*/mac_worker* (final check in preflight)"
 		fi
 	done
 
