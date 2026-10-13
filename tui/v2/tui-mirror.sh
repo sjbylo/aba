@@ -413,7 +413,7 @@ mirror_install() {
 				show_help "$TUI2_HELP_TITLE_MIRROR" \
 "A mirror registry stores OpenShift container images locally.
 
-• Local: installs on this host (Quay or Docker registry)
+• Local: installs on this host (Docker, Quay, or OMR)
 • Remote: installs on another host via SSH
 
 After installation, use 'Save', 'Sync', or 'Load' to populate it with images."

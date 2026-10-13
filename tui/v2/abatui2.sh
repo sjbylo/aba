@@ -866,7 +866,7 @@ Setup wizard:
   3. Version         — OCP channel and version
   4. Platform        — Bare-metal, VMware, or KVM
   5. Operators       — Pick operators for the mirror
-  6. Mirror registry — Set up a Quay or Docker registry
+  6. Mirror registry — Set up a mirror registry
   7. Cluster install — Create, install, and monitor
 
 Key operations:

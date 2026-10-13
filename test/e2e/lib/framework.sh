@@ -834,7 +834,7 @@ e2e_cleanup_mirrors() {
 
 # --- Post-Uninstall Assertion -----------------------------------------------
 #
-# Verify that a registry (Quay or Docker) is fully removed on a target host.
+# Verify that a registry is fully removed on a target host.
 # Checks containers, secrets, systemd units.
 # Use after 'aba -d mirror uninstall' for defense-in-depth.
 #   e2e_assert_registry_removed              # check disN (INTERNAL_BASTION)

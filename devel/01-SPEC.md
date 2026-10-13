@@ -184,7 +184,7 @@ FROM config.
 | File | Scope | Key values |
 |------|-------|------------|
 | `aba.conf` | Global | `ocp_version` (user intent), `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
-| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_upgrade_to` (upgrade) |
+| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker/omr), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_upgrade_to` (upgrade) |
 | `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `starting_ip`, `machine_network`, master/worker counts, `vlan`, `image_source` (mirror/proxy/direct/name) |
 
 **Read the config variable, not the file existence.** Config files created by ABA

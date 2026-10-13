@@ -200,7 +200,7 @@ aba_progress "START|ld_registry"
 [ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host" && aba_debug "Adjusted no_proxy=$no_proxy"
 
 # Can the registry mirror already be reached?
-# Support both Quay and Docker registries with different health endpoints
+# Support all registry vendors with different health endpoints
 aba_debug "Probing mirror registry at $reg_url"
 
 if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
