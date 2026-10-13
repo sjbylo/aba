@@ -52,6 +52,28 @@ missing for new code paths added since the initial implementation.
 
 ---
 
+## Add TUI progress dialogs to remaining workflows
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-13
+
+**Problem:** The TUI progress dialog currently only covers mirror operations
+(install, save, sync, load, bundle). Other long-running workflows — cluster
+ISO generation, cluster installation, and potentially others — still show a
+blank or static screen while the user waits with no feedback.
+
+**Proposed fix:** Add `_progress_plan-*` Makefile targets and corresponding
+`aba_progress` calls to:
+- **ISO/image generation** (`generate-image.sh` / Makefile.cluster `iso` target)
+- **Cluster installation** (agent-based install monitoring)
+- **Any other workflows** that take more than ~30 seconds
+
+Each needs a progress plan with weighted steps, matching `aba_progress` emitters
+in the scripts, and TUI integration via `_exec_with_progress`.
+
+---
+
 ## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
 
 **Severity:** MEDIUM
