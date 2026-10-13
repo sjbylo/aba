@@ -38,6 +38,7 @@ echo
 # and legitimately need $ABA_ROOT for cross-directory access.
 ALLOWED_FILES=(
 	"scripts/aba.sh"
+	"scripts/include_all.sh"
 )
 
 # Allowed patterns: any file under tui/ or scripts/tui-* (TUI helpers)

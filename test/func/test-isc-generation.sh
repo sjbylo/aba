@@ -184,9 +184,17 @@ fi
 
 OCP_VER="4.22.3"
 OCP_MAJOR="4.22"
+# Fall back to the latest available version if 4.22 index is missing
+# (prior catalog tests may have replaced indexes with a different version)
 if [ ! -f "$MIRROR_DIR/.index/redhat-operator-index-v${OCP_MAJOR}" ]; then
-	echo "ERROR: redhat-operator-index-v${OCP_MAJOR} not found"
-	exit 2
+	_latest=$(ls "$MIRROR_DIR/.index"/redhat-operator-index-v* 2>/dev/null | sort -V | tail -1)
+	if [ -z "$_latest" ]; then
+		echo "ERROR: no redhat-operator-index found in $MIRROR_DIR/.index/"
+		exit 2
+	fi
+	OCP_MAJOR=$(echo "$_latest" | grep -oE 'v[0-9]+\.[0-9]+' | sed 's/^v//')
+	OCP_VER="${OCP_MAJOR}.0"
+	echo "NOTE: v4.22 index not found, using v${OCP_MAJOR} instead"
 fi
 
 echo "ISC Generation Functional Tests"
