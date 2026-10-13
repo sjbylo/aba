@@ -41,10 +41,18 @@ This pulls fresh operator catalog data from registry.redhat.io and updates
 registry.redhat.io. After it completes, review the changes and commit
 when the user approves. Do NOT use `--commit` (auto-commits without permission).
 
-### 2. Functional tests — DO NOT run
+### 2. Functional tests (REQUIRED)
 
-Functional tests are run separately by the developer, not as part of
-release prep. Do not run `test/func/run-all-tests.sh` here.
+Functional tests **must pass** before every release. They validate that scripts,
+config handling, input validation, and registry logic all work correctly.
+These tests must be kept in sync with the code — a failing test blocks the release.
+
+```bash
+test/func/run-all-tests.sh
+```
+
+Run on bastion (inside the tmux session). All unit and integration tests must
+pass. Fix any failures before proceeding — do not skip or defer.
 
 ### 3. Run smoke test (if significant changes)
 
