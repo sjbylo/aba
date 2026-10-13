@@ -1,5 +1,9 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.0...HEAD)
 
+<!-- TODO: BMC PR (from PR #27) references "v1.1" and "v1.2" throughout code
+     comments, Troubleshooting.md, and CHANGELOG entries below. Update these
+     version references to match ABA's actual versioning before merging into dev. -->
+
 ---
 
 ## [1.4.0](https://github.com/sjbylo/aba/releases/tag/v1.4.0) - 2026-10-13
