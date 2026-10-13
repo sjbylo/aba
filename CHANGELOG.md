@@ -28,6 +28,9 @@ New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idem
 - **Docker debug port isolation** — Multiple Docker registries on the same host get unique debug/metrics ports derived from their data port, preventing bind collisions.
 - **TUI: Tab navigation hint** — All input, editbox, and form dialogs automatically show "Use Tab to navigate to the buttons" in the footer.
 - **TUI: ISO-only hint for bare-metal** — Review page shows "Bare-metal (ISO only — you boot servers)" so users know they'll need to boot from the ISO.
+- **TUI: Retry button on progress failure** — Error dialog now offers View Output, Retry, and OK buttons instead of just dismissing the error.
+- **TUI: vendor-specific install labels** — Mirror install menu shows "Install docker Mirror" or "Install OMR Mirror" instead of the generic "Install Local Mirror".
+- **Status: configured-but-not-installed clusters** — `aba status` detects cluster directories that are configured but not yet installed.
 - **Functional test restructure** — 78 tests categorized into unit and integration tiers in a restructured test runner. New tests for mirror payload warnings (18 permutations), mirror status keys, derived flags, idempotent install (25 assertions), and registry auth.
 
 ### Changed
@@ -41,6 +44,7 @@ New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idem
 - **OMR uninstall uses `-purge` flag** — Ensures complete cleanup of Quadlet files and container state.
 - **ISC terminology cleanup** — User-facing messages now say "imageset-config.yaml" or "image configuration" instead of internal jargon ("ISC", "digest-pinned").
 - **Registry backup uses hidden directory** — Credential backups now use dot-prefix (`.mirror.bk`) so the glob `~/.aba/mirror/*/state.sh` won't match stale backups. Backups are cleaned up after successful install.
+- **Uninstall preserves data by default** — `aba -d mirror uninstall` now keeps the registry data directory by default, allowing reinstall over existing data. Use `--delete-data` to remove data explicitly. The interactive confirmation prompt was removed in favor of the explicit flag.
 - **Container auth merging** — `create-containers-auth.sh` now merges existing container auth instead of replacing it, and checks for kubeconfig before upgrade rewrites.
 - **TUI: destructive dialog safety** — All destructive yesno dialogs (Delete Cluster, Clean ABA, Shutdown, Refresh, Clean Cluster, Reset ISC) now default to Cancel, requiring users to actively navigate to the destructive action.
 - **Quay pod management** — Uses `podman pod stop/start` instead of individual container stop/start. Fixes port-still-listening bug where the infra container held the port after stopping quay-app.
@@ -48,6 +52,8 @@ New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idem
 - **Day-2 NTP checks cluster API first** — A down cluster no longer gets new chrony files written then aborts; the API check runs before any file changes.
 - **Stopped mirror started before uninstall** — `aba uninstall` detects a stopped registry and starts it first, so the vendor's uninstall tool can clean up properly.
 - **Verify is read-only** — `aba verify` no longer generates configs as a side effect.
+- **`--vendor existing` rejected from CLI** — Users must use `aba register` instead; `existing` is an internal-only value.
+- **Catalog download progress bar during refresh** — Progress bar now also appears when a background catalog refresh is still running, not only when shipped indexes are missing.
 - **Help text overhaul** — Curated help text replaces awk-generated Makefile targets across CLI, RPM, and build systems. Clearer download, configure, and DISCO help. Operator help points to `show-operators` and `show-op-sets`.
 - **Legacy cleanup** — Removed legacy shim `image_source_mirror_name()`, old bundle scripts, broken TUI keystroke tests (3,956 lines), dead code TUI functions, and deprecated test scripts.
 
@@ -74,7 +80,6 @@ New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idem
 - **Platform Settings** — Now loads `~/.vmware.conf` correctly. Clean help text corrected.
 - **Registry state persistence** — `reg_path` now persisted in `state.sh`. `save` updates `last_action`.
 - **Data-dir clash guard** — Skips incomplete installs (`reg_status=installing`) from other workdirs. Skips stale entries where data dir no longer exists on disk.
-- **Quay backend readiness** — Waits for Quay backend to be ready after pod start before declaring success.
 - **USB device override** — `USB_DEVICE` now honored as the system-disk override for bare-metal installs.
 - **VLAN bond config** — Uses cluster `prefix_length` in the VLAN bond agent configuration.
 - **Multi-line dig answer** — Saves only the first IPv4 address from multi-line DNS responses.
@@ -88,6 +93,18 @@ New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idem
 - **Transfer `.init` cleanup** — `transfer-primed.sh` created `.init` files in cluster dirs to prevent full init during bundling, but the cleanup trap didn't remove them, causing Make to skip the real init recipe.
 - **ISC user-managed detection** — `aba_isc_is_user_managed` now requires `.created` marker to exist; missing marker means ABA never generated the ISC, not that the user manages it.
 - **Imageset regenerated for upgrade** — After switching `excl_platform=false` for upgrade, the imageset config is now regenerated so oc-mirror doesn't use a stale version with the platform section commented out.
+- **Failed release extract false success** — `openshift-install` extract failures no longer silently continue; the error is caught and reported.
+- **TUI clean cluster warning missing** — The "cluster is installed/shut-down" warning in day2 clean never appeared due to a wrong variable name.
+- **Warn on clean of installed cluster** — `aba clean` now shows a warning when the cluster has been installed or shut down. Install wizard prompts before opening an already-installed cluster.
+- **Install/startup hints use correct dir name** — Error messages now suggest the correct `aba -d <dir>` command instead of a misleading generic path.
+- **Pending Pods → Non-Ready Pods** — Status section renamed since it also shows Error pods, not just Pending.
+- **'OCP version not set' display** — Shows "OCP version not set" instead of cryptic "OCP ?" when version is empty.
+- **`all` in operator-set list** — `show-op-sets` now includes `all` at the top of the list.
+- **MAC overflow guard** — Aborts if MAC address count exceeds 255 instead of silently wrapping.
+- **Exact null check in cluster-config** — `grep -q 'null'` matched substrings like `nullable`; replaced with exact string comparison.
+- **Grammar and display cosmetics** — Fixed "1 images" → "1 image" pluralization, "(not set) GB" → "(not set)", and archive size shown in KB when under 1MB.
+- **Progress dialog false failure on OMR installs** — OMR and remote install scripts were missing progress events, causing the dialog to show "Stopped before all steps finished" on success.
+- **KVM hypervisor unreachable misdetected as "no VMs"** — `vmp_exists` now probes reachability first and returns exit 2 when the KVM host is down, preventing `kvm-delete.sh` from skipping deletion and orphaning running VMs.
 
 ---
 
