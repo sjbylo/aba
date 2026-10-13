@@ -132,7 +132,7 @@ _test_vip() {
 			_pass=$(( _pass + 1 ))
 		else
 			# Check if it failed on VIP collision (our code) vs other (acceptable)
-			if echo "$output" | grep -qE 'must be different|falls within the node IP range'; then
+			if echo "$output" | grep -qE 'cannot be the same address|falls within the node IP range'; then
 				echo "FAIL: $test_name — VIP check wrongly rejected valid config!"
 				echo "  Output: $(echo "$output" | tail -5)"
 				_fail=$(( _fail + 1 ))
@@ -153,7 +153,7 @@ echo ""
 # -----------------------------------------------------------------------
 
 _test_vip "api_vip == ingress_vip" \
-	10.0.2.100  10.0.2.90  10.0.2.90  3 2  1  "must be different"
+	10.0.2.100  10.0.2.90  10.0.2.90  3 2  1  "cannot be the same address"
 
 _test_vip "api_vip == starting_ip (first node)" \
 	10.0.2.100  10.0.2.100  10.0.2.91  3 2  1  "falls within the node IP range"
@@ -177,7 +177,7 @@ _test_vip "VIP in wrapped range (253+5, VIP=10.0.1.1)" \
 
 # Compact cluster (3 masters, 0 workers)
 _test_vip "compact: api_vip == ingress_vip" \
-	10.0.2.100  10.0.2.90  10.0.2.90  3 0  1  "must be different"
+	10.0.2.100  10.0.2.90  10.0.2.90  3 0  1  "cannot be the same address"
 
 _test_vip "compact: api_vip in node range (3m, last=.102)" \
 	10.0.2.100  10.0.2.101  10.0.2.91  3 0  1  "falls within the node IP range"
