@@ -16,7 +16,7 @@ if [ ! "$1" = "--exec" ]; then
 	fi
 
 	# This will run locally and will copy and exec the rescue script (below)
-	[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+	[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "$ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
 
 	ip=$(cat $ASSETS_DIR/rendezvousIP)
 

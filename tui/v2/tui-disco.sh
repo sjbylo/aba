@@ -150,6 +150,7 @@ disco_main() {
 	# confirm_and_execute post-hook).
 	while :; do
 		local items=()
+		_TUI_REG_STATE=""
 		local reg_label="$TUI2_LABEL_INSTALL_REGISTRY"
 		local load_label="$TUI2_LABEL_LOAD"
 		local isc_label="$TUI2_LABEL_VIEW_ISC_RO"
@@ -159,10 +160,10 @@ disco_main() {
 
 		# Mirror recheck: only when _invalidate_mirror_cache fired
 		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
-			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+			if ! run_once -p -i "aba:mirror:runtime" 2>/dev/null; then
 				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
 			fi
-			aba_mirror_verify_wait
+			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
 		fi
 
@@ -173,6 +174,8 @@ disco_main() {
 		if mirror_available; then
 			if _mirror_has_release_image; then
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
+			elif [[ "$_TUI_REG_STATE" == "stopped" ]]; then
+				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_STOPPED"
 			else
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_NOT_VERIFIED"
 			fi
@@ -228,7 +231,7 @@ disco_main() {
 		# Smart focus: last assignment wins = highest priority (read bottom-to-top)
 		if [[ -z "$default_item" ]]; then
 			default_item="$TUI2_DISCO_TAG_INSTALL_REG"
-			if mirror_available && ! _mirror_has_release_image;  then default_item="$TUI2_DISCO_TAG_LOAD"; fi
+			if mirror_available && ! _mirror_has_release_image && [[ "${_TUI_REG_STATE:-}" != "stopped" ]]; then default_item="$TUI2_DISCO_TAG_LOAD"; fi
 			if _mirror_has_release_image;                         then default_item="$TUI2_DISCO_TAG_INSTALL"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];         then default_item="$TUI2_DISCO_TAG_DAY2"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];        then default_item="$TUI2_DISCO_TAG_MONITOR"; fi
@@ -249,16 +252,17 @@ disco_main() {
 				show_help "$TUI2_HELP_TITLE_DISCO" \
 "You are in fully disconnected mode (no internet access).
 
-Typical workflow:
+Workflow:
   1. Install Registry — set up a local container registry
   2. Load Images — disk-to-mirror (d2m): load saved images into registry
   3. Install Cluster — configure and provision OpenShift
   4. Day-2 — apply cluster resources, NTP, update service, etc.
 
-Image transfer uses oc-mirror (disk2mirror). The saved archives
-were created on a connected host via 'Save images to disk' (mirror2disk).
-
-Use 'Advanced' to switch modes or manage platform settings.
+Other:
+  • Configure — adjust settings (registry type, retry count)
+  • View Mirror Payload — inspect imageset configuration
+  • Advanced — switch modes, manage platform settings
+  • Feedback — report bugs or request features
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
@@ -285,7 +289,7 @@ Navigation:
 		case "$choice" in
 			"$TUI2_DISCO_TAG_INSTALL_REG")
 				if [[ "$reg_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --yesno \
+					dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 						"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 					if [[ $? -eq 0 ]]; then
 						confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" _invalidate_mirror_cache && disco_install_reg
@@ -300,7 +304,7 @@ Navigation:
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 						--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be loaded.\n\nContinue?" 0 0
 					if [[ $? -eq 0 ]]; then
-						_mirror_config_review && disco_load_images
+						_mirror_config_review && _tui_install_mirror "Install Mirror" && disco_load_images
 					fi
 				else
 					disco_load_images
@@ -381,9 +385,11 @@ disco_load_images() {
 		done
 	fi
 
-	_mirror_op_confirm "$TUI2_LABEL_LOAD" || return 1
-	confirm_and_execute "aba --dir mirror load$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache
+	_mirror_op_confirm "$TUI2_LABEL_LOAD" load || return 1
+	local _cmd="aba --dir mirror load$(_tui_oc_mirror_retry_suffix)"
+	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache
 	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache && rc=$?
 	[[ $rc -eq 0 ]] && _offer_day2_after_mirror_update
 	return $rc
 }

@@ -29,9 +29,12 @@ with_clusters=			# Include pre-configured configs (cluster dirs, mirror.conf, vm
 
 while echo "$1" | grep -q ^--[a-z]
 do
-	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
-	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
-	[ "$1" = "--primed" ] && with_clusters=1 && shift
+	case "$1" in
+		--repo)   repo_only=1; shift ;;
+		--inc)    inc=1; shift ;;
+		--primed) with_clusters=1; shift ;;
+		*)        aba_abort "unknown option: $1" ;;
+	esac
 done
 
 [ "$1" ] && dest="$1"
@@ -171,12 +174,9 @@ file_list=$(find				\
 	"${repo_dir}/aba"			\
 	"${repo_dir}/aba.conf"			\
 	"${repo_dir}/.bundle"			\
-	"${repo_dir}/cli"			\
-	"${repo_dir}/rpms"			\
 	"${repo_dir}/others"			\
 	"${repo_dir}/scripts"			\
 	"${repo_dir}/templates"			\
-	"${repo_dir}/tools"			\
 	"${repo_dir}/tui/v2"			\
 	"${repo_dir}/Makefile"			\
 	"${repo_dir}/README.md"			\
@@ -185,6 +185,10 @@ file_list=$(find				\
 	"${repo_dir}/LICENSE"			\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/.index"			\
+	"${repo_dir}/tools"			\
+	"${repo_dir}/cli"			\
+	"${repo_dir}/rpms"			\
+	"${repo_dir}/catalogs"			\
 	"${repo_dir}/mirror"			\
 	$_cluster_paths				\
 	${_hv_conf_path:+"$_hv_conf_path"}	\

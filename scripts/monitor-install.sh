@@ -32,7 +32,7 @@ aba_info "======================================================================
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 
-[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "$ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
 
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
@@ -61,10 +61,9 @@ declare -A wait_for_exit_reasons=(
     [8]="Interrupted"
 )
 
-# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c), for that we don't want to show any errors. 
-[ $ret -eq 8 ] && exit 0
-
-if [ $ret -ne 0 ]; then
+# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c). Stay quiet, but
+# exit non-zero so Make does not create .install-complete.
+if ! exit_unless_install_finished "$ret"; then
 	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
@@ -81,7 +80,7 @@ externalize_cluster_state
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 
 show_cluster_summary
 

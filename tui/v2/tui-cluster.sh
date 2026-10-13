@@ -97,7 +97,6 @@ _cluster_load_conf() {
 			ports)            cl_ports="$val" ;;
 			vlan)             cl_vlan="$val" ;;
 			image_source)     cl_connection="$val" ;;
-		int_connection)   cl_connection="$val"; [[ "$cl_connection" == "none" ]] && cl_connection="" ;;
 			mac_prefix)       cl_mac_template="$val" ;;
 			num_masters)      _nm="$val" ;;
 			num_workers)      _nw="$val" ;;
@@ -308,9 +307,13 @@ _configure_platform_file() {
 _configure_vmw_form() {
 	local conf_path="$ABA_ROOT/vmware.conf"
 
-	# Create from template if missing
+	# Populate from home cache or template if missing
 	if [[ ! -s "$conf_path" ]]; then
-		cp "$ABA_ROOT/templates/vmware.conf" "$conf_path"
+		if [[ -s "$HOME/.vmware.conf" ]]; then
+			cp "$HOME/.vmware.conf" "$conf_path"
+		else
+			cp "$ABA_ROOT/templates/vmware.conf" "$conf_path"
+		fi
 	fi
 
 	# Load current values
@@ -686,6 +689,19 @@ cluster_install_flow() {
 		_CL_STATE_INIT=true
 	fi
 
+	# Warn if the auto-detected cluster is already installed
+	if [ -f "$ABA_ROOT/$_cl_name/.install-complete" ]; then
+		local _inst_msg="Cluster '$_cl_name' is already installed"
+		[ -f "$ABA_ROOT/$_cl_name/.shutdown.log" ] && _inst_msg="$_inst_msg (shut down)"
+		if ! dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+			--yes-label "New Cluster" --no-label "$TUI2_BTN_CANCEL" \
+			--yesno "$_inst_msg.\n\nDo you want to create a new cluster instead?" 0 0; then
+			return 0
+		fi
+		_cl_name="ocp"
+		_CL_STATE_INIT=false
+	fi
+
 	# Always refresh platform from aba.conf (may have changed via Advanced menu)
 	_cl_platform="${platform:-bm}"
 
@@ -993,6 +1009,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				# Warn if cluster is already installed
 				if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+						--defaultno \
 						--yes-label "Continue" --no-label "Back" \
 						--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
 					[[ $? -ne 0 ]] && continue
@@ -1635,7 +1652,7 @@ _cluster_execute() {
 	# Platform display
 	local _plat_disp="$cl_platform"
 	case "$cl_platform" in
-		bm)  _plat_disp="Bare-metal" ;;
+		bm)  _plat_disp="Bare-metal (ISO only — you boot servers)" ;;
 		vmw) _plat_disp="VMware/ESXi" ;;
 		kvm) _plat_disp="Libvirt/KVM" ;;
 	esac
@@ -1670,7 +1687,7 @@ _cluster_execute() {
 
 	local summary="Review — Confirm before installing:\n\n"
 	summary+="  Cluster:      $fqdn\n"
-	summary+="  Type:         $cl_type$( [[ "$cl_type" == "sno" ]] && echo " (single node)" || echo " ($_nm master, $_nw workers = $total_nodes nodes)")\n"
+	summary+="  Type:         $cl_type$( [[ "$cl_type" == "sno" ]] && echo " (single node)" || echo " ($_nm $( (( _nm == 1 )) && echo master || echo masters), $_nw $( (( _nw == 1 )) && echo worker || echo workers) = $total_nodes nodes)")\n"
 	summary+="  Platform:     $_plat_disp\n"
 	summary+="  OpenShift:    ${ocp_version:-?} (${ocp_channel:-?})\n"
 	local _mode_display
@@ -1699,13 +1716,18 @@ _cluster_execute() {
 	summary+="  SSH key:      ${cl_ssh_key:-~/.ssh/id_rsa}\n"
 	summary+="\n"
 	if [[ "$cl_platform" != "bm" ]]; then
-		summary+="  Master CPU:   ${cl_master_cpu:-(not set)}\n"
-		summary+="  Master Mem:   ${cl_master_mem:-(not set)} GB\n"
+		local _r_mcpu="${cl_master_cpu:-(not set)}"
+		local _r_mmem="${cl_master_mem:+${cl_master_mem} GB}"; _r_mmem="${_r_mmem:-(not set)}"
+		summary+="  Master CPU:   $_r_mcpu\n"
+		summary+="  Master Mem:   $_r_mmem\n"
 		if [[ "$cl_type" == "standard" ]]; then
-			summary+="  Worker CPU:   ${cl_worker_cpu:-(not set)}\n"
-			summary+="  Worker Mem:   ${cl_worker_mem:-(not set)} GB\n"
+			local _r_wcpu="${cl_worker_cpu:-(not set)}"
+			local _r_wmem="${cl_worker_mem:+${cl_worker_mem} GB}"; _r_wmem="${_r_wmem:-(not set)}"
+			summary+="  Worker CPU:   $_r_wcpu\n"
+			summary+="  Worker Mem:   $_r_wmem\n"
 		fi
-		summary+="  Data disk:    ${cl_disk:-(not set)} GB\n"
+		local _r_disk="${cl_disk:+${cl_disk} GB}"; _r_disk="${_r_disk:-(not set)}"
+		summary+="  Data disk:    $_r_disk\n"
 		summary+="  MAC template: ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
@@ -1759,7 +1781,7 @@ _cluster_execute() {
 	# After successful ISO creation (bare-metal, ISO-only step): show boot guidance
 	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
 		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
-		local _node_count=$(( ${cl_masters:-3} + ${cl_workers:-0} ))
+		local _node_count=$total_nodes
 		local _boot_msg
 		if [ "$_node_count" -eq 1 ]; then
 			_boot_msg="Boot your server from this ISO using one of:"
@@ -1805,7 +1827,8 @@ Run 'Configure OperatorHub' (aba day2) to set up:\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
 		if [[ $? -eq 0 ]]; then
-			confirm_and_execute "aba --dir $cl_name day2" "Configure OperatorHub: $fqdn"
+			_exec_with_progress "aba --dir $cl_name day2 --yes" "Configure OperatorHub: $fqdn"
+			[[ $? -eq 2 ]] && confirm_and_execute "aba --dir $cl_name day2" "Configure OperatorHub: $fqdn"
 		fi
 	fi
 
@@ -1889,7 +1912,8 @@ Run 'Configure OperatorHub' (aba day2) to set up:\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
 		if [[ $? -eq 0 ]]; then
-			confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $_fqdn"
+			_exec_with_progress "aba --dir $_cl day2 --yes" "Configure OperatorHub: $_fqdn"
+			[[ $? -eq 2 ]] && confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $_fqdn"
 		fi
 	fi
 }
@@ -1909,15 +1933,17 @@ cluster_delete() {
 
 	local _del_msg _del_help
 	if [[ "${platform:-bm}" == "bm" ]]; then
-		_del_msg="Delete cluster '$cl_display'?\n\nThis removes the local cluster directory and state files only.\nThe physical servers are left running — decommission them manually."
-		_del_help="Delete removes the cluster directory and all generated resources\n\
-(kubeconfig, manifests, ISOs, state markers).\n\n\
+		_del_msg="Delete cluster '$cl_display'?\n\nThis removes cluster state files only.\nThe physical servers are left running — decommission them manually."
+		_del_help="Delete removes cluster state and generated resources\n\
+(kubeconfig, manifests, ISOs, state markers).\n\
+The cluster directory and cluster.conf are kept.\n\n\
 On bare-metal, nodes are left powered — decommission them manually.\n\
 To fully decommission, reinstall or wipe the servers yourself."
 	else
 		_del_msg="Delete cluster '$cl_display'?\n\nThis removes all cluster state and destroys the VMs.\nThis action cannot be undone."
-		_del_help="Delete removes the cluster directory and all generated resources\n\
-(kubeconfig, manifests, ISOs, state markers).\n\n\
+		_del_help="Delete removes cluster state and generated resources\n\
+(kubeconfig, manifests, ISOs, state markers) and destroys the VMs.\n\
+The cluster directory and cluster.conf are kept.\n\n\
 On virtualized platforms (VMware, KVM), the VMs are also destroyed."
 	fi
 
@@ -1925,7 +1951,7 @@ On virtualized platforms (VMware, KVM), the VMs are also destroyed."
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
 			--yes-label "Delete" --no-label "$TUI2_BTN_CANCEL" \
 			--help-button --help-label "Help" \
-			--yesno "$_del_msg" 0 0
+			--defaultno --yesno "$_del_msg" 0 0
 		local rc=$?
 		case $rc in
 			0) break ;;
@@ -1957,6 +1983,8 @@ tui_advanced_menu() {
 		_plat_label="Platform Settings (${platform:-bm})"
 		adv_items+=("P" "$_plat_label")
 		if [[ "${_TUI_MODE:-}" != "DIRECT" ]] && mirror_available; then
+			adv_items+=("S" "Stop Mirror Registry")
+			adv_items+=("T" "Start Mirror Registry")
 			adv_items+=("U" "Uninstall Mirror Registry (destructive)")
 		fi
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
@@ -1982,7 +2010,7 @@ tui_advanced_menu() {
 			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
 		fi
 		if [[ "$_TUI_MODE" != "DISCO" ]]; then
-			adv_items+=("R" "Reset ABA (clean config and state)")
+			adv_items+=("R" "Clean ABA (remove config and state)")
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
@@ -2003,13 +2031,16 @@ P - Platform Settings: View or edit your hypervisor configuration\n\
     (vmware.conf for vSphere, kvm.conf for KVM/libvirt).\n\n\
 U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
+S - Stop Mirror Registry: Stops the registry service without removing\n\
+    data or configuration. Use before copying the data directory.\n\n\
+T - Start Mirror Registry: Starts a previously stopped registry.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
 X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
     installation from scratch. All current cluster data is lost.\n\n\
-R - Reset ABA: Cleans configuration and state files so you can\n\
+R - Clean ABA: Removes configuration and state files so you can\n\
     reconfigure from scratch. Keeps downloaded CLI tools, mirror\n\
     installers, and saved image archives. Use 'aba reset --force'\n\
     from the command line for a full factory reset." 0 0
@@ -2026,10 +2057,10 @@ R - Reset ABA: Cleans configuration and state files so you can\n\
 			;;
 		"R")
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
-				--yes-label "Reset" --no-label "$TUI2_BTN_CANCEL" \
-				--yesno "Reset ABA configuration?\n\nThis will clean configuration and state files.\nDownloaded tools, mirror installers, and image archives are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
+				--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
+				--defaultno --yesno "Clean ABA configuration?\n\nThis will remove configuration, state files, and mirror installers.\nImage archives (mirror_*.tar) and CLI tools are kept.\n\nEquivalent to: aba clean\n\nFor a full factory reset, use: aba reset --force (CLI)" 0 0
 			[[ $? -ne 0 ]] && continue
-			confirm_and_execute "aba clean" "Reset ABA"
+			confirm_and_execute "aba clean" "Clean ABA"
 			return 0
 			;;
 			"P")
@@ -2068,15 +2099,31 @@ R - Reset ABA: Cleans configuration and state files so you can\n\
 						;;
 				esac
 				;;
+			"S")
+				_exec_with_progress "aba --dir mirror stop --yes" "Stop Mirror Registry" _invalidate_mirror_cache
+				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir mirror stop" "Stop Mirror Registry" _invalidate_mirror_cache
+				;;
+			"T")
+				_exec_with_progress "aba --dir mirror start --yes" "Start Mirror Registry" _invalidate_mirror_cache
+				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir mirror start" "Start Mirror Registry" _invalidate_mirror_cache
+				;;
 			"U")
 				local _unreg_host
 				_unreg_host=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_host")
 				[[ -z "$_unreg_host" ]] && _unreg_host="localhost"
+				local _delete_data=""
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
-					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
-					--yesno "Uninstall the mirror registry on: ${_unreg_host}\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
+					--ok-label "Uninstall" --cancel-label "$TUI2_BTN_CANCEL" \
+					--separate-output \
+					--checklist "Uninstall the mirror registry on: ${_unreg_host}\n\nThe registry service will be stopped and removed.\nThe data directory is preserved by default (images survive for reinstall).\n\nOptional:" 0 0 1 \
+					"delete-data" "Also delete the data directory (images will be lost)" off \
+					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && continue
-				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				grep -q 'delete-data' "$_TUI_TMP" && _delete_data="--delete-data"
+				_exec_with_progress "aba --dir mirror uninstall --yes${_delete_data:+ $_delete_data}" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				if [ $? -eq 2 ]; then
+					confirm_and_execute "aba --dir mirror uninstall${_delete_data:+ $_delete_data}" "Uninstall Mirror Registry" _invalidate_mirror_cache
+				fi
 				;;
 			"F")
 				cluster_monitor
@@ -2227,7 +2274,15 @@ _day2_run() {
 		return 1
 	fi
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER $target" "Day-2: $target"
+	local _cmd="aba --dir $SELECTED_CLUSTER $target"
+	local _title="Day-2: $target"
+
+	# Try progress dialog first; falls back to confirm_and_execute if the
+	# script doesn't emit PLAN events (returns 2).
+	_exec_with_progress "$_cmd --yes" "$_title"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" && rc=$?
+	return $rc
 }
 
 _day2_run_osus() {
@@ -2312,7 +2367,7 @@ _day2_status() {
 		echo ""
 		KUBECONFIG="$kc" oc get nodes --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 		echo ""
-		echo "═══ Pending Pods ($cl_display) ═══"
+		echo "═══ Non-Ready Pods ($cl_display) ═══"
 		echo ""
 		KUBECONFIG="$kc" oc get po -A --sort-by=.status.conditions[-1].lastTransitionTime --request-timeout=5s 2>&1 \
 			| awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print}' \
@@ -2513,8 +2568,13 @@ _day2_upgrade() {
 		return 1
 	fi
 
-	local opt_warnings="OFF" opt_force="OFF"
+	local opt_force="OFF"
 	local _cur_minor="${upgrade_current_ver%.*}"
+
+	# Build a lookup set for conditional versions
+	local -A _cond_set=()
+	local _cv
+	for _cv in "${_conditional[@]}"; do _cond_set[$_cv]=1; done
 
 	# Default to the safest choice: z-stream first, then minor, then conditional
 	local default_item="M"
@@ -2528,9 +2588,11 @@ _day2_upgrade() {
 		local _header="Current: ${upgrade_current_ver:-?}"
 		[[ -n "${upgrade_channel:-}" ]] && _header="$_header (${upgrade_channel})"
 		if [[ "${upgrade_osus:-}" == "true" ]]; then
-			_header="$_header [OSUS]"
+			_header="$_header \\Z2[OSUS]\\Zn"
 		else
-			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths (recommended)"
+			_header="$_header \\Z1[no OSUS]\\Zn"
+			_header="$_header\n\\Z1⚠ Upgrade paths cannot be validated without OSUS.\\Zn"
+			_header="$_header\n\\Z1  Install OSUS first: Day-2 → OSUS (recommended).\\Zn"
 		fi
 		_header="$_header\nNote: The update channel will be switched automatically if needed."
 
@@ -2565,17 +2627,16 @@ _day2_upgrade() {
 			done
 		fi
 
-		# Show conditional versions when toggle is ON
-		if [[ "$opt_warnings" == "ON" && ${#_conditional[@]} -gt 0 ]]; then
+		# Always show conditional versions inline (annotated)
+		if [[ ${#_conditional[@]} -gt 0 ]]; then
 			items+=("" "──── Conditional (not recommended) ───")
 			for v in "${_conditional[@]}"; do
-				items+=("$v" "(!) known issues")
+				items+=("$v" "\\Z1(conditional)\\Zn known issues")
 			done
 		fi
 
 		items+=("M" "Manual entry...")
 		items+=("" "──── Options ────────────────────")
-		items+=("W" "Include conditional versions:  $opt_warnings")
 		items+=("F" "Force (bypass safety checks):  $opt_force")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
@@ -2612,24 +2673,29 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 		choice=$(<"$_TUI_TMP")
 		[[ -n "$choice" ]] && default_item="$choice"
 
-		# Handle toggles
-		if [[ "$choice" == "W" ]]; then
-			[[ "$opt_warnings" == "OFF" ]] && opt_warnings="ON" || opt_warnings="OFF"
-			continue
-		elif [[ "$choice" == "F" ]]; then
+		# Handle toggles and selections
+		if [[ "$choice" == "F" ]]; then
 			[[ "$opt_force" == "OFF" ]] && opt_force="ON" || opt_force="OFF"
 			continue
 		elif [[ "$choice" == "M" ]]; then
 			:
 		elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			# Confirm if conditional version selected
+			if [[ -n "${_cond_set[$choice]:-}" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Conditional Version" \
+					--defaultno \
+					--yes-label "Proceed" --no-label "$TUI2_BTN_BACK" \
+					--yesno "Version $choice is \\Z1conditional (not recommended)\\Zn.\n\nThis version has known issues. Red Hat does not\nrecommend upgrading to it unless specifically advised.\n\nProceed with upgrade to $choice?" 0 0
+				[[ $? -ne 0 ]] && continue
+			fi
 			_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 			local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $choice"
-			# If the version is conditional, tell ABA core to skip the redundant interactive question
-			local _is_conditional=
-			for _cv in "${_conditional[@]}"; do [[ "$_cv" == "$choice" ]] && _is_conditional=1 && break; done
-			[[ "$_is_conditional" ]] && _cmd="$_cmd --allow-not-recommended"
+			[[ -n "${_cond_set[$choice]:-}" ]] && _cmd="$_cmd --allow-not-recommended"
 			[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
-			confirm_and_execute "$_cmd" \
+			_exec_with_progress "$_cmd --yes" \
+				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
+			local _rc=$?
+			[[ $_rc -eq 2 ]] && confirm_and_execute "$_cmd" \
 				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
 			return
 		else
@@ -2662,7 +2728,10 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 		_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 		local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $target_ver"
 		[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
-		confirm_and_execute "$_cmd" \
+		_exec_with_progress "$_cmd --yes" \
+			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
+		local _rc=$?
+		[[ $_rc -eq 2 ]] && confirm_and_execute "$_cmd" \
 			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
 		return
 	done
@@ -2679,10 +2748,14 @@ _day2_shutdown() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_SHUTDOWN" \
 		--yes-label "Shutdown" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
+		--defaultno --yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER shutdown --wait" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
+	local _cmd="aba --dir $SELECTED_CLUSTER shutdown --wait"
+	_exec_with_progress "$_cmd --yes" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display" && rc=$?
+	return $rc
 }
 
 # --- Graceful Cluster Startup ---
@@ -2701,7 +2774,10 @@ _day2_startup() {
 		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	_exec_with_progress "aba --dir $SELECTED_CLUSTER startup --yes" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display" && rc=$?
+	return $rc
 }
 
 # --- Refresh (recreate VMs, trigger new install) ---
@@ -2714,7 +2790,7 @@ _day2_refresh() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
 		--yes-label "Refresh" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
+		--defaultno --yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER refresh" "$TUI2_TITLE_DAY2_REFRESH: $cl_display"
@@ -2728,9 +2804,17 @@ _day2_clean() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	local _clean_warn=""
+	local _cl_path="$ABA_ROOT/$SELECTED_CLUSTER"
+	if [ -f "$_cl_path/.install-complete" ]; then
+		_clean_warn="\n\nWARNING: This cluster is installed"
+		[ -f "$_cl_path/.shutdown.log" ] && _clean_warn="$_clean_warn (shut down)"
+		_clean_warn="$_clean_warn. Clean will remove\n.install-complete, kubeconfig, and shutdown state. VMs are NOT removed."
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
 		--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
+		--defaultno --yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved.$_clean_warn" 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"

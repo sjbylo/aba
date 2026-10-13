@@ -21,7 +21,7 @@ cincinnati-operator OpenShift Update Service v1
 cli-manager CLI Manager tech-preview
 cluster-observability-operator Cluster Observability Operator stable
 compliance-operator Compliance Operator stable
-container-security-operator Red Hat Quay Container Security Operator stable-3.17
+container-security-operator Container Security stable-3.18
 costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
@@ -31,6 +31,7 @@ dpu-network-operator DPU Network Operator stable
 eap JBoss EAP stable
 fence-agents-remediation Fence Agents Remediation Operator stable
 file-integrity-operator File Integrity Operator stable
+gatekeeper-operator-product Gatekeeper Operator stable
 job-set Job Set Operator stable-v1.0
 jws-operator WebServer alpha
 kernel-module-management-hub Kernel Module Management (Hub) stable
@@ -71,10 +72,11 @@ openshift-external-secrets-operator External Secrets Operator for Red Hat OpenSh
 openshift-gitops-operator Red Hat OpenShift GitOps latest
 openshift-pipelines-operator-rh Red Hat OpenShift Pipelines latest
 openshift-secondary-scheduler-operator Secondary Scheduler Operator for Red Hat OpenShift stable
+openshift-zero-trust-workload-identity-manager Zero Trust Workload Identity Manager stable-v1
 opentelemetry-product Red Hat build of OpenTelemetry stable
 policy-controller-operator Policy Controller Operator stable
-quay-bridge-operator Red Hat Quay Bridge Operator stable-3.17
-quay-operator Red Hat Quay stable-3.17
+quay-bridge-operator Quay Bridge Operator stable-3.18
+quay-operator Quay stable-3.18
 recipe Recipe stable-4.22
 red-hat-hawtio-operator HawtIO Operator v2
 rhacs-operator Advanced Cluster Security for Kubernetes stable
@@ -84,6 +86,7 @@ rhsso-operator Red Hat Single Sign-On Operator stable
 rhtas-operator Red Hat Trusted Artifact Signer stable
 rook-ceph-operator Rook-Ceph stable-4.22
 run-once-duration-override-operator Run Once Duration Override Operator stable
+security-profiles-operator Security Profiles Operator release-alpha-rhel-8
 self-node-remediation Self Node Remediation Operator stable
 serverless-operator Red Hat OpenShift Serverless stable
 servicemeshoperator3 Red Hat OpenShift Service Mesh 3 stable

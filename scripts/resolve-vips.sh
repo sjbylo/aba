@@ -39,6 +39,11 @@ fi
 
 _is_ip='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
 
+# dig +short can print a CNAME and then several addresses. The VIP is the first IPv4 line.
+first_ipv4() {
+	printf '%s\n' "$1" | grep -m1 -E "$_is_ip" || true
+}
+
 # If both VIPs are already set as valid IPs, skip DNS discovery
 if { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; } && \
    { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
@@ -96,32 +101,43 @@ else
 		_try_api=$(( _start_int - 2 ))
 		_try_ing=$(( _start_int - 1 ))
 
+		# Candidates only. A VIP that is already a valid IP must stay.
+		_new_api=""
+		_new_ing=""
 		if [ "$_try_api" -gt "$_net_int" ] && [ "$_try_ing" -lt "$_net_end" ]; then
-			api_vip=$(int_to_ip "$_try_api")
-			ingress_vip=$(int_to_ip "$_try_ing")
+			_new_api=$(int_to_ip "$_try_api")
+			_new_ing=$(int_to_ip "$_try_ing")
 		else
 			# "Before" wraps out of subnet — place after last node (+10 gap)
 			_after_api=$(( _start_int + _node_count + 10 ))
 			_after_ing=$(( _start_int + _node_count + 11 ))
 			if [ "$_after_ing" -lt "$_net_end" ]; then
-				api_vip=$(int_to_ip "$_after_api")
-				ingress_vip=$(int_to_ip "$_after_ing")
+				_new_api=$(int_to_ip "$_after_api")
+				_new_ing=$(int_to_ip "$_after_ing")
 			else
 				aba_abort "Cannot auto-allocate VIPs: no room in subnet $machine_network/$prefix_length." \
 					"Set api_vip and ingress_vip explicitly in cluster.conf."
 			fi
 		fi
 
+		if ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; }; then
+			api_vip="$_new_api"
+			replace-value-conf -n api_vip -v "$api_vip" cluster.conf
+		fi
+		if ! { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
+			ingress_vip="$_new_ing"
+			replace-value-conf -n ingress_vip -v "$ingress_vip" cluster.conf
+		fi
+
 		aba_info "Auto-allocated VIPs: api_vip=$api_vip, ingress_vip=$ingress_vip (ABA-managed DNS)"
-		replace-value-conf -n api_vip -v "$api_vip" cluster.conf
-		replace-value-conf -n ingress_vip -v "$ingress_vip" cluster.conf
 
 	elif ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; }; then
 		# api_vip not set — try to back-fill from DNS
-		if [ "$actual_ip_of_api" ] && echo "$actual_ip_of_api" | grep -q -E "$_is_ip"; then
-			aba_info "Resolved $cl_api_domain → $actual_ip_of_api (saved to $cluster_name/cluster.conf)"
-			replace-value-conf -q -n api_vip -v "$actual_ip_of_api" cluster.conf
-			api_vip=$actual_ip_of_api
+		_api_ip=$(first_ipv4 "$actual_ip_of_api")
+		if [ "$_api_ip" ]; then
+			aba_info "Resolved $cl_api_domain → $_api_ip (saved to $cluster_name/cluster.conf)"
+			replace-value-conf -q -n api_vip -v "$_api_ip" cluster.conf
+			api_vip=$_api_ip
 		else
 			aba_abort "Missing DNS record $cl_api_domain" \
 				"Create DNS records for api.$cluster_name.$base_domain or set api_vip in cluster.conf."
@@ -130,10 +146,11 @@ else
 
 	# Resolve ingress_vip (may already be set from auto-allocation above)
 	if ! { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
-		if [ "$actual_ip_of_ingress" ] && echo "$actual_ip_of_ingress" | grep -q -E "$_is_ip"; then
-			aba_info "Resolved $cl_ingress_domain → $actual_ip_of_ingress (saved to $cluster_name/cluster.conf)"
-			replace-value-conf -q -n ingress_vip -v "$actual_ip_of_ingress" cluster.conf
-			ingress_vip=$actual_ip_of_ingress
+		_ingress_ip=$(first_ipv4 "$actual_ip_of_ingress")
+		if [ "$_ingress_ip" ]; then
+			aba_info "Resolved $cl_ingress_domain → $_ingress_ip (saved to $cluster_name/cluster.conf)"
+			replace-value-conf -q -n ingress_vip -v "$_ingress_ip" cluster.conf
+			ingress_vip=$_ingress_ip
 		else
 			aba_abort "Missing DNS record $cl_ingress_domain!" \
 				"Create DNS records for *.apps.$cluster_name.$base_domain or set ingress_vip in cluster.conf."

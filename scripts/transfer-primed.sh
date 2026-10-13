@@ -54,6 +54,7 @@ fi
 _resolved_copies=""
 declare -a _original_targets=()
 _primed_dirs=""
+_temp_init_dirs=""
 
 _restore_transfer_cleanup() {
 	local _i=0
@@ -65,12 +66,18 @@ _restore_transfer_cleanup() {
 	for _d in $_primed_dirs; do
 		rm -f "$_d/.primed"
 	done
+	for _d in $_temp_init_dirs; do
+		rm -f "$_d/.init"
+	done
 }
 trap '_restore_transfer_cleanup' EXIT
 
 # Prepare each cluster dir: resolve symlinks, set .primed markers
 for _cdir in "${_cluster_dirs[@]}"; do
-	[ ! -f "$_cdir/.init" ] && [ -f "$_cdir/cluster.conf" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
+	if [ ! -f "$_cdir/.init" ] && [ -f "$_cdir/cluster.conf" ]; then
+		touch -r "$_cdir/cluster.conf" "$_cdir/.init"
+		_temp_init_dirs+=" $_cdir"
+	fi
 
 	for _f in vmware.conf kvm.conf mirror.conf; do
 		if [ -L "$_cdir/$_f" ]; then

@@ -7,18 +7,44 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_load_config
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
+
 reg_detect_existing
+_skip_to_post_install=$?
+
 reg_check_fqdn
 reg_setup_data_dir docker
 reg_generate_password
-reg_verify_localhost
 
-REGISTRY_NAME="registry"
+if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+	# Previous install was interrupted but registry is healthy — skip to post_install
+	aba_progress "DONE|reg_env"
+	aba_progress "DONE|reg_firewall"
+	aba_progress "DONE|reg_download"
+	aba_progress "DONE|reg_install"
+	aba_progress "START|reg_postcfg"
+else
+
+reg_verify_localhost
+fi
+
+REGISTRY_NAME="registry-${reg_port}"
 REGISTRY_DATA_DIR="$reg_root/data"
 REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
+if [ "$_skip_to_post_install" -ne "$REG_RC_COMPLETING" ]; then
+
 ask "Install Docker registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
+
+aba_progress "DONE|reg_env"
+aba_progress "START|reg_firewall"
+
+reg_open_firewall
+
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_download"
 
 aba_info "Installing Docker registry on localhost ..."
 
@@ -27,6 +53,12 @@ if [ -f docker-reg-image.tgz ]; then
 	aba_info "Loading Docker registry image from docker-reg-image.tgz ..."
 	podman load -i docker-reg-image.tgz
 fi
+
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
+
+# Mark state as "installing" so a retry can detect and recover from a partial install
+reg_mark_installing docker
 
 mkdir -p "$REGISTRY_DATA_DIR" "$REGISTRY_CERTS_DIR" "$REGISTRY_AUTH_DIR"
 
@@ -70,10 +102,12 @@ fi
 aba_info "Creating authentication file ..."
 htpasswd -Bbn "$reg_user" "$reg_pw" > "$REGISTRY_AUTH_DIR/htpasswd"
 
-# --- Stop old container if running ---
+# --- Abort if a container with this name already exists ---
 if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
-	aba_info "Removing old registry container ..."
-	podman rm -f "$REGISTRY_NAME" || true
+	aba_abort "Container '$REGISTRY_NAME' already exists." \
+		"A previous install may have failed or was not fully uninstalled." \
+		"Clean up with: podman rm -f $REGISTRY_NAME" \
+		"Then retry: aba -d $(basename "$PWD") install"
 fi
 
 # --- Start the registry container ---
@@ -89,6 +123,7 @@ podman run -d \
 	-v "${REGISTRY_CERTS_DIR}:/certs:Z" \
 	-v "${REGISTRY_AUTH_DIR}:/auth:Z" \
 	-e REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port} \
+	-e REGISTRY_HTTP_DEBUG_ADDR=localhost:$(( reg_port + 10000 )) \
 	-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
 	-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
 	-e REGISTRY_AUTH=htpasswd \
@@ -118,7 +153,10 @@ else
 	fi
 fi
 
-reg_open_firewall
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_postcfg"
+
+fi  # end of skip_to_post_install guard
 
 # Save credentials and state BEFORE the connectivity check, so the user
 # can recover with 'aba verify' or 'aba uninstall' if networking fails.
@@ -133,6 +171,9 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To verify:    cd $PWD && aba verify
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
+
+aba_progress "DONE|reg_postcfg"
+aba_progress "START|reg_verify"
 
 # Verify connectivity after saving state.
 # Report diagnostic facts without guessing the cause — network setups vary widely
@@ -161,3 +202,6 @@ if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
 		"" \
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi
+
+reg_cleanup_backup
+aba_progress "DONE|reg_verify"

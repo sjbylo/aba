@@ -19,6 +19,7 @@ When managing E2E test pool VMs (con1-4, dis1-4), **always use `test/e2e/run.sh`
 | Run suites | `run.sh run -a -p 1-4 --dev --loop` | manual tmux/runner.sh |
 | Verify pools healthy | `run.sh verify -p 1-4` | ad-hoc SSH probes |
 | Reclone pool VMs | `run.sh run -a -p 3 -R` | manual govc clone |
+| Expedite a suite | `run.sh reschedule -s <suite>` | manual queue editing |
 
 ## Daemon inject — NEVER manually stop/deploy/restart
 
@@ -40,3 +41,15 @@ Only use `run.sh stop` / `run.sh kill` when the user explicitly asks to stop tes
 ## When govc is acceptable
 
 Only use `govc` directly for operations `run.sh` does NOT cover — e.g. inspecting vCenter inventory, checking VM info for debugging, or managing non-pool VMs (conno, disco, ESXi hosts).
+
+## Expediting a suite (priority queue)
+
+To move a suite to the **front** of the pending queue without interrupting running suites:
+
+```bash
+run.sh reschedule -s mirror-vendor-matrix
+```
+
+This prepends the suite to the inject queue. The dispatcher picks it up as the next suite when a pool becomes free. Already-running suites are unaffected.
+
+Use this when a specific suite needs to run sooner (e.g. re-testing a previous failure, verifying a targeted fix).

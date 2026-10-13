@@ -572,10 +572,11 @@ cmd_deploy() {
 	echo ""
 	echo "  Deploy complete."
 
-	# Store local deploy checksum for verify-code
+	# Store local deploy checksum and per-file manifest for verify-code
 	local _deploy_cksum
 	_deploy_cksum=$(_source_checksum "$aba_root")
 	echo "$_deploy_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+	cp -f /tmp/e2e-source-md5sums /tmp/e2e-deploy-md5sums 2>/dev/null || true
 }
 
 # --- verify-code: check source sync between workspace and pools --------------
@@ -606,14 +607,18 @@ cmd_verify_code() {
 		echo "  Workspace:   ${_ws_cksum:0:12}  ✓ matches last deploy (${_deploy_time})"
 	else
 		echo "  Workspace:   ${_ws_cksum:0:12}  ✗ CHANGED since last deploy (${_deploy_time})"
-		# Show which workspace files changed (uncommitted, filtered to manifest paths)
-		local _dirty_files
-		_dirty_files=$(cd "$aba_root" && git diff --name-only HEAD 2>/dev/null | grep -E '^(scripts/|templates/|tui/|tools/|others/|test/|Makefile|aba$|install$|VERSION$)' || true)
-		if [ -n "$_dirty_files" ]; then
-			local _count
-			_count=$(echo "$_dirty_files" | wc -l)
-			echo "               ${_count} uncommitted file(s):"
-			echo "$_dirty_files" | while read -r f; do echo "                 $f"; done
+		# Show which tracked files differ between workspace and last deploy.
+		# The deploy snapshot is saved at deploy time; compare against current.
+		if [ -f /tmp/e2e-deploy-md5sums ] && [ -f /tmp/e2e-source-md5sums ]; then
+			local _changed_files
+			_changed_files=$(diff <(LC_ALL=C sort /tmp/e2e-deploy-md5sums) <(LC_ALL=C sort /tmp/e2e-source-md5sums) 2>/dev/null | \
+				grep '^[<>]' | sed 's/^[<>] [a-f0-9]*  //' | LC_ALL=C sort -u || true)
+			if [ -n "$_changed_files" ]; then
+				local _count
+				_count=$(echo "$_changed_files" | wc -l)
+				echo "               ${_count} changed file(s):"
+				echo "$_changed_files" | while read -r f; do echo "                 $f"; done
+			fi
 		fi
 	fi
 
@@ -634,7 +639,15 @@ cmd_verify_code() {
 		elif [ "$_pool_cksum" = "$_ws_cksum" ]; then
 			echo "${_pool_cksum:0:12}  ✓ matches workspace"
 		elif [ -n "$_deploy_cksum" ] && [ "$_pool_cksum" = "$_deploy_cksum" ]; then
-			echo "${_pool_cksum:0:12}  ✓ matches last deploy (workspace changed since)"
+			echo "${_pool_cksum:0:12}  ✗ STALE (matches last deploy, workspace changed since)"
+			# Show which files differ between pool and current workspace
+			local _pool_md5s
+			_pool_md5s=$(_remote_source_md5sums "$_target") || _pool_md5s=""
+			if [ -n "$_pool_md5s" ] && [ -f /tmp/e2e-source-md5sums ]; then
+				diff <(cat /tmp/e2e-source-md5sums) <(echo "$_pool_md5s") 2>/dev/null | \
+					grep '^[<>]' | sed 's/^[<>] [a-f0-9]*  //' | LC_ALL=C sort -u | \
+					while read -r f; do echo "                 $f"; done
+			fi
 		else
 			echo "${_pool_cksum:0:12}  ✗ DIFFERS from workspace"
 			# Show which files differ

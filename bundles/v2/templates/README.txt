@@ -30,8 +30,8 @@ See the build folder for full test logs and the test script used.
 ─── QUICK START ───────────────────────────────────────────────────────
 
   DISK SPACE: The bastion host needs approximately 3-4x the bundle
-  size (~<SIZE> x 3) for unpacked content, oc-mirror cache, and
-  mirror registry images.
+  size (~<SIZE> x 3 = ~<DISK_NEEDED>) for unpacked content, oc-mirror
+  cache, and mirror registry images.
 
   1. Transfer the bundle files to the disconnected environment.
 

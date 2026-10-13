@@ -80,7 +80,11 @@ if [ ! -d "$stale_dir" ]; then
 fi
 echo "  Planted stale dir: $stale_dir (mtime=$(stat -c %y "$stale_dir"))"
 
-# Run extraction -- sweep happens at startup
+# Force a full download by removing the content-layer cache file so the
+# fast-path exit (which skips the sweep) is not taken.
+rm -f ".index/.${catalog}-index-v${ocp_ver_major}.content-layer-digest"
+
+# Run extraction -- sweep happens at startup (before the full download path)
 scripts/download-catalog-index.sh "$catalog" "$ocp_ver_major"
 
 if [ -d "$stale_dir" ]; then

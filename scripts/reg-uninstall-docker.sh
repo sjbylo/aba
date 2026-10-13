@@ -7,56 +7,36 @@
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
-source scripts/include_all.sh
 source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $*"
 
-source <(normalize-aba-conf)
-source <(normalize-mirror-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
-export regcreds_display="regcreds"
-
-# No verify-aba-conf — uninstall uses state.sh, not aba.conf values
-
-if [ ! -s "$regcreds_dir/state.sh" ]; then
-	aba_abort "No Docker registry state found in $regcreds_display/state.sh"
-fi
-
-source "$regcreds_dir/state.sh"
-
-REGISTRY_NAME="registry"
+reg_pre_uninstall "Docker"
 
 if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
+
+	aba_progress "START|uninst_remove"
 
 	_stale=$(reg_stale_report docker)
 	if [ -z "$_stale" ]; then
 		aba_info "Docker registry already gone on localhost -- clearing local state"
 		reg_close_firewall
+		aba_progress "DONE|uninst_remove"
+		aba_progress "START|uninst_cleanup"
 		reg_finish_uninstall "Docker" "already uninstalled"
+		aba_progress "DONE|uninst_cleanup"
 		exit 0
 	fi
 
-	if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
-		aba_info "Stopping and removing registry container ..."
-		podman rm -f "$REGISTRY_NAME" || true
-	else
-		aba_info "Registry container '$REGISTRY_NAME' not found (already stopped)."
-	fi
-
-	reg_rm_data_dir docker "$reg_root"
+	reg_docker_remove
 
 	reg_close_firewall
 
-	_stale=$(reg_stale_report docker)
-	if [ -n "$_stale" ]; then
-		aba_abort \
-			"Docker registry uninstall left stale state:" \
-			"$_stale" \
-			"Investigate and clean up manually before retrying."
-	fi
+	aba_progress "DONE|uninst_remove"
+	aba_progress "START|uninst_cleanup"
 
 	reg_finish_uninstall "Docker" "uninstall successful"
+	aba_progress "DONE|uninst_cleanup"
 	exit 0
 fi
 

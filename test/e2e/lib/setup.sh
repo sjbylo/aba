@@ -33,10 +33,10 @@ _e2e_delete_leftover_cluster_remote() {
 }
 
 # Source other libs if not already loaded
-if ! type remote_exec >/dev/null; then
+if ! type remote_exec &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
 fi
-if ! type configure_internal_bastion >/dev/null; then
+if ! type configure_internal_bastion &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/pool-ops.sh"
 fi
 
@@ -123,7 +123,7 @@ reset_internal_bastion() {
     # 1. Uninstall the registry using aba's own uninstall, from conN.
     #    Rule 6: uninstall from the same host that installed.
     e2e_run "Uninstall registry from conN" \
-        "cd ${_aba_root} && aba -d mirror uninstall"
+        "cd ${_aba_root} && aba -d mirror uninstall --delete-data"
 
     # 2. Verify the registry is actually down.
     e2e_run "Verify registry is down on $_dis_bare" \
@@ -183,7 +183,7 @@ _cleanup_con_registry() {
                 }
             else
                 echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
-                ( cd "$_dir" && ./aba -y -d mirror uninstall ) && _did_uninstall=1 || {
+                ( cd "$_dir" && ./aba -y -d mirror uninstall --delete-data ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
                 }
             fi

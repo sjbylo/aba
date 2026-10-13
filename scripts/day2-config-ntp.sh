@@ -10,12 +10,30 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
+scripts/progress-plan.sh day2-ntp
+aba_progress "START|ntp_access"
+
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
 [ ! "$ntp_servers" ] && aba_abort "Define 'ntp_servers' value in 'aba.conf' to configure NTP" 
 
 scripts/cli-install-all.sh --wait oc butane
+
+# Check the API before writing chrony files. A down cluster used to leave new
+# .bu and yaml files behind and then abort.
+aba_info "Accessing the cluster ..."
+
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
+
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
+
+exec_cmd="oc whoami"
+aba_debug "Running: $exec_cmd"
+$exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 
@@ -134,20 +152,10 @@ fi
 butane .99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
-aba_info "Accessing the cluster ..."
-
-if [ ! "$KUBECONFIG" ]; then
-	_kc=$(cluster_kubeconfig 2>/dev/null)
-	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
-fi
-
-cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
-
-exec_cmd="oc whoami"
-aba_debug "Running: $exec_cmd"
-$exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
-
 warn_if_cluster_unstable
+
+aba_progress "DONE|ntp_access"
+aba_progress "START|ntp_apply"
 
 # Check if MachineConfig would change anything before applying.
 # oc diff: exit 0=no change, exit 1=diff found, exit >1=error.
@@ -231,6 +239,9 @@ if [ "$_mc_changed" -eq 1 ]; then
 fi
 
 raw_targets=($ntp_servers)
+
+aba_progress "DONE|ntp_apply"
+aba_progress "START|ntp_verify"
 
 # Get list of Node IPs before potential reboot.
 aba_debug "Running: oc get nodes -owide --no-headers"
@@ -356,4 +367,5 @@ if ! mcp_is_updated; then
 	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
 
+aba_progress "DONE|ntp_verify"
 aba_success "NTP configuration completed successfully."

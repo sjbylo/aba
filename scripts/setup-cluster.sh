@@ -14,7 +14,7 @@ type=
 
 . <(process_args "$@")
 
-[ ! "$name" ] && aba_abort "Error: cluster name missing!" 
+[ ! "$name" ] && aba_abort "Cluster name missing!" 
 _valid_cluster_name "$name" || exit 1
 
 if [ ! -d "$name" ]; then
@@ -32,7 +32,7 @@ else
 			aba_debug "Running: $exec_cmd (existing cluster dir $name)"
 			$exec_cmd  # Allow the dir to be "re-used",. i.e. don't touch any already created artifacts (cluster.con, agent*yaml, iso etc) 
 		else
-			aba_abort "Error: Directory $name invalid cluster dir."
+			aba_abort "Directory $name is not a valid cluster dir."
 		fi
 	else
 		cd $name
@@ -98,7 +98,7 @@ _updated=""
 # cluster.conf -- the target file exists, so Make considers it up-to-date.
 source <(normalize-cluster-conf)
 if image_source_is_mirror; then
-	_mn=$(image_source_mirror_name)
+	_mn=${image_source:-mirror}
 	ln -sfn ../$_mn mirror
 	ln -sfn ~/.aba/mirror/$_mn regcreds
 fi

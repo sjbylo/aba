@@ -20,6 +20,16 @@
 #     page) to prevent dialog resize flicker.
 
 printf 'Initializing ABA TUI v2...\n'
+
+# Abort early if the filesystem is full (avoids scattered "No space left" errors)
+if ! _tui_tmpcheck=$(mktemp 2>/dev/null); then
+	printf '\n\033[31mError: Cannot create temporary files — disk may be full.\033[0m\n'
+	printf 'Free some disk space and try again.\n\n'
+	df -h / /tmp 2>/dev/null
+	exit 1
+fi
+rm -f "$_tui_tmpcheck"
+
 printf '  [ ] Loading modules\n'
 printf '  [ ] Checking mirror\n'
 printf '  [ ] Checking packages\n'
@@ -122,6 +132,7 @@ export ESCDELAY=25
 # Source TUI v2 modules
 source "$ABA_ROOT/tui/v2/tui-strings2.sh"
 source "$ABA_ROOT/tui/v2/tui-lib.sh"
+source "$ABA_ROOT/tui/v2/tui-progress.sh"
 source "$ABA_ROOT/tui/v2/tui-mirror.sh"
 source "$ABA_ROOT/tui/v2/tui-cluster.sh"
 source "$ABA_ROOT/tui/v2/tui-disco.sh"
@@ -134,7 +145,7 @@ _tick "Loading modules"
 # =============================================================================
 
 for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf \
-	aba_mirror_verify_start aba_mirror_verify_refresh aba_mirror_verify_exit \
+	aba_mirror_runtime_start aba_mirror_runtime_refresh aba_mirror_runtime_read aba_mirror_runtime_wait \
 	aba_inet_check_start aba_inet_check_wait aba_inet_check_wait_status \
 	aba_podman_check_start aba_podman_check_wait \
 	aba_version_fetch_start aba_isconf_generate_start aba_prefetch_catalogs aba_bg_cleanup; do
@@ -154,7 +165,7 @@ aba_bg_cleanup
 aba_inet_check_start
 
 tui_log "Kicking off background mirror verify"
-aba_mirror_verify_start
+aba_mirror_runtime_start
 
 _tick "Checking mirror"
 
@@ -300,7 +311,8 @@ _ps_path="${pull_secret_file:-$HOME/.pull-secret.json}"
 _ps_path="${_ps_path/#\~/$HOME}"                         # ~/foo → /home/user/foo
 if [[ -f "$_ps_path" ]]; then
 	tui_log "Starting background catalog pre-fetch"
-	(aba_prefetch_catalogs >>"$_TUI_LOG_FILE" 2>&1) &
+	setsid bash -c "source scripts/include_all.sh 2>/dev/null; aba_prefetch_catalogs" >>"$_TUI_LOG_FILE" 2>&1 &
+	_PREFETCH_PID=$!
 fi
 
 # Background CLI tool downloads (non-blocking, uses run_once per tool)
@@ -465,12 +477,17 @@ _detect_mode() {
 			tui_log "Mode detected: DISCO (offline, payload ready)"
 		else
 			# No fallback possible — show detailed error and exit
-			local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"  # replace newlines with \n for dialog
+			local _err_details="${ERROR_DETAILS//$'\n'/\\n}"  # replace newlines with \n for dialog
 			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
 				--no-collapse \
 				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
 			_tui_redirect_restore
 			clear
+			if [[ -n "${_PREFETCH_PID:-}" ]]; then
+				kill -- -"$_PREFETCH_PID" 2>/dev/null; wait "$_PREFETCH_PID" 2>/dev/null
+				# Also clean up run_once tasks spawned by prefetch (they use setsid, so group kill doesn't reach them)
+				run_once -G 2>/dev/null || true
+			fi
 			exit 0
 		fi
 	fi
@@ -515,6 +532,7 @@ _conno_main() {
 		if aba_inet_check_cached 300; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
 		local items=()
+		_TUI_REG_STATE=""
 
 		local mirr_label="$TUI2_LABEL_INSTALL_MIRROR"
 		local mirr_avail=true
@@ -538,10 +556,10 @@ _conno_main() {
 		# Mirror recheck: only when _invalidate_mirror_cache fired after a
 		# mirror-changing action (sync, load, install, uninstall).
 		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
-			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+			if ! run_once -p -i "aba:mirror:runtime" 2>/dev/null; then
 				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
 			fi
-			aba_mirror_verify_wait
+			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
 		fi
 
@@ -552,6 +570,12 @@ _conno_main() {
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
 			if [[ "$sync_avail" == "true" ]]; then
+				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			fi
+		elif mirror_available && [[ "$_TUI_REG_STATE" == "stopped" ]]; then
+			mirr_avail=false
+			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_STOPPED"
+			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
 				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
 			fi
 		elif mirror_available; then
@@ -599,7 +623,7 @@ _conno_main() {
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];           then default_item="$TUI2_CONNO_TAG_DAY2"; fi
 			if _mirror_has_release_image;                            then default_item="$TUI2_CONNO_TAG_INSTALL"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];          then default_item="$TUI2_CONNO_TAG_MONITOR"; fi
-			if mirror_available && ! _mirror_has_release_image;      then default_item="$TUI2_CONNO_TAG_SYNC"; fi
+			if mirror_available && ! _mirror_has_release_image && [[ "${_TUI_REG_STATE:-}" != "stopped" ]]; then default_item="$TUI2_CONNO_TAG_SYNC"; fi
 			if ! mirror_available;                                   then default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"; fi
 			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_PAYLOAD"; fi
 		fi
@@ -664,12 +688,14 @@ Transfer:
 
 Cluster:
   • Install Cluster — configure, review, and provision OpenShift
+  • Monitor Installation — watch install progress
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
 Advanced:
-  • Configure — adjust settings (retry, editor, ask mode)
+  • Configure — adjust settings (registry type, retry count)
   • Rerun Wizard — re-run the initial setup wizard
   • Advanced — switch modes, uninstall, reset
+  • Feedback — report bugs or request features
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
@@ -697,7 +723,7 @@ Navigation:
 		case "$choice" in
 		"$TUI2_CONNO_TAG_INSTALL_MIRROR")
 			if [[ "$mirr_avail" == "false" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --yesno \
+				dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
 					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && mirror_install
@@ -722,7 +748,7 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
 				if [[ $? -eq 0 ]]; then
-					_mirror_config_review && mirror_sync
+					_mirror_config_review && _tui_install_mirror "Install Mirror" && mirror_sync
 				fi
 			else
 				mirror_sync
@@ -840,7 +866,7 @@ Setup wizard:
   3. Version         — OCP channel and version
   4. Platform        — Bare-metal, VMware, or KVM
   5. Operators       — Pick operators for the mirror
-  6. Mirror registry — Set up a Quay or Docker registry
+  6. Mirror registry — Set up a mirror registry
   7. Cluster install — Create, install, and monitor
 
 Key operations:
@@ -875,6 +901,12 @@ if [[ "$_TUI_FIRST_RUN" ]]; then
 		_user_domain=$(<"$_TUI_TMP")
 	fi
 	_new_domain="${_user_domain:-${_cur_domain:-example.com}}"
+	# Validate domain format before saving
+	if [[ -n "$_new_domain" ]] && ! _valid_domain "$_new_domain"; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Invalid domain format: '$_new_domain'\n\nExpected a valid domain name (e.g. example.com)." 0 0
+		_new_domain="${_cur_domain:-example.com}"
+	fi
 	if [[ "$_new_domain" != "$_cur_domain" ]]; then
 		replace-value-conf -q -n domain -v "$_new_domain" -f "$ABA_ROOT/aba.conf"
 		tui_log "User changed domain: $_cur_domain -> $_new_domain"

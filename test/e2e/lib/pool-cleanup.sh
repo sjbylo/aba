@@ -49,7 +49,7 @@ _cleanup_dis() {
 			_aba=\$HOME/.e2e-harness/bin/aba
 			if [ -f ~/aba/mirror/.available ] || [ -f ~/aba/mirror/.installed ] || [ -f ~/aba/mirror/.unavailable ]; then
 				echo '  [cleanup] Found mirror dir for $_try_user on disN -- uninstalling locally'
-				if cd ~/aba && \$_aba -y -d mirror uninstall 2>&1; then
+				if cd ~/aba && \$_aba -y -d mirror uninstall --delete-data 2>&1; then
 					echo '  [cleanup] uninstall OK'
 				else
 					echo '  [cleanup] uninstall failed -- trying aba unregister (external registry)'
@@ -94,7 +94,7 @@ _cleanup_dis() {
 						echo '  [cleanup] mirror-registry not found -- using aba uninstall'
 						_aba=\$HOME/.e2e-harness/bin/aba
 						if [ -x \"\$_aba\" ] && [ -f ~/aba/mirror/.available ]; then
-							cd ~/aba && \$_aba -y -d mirror uninstall 2>&1 || true
+							cd ~/aba && \$_aba -y -d mirror uninstall --delete-data 2>&1 || true
 						fi
 					fi
 				" 2>&1

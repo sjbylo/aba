@@ -8,6 +8,7 @@
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 source scripts/include_all.sh
+source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $*"
 
@@ -32,11 +33,12 @@ fi
 
 aba_info "Deregistering existing registry: ${reg_host:-unknown}:${reg_port:-unknown}"
 
-# Back up regcreds before removing (safety net)
-rm -rf "${regcreds_dir}.bk"
-mv "$regcreds_dir" "${regcreds_dir}.bk"
-aba_info "Credentials backed up to ${regcreds_display}.bk/"
+# Back up regcreds before removing (safety net — hidden so it won't match glob)
+_bk=$(_regcreds_bk "$regcreds_dir")
+rm -rf "$_bk"
+mv "$regcreds_dir" "$_bk"
+aba_info "Credentials backed up to $(basename "$_bk")/"
 
 echo
 aba_success "Existing registry deregistered (registry itself was not modified)."
-aba_info "Credentials backed up to: ${regcreds_display}.bk/"
+aba_info "Credentials backed up to: $(basename "$_bk")/"

@@ -119,8 +119,8 @@ _resolve_operators_json() {
 			"Cannot add required operators to the image-set config file!" \
 			"Your options are:" \
 			"- Refresh any existing catalog files by running: 'cd $PWD; rm -f .index/redhat-operator-index-v${catalog_ver}*' and try again." \
-			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
-			"- Re-download the operator catalog:  aba catalog" \
+			"- run 'aba show-operators --refresh' to download the catalog file again." \
+			"- Re-download the operator catalog:  aba show-operators --refresh" \
 			"- Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'"
 	fi
 
@@ -310,7 +310,11 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 			fi
 
-			aba_info "Upgrade mode: $ocp_version → $ocp_upgrade_to (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+			if [ "${excl_platform:-}" ]; then
+				aba_debug "Upgrade target set ($ocp_version → $ocp_upgrade_to) but release images excluded"
+			else
+				aba_info "Upgrade mode: $ocp_version → $ocp_upgrade_to (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+			fi
 
 			_upath=$(compute_upgrade_path "$ocp_version" "$ocp_upgrade_to" "${ocp_channel}-${tgt_major}" 2>/dev/null) || true
 			export upgrade_path="${_upath:-}"

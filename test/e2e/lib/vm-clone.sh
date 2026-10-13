@@ -9,10 +9,10 @@
 _E2E_LIB_DIR_VMCLONE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh >/dev/null; then
+if ! type _wait_for_ssh &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMCLONE/remote.sh"
 fi
-if ! type pool_domain >/dev/null; then
+if ! type pool_domain &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMCLONE/config-helpers.sh"
 fi
 
@@ -408,7 +408,7 @@ declare -A VM_TEMPLATES=(
 )
 
 # MAC addresses per clone (set via config.env, declared here if not already)
-if ! declare -p VM_CLONE_MACS >/dev/null; then
+if ! declare -p VM_CLONE_MACS &>/dev/null; then
 	declare -A VM_CLONE_MACS=()
 fi
 

@@ -33,6 +33,9 @@ aba_debug "try_tot=$try_tot"
 
 umask 077
 
+# PLANs are emitted by _progress_plan-load Makefile target (scripts/progress-plan.sh)
+aba_progress "START|ld_preflight"
+
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
@@ -113,9 +116,8 @@ _transfer_meta_chan=""
 # --- Guard: warn if transfer tar is missing (user may have copied only mirror_*.tar) ---
 if [ ! -f "$_transfer_tar" ]; then
 	aba_warn "No aba-transfer.tar found alongside mirror_*.tar archives." \
-		"This file contains the matching config and metadata." \
-		"Ensure you copied ALL *.tar files from mirror/data/." \
-		"Continuing with existing local ISC."
+		"Using the existing local ISC (data/imageset-config.yaml)." \
+		"To use the connected side's ISC, re-copy all *.tar files from mirror/data/."
 fi
 
 if [ -f "$_transfer_tar" ]; then
@@ -123,16 +125,25 @@ if [ -f "$_transfer_tar" ]; then
 
 	_backup_configs
 
+	# Detect user-edited ISC: if ISC is newer than .created, the user has
+	# customized it on this (disconnected) side. Skip extracting the ISC
+	# from the transfer tar so the user's version is preserved.
+	_tar_exclude=""
+	if [ -f "data/imageset-config.yaml" ] && [ -f "data/.created" ] \
+	   && [ "data/imageset-config.yaml" -nt "data/.created" ]; then
+		aba_warn "Local imageset-config.yaml has been edited — preserving your version."
+		_tar_exclude="--exclude=mirror/data/imageset-config.yaml --exclude=mirror/data/imageset-config-digest.yaml"
+	fi
+
 	# Drop leftovers from a prior load before unpack. Non-upgrade transfer tars
 	# omit metadata (and sometimes the digest ISC); tar xf will not remove
 	# pre-existing files, so a stale aba-transfer-metadata.json would be
 	# validated against the newly unpacked digest ISC (false checksum mismatch).
-	rm -f data/aba-transfer-metadata.json \
-		data/imageset-config.yaml \
-		data/imageset-config-digest.yaml
+	rm -f data/aba-transfer-metadata.json
+	[ -z "$_tar_exclude" ] && rm -f data/imageset-config.yaml data/imageset-config-digest.yaml
 
 	# Unpack from aba root (CWD is mirror/, aba root is ..)
-	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
+	if ! ( cd .. && tar xf "mirror/$_transfer_tar" $_tar_exclude ); then
 		aba_abort "Failed to unpack transfer config ($_transfer_tar)." \
 			"The file may be corrupt. Re-copy mirror/data/*.tar from the connected host."
 	fi
@@ -182,17 +193,20 @@ aba_debug "oc-mirror is ready"
 export reg_url=https://$reg_host:$reg_port
 aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port reg_path=$reg_path"
 
+aba_progress "DONE|ld_preflight"
+aba_progress "START|ld_registry"
+
 # Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
 [ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host" && aba_debug "Adjusted no_proxy=$no_proxy"
 
 # Can the registry mirror already be reached?
-# Support both Quay and Docker registries with different health endpoints
-aba_info "Probing mirror registry at $reg_url"
+# Support all registry vendors with different health endpoints
+aba_debug "Probing mirror registry at $reg_url"
 
 if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
 	aba_debug "Quay registry detected and accessible"
 elif probe_host --any "$reg_url/v2/" "Docker registry API"; then
-	# 401 is expected on /v2/ without credentials (Docker, quay-ng, GCR all behave this way)
+	# 401 is expected on /v2/ without credentials (Docker, omr, GCR all behave this way)
 	aba_debug "Docker/OCI registry detected and accessible"
 elif probe_host "$reg_url/" "registry root"; then
 	aba_debug "Generic registry detected and accessible"
@@ -234,14 +248,18 @@ ensure_sigstore_mirror_config "$reg_host:$reg_port"
 # invent a second ISC parser. Prefer transfer tar content when present.
 scripts/mirror-status.sh op=load
 
+# Abort early if imageset has no active content — oc-mirror would fail with "no images to copy"
+if ! sed -n '/^mirror:/,$ p' data/imageset-config.yaml 2>/dev/null | grep -q '^  [^#]'; then
+	aba_abort "Nothing to load — the imageset has no active (uncommented) image sections." \
+		"Enable at least one section in aba.conf (excl_platform, excl_operators) or add images to images.conf."
+fi
+
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 
-# Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
-if [ -s ./reg-uninstall.sh ]; then
-	aba_warn \
-		"Ensure there is enough disk space under $reg_root." \
-		"This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
-fi
+aba_progress "DONE|ld_registry"
+aba_progress "START|ld_load"
+
+aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
 
 # Now using data_dir so reg_root=$data_dir/quay-install
 # Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
@@ -284,8 +302,12 @@ _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd" || _load_rc=$?
 echo "$_load_rc" > .oc-mirror-exit-code
 
 if [ $_load_rc -ne 0 ]; then
+	aba_progress "FAIL|ld_load"
 	exit $_load_rc
 fi
+
+aba_progress "DONE|ld_load"
+aba_progress "START|ld_finalize"
 
 # After successful load: update state.sh with the loaded version.
 # state.sh is the authoritative record of what the mirror actually contains.
@@ -301,6 +323,7 @@ if [ "$_loaded_ver" ]; then
 fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n reg_running -v "true" -f "$regcreds_dir/state.sh"
 
 # Archive the entire cluster-resources/ directory per OCP minor version.
 # oc-mirror overwrites these files on every load, so after an upgrade load
@@ -334,6 +357,8 @@ if [ ! -f data/.isc-pinned ]; then
 	touch data/.created
 fi
 rm -f ../.bundle data/.isc-pinned
+
+aba_progress "DONE|ld_finalize"
 
 echo
 

@@ -8,8 +8,8 @@ aba_debug "Starting: $0 $*"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
-export regcreds_display="$(image_source_mirror_name)/regcreds"
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
+export regcreds_display="${image_source:-mirror}/regcreds"
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
@@ -66,9 +66,15 @@ if [ ! -x "$openshift_install_mirror" ]; then
 	# So, I added || true to ignore errors (which is a hack!)
 	exec_cmd="oc adm release extract --idms-file=.idms.yaml --command=openshift-install $reg_host:$reg_port$reg_path/openshift/release-images$release_sha --insecure=true"
 	aba_debug "Running: $exec_cmd"
-	$exec_cmd || true
-	[ -x openshift-install ] && mv openshift-install "$openshift_install_mirror"
-	# Now use the one in CWD # [ -s openshift-install ] && mv openshift-install ~/bin
+	if ! $exec_cmd; then
+		aba_warn "Extract command failed"
+	fi
+	if [ -x openshift-install ]; then
+		mv openshift-install "$openshift_install_mirror"
+	else
+		rm -f .idms.yaml
+		aba_abort "Failed to extract openshift-install from the release image. The release image may not be available at $reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
+	fi
 	rm -f .idms.yaml
 else
 	aba_info "openshift-install already extracted from mirror registry"

@@ -27,8 +27,10 @@ if [ -s "$regcreds_dir/state.sh" ]; then
 			"The registry itself will not be modified."
 	fi
 
+	# PLANs are emitted by _progress_plan-uninstall Makefile target (scripts/progress-plan.sh)
+
 	if [ "$reg_ssh_key" ]; then
-		exec scripts/reg-uninstall-remote.sh "$reg_vendor" "$@"
+		exec scripts/reg-uninstall-${reg_vendor}-remote.sh "$@"
 	else
 		exec scripts/reg-uninstall-${reg_vendor}.sh "$@"
 	fi
@@ -61,13 +63,13 @@ sleep 1
 
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
-if [ ! "$data_dir" ]; then
-	if [ "$reg_ssh_key" ]; then data_dir='~'; else data_dir=~; fi
-fi
 if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 
 # Resolve vendor (handles "auto" → quay/docker based on architecture)
 vendor="$(resolved_reg_vendor)"
+
+# Set up reg_root and reg_root_opts correctly for the resolved vendor
+reg_setup_data_dir "$vendor"
 
 ssh_conf_file=~/.aba/ssh.conf
 
@@ -90,16 +92,12 @@ fi
 _found=
 case "$vendor" in
 	docker)
-		reg_root=$data_dir/docker-reg
-		echo "$_podman_ps" | grep -q "^registry$" && _found=1
+		echo "$_podman_ps" | grep -q -E "^registry(-${reg_port})?$" && _found=1
 		;;
 	quay)
-		reg_root=$data_dir/quay-install
-		reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 		echo "$_podman_ps" | grep -q "quay-app\|quay" && _found=1
 		;;
-	$_QUAY_NG_VENDOR)
-		reg_root=$data_dir/$_QUAY_NG_VENDOR
+	$_OMR_VENDOR)
 		echo "$_podman_ps" | grep -q "^systemd-quay$" && _found=1
 		;;
 esac
@@ -125,92 +123,19 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 	if [ "$_is_remote" ]; then
 		_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 		case "$vendor" in
-			docker)
-				aba_info "Removing Docker registry container and data on $reg_host ..."
-				$_ssh "podman rm -f registry" || \
-					aba_warn "Remote Docker cleanup returned non-zero (container may not have existed)"
-				reg_rm_data_dir docker "$reg_root" "$_ssh"
-				# Verify container is gone
-				if $_ssh "podman ps -a --format '{{.Names}}'" 2>/dev/null | grep -q '^registry$'; then
-					aba_abort "Failed to remove Docker registry container on $reg_host"
-				fi
-				;;
-			quay)
-				ensure_quay_registry
-				cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
-				aba_info "Running command: $cmd"
-				$cmd || exit 1
-				;;
-			$_QUAY_NG_VENDOR)
-				aba_info "Removing $_QUAY_NG_VENDOR registry on $reg_host ..."
-				$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
-						systemctl --user stop quay.service; \
-					fi; \
-					rm -f ~/.config/containers/systemd/quay.container; \
-					systemctl --user daemon-reload 2>/dev/null" || \
-					aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
-				reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
-
-				# Post-uninstall assertions
-				_stale=""
-				$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
-				$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-				$_ssh "systemctl --user is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
-				if [ -n "$_stale" ]; then
-					aba_abort \
-						"$_QUAY_NG_VENDOR registry uninstall left stale state on $reg_host:" \
-						"$_stale" \
-						"Investigate and clean up manually before retrying."
-				fi
-				;;
+			docker)           reg_docker_remove "$_ssh" ;;
+			quay)             reg_quay_remove "$_ssh" ;;
+			$_OMR_VENDOR) reg_omr_remove "$_ssh" ;;
+			*)                aba_abort "Unknown registry vendor: $vendor" ;;
 		esac
-	else
-		case "$vendor" in
-			docker)
-				aba_info "Removing Docker registry container and data ..."
-				podman rm -f registry || \
-					aba_warn "Docker container removal returned non-zero (container may not have existed)"
-				# Verify container is gone
-				if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^registry$'; then
-					aba_abort "Failed to remove Docker registry container"
-				fi
-				reg_rm_data_dir docker "$reg_root"
-				;;
-			quay)
-				ensure_quay_registry
-				cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
-				aba_info "Running command: $cmd"
-				$cmd || exit 1
-				;;
-			$_QUAY_NG_VENDOR)
-				aba_info "Removing $_QUAY_NG_VENDOR registry ..."
-				if systemctl --user is-active quay.service &>/dev/null; then
-					systemctl --user stop quay.service
-				fi
-				[ -f "$HOME/.config/containers/systemd/quay.container" ] && \
-					rm -f "$HOME/.config/containers/systemd/quay.container"
-				systemctl --user daemon-reload 2>/dev/null || true
-				reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
-
-				# Post-uninstall assertions
-				_stale=""
-				[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
-				ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-				systemctl --user is-active quay.service &>/dev/null && _stale+="  quay.service still active"$'\n'
-				if [ -n "$_stale" ]; then
-					aba_abort \
-						"$_QUAY_NG_VENDOR registry uninstall left stale state:" \
-						"$_stale" \
-						"Investigate and clean up manually before retrying."
-				fi
-				;;
-		esac
-	fi
-
-	# Close firewall port opened during install
-	if [ "$_is_remote" ]; then
 		reg_close_firewall --ssh
 	else
+		case "$vendor" in
+			docker)           reg_docker_remove ;;
+			quay)             reg_quay_remove ;;
+			$_OMR_VENDOR) reg_omr_remove ;;
+			*)                aba_abort "Unknown registry vendor: $vendor" ;;
+		esac
 		reg_close_firewall
 	fi
 else
@@ -219,7 +144,8 @@ fi
 
 # Back up credentials (after successful uninstall) then clear them
 if [ -d "$regcreds_dir" ]; then
-	rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
+	_bk=$(_regcreds_bk "$regcreds_dir")
+	rm -rf "$_bk" && mv "$regcreds_dir" "$_bk"
 else
 	rm -rf "${regcreds_dir:?}/"*
 fi

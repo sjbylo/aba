@@ -40,13 +40,14 @@ export ARCH=$(uname -m)
 # Per-user temp directory for all ABA internal temp files (flag files, caches, debug logs)
 ABA_TMP="/tmp/.aba-${USER:-$(id -un)}"
 mkdir -p "$ABA_TMP"
+chmod 700 "$ABA_TMP"
 
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
 # Registry vendor name for the new Go-based Quay mirror registry.
 # Single rename point — change here to rename the vendor everywhere.
-_QUAY_NG_VENDOR="quay-ng"
-_QUAY_NG_IMAGE="${QUAY_NG_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
+_OMR_VENDOR="omr"
+_OMR_IMAGE="${OMR_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
 
 # ===========================
 # Color Echo Functions
@@ -169,6 +170,15 @@ aba_success() {
 	fi
 }
 
+# TUI progress reporting.
+# No-op unless the TUI sets ABA_PROGRESS_FIFO before launching the command.
+# Events: PLAN|id|text, START|id, DONE|id, FAIL|id, ERROR|id|msg,
+#          DETAIL|msg, NEXT|msg, ABORT|msg, PROMPT|msg, PROMPT_DONE
+aba_progress() {
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] || return 0
+	printf '%s\n' "$*" >> "$ABA_PROGRESS_FIFO"
+}
+
 echo_warn() {
 	if [ "$1" = "-n" ]; then
 		shift
@@ -256,6 +266,9 @@ aba_abort() {
 	fi
 
 	sleep 1
+
+	# Emit structured error for TUI progress dialog
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "ERROR|$main_msg"
 
 	exit 1
 }
@@ -602,11 +615,10 @@ verify-aba-conf() {
 
 	local ret=0
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
-	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
 	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$ocp_channel" | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$platform"    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo "$ocp_channel" | grep -q -E "^(fast|stable|candidate|eus)$" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo "$platform"    | grep -q -E "^(bm|vmw|kvm)$" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -619,12 +631,13 @@ verify-aba-conf() {
 	fi
 
 	if [ "$ops" ]; then
-		echo $ops | grep -q -E "^[a-z,]+" || { echo_red "Error: ops invalid in aba.conf: [$ops]" >&2; ret=1; }
+		local _op
+		for _op in $(echo "$ops" | tr , " "); do
+			_valid_operator_name "$_op" || { echo_red "Error: invalid operator name '$_op' in aba.conf" >&2; ret=1; }
+		done
 	fi
 
-	# Check for a domain name in less strict way
-	#[ "$domain" ] && ! echo $domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
-	[ "$domain" ] && ! echo $domain | grep -q -E "$REGEX_BASIC_DOMAIN" && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
+	[ "$domain" ] && ! _valid_domain "$domain" && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
 
 	# Check for ip addr
 	[ "$machine_network" ] && ! echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
@@ -687,6 +700,12 @@ normalize-mirror-conf()
 	fi
 }
 
+# TCP port. 1 through 65535, the same range the TUI already uses.
+valid_port() {
+	[[ "$1" =~ ^[0-9]+$ ]] || return 1
+	[[ "$1" -ge 1 && "$1" -le 65535 ]] || return 1
+}
+
 verify-mirror-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	# If the file exists and is empty?
@@ -695,27 +714,30 @@ verify-mirror-conf() {
 
 	local ret=0
 
-	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	[ ! "$reg_host" ] && echo_red "Error: reg_host value is missing in mirror.conf" >&2 && ret=1
+	[ "$reg_host" ] && ! _valid_fqdn "$reg_host" && { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host] — must be a fully qualified domain name" >&2; ret=1; }
+
+	if [ "$reg_port" ] && ! valid_port "$reg_port"; then
+		aba_abort "reg_port is invalid in mirror.conf [$reg_port]" \
+			"A registry port is an integer from 1 to 65535."
+	fi
 
 	####[ ! "$reg_ssh_user" ] && echo_red "Error: reg_ssh_user not defined!" >&2 && ret=1   # This should never happen as the user name (whoami) is added above if its empty.
 
 	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is deprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
 
-	REGEX_ABS_PATH='^(~(/([A-Za-z0-9._-]+(/)?)*|$)|/([A-Za-z0-9._-]+(/)?)*$)'
+	[ "$data_dir" ] && { _valid_abs_path "$data_dir" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
 
-	[ "$data_dir" ] && { echo $data_dir | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
+	[ "$reg_path" ] && { _valid_abs_path "$reg_path" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
 
-	[ "$reg_path" ] && { echo $reg_path | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
+	[ "$reg_ssh_key" ] && { _valid_abs_path "$reg_ssh_key" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
-
-	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE "^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_QUAY_NG_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { _valid_reg_vendor "$reg_vendor" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_OMR_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	# quay-ng and docker handle passwords safely, so skip this check for those vendors.
-	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_QUAY_NG_VENDOR" ]]; then
+	# omr and docker handle passwords safely, so skip this check for those vendors.
+	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_OMR_VENDOR" ]]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
 			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
@@ -739,7 +761,7 @@ resolved_reg_user() {
 }
 
 # Resolve reg_vendor to the actual registry type for this host.
-# User intent (auto/quay/docker/quay-ng/existing) stays in mirror.conf unchanged.
+# User intent (auto/quay/docker/omr/existing) stays in mirror.conf unchanged.
 # This function is the ONLY place where "auto" is resolved to a concrete vendor.
 resolved_reg_vendor() {
 	local vendor="${reg_vendor:-auto}"
@@ -754,71 +776,27 @@ resolved_reg_vendor() {
 
 normalize-cluster-conf()
 {
-	# Output only the values from cluster.conf (with defaults for backwards compat).
+	# Output only the values from cluster.conf (with defaults).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 
-	# --- image_source migration shim ---
-	# New clusters have image_source=.  Legacy clusters have int_connection + mirror_name.
-	# Emit image_source from whichever format is present.
-	# Capture _is here for the backward-compat shim below (int_connection/mirror_name).
-	local _is=""
-	if grep -q '^image_source=' cluster.conf 2>/dev/null; then
-		# New format — _normalize_export below will emit export image_source=...
-		# Extract the sanitized value for the backward-compat shim.
-		_is=$(grep -m1 '^image_source=' cluster.conf | _normalize_export | cut -d= -f2)
-	elif [ -s cluster.conf ]; then
-		# Legacy format — derive image_source from old keys
-		local _ic _mn
-		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
-		[[ "$_ic" == "none" ]] && _ic=""
-		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
-		_mn=${_mn:-mirror}
-		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
-			_is="$_ic"
-		elif [[ -z "$_ic" ]] && grep -E -q "^proxy=\S" cluster.conf 2>/dev/null; then
-			_is="proxy"
-		else
-			_is="$_mn"
-		fi
-		echo "export image_source=$_is"
-	else
-		_is="mirror"
-		echo "export image_source=mirror"
-	fi
-
 	if [ ! -s cluster.conf ]; then
-		echo 'export int_connection='
-		echo 'export mirror_name=mirror'
+		echo 'export image_source=mirror'
 		return 0
 	fi
 
 	# Sanitize config, then:
 	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
-	#   - Strip legacy int_connection and mirror_name (replaced by image_source)
 	#   - RFC 1123: base_domain must be lowercase for Kubernetes
 	_normalize_export < cluster.conf | \
 		sed -E	\
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
-			-e '/^export int_connection=/d' \
-			-e '/^export mirror_name=/d' \
 			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
-	# Add any missing default values, mainly for backwards compat.
-	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
+	# Default image_source if not in cluster.conf
+	grep -q '^image_source=' cluster.conf || echo 'export image_source=mirror'
 
-	# Backward compat: derive int_connection + mirror_name from image_source
-	# so scripts not yet migrated keep working.
-	_is="${_is:-mirror}"
-	case "$_is" in
-		direct|proxy)
-			echo "export int_connection=$_is"
-			echo "export mirror_name=mirror"
-			;;
-		*)
-			echo "export int_connection="
-			echo "export mirror_name=$_is"
-			;;
-	esac
+	# Default hostPrefix if not in cluster.conf
+	grep -q '^hostPrefix=' cluster.conf || echo 'export hostPrefix=23'
 
 	# Phase 3 (ADR-007): override immutable fields from installed state.
 	# Only apply if this cluster dir has the 'clusterstate' symlink — it points
@@ -837,8 +815,20 @@ image_source_is_mirror() {
 }
 
 # Print the mirror directory name.  Only meaningful when image_source_is_mirror.
-image_source_mirror_name() {
-	echo "${image_source:-mirror}"
+
+# openshift-install wait-for status.
+# 0: finished, caller continues.
+# 8: Ctrl-C. Exit quietly with 8 so Make does not stamp success.
+# other: return 1; the caller prints the error and exits with that status.
+exit_unless_install_finished() {
+	local ret=$1
+	if [ "$ret" -eq 0 ]; then
+		return 0
+	fi
+	if [ "$ret" -eq 8 ]; then
+		exit 8
+	fi
+	return 1
 }
 
 # -----------------------------------------------------------------------------
@@ -912,6 +902,120 @@ _valid_ipv4() {
 	(( BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255 ))
 }
 
+# Validate a Unix username (SSH user, registry user, etc.)
+# Rules: start with letter or underscore, then alphanumeric/dots/hyphens/underscores
+# Returns 0 if valid, 1 if invalid.
+_valid_username() {
+	[[ "$1" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]
+}
+
+# Validate an absolute filesystem path (or ~-prefixed path).
+# Segments must be alphanumeric with dots, hyphens, underscores.
+# Returns 0 if valid, 1 if invalid.
+_valid_abs_path() {
+	[[ "$1" =~ ^(/|~(/|$))([A-Za-z0-9._-]+/)*([A-Za-z0-9._-]+)?$ ]]
+}
+
+# Validate a fully qualified domain name (at least 2 labels, dot-separated).
+# Each label: start/end with alphanumeric, hyphens allowed inside. TLD ≥ 2 alpha chars.
+# Used for: reg_host, domain, base_domain.
+# Returns 0 if valid, 1 if invalid.
+_valid_fqdn() {
+	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]
+}
+
+# Validate a registry password.
+# Rules (must match TUI and mirror.conf documentation):
+#   - At least 8 characters
+#   - No whitespace
+#   - Must not contain: ' " ` $
+# Returns 0 if valid, 1 if invalid.  Prints reason on failure.
+_valid_password() {
+	local pw="$1"
+	if [[ ${#pw} -lt 8 ]]; then
+		echo "too short (minimum 8 characters)"
+		return 1
+	fi
+	if [[ "$pw" =~ [[:space:]] ]]; then
+		echo "contains whitespace"
+		return 1
+	fi
+	if [[ "$pw" == *"'"* ]]; then
+		echo "contains single quote (')"
+		return 1
+	fi
+	if [[ "$pw" == *'"'* ]]; then
+		echo "contains double quote (\")"
+		return 1
+	fi
+	if [[ "$pw" == *'`'* ]]; then
+		echo "contains backtick (\`)"
+		return 1
+	fi
+	if [[ "$pw" == *'$'* ]]; then
+		echo "contains dollar sign (\$)"
+		return 1
+	fi
+	return 0
+}
+
+# Domain validation (alias for _valid_fqdn — same rules).
+_valid_domain() { _valid_fqdn "$1"; }
+
+# Validate a registry vendor value.
+# Returns 0 if valid, 1 if invalid.
+_valid_reg_vendor() {
+	[[ "$1" =~ ^(auto|quay|docker|${_OMR_VENDOR}|existing)$ ]]
+}
+
+# Validate a CLI-facing registry vendor value (excludes 'existing', which is internal-only).
+# Returns 0 if valid, 1 if invalid.
+_valid_cli_vendor() {
+	[[ "$1" =~ ^(auto|quay|docker|${_OMR_VENDOR})$ ]]
+}
+
+# Validate an image_source value (direct, proxy, or mirror directory name).
+# Returns 0 if valid, 1 if invalid.
+_valid_image_source() {
+	[[ "$1" == "direct" || "$1" == "proxy" || "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+
+# Validate a port/interface name.
+# Returns 0 if valid, 1 if invalid.
+_valid_port_name() {
+	[[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+
+# Validate an operator package name against the catalog indexes.
+# Format: lowercase alphanumeric with hyphens, may start with a digit (e.g. 3scale-operator).
+# Warns (does NOT abort) if the name is not found in any catalog index for the configured OCP version.
+# Returns 0 if the format is valid, 1 if invalid.
+_valid_operator_name() {
+	local name="$1"
+	[[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || return 1
+
+	# Derive the version-specific index suffix (e.g. 4.22.0 → v4.22)
+	local _ver_short
+	_ver_short=$(_ver_minor "${ocp_version:-}")
+	if [ ! "$_ver_short" ]; then
+		# No OCP version configured yet — can't check index, skip warning
+		return 0
+	fi
+
+	# Warn if the operator is not found in any catalog index for this version
+	local _found=""
+	for _idx in "$ABA_ROOT"/.index/*-operator-index-v${_ver_short}; do
+		[ -f "$_idx" ] || continue
+		if awk '{print $1}' "$_idx" | grep -qx "$name"; then
+			_found=1
+			break
+		fi
+	done
+	[ ! "$_found" ] && aba_warn "Operator '$name' was not found in any catalog index for v${_ver_short} — it may be misspelled or from an uncached catalog"
+
+	return 0
+}
+
 # -----------------------------------------------------------------------------
 # Cluster State Helpers (ADR-007: unified state management)
 # Scripts use these instead of hard-coding ~/.aba/ paths.
@@ -955,7 +1059,9 @@ cluster_api_reachable() {
 	local _kc="${1:-$KUBECONFIG}"
 	[ -f "$_kc" ] || return 1
 	local _server _host _port
-	_server=$(grep ' server:' "$_kc" | awk '{print $NF}' | head -1)
+	_server=$(KUBECONFIG="$_kc" oc config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null) || true
+	# Fallback to grep if oc is not available
+	[ -z "$_server" ] && _server=$(grep ' server:' "$_kc" | awk '{print $NF}' | head -1)
 	[ -z "$_server" ] && return 1
 	_host=$(echo "$_server" | sed -E 's|https?://||; s|:[0-9]+.*||')
 	_port=$(echo "$_server" | grep -oE ':[0-9]+' | tr -d ':')
@@ -1102,7 +1208,7 @@ _state_override_cluster() {
 	source "$_state"
 
 	for _field in $_status; do
-		_sval="${!_field}"
+		_sval="${!_field:-}"
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
@@ -1138,17 +1244,21 @@ _state_override_mirror() {
 	# and "day2-osus: channel set fails after cross-minor upgrade".
 	# mirror_ocp_version and mirror_ocp_upgrade_from are the mirror-fact equivalents:
 	# they track what's actually in the mirror registry (set by reg-sync.sh / reg-load.sh).
-	local _status="reg_host reg_port reg_root reg_user reg_pw mirror_ocp_version mirror_ocp_upgrade_from last_action last_action_at"
+	local _status="reg_host reg_port reg_path reg_root reg_user reg_pw mirror_ocp_version mirror_ocp_upgrade_from last_action last_action_at"
 	local _field _sval _cval _drifted=""
 
 	source "$_state"
 
 	for _field in $_status; do
-		_sval="${!_field}"
+		_sval="${!_field:-}"
 		[ -z "$_sval" ] && continue
 		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
+			if [[ "$_field" == "reg_pw" ]]; then
+				_drifted="${_drifted:+$_drifted, }${_field}=*** (installed: ***)"
+			else
+				_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
+			fi
 		fi
 		echo "export ${_field}='${_sval}'"
 	done
@@ -1207,18 +1317,35 @@ _valid_cluster_name() {
 	return 0
 }
 
+_valid_mirror_name() {
+	local name="$1"
+	[ -z "$name" ] && echo_red "Error: mirror name is empty" >&2 && return 1
+
+	if [[ ${#name} -gt 63 || ! "$name" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		echo_red "Error: invalid mirror name '$name' — must be a DNS label (lowercase letters, digits, hyphens; start with letter; max 63 chars)" >&2
+		return 1
+	fi
+
+	# Reserved ABA directories — 'mirror' is allowed (it's the default mirror name)
+	case "$name" in
+		scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel)
+			echo_red "Error: '$name' is a reserved ABA directory name — choose a different mirror name" >&2
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
 verify-cluster-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f cluster.conf ] && [ ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
 	local ret=0
-	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
-
 	echo $cluster_name | grep -q -E -i '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: cluster_name incorrectly set or missing in cluster.conf" >&2; ret=1; }
 
-	#echo $base_domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
-	echo $base_domain | grep -q -E "$REGEX_BASIC_DOMAIN" || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
+	_valid_domain "$base_domain" || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
 
 	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
@@ -1227,7 +1354,7 @@ verify-cluster-conf() {
 	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
 	else
-		echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: starting_ip is invalid in cluster.conf. Try using --starting-ip option." >&2; ret=1; }
+		validate_ip "$starting_ip" || { echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Try using --starting-ip option." >&2; ret=1; }
 
 		# Validate starting_ip falls within machine_network CIDR
 		if [[ $ret -eq 0 ]] && echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
@@ -1267,6 +1394,10 @@ verify-cluster-conf() {
 						ret=1
 					fi
 				fi
+				if [ -n "${api_vip:-}" ] && [ -n "${ingress_vip:-}" ] && [ "$api_vip" = "$ingress_vip" ]; then
+					echo_red "Error: api_vip and ingress_vip cannot be the same address ($api_vip)" >&2
+					ret=1
+				fi
 			fi
 		fi
 	fi
@@ -1276,8 +1407,8 @@ verify-cluster-conf() {
 	echo $master_prefix | grep -q -E '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: master_prefix is invalid in cluster.conf" >&2; ret=1; }
 	echo $worker_prefix | grep -q -E '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: worker_prefix is invalid in cluster.conf" >&2; ret=1; }
 
-	echo $num_masters | grep -q -E '^[0-9]+$' || { echo_red "Error: num_masters is invalid in cluster.conf" >&2; ret=1; }
-	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
+	echo $num_masters | grep -q -E '^[1-9][0-9]*$' || { echo_red "Error: num_masters is invalid in cluster.conf (must be 1 or 3, no leading zeros)" >&2; ret=1; }
+	echo $num_workers | grep -q -E '^(0|[1-9][0-9]*)$' || { echo_red "Error: num_workers is invalid in cluster.conf (no leading zeros)" >&2; ret=1; }
 
 	# Topology rules: num_masters must be 1 (SNO) or 3 (compact/standard)
 	if echo "$num_masters" | grep -q -E '^[0-9]+$'; then
@@ -1295,20 +1426,15 @@ verify-cluster-conf() {
 
 	# The next few values are all optional — only validate if set
 	if [ -n "${ports:-}" ]; then
-		[[ $ports =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]] || { echo_red "Error: ports list is invalid in cluster.conf: [$ports]" >&2; ret=1; }
+		local _p
+		for _p in $(echo "$ports" | tr , " "); do
+			_valid_port_name "$_p" || { echo_red "Error: invalid port/interface name '$_p' in cluster.conf" >&2; ret=1; break; }
+		done
 	fi
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 
-	if [ "${image_source:-}" ]; then
-		if [[ "$image_source" == "direct" || "$image_source" == "proxy" ]]; then
-			: # valid
-		elif [[ "$image_source" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-			: # valid mirror dir name
-		else
-			echo_red "Error: image_source is invalid in cluster.conf [$image_source]" >&2; ret=1
-		fi
-	fi
+	[ "${image_source:-}" ] && ! _valid_image_source "$image_source" && { echo_red "Error: image_source is invalid in cluster.conf [$image_source]" >&2; ret=1; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
 	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warn -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
@@ -1316,11 +1442,11 @@ verify-cluster-conf() {
 	# mac_prefix is required for virtual platforms (VMs need unique MACs)
 	[[ "$platform" == "vmw" || "$platform" == "kvm" ]] && [ -z "$mac_prefix" ] && { aba_warn -p "Error" "mac_prefix is required for platform=$platform in cluster.conf"; ret=1; }
 
-	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
-	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_mem]" >&2; ret=1; }
+	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[1-9][0-9]*$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count] (must be > 0)" >&2; ret=1; }
+	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[1-9][0-9]*$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_mem] (must be > 0)" >&2; ret=1; }
 
-	[ "$worker_cpu_count" ] && ! echo $worker_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_cpu_count is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
-	[ "$worker_mem" ] && ! echo $worker_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_mem]" >&2; ret=1; }
+	[ "$worker_cpu_count" ] && ! echo $worker_cpu_count | grep -q -E '^[1-9][0-9]*$' && { echo_red "Error: worker_cpu_count is invalid in cluster.conf: [$worker_cpu_count] (must be > 0)" >&2; ret=1; }
+	[ "$worker_mem" ] && ! echo $worker_mem | grep -q -E '^[1-9][0-9]*$' && { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_mem] (must be > 0)" >&2; ret=1; }
 
 	[ "$data_disk" ] && ! echo $data_disk | grep -q -E '^[0-9]+$' && { echo_red "Error: data_disk is invalid in cluster.conf: [$data_disk]" >&2; ret=1; }
 
@@ -1473,7 +1599,10 @@ ask() {
 		[ "$effective" = "n" ] && return 1
 		return 0
 	fi
+	# TUI mode: notify the progress dialog so it shows a yes/no prompt
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "PROMPT|$*|$def_response"
 	read $timer yn
+	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "PROMPT_DONE"
 
 	# Empty input = use default
 	if [ ! "$yn" ]; then
@@ -1774,12 +1903,24 @@ ABA_CACHE_TTL="${ABA_CACHE_TTL:-100m}"
 # Convert human-readable duration string to seconds (e.g. 30m, 12h, 1d, 300s, or bare integer)
 parse_duration() {
 	local val="$1"
+	local num
 	case "$val" in
-		*d) echo $(( ${val%d} * 86400 )) ;;   # strip "d" suffix, convert days → seconds
-		*h) echo $(( ${val%h} * 3600 )) ;;    # strip "h" suffix, convert hours → seconds
-		*m) echo $(( ${val%m} * 60 )) ;;      # strip "m" suffix, convert minutes → seconds
-		*s) echo $(( ${val%s} )) ;;            # strip "s" suffix
-		*)  echo "$val" ;;
+		*d) num=${val%d} ;;
+		*h) num=${val%h} ;;
+		*m) num=${val%m} ;;
+		*s) num=${val%s} ;;
+		*)  num=$val ;;
+	esac
+	if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+		echo_red "Error: invalid duration '$val' — use a single unit: 30m, 12h, 1d, 300s, or a bare number of seconds" >&2
+		return 1
+	fi
+	case "$val" in
+		*d) echo $(( num * 86400 )) ;;
+		*h) echo $(( num * 3600 )) ;;
+		*m) echo $(( num * 60 )) ;;
+		*s) echo "$num" ;;
+		*)  echo "$num" ;;
 	esac
 }
 
@@ -1859,42 +2000,23 @@ _prev_minor() {
 	echo "${x}.$((y - 1))"
 }
 
-############################################
-# Find the nth candidate-exclusive version (not yet promoted to fast).
-# Scans from CDN latest minor downward, comparing candidate vs fast.
-# A version is "candidate-exclusive" if it's on candidate but NOT on fast.
-# Args: $1 = position (1=previous, 2=older), $2 = max minors to scan (default 4)
-# Returns: the version string, or empty if not found within scan range.
-############################################
-_candidate_nth_exclusive() {
-	local pos="${1:-1}"
-	local max_scan="${2:-4}"
-	local minor scanned=0 found=0
+# Next minor in the same major: "4.22" -> "4.23" ; "5.0" -> "5.1"
+_next_minor() {
+	local minor="$1"
+	local x y
+	x="${minor%%.*}"
+	y="${minor#*.}"
+	[[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+	echo "${x}.$(( y + 1 ))"
+}
 
-	minor="$(fetch_latest_minor_version candidate)"
-	[[ -n "$minor" ]] || return 1
-
-	while [[ $scanned -lt $max_scan ]]; do
-		local cand fast
-		cand="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
-		[[ -n "$cand" ]] || break
-
-		fast="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
-
-		if [[ "$cand" != "${fast:-}" ]]; then
-			found=$(( found + 1 ))
-			if [[ $found -eq $pos ]]; then
-				_is_version_string "$cand" && echo "$cand" && return 0
-				return 1
-			fi
-		fi
-
-		minor="$(_prev_minor "$minor")"
-		[[ -n "$minor" ]] || break
-		scanned=$(( scanned + 1 ))
-	done
-
-	return 1
+# First minor of the next major: "4.22" -> "5.0" ; "5.7" -> "6.0"
+_next_major() {
+	local minor="$1"
+	local x
+	x="${minor%%.*}"
+	[[ "$x" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+	echo "$(( x + 1 )).0"
 }
 
 # return 0 if v contains prerelease suffix (has '-') else 1
@@ -1977,17 +2099,134 @@ fetch_all_versions() {
 }
 
 ############################################
-# Fetch latest version (includes pre-release on candidate channel)
-# Uses two data sources:
-#   - CDN release.txt: discovers the "recommended" minor (e.g. 4.22)
-#   - Cincinnati graph: provides the actual version list per channel-minor
-# On candidate, the CDN may lag behind Cincinnati — newer pre-release minors
-# (e.g. 5.0) exist in the graph but aren't advertised by the CDN. Discovery
-# via fetch_latest_prerelease_version() bridges this gap.
+# True when this version has an upgrade edge from a different minor.
+# Reads the candidate graph cache that fetch_all_versions just filled.
+# A build with no such edge is listed but nothing can upgrade to it.
+############################################
+_version_has_cross_minor_edge() {
+	local version="$1"
+	local minor src cache_file
+
+	minor="$(_ver_minor "$version")"
+	[[ -n "$minor" ]] || return 1
+
+	cache_file="${ABA_CACHE_DIR}/graph_candidate-${minor}_${ARCH}.json"
+	[[ -s "$cache_file" ]] || return 1
+
+	while IFS= read -r src; do
+		[[ -z "$src" ]] && continue
+		[[ "$(_ver_minor "$src")" != "$minor" ]] && return 0
+	done < <(jq -r --arg ver "$version" '
+		. as $g
+		| ($g.nodes | to_entries | map(select(.value.version == $ver)) | .[0].key) as $dst
+		| select($dst != null)
+		| $g.edges[]?
+		| select(.[1] == $dst)
+		| $g.nodes[.[0]].version
+	' "$cache_file" 2>/dev/null)
+
+	return 1
+}
+
+############################################
+# Candidate versions to offer, newest first, at most 3.
+# Starts at the newest stable minor and steps forward with _next_minor.
+# The first empty minor jumps once, via _next_major, then the next empty
+# minor stops. A minor is kept only when its newest build has an upgrade
+# edge from another minor and fast does not already list that same build.
+# This is not fetch_upgrade_targets: that walk starts from an installed
+# version and stops when that version is absent from the next graph.
+############################################
+_candidate_offer_compute() {
+	local anchor minor head fast_head jump
+	local -a heads=()
+	local crossed=0 steps=0
+	local n i start
+
+	anchor="$(fetch_latest_minor_version stable)"
+	[[ -n "$anchor" ]] || return 0
+	minor="$anchor"
+
+	while [[ $steps -lt 6 ]]; do
+		minor="$(_next_minor "$minor")"
+		[[ -n "$minor" ]] || break
+		steps=$(( steps + 1 ))
+
+		head="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
+		if [[ -z "$head" ]]; then
+			# First gap in this major: try the next major's .0 once.
+			[[ $crossed -eq 1 ]] && break
+			crossed=1
+			jump="$(_next_major "$minor")"
+			[[ -n "$jump" ]] || break
+			minor="$jump"
+			head="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
+			[[ -n "$head" ]] || break
+		fi
+
+		_is_version_string "$head" || continue
+		_version_has_cross_minor_edge "$head" || continue
+
+		fast_head="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
+		[[ "$head" == "${fast_head:-}" ]] && continue
+
+		heads+=("$head")
+	done
+
+	n=${#heads[@]}
+	[[ $n -eq 0 ]] && return 0
+	start=0
+	[[ $n -gt 3 ]] && start=$(( n - 3 ))
+	i=$(( n - 1 ))
+	while [[ $i -ge $start ]]; do
+		printf '%s\n' "${heads[$i]}"
+		i=$(( i - 1 ))
+	done
+}
+
+# Cached offer list. A file that is only a newline means the walk found nothing.
+# flock so the parallel latest/previous/older tasks compute this once.
+_candidate_offer() {
+	local cache_file="${ABA_CACHE_DIR}/candidate_offer_${ARCH}.txt"
+	local lock_file="${cache_file}.lock"
+	local ttl tmp
+
+	ttl="$(parse_duration "$ABA_CACHE_TTL")"
+	mkdir -p "${ABA_CACHE_DIR}" 2>/dev/null || true
+
+	(
+		flock -w 120 9 || exit 1
+		if _cache_fresh "$cache_file" "$ttl"; then
+			grep -v '^$' "$cache_file" || true
+			exit 0
+		fi
+		tmp="$(mktemp "${cache_file}.XXXXXX")" || exit 1
+		_candidate_offer_compute > "$tmp" || true
+		if [[ ! -s "$tmp" ]]; then
+			printf '\n' > "$tmp"
+		fi
+		mv -f "$tmp" "$cache_file"
+		grep -v '^$' "$cache_file" || true
+	) 9>"$lock_file"
+}
+
+############################################
+# Fetch latest version.
+# Stable and fast come from the channel release file.
+# Candidate uses _candidate_offer when that walk found a version, and
+# otherwise the same release-file path.
 ############################################
 fetch_latest_version() {
 	local channel="${1:-stable}"
-	local minor v prev prerel
+	local minor v prev offer
+
+	if [[ "$channel" = "candidate" ]]; then
+		offer="$(_candidate_offer | sed -n '1p' || true)"
+		if _is_version_string "$offer"; then
+			echo "$offer"
+			return 0
+		fi
+	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || return 1
@@ -1997,14 +2236,6 @@ fetch_latest_version() {
 		prev="$(_prev_minor "$minor")"
 		[[ -n "$prev" ]] || return 1
 		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
-	fi
-
-	# On candidate, a newer pre-release may exist on a higher minor
-	if [[ "$channel" = "candidate" && -n "$v" ]]; then
-		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
-		if [[ -n "$prerel" ]] && is_version_greater "$prerel" "$v"; then
-			v="$prerel"
-		fi
 	fi
 
 	_is_version_string "$v" && echo "$v" && return 0
@@ -2040,17 +2271,16 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
-# On candidate: returns the 1st candidate-exclusive version (not on fast),
-# scanning from CDN minor downward. Empty if none found.
+# On candidate: line 2 of _candidate_offer (the one before latest). Empty if none.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
-	local minor prev v
+	local minor prev v offer
 
-	# Candidate channel: show only versions not yet promoted to fast
 	if [[ "$channel" = "candidate" ]]; then
-		_candidate_nth_exclusive 1
-		return
+		offer="$(_candidate_offer | sed -n '2p' || true)"
+		_is_version_string "$offer" && echo "$offer" && return 0
+		return 1
 	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
@@ -2067,16 +2297,16 @@ fetch_previous_version() {
 ############################################
 # Fetch latest version of N-2 minor (older)
 # Example: if latest minor is 4.21 -> return latest 4.19.z
-# On candidate: returns the 2nd candidate-exclusive version (not on fast).
+# On candidate: line 3 of _candidate_offer. Empty if the walk found fewer than 3.
 ############################################
 fetch_older_version() {
 	local channel="${1:-stable}"
-	local minor prev older v
+	local minor prev older v offer
 
-	# Candidate channel: show only versions not yet promoted to fast
 	if [[ "$channel" = "candidate" ]]; then
-		_candidate_nth_exclusive 2
-		return
+		offer="$(_candidate_offer | sed -n '3p' || true)"
+		_is_version_string "$offer" && echo "$offer" && return 0
+		return 1
 	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
@@ -2093,41 +2323,6 @@ fetch_older_version() {
 	return 1
 }
 
-
-############################################
-# Fetch latest pre-release version (candidate channel only).
-# Discovery is needed because the CDN release.txt only advertises one "recommended"
-# minor (e.g. 4.22), while newer pre-release minors (e.g. 5.0) exist only in the
-# Cincinnati graph. Cincinnati requires a specific channel-minor pair — there is no
-# "give me all minors" query. So we probe: try next minor (4.23), then next major.0 (5.0).
-# Returns the latest pre-release version or empty string.
-############################################
-fetch_latest_prerelease_version() {
-	local channel="${1:-candidate}"
-	local minor v next_minor next_major
-
-	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || return 0
-
-	# Try next minor in same major (e.g. 4.22 → 4.23)
-	local x="${minor%%.*}" y="${minor#*.}"      # split "4.22" → major "4", minor "22"
-	next_minor="${x}.$((y + 1))"
-	v="$(fetch_all_versions "$channel" "$next_minor" 2>/dev/null | tail -n1)"
-	if [[ -n "$v" ]] && _is_prerelease "$v"; then
-		echo "$v"
-		return 0
-	fi
-
-	# Try next major.0 (e.g. 4.22 → 5.0)
-	next_major="$((x + 1)).0"
-	v="$(fetch_all_versions "$channel" "$next_major" 2>/dev/null | tail -n1)"
-	if [[ -n "$v" ]] && _is_prerelease "$v"; then
-		echo "$v"
-		return 0
-	fi
-
-	return 0
-}
 
 ############################################
 # Verify that an upgrade path exists from current → target in the Cincinnati graph.
@@ -2158,11 +2353,6 @@ verify_upgrade_path_exists() {
 	[[ "$target_ver" == *-* ]] && tgt_minor="${target_ver%%-*}" && tgt_minor="${tgt_minor%.*}"  # 4.22.0-rc.1 → 4.22
 
 	local tgt_channel="${channel}-${tgt_minor}"
-
-	# Pre-release targets only exist in candidate channel
-	if [[ "$target_ver" == *-rc.* || "$target_ver" == *-ec.* ]]; then
-		tgt_channel="candidate-${tgt_minor}"
-	fi
 
 	local graph_json
 	graph_json=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null) || return 0
@@ -2341,8 +2531,10 @@ fetch_upgrade_targets() {
 	local probed=0 next_label=0
 
 	while [[ $probed -lt $max_probe ]]; do
-		y=$(( y + 1 ))
-		local probe_minor="${x}.${y}"
+		local probe_minor
+		probe_minor="$(_next_minor "${x}.${y}")"
+		[[ -n "$probe_minor" ]] || break
+		y="${probe_minor#*.}"
 
 		local graph_versions
 		graph_versions=$(_fetch_graph_cached "$channel" "$probe_minor" 2>/dev/null |
@@ -2351,7 +2543,8 @@ fetch_upgrade_targets() {
 		if [[ -z "$graph_versions" ]]; then
 			# No graph for this minor — try next major.0 (e.g. 4.22 → 5.0) once
 			if [[ $probed -eq 0 || $y -gt 99 ]]; then
-				local next_major="$(( x + 1 )).0"
+				local next_major
+				next_major="$(_next_major "${x}.${y}")"
 				graph_versions=$(_fetch_graph_cached "$channel" "$next_major" 2>/dev/null |
 					jq -r '.nodes[].version' 2>/dev/null) || true
 				[[ -z "$graph_versions" ]] && break
@@ -2484,7 +2677,7 @@ resolve_cluster_channel() {
 	local major
 	major=$(echo "$ver" | cut -d. -f1-2)
 
-	local isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
+	local isc_file="../${image_source:-mirror}/data/imageset-config.yaml"
 	local prefix=""
 
 	if [ -f "$isc_file" ]; then
@@ -2537,10 +2730,8 @@ verify_release_version_exists() {
 	local minor="${ver%.*}"                                 # 4.22.2 → 4.22
 	[[ "$ver" == *-* ]] && minor="${ver%%-*}" && minor="${minor%.*}"  # 4.22.0-rc.1 → 4.22
 
-	# Pre-release versions (rc/ec) only exist in candidate channel
-	if [[ "$ver" == *-rc.* || "$ver" == *-ec.* ]]; then
-		channel="candidate"
-	fi
+	# Check the channel the caller asked for. An rc on stable must fail here,
+	# or the TUI will save it and oc-mirror will find no release.
 
 	local all_versions
 	all_versions=$(_fetch_graph_cached "$channel" "$minor" 2>/dev/null | jq -r '.nodes[].version' 2>/dev/null) || return 1
@@ -2634,7 +2825,10 @@ replace-value-conf() {
 	# Auto-quotes new values that contain spaces or '#'.
 	# If the caller already pre-quotes (e.g. -v "'password'"), no double-quoting occurs.
 
-	aba_debug "Calling: replace-value-conf() $*"
+	# Redact reg_pw values from debug output
+	local _rvc_dbg_args="$*"
+	[[ "$_rvc_dbg_args" == *"reg_pw"* ]] && _rvc_dbg_args=$(echo "$_rvc_dbg_args" | sed -E "s/(-v[[:space:]]+)[^[:space:]]+/\1***/")
+	aba_debug "Calling: replace-value-conf() $_rvc_dbg_args"
 
 	local quiet=
 	local _rvc_case=
@@ -2720,14 +2914,15 @@ replace-value-conf() {
 		[ ! -s "$f" ] && continue # Try next file
 		[ ! "$_first_file" ] && _first_file="$f"
 
-		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
+		local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
+		aba_debug "Replacing config value [$name] with [$_log_val] in file: $f" >&2
 
 		# Idempotency: if the file already has the desired state, skip the write.
 		# Uses grep -F (fixed string) first so regex chars in values (e.g. passwords) don't cause false matches.
 		if [ "$value" ]; then
 			if grep -q -F "${name}=${_write_value}" "$f" && \
 			   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
-				aba_debug "Value ${name}=${_write_value} already exists in file $f"
+				aba_debug "Value ${name}=${_log_val} already exists in file $f"
 				return 0
 			fi
 		else
@@ -2760,21 +2955,22 @@ replace-value-conf() {
 		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_success "Added value ${name}=${_write_value} to file $f" >&2 || aba_success "Clearing ${name} in file $f" >&2 
+			[ "$value" ] && aba_success "Added value ${name}=${_log_val} to file $f" >&2 || aba_success "Clearing ${name} in file $f" >&2
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Clearing ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_log_val} to file $f"     || aba_debug "Clearing ${name} in file $f"
 		fi
 
 		return 0
 	done
 
 	# Key not found in any file — append to the first valid file
+	local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
 	if [ "$_first_file" ] && [ "$value" ]; then
 		echo "${name}=${_write_value}" >> "$_first_file"
 		if [ ! "$quiet" ]; then
-			aba_success "Added value ${name}=${_write_value} to file $_first_file" >&2
+			aba_success "Added value ${name}=${_log_val} to file $_first_file" >&2
 		else
-			aba_debug "Added value ${name}=${_write_value} to file $_first_file"
+			aba_debug "Added value ${name}=${_log_val} to file $_first_file"
 		fi
 		return 0
 	fi
@@ -3985,7 +4181,7 @@ _run_oc_mirror_with_retry() {
 		# via aba-transfer.tar).
 		if [ -f "data/imageset-config-digest.yaml" ]; then
 			base_cmd="${base_cmd/--config imageset-config.yaml/--config imageset-config-digest.yaml}"
-			aba_info "Using transferred digest ISC for air-gap catalog pinning"
+			aba_info "Using image configuration from transfer bundle"
 		else
 			aba_warn "imageset-config-digest.yaml not found in mirror/data/." \
 				"On disconnected hosts, this file is required for catalog pinning." \
@@ -4203,10 +4399,10 @@ validate_ip() {
 	for octet in "${octets[@]}"; do
 		# Must be numeric
 		[[ ! "$octet" =~ ^[0-9]+$ ]] && return 1
+		# No leading zeros (except "0" itself) — check before arithmetic to avoid octal parse errors
+		[[ ${#octet} -gt 1 && ${octet:0:1} == "0" ]] && return 1
 		# Must be in range 0-255
 		[[ $octet -lt 0 || $octet -gt 255 ]] && return 1
-		# No leading zeros (except "0" itself)
-		[[ ${#octet} -gt 1 && ${octet:0:1} == "0" ]] && return 1
 	done
 	
 	return 0
@@ -4403,7 +4599,9 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	readonly TASK_DL_OC_MIRROR="cli:download:oc-mirror"
 	readonly TASK_DL_GOVC="cli:download:govc"
 	readonly TASK_DL_BUTANE="cli:download:butane"
-	readonly TASK_DL_QUAY_REG="mirror:reg:download"
+	readonly TASK_DL_QUAY_REG="mirror:reg:download:quay"
+	readonly TASK_DL_DOCKER_REG="mirror:reg:download:docker"
+	readonly TASK_DL_OMR_REG="mirror:reg:download:omr"
 
 	# Download commands (arrays)
 	CMD_DL_OC=(make -sC cli download-oc)
@@ -4419,8 +4617,10 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	CMD_INST_GOVC=(make -sC cli govc)
 	CMD_INST_BUTANE=(make -sC cli butane)
 
-	# Mirror registry commands (arrays)
-	CMD_DL_QUAY_REG=(make -sC mirror download-registries)
+	# Mirror registry commands (arrays) — one command per vendor file (no races)
+	CMD_DL_QUAY_REG=(make -sC mirror download-quay-tarball)
+	CMD_DL_DOCKER_REG=(make -sC mirror download-docker-image)
+	CMD_DL_OMR_REG=(make -sC mirror download-omr-image)
 	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
 fi
 
@@ -4522,6 +4722,7 @@ ensure_openshift_install() {
 # Returns: 0 if available, 1 if not.
 # Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
+	local _vendor="${1:-}"
 	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
@@ -4558,7 +4759,7 @@ check_release_image() {
 				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")  # strip :port
 			fi
 		fi
-		_release_check_extra+=("Config: $(image_source_mirror_name)/mirror.conf (reg_host=$reg_host)")
+		_release_check_extra+=("Config: ${image_source:-mirror}/mirror.conf (reg_host=$reg_host)")
 		_release_check_extra+=("Pull secret: ${regcreds_display:-$regcreds_dir}/pull-secret-mirror.json")
 		return 1
 	fi
@@ -4568,6 +4769,18 @@ check_release_image() {
 
 	local _td="$ABA_TMP/cri.$$"
 	mkdir -p "$_td"
+
+	# Vendor-aware auth: skip the wrong path when caller knows the vendor
+	local _try_basic=true _try_bearer=true
+	case "$_vendor" in
+		docker)               _try_bearer=false ;;
+		quay|*omr*)       _try_basic=false ;;
+	esac
+
+	local _p1_code="" _p2_code=""
+
+	# --- Phase 1+2: Basic auth (parallel) — Docker/omr fast path ---
+	if [ "$_try_basic" = "true" ]; then
 
 	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---
 	aba_debug "Parallel check: Phase 1 ($_v2_url) + Phase 2 ($_manifest_url)"
@@ -4585,7 +4798,6 @@ check_release_image() {
 
 	wait "$_pid1" "$_pid2" 2>/dev/null || true
 
-	local _p1_code _p2_code
 	_p1_code=$(cat "$_td/p1.code" 2>/dev/null)
 	_p2_code=$(cat "$_td/p2.code" 2>/dev/null)
 
@@ -4600,11 +4812,27 @@ check_release_image() {
 		fi
 	fi
 
-	# --- Quay path: both return 401 with Basic, need Bearer token exchange ---
+	fi  # _try_basic
+
+	# --- Quay path: Bearer token exchange ---
+	# When vendor is known (quay), skip Basic entirely and come straight here.
+	# When vendor is unknown, enter only if Basic returned 401.
 	# A successful token exchange proves credentials are valid (no separate /v2/ check needed).
-	if [ "$_p1_code" = "401" ]; then
-		local _token_url="https://$reg_host:$reg_port/v2/auth?service=$reg_host:$reg_port&scope=repository:$_repo:pull"
-		aba_debug "Running: curl -s $_curl_opts -u <redacted> $_token_url"
+	# Parse the service name from the actual WWW-Authenticate header — omr may
+	# advertise a service without a port even when the registry runs on a non-standard
+	# port (e.g. port-mapped containers).  Always hit the known-reachable registry
+	# endpoint for the token exchange, not the realm URL (which may point to port 443).
+	if [ "$_try_bearer" = "true" ] && { [ "$_try_basic" != "true" ] || [ "$_p1_code" = "401" ]; }; then
+		local _bearer_svc _token_url _challenge_hdr _bearer_code
+		# Probe /v2/ for the challenge header (also captures _p1_code when Basic was skipped)
+		_bearer_code=$(curl -k -sS -D "$_td/bearer.headers" -o /dev/null -w "%{http_code}" \
+			--connect-timeout 3 "$_v2_url" 2>/dev/null) || true
+		[ -z "$_p1_code" ] && _p1_code="$_bearer_code"
+		_challenge_hdr=$(cat "$_td/bearer.headers" 2>/dev/null)
+		_bearer_svc=$(printf '%s\n' "$_challenge_hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p' | head -1)
+		[ -z "$_bearer_svc" ] && _bearer_svc="$reg_host:$reg_port"
+		_token_url="https://$reg_host:$reg_port/v2/auth?service=${_bearer_svc}&scope=repository:$_repo:pull"
+		aba_debug "Bearer challenge: service=$_bearer_svc token_url=$_token_url"
 		local _token
 		_token=$(curl -s $_curl_opts \
 			-u "$_userpass" \
@@ -4801,6 +5029,30 @@ aba_mirror_verify_exit() {
 	run_once -E -i "aba:mirror:check-image" 2>/dev/null
 }
 
+# --- Mirror runtime state (reg_state + release image — replaces check-image) ---
+
+# Start runtime check in background (non-blocking)
+aba_mirror_runtime_start() {
+	run_once -i "aba:mirror:runtime" -- \
+		bash -lc "cd '${ABA_ROOT:-.}/mirror' && ../scripts/mirror-status.sh --runtime"
+}
+
+# Reset + restart (after state-changing operations)
+aba_mirror_runtime_refresh() {
+	run_once -r -i "aba:mirror:runtime" 2>/dev/null || true
+	aba_mirror_runtime_start
+}
+
+# Wait for completion (blocking)
+aba_mirror_runtime_wait() {
+	run_once -q -w -S -i "aba:mirror:runtime" 2>/dev/null || true
+}
+
+# Read cached stdout (non-blocking). Returns key=value lines.
+aba_mirror_runtime_read() {
+	run_once -o -i "aba:mirror:runtime" 2>/dev/null || true
+}
+
 # --- Internet connectivity ---
 
 # Start internet check in background (non-blocking)
@@ -4859,9 +5111,10 @@ aba_version_fetch_start() {
 
 # Returns 0 if the ISC file has been manually edited by the user (newer than .created).
 # The .created sentinel is touched after every ABA-managed ISC generation.
+# A missing .created means ABA never generated the ISC — not user-managed.
 aba_isc_is_user_managed() {
 	local _isc="${1:-mirror/data/imageset-config.yaml}"
-	[[ -f "$_isc" && "$_isc" -nt "${_isc%/*}/.created" ]]
+	[[ -f "$_isc" && -f "${_isc%/*}/.created" && "$_isc" -nt "${_isc%/*}/.created" ]]
 }
 
 # --- ISC generation ---
@@ -4963,6 +5216,33 @@ ensure_quay_registry() {
 
 	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
 	run_once -w -m "Installing mirror-registry binary" -i "$TASK_INST_QUAY_REG"
+}
+
+# Start all registry vendor downloads in background (non-blocking)
+# Used by: aba.sh pre-fetch, tui-direct.sh early download
+start_all_registry_downloads() {
+	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
+	run_once -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}"
+	run_once -i "$TASK_DL_OMR_REG" -- "${CMD_DL_OMR_REG[@]}"
+}
+
+# Wait for all registry vendor downloads to complete (blocking)
+# Returns non-zero if any download failed
+# Used by: TUI _ensure_offline_prereqs, anywhere that needs all vendor binaries ready
+wait_all_registry_downloads() {
+	local _failed=false
+	run_once -q -w -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" || _failed=true
+	run_once -q -w -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}" || _failed=true
+	run_once -q -w -i "$TASK_DL_OMR_REG" -- "${CMD_DL_OMR_REG[@]}" || _failed=true
+	[[ "$_failed" == "false" ]]
+}
+
+# Check if all registry vendor downloads are already complete (non-blocking peek)
+# Returns 0 if all done, 1 if any pending
+registry_downloads_ready() {
+	run_once -p -i "$TASK_DL_QUAY_REG" 2>/dev/null &&
+	run_once -p -i "$TASK_DL_DOCKER_REG" 2>/dev/null &&
+	run_once -p -i "$TASK_DL_OMR_REG" 2>/dev/null
 }
 
 # Get error output from a task (helper for error messages)

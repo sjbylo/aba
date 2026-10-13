@@ -65,6 +65,7 @@ tui_change_version() {
 			_direct_channel
 			case "$DIALOG_RC" in
 				next) step="version" ;;
+				repeat) ;;  # Stay on channel (Help)
 				*) return 0 ;;
 			esac
 			;;
@@ -135,11 +136,15 @@ direct_wizard() {
 
 	local step="pull_secret"
 	local _ver_short=""
+	local _has_back=false
 
 	while :; do
 		case "$step" in
 		pull_secret)
 			if _direct_pull_secret; then
+				# Back button on channel only if pull_secret dialog was shown
+				# (auto-skip sets DIALOG_RC="next" without showing any dialog)
+				[[ "${DIALOG_RC:-}" != "next" ]] && _has_back=true
 				# Start redhat-operator catalog ASAP (uses core task IDs)
 				"$ABA_ROOT/scripts/create-containers-auth.sh" >>"$_TUI_LOG_FILE" 2>&1 || true
 				local _ps_ver=""
@@ -164,10 +169,16 @@ direct_wizard() {
 			fi
 			;;
 		channel)
-			_direct_channel
+			_direct_channel "$( $_has_back && echo back )"
 			case "$DIALOG_RC" in
 				next) step="version" ;;
-				back) return 1 ;;  # Exit wizard (pull secret already valid — no step to go back to)
+				back)
+					if $_has_back; then
+						step="pull_secret"
+					else
+						return 1
+					fi
+					;;
 				repeat) ;;  # Stay on channel
 				*) return 1 ;;
 			esac
@@ -192,8 +203,8 @@ direct_wizard() {
 							run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
 						done
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
-						# Start registry download early (shared task ID with aba.sh)
-						run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
+						# Start registry downloads early (shared with aba.sh)
+						start_all_registry_downloads >>"$_TUI_LOG_FILE" 2>&1
 					fi
 					step="platform"
 					;;
@@ -349,6 +360,7 @@ _print_pull_secret_instructions() {
 }
 
 # --- Channel Selection ---
+# Args: $1 = "back" to show Back button, empty to hide it
 _direct_channel() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: channel"
@@ -360,11 +372,18 @@ _direct_channel() {
 	candidate) _default_tag=c ;;
 	esac
 
+	local _back_args=()
+	local _cancel_label="$TUI2_BTN_BACK"
+	if [[ "${1:-}" == "back" ]]; then
+		_back_args=(--extra-button --extra-label "$TUI2_BTN_BACK")
+		_cancel_label="$TUI2_BTN_EXIT"
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CHANNEL" \
 		--default-item "$_default_tag" \
 		--default-button ok \
-		--no-cancel \
-		--extra-button --extra-label "$TUI2_BTN_BACK" \
+		--cancel-label "$_cancel_label" \
+		"${_back_args[@]}" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
 		--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
@@ -400,16 +419,16 @@ _direct_channel() {
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
 "• stable — recommended for production, well-tested
-• fast — latest GA release, early access to new features
-• candidate — preview/beta for testing only"
+• fast — latest GA release, receives z-stream updates before stable
+• candidate — pre-release versions for testing only"
 			DIALOG_RC="repeat"
+			;;
+		1|255)
+			DIALOG_RC=""
 			;;
 		3)
 			DIALOG_RC="back"
 			;;
-	255)
-		DIALOG_RC="back"
-		;;
 	esac
 }
 
@@ -499,12 +518,13 @@ _direct_version() {
 		return
 	fi
 
-	# Build menu items
+	# Build menu items. "Current" is only offered when that version is on this channel.
 	local _has_current=false
 	if [[ -n "${ocp_version:-}" ]] &&
 	   [[ "$ocp_version" != "$latest" ]] &&
 	   [[ "$ocp_version" != "${previous:-}" ]] &&
-	   [[ "$ocp_version" != "${older:-}" ]]; then
+	   [[ "$ocp_version" != "${older:-}" ]] &&
+	   verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
 		_has_current=true
 	fi
 
@@ -603,10 +623,10 @@ _direct_version() {
 
 • Latest: most recent release in the channel
 • Previous: one release back (good for stability)
-• Older: two releases back
-• Manual: enter specific version (x.y, x.y.z, or x.y.z-rc.N)
+• Older: the one before Previous
+• Manual: enter a version that exists on this channel (x.y, x.y.z, or x.y.z-rc.N)
 
-Pre-release versions (e.g. 4.22.0-rc.1) can be entered manually."
+A pre-release (rc or ec) is accepted only when this channel lists it. That is the candidate channel."
 			DIALOG_RC="repeat"
 			;;
 		3)
@@ -847,6 +867,11 @@ Workflow:
   1. Install Cluster — configure, review, and provision OpenShift
   2. Monitor Cluster — track install progress until completion
   3. Day-2 — post-install config (resources, NTP, update service, etc.)
+
+Other:
+  • Rerun Wizard — re-run the initial setup wizard
+  • Advanced — switch modes, platform settings
+  • Feedback — report bugs or request features
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons

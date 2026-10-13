@@ -84,6 +84,7 @@ wait_all_pods() {
 			| awk '{split($2,a,"/"); if (a[1]!=a[2] && $3!="Completed") print}')
 	done
 	echo "All pods ready in namespace $ns"
+	oc get po -n "$ns"
 }
 
 # Generic operand status wait.

@@ -27,13 +27,20 @@ s_secondary=$(cd cli && echo $(ls -1d *.gz | grep -v '^openshift-' | grep -v '^o
 d=$(date -u)
 bundle_size=$(du -shc "$WORK_BUNDLE_DIR"/ocp_* 2>/dev/null | tail -1 | awk '{print $1}')
 [ -z "$bundle_size" ] && bundle_size="unknown"
+# Compute ~3x disk needed (e.g. "106G" → "318G")
+if _num=$(echo "$bundle_size" | grep -oE '^[0-9]+'); then
+	_unit=$(echo "$bundle_size" | grep -oE '[A-Za-z]+$')
+	disk_needed="$(( _num * 3 ))${_unit}"
+else
+	disk_needed="unknown"
+fi
 aba_ver=$(cat "$REPO_ROOT/VERSION" 2>/dev/null)
 [ -z "$aba_ver" ] && aba_ver="unknown"
 
 op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
 [ ! "$op_list" ] && op_list="  - No Operators!"
 
-sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
+sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
 
 # Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
 test_body=$(grep -v '^## ' "$WORK_TEST_LOG")

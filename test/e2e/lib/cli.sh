@@ -307,7 +307,12 @@ _parse_args() {
 		fi
 	fi
 
-	# Step 8: Resolve pool list from -p/--pools spec
+	# Step 8: For "deploy", default to --force (hot-deploy to running pools)
+	if [ "$CLI_COMMAND" = "deploy" ]; then
+		CLI_FORCE="${CLI_FORCE:-1}"
+	fi
+
+	# Step 9: Resolve pool list from -p/--pools spec
 	_resolve_pools "$pools_file"
 }
 

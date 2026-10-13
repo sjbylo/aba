@@ -238,8 +238,8 @@ e2e_run "Verify operators still present in ISC" \
     "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
 e2e_run -q "Restore excl_platform=false" "aba --excl-platform false"
 
-# Restore original operator settings so we leave things clean
-e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"
+# Restore original operator settings so we leave things clean (clear then set)
+e2e_run -q "Restore op-sets to abatest" "aba --op-sets && aba --op-sets abatest"
 
 test_end 0
 
@@ -761,7 +761,7 @@ test_end 0
 test_begin "Cleanup: delete cluster and uninstall mirror on disN"
 
 e2e_run_remote "Uninstall mirror registry on disN" \
-    "cd ~/aba && aba -d mirror uninstall"
+    "cd ~/aba && aba -d mirror uninstall --delete-data"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 test_end

@@ -118,7 +118,7 @@ else
 	if [[ "$_source" == "transfer" ]]; then
 		aba_info "Transfer config: $_transfer_tar"
 	else
-		aba_info "No transfer config found. Showing local ISC."
+		aba_info "No transfer config found. Showing local imageset-config.yaml."
 	fi
 
 	local_ver="$_ocp_version"

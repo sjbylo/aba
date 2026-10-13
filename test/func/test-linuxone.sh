@@ -178,7 +178,7 @@ phase_reset() {
 
 	r "cd ~/aba 2>/dev/null && aba -d $SNO_NAME delete --yes; true"
 	r "cd ~/aba 2>/dev/null && aba -d sno-kvm delete --yes; true"
-	r "cd ~/aba 2>/dev/null && aba -d mirror uninstall --yes; true"
+	r "cd ~/aba 2>/dev/null && aba -d mirror uninstall --yes --delete-data; true"
 
 	# Only VMs this test (or the old skill name) creates — not every libvirt guest.
 	r "for vm in $SNO_NAME sno-kvm; do
@@ -297,7 +297,7 @@ phase_mirror() {
 
 	r "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1 || true"
 
-	# docker: classic Quay is too heavy for 24GB; quay-ng image is amd64-only.
+	# docker: classic Quay is too heavy for 24GB; omr image is amd64-only.
 	r "cd ~/aba && aba -d mirror --reg-host ${REG_FQDN} --vendor docker"
 
 	r "cd ~/aba && aba mirror --name mirror"
@@ -454,7 +454,7 @@ phase_final_cleanup() {
 	log "=== --clean after PASS ==="
 
 	r "cd ~/aba 2>/dev/null && aba -d $SNO_NAME delete --yes; true"
-	r "cd ~/aba 2>/dev/null && aba -d mirror uninstall --yes; true"
+	r "cd ~/aba 2>/dev/null && aba -d mirror uninstall --yes --delete-data; true"
 	r "rm -rf ~/aba ~/.aba"
 	r "sudo rm -f /etc/dnsmasq.d/aba-registry-fqdn.conf /etc/dnsmasq.d/aba-${SNO_NAME}.conf; sudo systemctl restart dnsmasq 2>/dev/null; true"
 

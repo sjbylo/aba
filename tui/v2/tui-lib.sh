@@ -67,33 +67,6 @@ _tui_redirect_activate() {
 # DISCO mode filters — strip public/internet values from config fields
 # =============================================================================
 
-# Filter comma-separated list, removing entries that are unreachable in DISCO mode.
-# Usage: filtered=$(filter_disco_values "$ntp_servers")
-filter_disco_values() {
-	local input="$1"
-	[[ -z "$input" ]] && return 0
-	[[ "$_TUI_MODE" != "DISCO" ]] && { echo "$input"; return 0; }
-
-	local result="" entry
-	IFS=',' read -ra entries <<< "$input"
-	for entry in "${entries[@]}"; do
-		entry=$(echo "$entry" | tr -d ' ')
-		[[ -z "$entry" ]] && continue
-		# Skip known public NTP pools and time servers
-		case "$entry" in
-			*.pool.ntp.org|time.google.com|time.cloudflare.com|time.apple.com) continue ;;
-			time.windows.com|ntp.ubuntu.com|clock.xfce.org) continue ;;
-		esac
-		# Skip well-known public DNS
-		case "$entry" in
-			8.8.8.8|8.8.4.4|1.1.1.1|1.0.0.1|9.9.9.9|208.67.222.222|208.67.220.220) continue ;;
-		esac
-		[[ -n "$result" ]] && result+=","
-		result+="$entry"
-	done
-	echo "$result"
-}
-
 # =============================================================================
 # Input validation helpers
 # =============================================================================
@@ -152,21 +125,12 @@ _valid_ip_list() {
 	return 0
 }
 
-# Validate FQDN (must have at least one dot and a TLD label)
-_valid_fqdn() {
-	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || return 1
-	[[ "$1" == *.* ]] || return 1
-}
+# _valid_fqdn, _valid_abs_path: defined in scripts/include_all.sh (DRY)
 
 # Validate TCP/UDP port number (1-65535)
 _valid_port() {
 	[[ "$1" =~ ^[0-9]+$ ]] || return 1
 	[[ "$1" -ge 1 && "$1" -le 65535 ]] || return 1
-}
-
-# Validate absolute path or ~-prefixed path
-_valid_abs_path() {
-	[[ "$1" =~ ^(/|~) ]] || return 1
 }
 
 # Validate MAC prefix pattern (exactly 5 octets with trailing colon, e.g. 00:50:56:xx:xx:)
@@ -181,9 +145,13 @@ _valid_mac() {
 }
 
 # Validate comma-separated network port names (e.g. ens1f0,ens1f1)
+# Uses _valid_port_name from include_all.sh for each item.
 _valid_port_names() {
 	[[ -z "$1" ]] && return 0
-	[[ "$1" =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]]
+	local _p
+	for _p in $(echo "$1" | tr , " "); do
+		_valid_port_name "$_p" || return 1
+	done
 }
 
 # =============================================================================
@@ -269,6 +237,7 @@ dlg() {
 	local has_menu=false
 	local menu_type=""
 	local _add_trailing=false
+	local _needs_tab_hint=false
 	local dims_after_text=0
 	local height_idx=-1
 	local width_val=""
@@ -324,13 +293,21 @@ dlg() {
 				next_is_text=true; has_menu=true; menu_type="menu" ;;
 			--radiolist|--checklist)
 				next_is_text=true; has_menu=true; menu_type="checklist" ;;
-			--msgbox|--yesno|--inputbox)
-				next_is_text=true; _add_trailing=true ;;
-			--mixedform)
-				next_is_text=true ;;
+		--msgbox|--yesno)
+			next_is_text=true; _add_trailing=true ;;
+		--inputbox)
+			next_is_text=true; _add_trailing=true; _needs_tab_hint=true ;;
+		--mixedform|--editbox)
+			next_is_text=true; _needs_tab_hint=true ;;
 		esac
 		args+=("$arg")
 	done
+
+	# Inputbox / editbox / mixedform: arrow keys edit text, not navigate buttons.
+	# Inject --hline so the hint appears at the bottom frame, near the buttons.
+	if [[ "$_needs_tab_hint" == "true" ]]; then
+		args=("--hline" "Use Tab to navigate to the buttons" "${args[@]}")
+	fi
 
 	# If menu-height was 0, replace with actual item count and compute height
 	if [[ $dims_idx -ge 0 && "${args[$dims_idx]}" == "0" ]]; then
@@ -376,7 +353,7 @@ _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 _TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-${TUI_OC_MIRROR_RETRY_COUNT:-1}}"
 
 # Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
-# Values: "auto", "quay", "docker", "quay-ng"
+# Values: "auto", "quay", "docker", "omr"
 _TUI_REG_VENDOR="auto"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
@@ -762,7 +739,7 @@ _exec_in_terminal() {
 	fi
 
 	# When auto-answer is ON, append --yes (same as _exec_in_tui)
-	if [[ "$(_tui_abaconf_raw_ask)" == "yes" ]]; then
+	if [[ "$(_tui_abaconf_raw_ask)" == "true" ]]; then
 		[[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]] && cmd="$cmd --yes"
 	fi
 
@@ -827,13 +804,37 @@ mirror_available() {
 	[[ -f "$ABA_ROOT/mirror/.available" ]]
 }
 
-# Check if the mirror has been verified (release image present in registry).
-# Uses the background run_once task — non-blocking, returns cached result.
-# Returns 0 (true) if verified, 1 (false) if not yet verified or failed.
+# Run mirror install (with progress) as a standalone step.
+# Used by TUI paths that detect "mirror not installed" and need to install
+# before sync/load.  Running install separately avoids the Makefile prerequisite
+# chain from delaying PLAN events past the 5-second progress timeout.
+# Returns 0 on success, non-zero on failure or user cancel.
+_tui_install_mirror() {
+	local _vendor
+	_vendor=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) && echo "${reg_vendor:-auto}")
+	local _label="Install ${_vendor} Mirror"
+	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "$_label" _invalidate_mirror_cache && rc=$?
+	return $rc
+}
+
+# Read the runtime cache exactly once and store it in _TUI_REG_STATE.
+# All TUI code that needs reg_state should call this (idempotent per menu
+# iteration — callers reset _TUI_REG_STATE="" at the top of each loop).
+_tui_read_mirror_state() {
+	if [[ -n "${_TUI_REG_STATE:-}" ]]; then
+		return
+	fi
+	local reg_state=""
+	eval "$(aba_mirror_runtime_read)"
+	_TUI_REG_STATE="${reg_state:-unknown}"
+}
+
+# Convenience: true when reg_state == ready (release image available).
 _mirror_has_release_image() {
-	local exit_code
-	exit_code=$(aba_mirror_verify_exit) || true
-	[[ "$exit_code" == "0" ]]
+	_tui_read_mirror_state
+	[[ "$_TUI_REG_STATE" == "ready" ]]
 }
 
 # Last completed mirror action from state.sh (install | load | sync | register).
@@ -843,19 +844,21 @@ _mirror_last_action() {
 }
 
 # Return human-readable mirror state for the menu title.
-# States: "no mirror" → "mirror installed" → "mirror ready"
-# "mirror ready" means the release image is actually present in the registry.
-# Color-coded via dialog --colors escape codes: green=ready, yellow=installed, red=none.
+# States: "no mirror" → "mirror stopped" → "mirror installed" → "mirror ready"
+# Pure display function — reads cached reg_state from core, zero business logic.
+# Color-coded via dialog --colors escape codes: green=ready, yellow=installed, red=none/stopped.
 mirror_state_label() {
 	if ! mirror_available; then
 		echo "\\Z1no mirror\\Zn"
 		return
 	fi
-	if _mirror_has_release_image; then
-		echo "\\Z2\\Zbmirror ready\\Zn"
-	else
-		echo "\\Z3mirror installed\\Zn"
-	fi
+	_tui_read_mirror_state
+	case "$_TUI_REG_STATE" in
+		ready)     echo "\\Z2\\Zbmirror ready\\Zn" ;;
+		stopped)   echo "\\Z1mirror stopped\\Zn" ;;
+		installed) echo "\\Z3mirror installed\\Zn" ;;
+		*)         echo "\\Z3mirror installed\\Zn" ;;
+	esac
 }
 
 # Invalidate mirror verify and kick off a fresh background check.
@@ -864,7 +867,7 @@ mirror_state_label() {
 # Also sets _TUI_NEED_MIRROR_RECHECK so the menu loop re-probes on next draw.
 _invalidate_mirror_cache() {
 	_TUI_NEED_MIRROR_RECHECK=true
-	aba_mirror_verify_refresh
+	aba_mirror_runtime_refresh
 	# Internet check uses TTL (aba_inet_check_cached) — no reset needed here.
 	# The menu loop re-triggers automatically if >300s elapsed.
 }
@@ -905,7 +908,8 @@ Cluster $_fqdn uses this mirror.\n\n\
 Run Day-2 now to apply changes\n\
 (new operators, updated release image, etc.)?" 0 0
 		if [[ $? -eq 0 ]]; then
-			confirm_and_execute "aba --dir ${_clusters[0]} day2" "Configure OperatorHub: $_fqdn"
+			_exec_with_progress "aba --dir ${_clusters[0]} day2 --yes" "Configure OperatorHub: $_fqdn"
+			[[ $? -eq 2 ]] && confirm_and_execute "aba --dir ${_clusters[0]} day2" "Configure OperatorHub: $_fqdn"
 		fi
 		return 0
 	fi
@@ -924,12 +928,6 @@ Run 'aba day2' on those clusters, if you have:\n\
   - Updated the OCP release image\n\n\
 CLI:  aba --dir <cluster> day2\n\
 TUI:  Cluster > Day-2 > Configure OperatorHub" 0 0
-}
-
-# Is a cluster configured? (cluster.conf exists in given dir)
-cluster_configured() {
-	local dir="$1"
-	[[ -f "$ABA_ROOT/$dir/cluster.conf" ]]
 }
 
 # Is a cluster installed? (.install-complete is created by Makefile on success
@@ -1041,7 +1039,8 @@ Run 'Configure OperatorHub' (aba day2) to set up:\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
 			if [[ $? -eq 0 ]]; then
-				confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
+				_exec_with_progress "aba --dir $dir day2 --yes" "Configure OperatorHub: $_fqdn"
+				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
 			fi
 		fi
 	done
@@ -1066,11 +1065,6 @@ cluster_display_name() {
 # Are there mirror archive tar files?
 mirror_has_archives() {
 	compgen -G "$ABA_ROOT/mirror/data/mirror_*.tar" >/dev/null 2>&1
-}
-
-# Is the bundle flag set?
-is_bundle_mode() {
-	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
 # Feedback: show all GitHub links in a single dialog.
@@ -1130,6 +1124,8 @@ tui_cluster_menu_flags() {
 		CONNO)
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_MIRROR"
+			elif [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_MIRROR_STOPPED"
 			elif ! _mirror_has_release_image; then
 				# Release image may be absent after a successful sync/load
 				# (e.g. excl_platform=true / operators-only archive).
@@ -1139,6 +1135,8 @@ tui_cluster_menu_flags() {
 		DISCO)
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_INSTALL_REGISTRY"
+			elif [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_MIRROR_STOPPED"
 			elif ! _mirror_has_release_image; then
 				# Same check as CONNO: "not loaded" is wrong when the archive
 				# was loaded but intentionally omitted platform/release images.
@@ -1168,63 +1166,6 @@ _tui_abaconf_raw_ask() {
 	echo "$_ask_val"
 }
 
-_tui_settings_menu_reg_vendor() {
-	local vf="$ABA_ROOT/mirror/mirror.conf"
-	if [[ ! -f "$vf" ]]; then
-		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
-	fi
-
-	local cur="auto"
-	if [[ -f "$vf" ]]; then
-		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
-		cur="${reg_vendor:-auto}"
-	fi
-
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--menu "Select registry installer vendor (stored in mirror/mirror.conf).\nAuto picks Quay vs Docker based on detected architecture.\nCurrent: $cur" 0 0 3 \
-		"auto"  "Auto (architecture-based)" \
-		"quay"  "Quay mirror-registry" \
-		"docker" "Docker registry tarball" \
-		2>"$_TUI_TMP"
-	local rc=$?
-	[[ $rc -ne 0 ]] && return
-
-	local pick
-	pick=$(<"$_TUI_TMP")
-	case "$pick" in
-		auto|quay|docker|$_QUAY_NG_VENDOR)
-			if [[ ! -f "$vf" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox "mirror.conf not available." 0 0
-				return 1
-			fi
-			replace-value-conf -q -n reg_vendor -v "$pick" -f "$vf"
-			tui_log "Settings: reg_vendor=$pick"
-			;;
-	esac
-}
-
-_tui_settings_menu_retry() {
-	local current="${_TUI_RETRY_COUNT:-1}"
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
-		--inputbox "Oc-mirror retry count for this session (0 = omit --retry):" 0 0 "$current" \
-		2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return
-
-	local val
-	val=$(<"$_TUI_TMP")
-	val=$(echo "$val" | tr -dc '0-9')
-	[[ -z "$val" ]] && val="0"
-
-	if [[ "$val" =~ ^[0-9]+$ ]] && [[ "$val" -le 999 ]]; then
-		_TUI_RETRY_COUNT="$val"
-		_tui_persist_retry_count "$val"
-		tui_log "Settings: _TUI_RETRY_COUNT=$val"
-	else
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"Invalid retry count.\n\nEnter an integer between 0 and 999." 0 0
-	fi
-}
 
 # Build a compact settings summary string for the menu item label.
 _tui_settings_summary() {
@@ -1234,8 +1175,9 @@ _tui_settings_summary() {
 
 	local rv="Auto"
 	case "$_TUI_REG_VENDOR" in
-		quay)   rv="Quay" ;;
-		docker) rv="Docker" ;;
+		quay)    rv="Quay" ;;
+		docker)  rv="Docker" ;;
+		omr) rv="OMR" ;;
 	esac
 
 	printf '(\Z6%s, retry=%s\Zn)' "$rv" "${_TUI_RETRY_COUNT:-1}"
@@ -1258,9 +1200,10 @@ _tui_settings_menu() {
 		if [[ "${_TUI_MODE:-}" != "DIRECT" ]]; then
 			local reg_display
 			case "$_TUI_REG_VENDOR" in
-				quay)   reg_display="Registry Type: \Z2Quay\Zn" ;;
-				docker) reg_display="Registry Type: \Z3Docker\Zn" ;;
-				*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
+				quay)      reg_display="Registry Type: \Z2Quay\Zn" ;;
+				docker)    reg_display="Registry Type: \Z3Docker\Zn" ;;
+				omr)   reg_display="Registry Type: \Z2OMR\Zn" ;;
+				*)         reg_display="Registry Type: \Z6Auto\Zn" ;;
 			esac
 			local retry_display
 			local rc_val="${_TUI_RETRY_COUNT:-1}"
@@ -1271,13 +1214,14 @@ _tui_settings_menu() {
 			_menu_items+=("1" "$reg_display" "2" "$retry_display")
 			_help_extra="
 Registry Type:
-  Auto   - Let aba choose the registry (recommended).
-  Quay   - Force Quay mirror registry.
-  Docker - Force Docker V2 mirror registry.
+  Auto    - Let aba choose the registry (recommended).
+  Quay    - Force Quay mirror registry.
+  Docker  - Force Docker V2 mirror registry.
+  OMR - Force OMR mirror registry (binary).
 
 Retry Count:
   How many times to retry failed oc-mirror operations.
-  0 = no retries, or set any count (default: 1)."
+  Toggle cycles: OFF → 1 → 2 → 5 → OFF (default: 1)."
 		fi
 
 		if [[ ${#_menu_items[@]} -eq 0 ]]; then
@@ -1316,12 +1260,13 @@ Toggle a setting by selecting it and pressing Enter."
 
 		case "$choice" in
 			1)
-				# Toggle in-memory: auto → quay → docker → auto
+				# Toggle in-memory: auto → quay → docker → omr → auto
 				case "$_TUI_REG_VENDOR" in
-					auto)   _TUI_REG_VENDOR="quay";   tui_log "Settings: Registry type toggled to Quay" ;;
-					quay)   _TUI_REG_VENDOR="docker"; tui_log "Settings: Registry type toggled to Docker" ;;
-					docker) _TUI_REG_VENDOR="auto";   tui_log "Settings: Registry type toggled to Auto" ;;
-					*)      _TUI_REG_VENDOR="auto";   tui_log "Settings: Registry type reset to Auto" ;;
+					auto)    _TUI_REG_VENDOR="quay";    tui_log "Settings: Registry type toggled to Quay" ;;
+					quay)    _TUI_REG_VENDOR="docker";  tui_log "Settings: Registry type toggled to Docker" ;;
+					docker)  _TUI_REG_VENDOR="omr"; tui_log "Settings: Registry type toggled to OMR" ;;
+					omr) _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type toggled to Auto" ;;
+					*)       _TUI_REG_VENDOR="auto";    tui_log "Settings: Registry type reset to Auto" ;;
 				esac
 				# Persist to file
 				local vf="$ABA_ROOT/mirror/mirror.conf"
@@ -1490,39 +1435,6 @@ select_installed_cluster() {
 # Editor helper (offer $EDITOR or dialog editbox)
 # =============================================================================
 
-offer_editor() {
-	local filepath="$1"
-	local title="${2:-Edit File}"
-
-	dlg --backtitle "$(ui_backtitle)" --title "$title" \
-		--cancel-label "$TUI2_BTN_SKIP" \
-		--menu "$(printf "$TUI2_MSG_EDITOR_PROMPT" "$filepath")" 0 0 0 \
-		"1" "Edit in terminal (\$EDITOR)" \
-		"2" "Edit in TUI dialog" \
-		2>"$_TUI_TMP"
-	local rc=$?
-
-	[[ $rc -ne 0 ]] && return 1
-
-	local choice
-	choice=$(<"$_TUI_TMP")
-
-	case "$choice" in
-		1)
-			clear
-			${EDITOR:-vi} "$filepath" {ABA_TUI_FLOCK_FD}>&-
-			;;
-		2)
-			dlg --backtitle "$(ui_backtitle)" --title "$title" \
-				--editbox "$filepath" 0 0 2>"$_TUI_TMP"
-			if [[ $? -eq 0 ]]; then
-				cp "$_TUI_TMP" "$filepath"
-			fi
-			;;
-	esac
-	return 0
-}
-
 # =============================================================================
 # Exit summary
 # =============================================================================
@@ -1630,11 +1542,16 @@ tui_install_cluster_gate() {
 					--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
 				_rc=$?
 				if [[ $_rc -eq 0 ]]; then
-					if _mirror_config_review && mirror_sync; then
+					if _mirror_config_review && _tui_install_mirror "Install Mirror" && mirror_sync; then
 						cluster_install_flow
 						return 3
 					fi
 				fi
+				return 1
+			fi
+			if [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Mirror Stopped" \
+					--msgbox "The mirror registry is stopped.\n\nStart it first via Advanced → Start Mirror Registry." 0 0
 				return 1
 			fi
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_SYNCED" \
@@ -1656,11 +1573,16 @@ tui_install_cluster_gate() {
 					--yesno "No mirror registry installed.\n\nA mirror with loaded images is required to install a cluster.\n\nInstall the registry and load images now?" 0 0
 				_rc=$?
 				if [[ $_rc -eq 0 ]]; then
-					if _mirror_config_review && disco_load_images; then
+					if _mirror_config_review && _tui_install_mirror "Install Mirror" && disco_load_images; then
 						cluster_install_flow
 						return 3
 					fi
 				fi
+				return 1
+			fi
+			if [[ "${_TUI_REG_STATE:-}" == "stopped" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Mirror Stopped" \
+					--msgbox "The mirror registry is stopped.\n\nStart it first via Advanced → Start Mirror Registry." 0 0
 				return 1
 			fi
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \
@@ -1698,7 +1620,7 @@ _require_podman() {
 	# If still running, show "Please wait..." until it completes
 	if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"Verifying podman connectivity...\n\nPlease wait." 5 45
+			"One moment please..." 5 30
 	fi
 
 	# Block until result is available
@@ -1715,13 +1637,21 @@ _require_podman() {
 	if ! aba_podman_check_wait; then
 		local _err="${PODMAN_CHECK_ERROR//$'\n'/\\n}"
 		dlg --backtitle "$(ui_backtitle)" --title "Podman Preflight Warning" \
-			--yes-label "Continue" --no-label "Back" \
-			--extra-button --extra-label "Retry" \
-			--yesno "Podman preflight check failed:\n\n${_err}\n\nThis may not affect your workflow if the required\nregistries are accessible.\n\nContinue anyway?" 0 0
+			--cancel-label "$TUI2_BTN_BACK" \
+			--no-tags \
+			--menu "Podman preflight check failed:\n\n${_err}\n\nThis may not affect your workflow if the required\nregistries are accessible." 0 0 0 \
+			"continue" "Continue anyway" \
+			"retry"    "Retry the podman check" \
+			2>"$_TUI_TMP"
 		local _rc=$?
-		case "$_rc" in
-			0) _PODMAN_WARN_DISMISSED=1; return 0 ;;
-			3)
+		if [[ $_rc -ne 0 ]]; then
+			return 1
+		fi
+		local _choice
+		_choice=$(<"$_TUI_TMP")
+		case "$_choice" in
+			continue) _PODMAN_WARN_DISMISSED=1; return 0 ;;
+			retry)
 				run_once -r -i "aba:preflight:podman" 2>/dev/null || true
 				aba_podman_check_start
 				_require_podman

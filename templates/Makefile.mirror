@@ -37,13 +37,13 @@ MR_TARBALL := mirror-registry-$(MR_ARCH).tar.gz
 
 # Determine registry prerequisite based on vendor and architecture.
 # Docker registry needs only the lightweight Docker image; Quay needs the full mirror-registry tarball.
-# quay-ng needs a lightweight saved container image (~64MB).
+# omr needs a lightweight saved container image (~64MB).
 # arm64 always uses Docker (Quay binary not available for that architecture).
 _REG_VENDOR := $(shell grep '^reg_vendor=' mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*\#.*//')
 ifeq ($(_REG_VENDOR),docker)
   _REGISTRY_PREREQ := docker-reg-image.tgz
-else ifeq ($(_REG_VENDOR),quay-ng)
-  _REGISTRY_PREREQ := quay-ng-image.tgz
+else ifeq ($(_REG_VENDOR),omr)
+  _REGISTRY_PREREQ := omr-image.tgz
 else ifeq ($(arch),aarch64)
   _REGISTRY_PREREQ := docker-reg-image.tgz
 else
@@ -84,7 +84,7 @@ all: install
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@cat ../others/help-mirror.txt
 
 init: .init 
 .init: ../aba.conf
@@ -154,21 +154,36 @@ data/imageset-config.yaml: ../aba.conf $(wildcard mirror.conf) $(wildcard ../ima
 # Auth is verified only when building .available (install); do not depend on verify here or we run
 # reg-verify.sh even when .available is up-to-date (stale .available => login fails before sync).
 .PHONY: sync
-sync: .init .rpmsint                                        install status-preflight data/imageset-config.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint                                        install _progress_plan-sync status-preflight data/imageset-config.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
+
+.PHONY: _progress_plan-sync
+_progress_plan-sync:
+	@$(SCRIPTS)/progress-plan.sh sync
 
 .PHONY: save
 # Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
 # Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
-save: .init .rpmsext                                                 status-preflight data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
-	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+save: _progress_plan-save .init .rpmsext                                                 status-preflight data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
+	@echo "[ABA] Downloading registry vendor binaries (Quay tarball, Docker image, OMR image) ..."
+	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory download-quay-tarball
+	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:docker" -- $(MAKE) --no-print-directory download-docker-image
+	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:omr" -- $(MAKE) --no-print-directory download-omr-image
+	@$(SCRIPTS)/run-once.sh -q -w -i "mirror:reg:download:quay"
+	@$(SCRIPTS)/run-once.sh -q -w -i "mirror:reg:download:docker"
+	@$(SCRIPTS)/run-once.sh -q -w -i "mirror:reg:download:omr"
 ifneq ($(arch),aarch64)
 	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
 endif
-	@[ -f $(DOCKER_REG_FILE) ] || echo "[ABA] Warning: Docker registry image not available (docker.io may not be reachable). Bundle will include Quay registry only."
+	@[ -f $(DOCKER_REG_FILE) ] || echo "[ABA] Warning: Docker registry image not available (docker.io may not be reachable). Bundle will not include Docker registry support."
+	@[ -f $(OMR_FILE) ] || echo "[ABA] Warning: OMR registry image not available. Bundle will not include OMR registry support."
 	$(SCRIPTS)/reg-save.sh          $(retry)
+
+.PHONY: _progress_plan-save
+_progress_plan-save:
+	@$(SCRIPTS)/progress-plan.sh save
 
 # Fail fast if data/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
 .PHONY: .check-data-dir
@@ -183,8 +198,12 @@ endif
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init               .rpmsint .check-data-dir install  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+load: .init               .rpmsint .check-data-dir install _progress_plan-load  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-load.sh          $(retry)
+
+.PHONY: _progress_plan-load
+_progress_plan-load:
+	@$(SCRIPTS)/progress-plan.sh load
 
 .PHONY: testload
 testload: save install load     # Test the save, install, load process on a connected host
@@ -201,12 +220,19 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
-	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+	@$(SCRIPTS)/run-once.sh -w -m "Downloading Quay mirror-registry" -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory $(MR_TARBALL)
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
 
+# Per-vendor download targets (each has its own run-once ID — one ID per file, no races)
+# Use literal filenames (not variables) because DOCKER_REG_FILE/OMR_FILE are defined later
+.PHONY: download-quay-tarball download-docker-image download-omr-image
+download-quay-tarball: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL))
+download-docker-image: docker-reg-image.tgz
+download-omr-image: omr-image.tgz
+
 .PHONY: download-registries
-download-registries: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL)) docker-reg-image.tgz quay-ng-image.tgz
+download-registries: download-quay-tarball download-docker-image download-omr-image
 
 mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
 
@@ -236,12 +262,12 @@ DOCKER_REG_FILE  := docker-reg-image.tgz
 $(DOCKER_REG_FILE):
 	@$(SCRIPTS)/download-docker-reg-image.sh $(DOCKER_REG_IMAGE) $(DOCKER_REG_FILE)
 
-# quay-ng registry image (Go-based single-binary Quay mirror registry)
-QUAY_NG_IMAGE ?= quay.io/sjbylo/quay-mirror:dev
-QUAY_NG_FILE  := quay-ng-image.tgz
-$(QUAY_NG_FILE):
-	@echo "[ABA] Pulling $(QUAY_NG_IMAGE) and saving to $(QUAY_NG_FILE) ..."
-	@podman pull $(QUAY_NG_IMAGE) && podman save -o $(QUAY_NG_FILE) $(QUAY_NG_IMAGE)
+# omr registry image (Go-based single-binary Quay mirror registry)
+OMR_IMAGE ?= quay.io/sjbylo/quay-mirror:dev
+OMR_FILE  := omr-image.tgz
+$(OMR_FILE):
+	@echo "[ABA] Pulling $(OMR_IMAGE) and saving to $(OMR_FILE) ..."
+	@podman pull $(OMR_IMAGE) && podman save -o $(OMR_FILE) $(OMR_IMAGE)
 
 .PHONY: install-docker-registry
 install-docker-registry:
@@ -260,7 +286,12 @@ uninstall-docker-registry:
 mirror.conf: .init                                    ## Create the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
-install: .available
+install: _progress_plan-install .available
+
+.PHONY: _progress_plan-install
+_progress_plan-install:
+	@$(SCRIPTS)/progress-plan.sh install
+
 # .init and .rpmsext are order-only (|) so their timestamps don't trigger a rebuild of .available.
 # Without this, operations that rebuild .init or .rpmsext (new timestamp) cause subsequent commands
 # to unnecessarily re-run reg-install.sh even though the registry is already up.
@@ -277,7 +308,7 @@ installclean:
 
 .PHONY: password pw
 password: pw
-pw: 
+pw: .init mirror.conf
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
 #	@touch .available  #FIXME: is this really needed?
 
@@ -338,7 +369,11 @@ status: .init                     ## Show mirror state summary (human-readable, 
 status-preflight: .init           ## Run preflight checks (interactive, fixes blocking issues)
 	$(SCRIPTS)/mirror-status.sh --preflight
 
-uninstall: .init .unavailable     ## Uninstall any previously installed registry  
+uninstall: _progress_plan-uninstall .init .unavailable     ## Uninstall any previously installed registry  
+
+.PHONY: _progress_plan-uninstall
+_progress_plan-uninstall:
+	@$(SCRIPTS)/progress-plan.sh uninstall
 .unavailable:
 	$(SCRIPTS)/reg-uninstall.sh
 	@$(SCRIPTS)/infra-dns.sh remove-mirror
@@ -348,6 +383,22 @@ uninstall: .init .unavailable     ## Uninstall any previously installed registry
 .PHONY: checkversion
 checkversion: init
 	$(SCRIPTS)/check-version-mismatch.sh
+
+.PHONY: stop
+stop: .init _progress_plan-stop    ## Stop the mirror registry (data is preserved). Use before copying the data directory.
+	$(SCRIPTS)/reg-stop.sh
+
+.PHONY: _progress_plan-stop
+_progress_plan-stop:
+	@$(SCRIPTS)/progress-plan.sh stop
+
+.PHONY: start
+start: .init _progress_plan-start   ## Start a previously stopped mirror registry.
+	$(SCRIPTS)/reg-start.sh
+
+.PHONY: _progress_plan-start
+_progress_plan-start:
+	@$(SCRIPTS)/progress-plan.sh start
 
 .PHONY: cluster
 cluster:
@@ -388,10 +439,11 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .available ] && echo "[ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'." || true
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download"
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:download:docker-reg-image.tgz"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:quay"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:docker"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:omr"
 	make clean
-	rm -rf *.tar mirror-registry
+	rm -rf *.tar mirror-registry omr
 	rm -rf regcreds
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo "[ABA] mirror.conf backed up to mirror.conf.bk" || true
 	rm -rf          oc-mirror-workspace 

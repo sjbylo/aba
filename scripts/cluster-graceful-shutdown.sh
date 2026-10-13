@@ -14,15 +14,23 @@ for _arg in "$@"; do
 done
 [ "$1" = "wait=1" ] && wait=1 && shift
 
+scripts/progress-plan.sh cluster-shutdown
+aba_progress "START|sd_preflight"
+
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
-verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
-verify-cluster-conf || exit 1
+verify-aba-conf || { aba_progress "FAIL|sd_preflight"; aba_progress "ERROR|$_ABA_CONF_ERR"; aba_abort "$_ABA_CONF_ERR"; }
+verify-cluster-conf || { aba_progress "FAIL|sd_preflight"; aba_progress "ERROR|Cluster configuration invalid"; exit 1; }
 
 # Resolve kubeconfig (prefer externalized state, fall back to local)
 _kc=$(cluster_kubeconfig)
-[ -z "$_kc" ] && aba_abort "Cannot find kubeconfig for this cluster! Expected at ~/.aba/clusters/$cluster_name.$base_domain/kubeconfig or iso-agent-based/auth/kubeconfig"
+if [ -z "$_kc" ]; then
+	aba_progress "FAIL|sd_preflight"
+	aba_progress "ERROR|Cannot find kubeconfig"
+	aba_progress "NEXT|Expected at ~/.aba/clusters/<name>/kubeconfig or iso-agent-based/auth/kubeconfig"
+	aba_abort "Cannot find kubeconfig for this cluster!"
+fi
 export KUBECONFIG="$_kc"
 
 #aba_info "Ensuring CLI binaries are installed"
@@ -30,11 +38,19 @@ scripts/cli-install-all.sh --wait oc
 
 server_url=$(grep " server: " "$KUBECONFIG" | awk '{print $NF}' | head -1)
 
+aba_progress "DONE|sd_preflight"
+aba_progress "START|sd_access"
+
 aba_info Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
-if ! curl --connect-timeout 10 --retry 8 -skI $server_url >/dev/null; then
+if ! _curl_err=$(curl --connect-timeout 10 --retry 8 -sSkI $server_url 2>&1 >/dev/null); then
 	echo_red "Cluster not reachable at $server_url" >&2
-
+	[ -n "$_curl_err" ] && echo "$_curl_err" >&2
+	aba_progress "FAIL|sd_access"
+	aba_progress "ERROR|Cluster not reachable at $server_url"
+	[ -n "$_curl_err" ] && aba_progress "DETAIL|$_curl_err"
+	aba_progress "NEXT|Check that VMs are powered on: aba ls"
+	aba_progress "NEXT|Power on VMs with 'aba start' and retry"
 	exit 1
 fi
 
@@ -43,9 +59,15 @@ aba_info "Attempting to access the cluster ... "
 OC="oc --kubeconfig=$KUBECONFIG"
 
 aba_debug "Running: $OC whoami"
-if ! $OC whoami >/dev/null; then
+if ! _oc_err=$($OC whoami 2>&1 >/dev/null); then
 	echo_red "Error: Cannot access the cluster using KUBECONFIG=$KUBECONFIG" >&2
-
+	[ -n "$_oc_err" ] && echo "$_oc_err" >&2
+	aba_progress "FAIL|sd_access"
+	aba_progress "ERROR|Cannot authenticate to the cluster"
+	[ -n "$_oc_err" ] && aba_progress "DETAIL|$_oc_err"
+	aba_progress "DETAIL|KUBECONFIG=$KUBECONFIG"
+	aba_progress "NEXT|Check if cluster certificates have expired"
+	aba_progress "NEXT|Try 'aba login' or check cluster health"
 	exit 1
 fi
 
@@ -124,6 +146,9 @@ fi
 aba_info "Never power down a cluster for an extended period without taking a fresh etcd snapshot first!"
 echo
 ask "Gracefully shut down the cluster" || exit 1
+
+aba_progress "DONE|sd_access"
+aba_progress "START|sd_shutdown"
 
 aba_info "Cluster ready for graceful shutdown! Logging full output to $logfile ..." 2>&1 | tee -a $logfile
 
@@ -287,6 +312,8 @@ _shutdown_all_nodes_off() {
 }
 
 # Only wait for power-off if platform supports it (VMware or KVM)
+aba_progress "DONE|sd_shutdown"
+aba_progress "START|sd_poweroff"
 if [ "$wait" ] && ! { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	aba_info "--wait: bare-metal has no hypervisor to query power state — cannot wait for power-off"
 fi
@@ -304,6 +331,10 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	elif [ "$_wait_rc" -ne 0 ]; then
 		echo "" | tee -a $logfile
 		aba ls 2>/dev/null | tee -a $logfile
+		aba_progress "FAIL|sd_poweroff"
+		aba_progress "ERROR|Timed out waiting for all nodes to power off"
+		aba_progress "NEXT|Check VM power state: aba ls"
+		aba_progress "NEXT|Nodes may still be shutting down in the background"
 		aba_abort "Timed out after ${_wait_timeout}s waiting for all nodes to power off"
 	else
 		echo "" | tee -a $logfile
@@ -312,6 +343,7 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	fi
 fi
 
+aba_progress "DONE|sd_poweroff"
 aba_success "Cluster shutdown completed successfully."
 
 exit 0

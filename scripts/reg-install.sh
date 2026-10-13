@@ -18,8 +18,8 @@ vendor="${REG_VENDOR_OVERRIDE:-$(resolved_reg_vendor)}"
 aba_debug "Resolved registry vendor: $vendor (reg_vendor=${reg_vendor:-auto})"
 
 case "$vendor" in
-	quay|docker|$_QUAY_NG_VENDOR|existing) ;;
-	*) aba_abort "Unknown registry vendor '$vendor'. Valid values: quay, docker, $_QUAY_NG_VENDOR, existing" ;;
+	quay|docker|$_OMR_VENDOR|existing) ;;
+	*) aba_abort "Unknown registry vendor '$vendor'. Valid values: quay, docker, $_OMR_VENDOR, existing" ;;
 esac
 
 # "existing" = externally managed registry; nothing to install
@@ -28,9 +28,12 @@ if [ "$vendor" = "existing" ]; then
 	exit 0
 fi
 
+# PLANs are emitted by _progress_plan-install Makefile target (scripts/progress-plan.sh)
+aba_progress "START|reg_config"
+
 # Dispatch: remote (SSH) or local
 if [ "$reg_ssh_key" ]; then
-	exec scripts/reg-install-remote.sh "$vendor" "$@"
+	exec scripts/reg-install-${vendor}-remote.sh "$@"
 else
 	exec scripts/reg-install-${vendor}.sh "$@"
 fi

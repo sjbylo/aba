@@ -422,21 +422,29 @@ on every harness deploy. No VM revert needed.
 ### Commands (quick reference)
 
 ```
-run.sh run [-s X] [-p 1,2,3]            Run suites (blocks until completion)
+run.sh run [-s X] [-p 1,2,3]            Run suites (dispatches, then monitors)
 run.sh run -p all                        Run all suites across all pools
 run.sh run -s X -p 2 -f                 Force dispatch onto pool 2 (even if dispatcher running)
-run.sh run -p 1 -r                       Re-run last suite, skip passed tests (mini-menu usually easier)
 run.sh run -p all -d                     Push local source to ~/aba, then run
 run.sh run -a -D -p all                  Include dummy framework test suites
+run.sh run -a -p 1-4 --dev --loop -y    Continuous loop: re-queue when queue drains
+run.sh daemon [-a] [-p 1-4]              Auto-restarting dispatcher (crash-resilient)
 run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 run.sh deploy [-p 2,3]                   Push source code + harness to conN
 run.sh restart [-p 2] [-r]               Stop + harness deploy + re-run last suite
-run.sh stop [-p 2,3] [-c]               Kill runners (-c: delete clusters/mirrors)
+run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
+run.sh kill                              Kill daemon + all children + remove all locks
 run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 run.sh status [-p 3]                     Show what's running
-run.sh verify [-p all]                   Verify pool VMs (no dispatch)
-run.sh list                              List available suites (shows dummy suites separately)
-run.sh destroy [-p all] [-c]             Destroy pool VMs (-c: delete clusters first)
+run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
+run.sh verify-code [-p all]              Verify source code sync between workspace and pools
+run.sh list                              List available suites (dummy suites shown separately)
+run.sh destroy [-p all] [--no-clean]     Destroy pool VMs (cleans clusters/mirrors by default)
+run.sh attach conN                       Attach to runner tmux session on conN
+run.sh logs                              Tail the daemon log
+run.sh live [-p 1-3]                     Interactive multi-pane dashboard
+run.sh dash [-p all] [log]              Read-only summary dashboard
+```
 run.sh attach conN                       Attach to conN's runner tmux session
 run.sh live [-p 1-3]                     Interactive multi-pane dashboard
 run.sh dash [-p all] [log]              Read-only summary dashboard
@@ -446,11 +454,17 @@ run.sh dash [-p all] [log]              Read-only summary dashboard
 
 #### `run` -- Start suites
 
-Runs the dispatcher loop inline (blocking) in the current terminal. The
-dispatcher assigns suites from the work queue to free pools and blocks until
-all suites complete. If a dispatcher is already running (from another
-terminal), appends new suites to the queue (unless `--force` is used, which
-wipes queue state first). To survive SSH disconnects, run inside tmux/screen.
+Launches the dispatcher (or injects suites into an already-running one).
+When a daemon is already running, `run` detects it and appends suites to
+the queue rather than starting a second dispatcher. The `--dev` flag
+deploys local source to each pool as the dispatcher dispatches suites.
+
+With `--loop`/`-L`, the dispatcher re-queues all suites when the queue
+drains — pools stay busy indefinitely until manually stopped.
+
+**Inject pattern (preferred for code changes):** When a daemon is running,
+just re-run the same command. The daemon deploys `--dev` code to each pool
+as it dispatches. Do NOT manually `stop → deploy → run`.
 
 **One-shot force dispatch:** When `-f`/`--force` targets a single pool (`-p N`),
 only the first suite in `-s X,Y,Z` is dispatched immediately; remaining
@@ -464,10 +478,13 @@ run.sh run -s X -p 2 -f -y              # Force onto pool 2 (even if busy)
 run.sh run -p 1 -r                       # Re-run, skip already-passed tests
 run.sh run -n                            # Show plan, don't execute
 run.sh run -a -D -p 1-4                  # Include dummy suites in the run
+run.sh run -a -p 1-4 --dev --loop -y    # Continuous: deploy local code, loop
+run.sh run -a -p 1-4 --dev --loop --fresh -y  # Same but clear old results first
 ```
 
 Applicable options: `-s`/`--suite`, `-a`/`--all`, `-D`/`--with-dummy`, `-p`,
-`-f`/`--force`, `-d`/`--dev`, `-r`/`--resume`, `-n`/`--dry-run`,
+`-F`/`--fresh` (aliases: `-f`/`--force`), `-d`/`--dev`, `-r`/`--resume`,
+`-n`/`--dry-run`, `-L`/`--loop`,
 `-V`/`--revert`, `-G`/`--recreate-golden`, `-R`/`--recreate-vms`, `-y`, `-q`,
 `-o`/`--os`, `-v`/`--vmware-conf`, `-u`/`--user`, `--con-user`, `--dis-user`
 
@@ -518,13 +535,14 @@ Applicable options: `-p`, `-s`/`--suite`, `-r`/`--resume`, `-d`/`--dev`,
 
 #### `stop` -- Kill runners
 
-Stops the runner process on the target pool(s). With `-c`/`--clean`, deletes
-clusters and mirrors on the pool before stopping (tests `aba delete` /
-`aba uninstall`).
+Stops the runner process on the target pool(s). By default, cleans up
+clusters and mirrors on the pool before stopping (runs `aba delete` /
+`aba uninstall`). Use `--no-clean` to skip cleanup.
 
 ```
 run.sh stop -p 2,3                       # Stop pools 2 and 3 (dispatcher stays alive)
-run.sh stop -p all -c                    # Clean up clusters/mirrors, then stop (kills dispatcher)
+run.sh stop -p all                       # Stop all pools (kills dispatcher)
+run.sh stop -p 2 --no-clean             # Stop without cleaning up clusters/mirrors
 ```
 
 When stopping a subset of pools (e.g. `-p 2,3`), only the runners on those
@@ -534,7 +552,53 @@ The dispatcher is only killed when stopping ALL configured pools.
 **Cross-user:** Uses `sudo tmux kill-session` when the suite user is root
 (detected via `/tmp/e2e-suite-user`), since the tmux session is owned by root.
 
-Applicable options: `-p`, `-c`/`--clean`, `-y`
+Applicable options: `-p`, `--no-clean`, `-y`
+
+#### `daemon` -- Auto-restarting dispatcher
+
+Wraps `run` in a crash-resilient loop. If the dispatcher exits unexpectedly,
+the daemon restarts it with exponential backoff (5s to 60s). Gives up after
+5 consecutive crashes. On successful completion (all suites done, or with
+`--loop` looping indefinitely), the daemon exits cleanly.
+
+```
+run.sh daemon -a -p 1-4 --dev --loop -y   # Typical usage: continuous testing
+run.sh daemon -a -p 1-4 --dev --loop -R -y  # Same + reclone VMs between suites
+```
+
+The daemon writes a PID file and metadata to `~/.e2e-harness/`. Only one
+daemon per pool set can run at a time (overlap detection). Use `run.sh kill`
+to stop a running daemon, or `run.sh logs` to tail its log.
+
+Applicable options: same as `run`, plus crash-recovery is automatic.
+
+#### `kill` -- Kill daemon + all children + remove locks
+
+Emergency stop: kills the daemon process, all runner children, and removes
+lock files. Use when `stop` cannot work (e.g. orphaned processes after SSH
+disconnect).
+
+```
+run.sh kill                              # Kill everything
+```
+
+#### `logs` -- Tail the daemon log
+
+Tails the daemon log file (`~/.e2e-harness/logs/daemon.log`).
+
+```
+run.sh logs                              # Follow daemon log output
+```
+
+#### `verify-code` -- Verify source code sync
+
+Compares source file checksums between the workspace and deployed pool VMs.
+Reports any files that differ or are missing.
+
+```
+run.sh verify-code -p 1-4               # Check all pools
+run.sh verify-code -p 2                  # Check one pool
+```
 
 #### `start` -- Power on pool VMs
 
@@ -656,11 +720,12 @@ Applicable options: `-p`
 | `--all`                | `-a`  |          | Select all suites (default for `run`/`reschedule`). Excludes `dummy-*` suites unless `-D` is also passed.                        | `run`, `reschedule`                 |
 | `--with-dummy`         | `-D`  |          | Include `dummy-*` framework test suites (excluded from `--all` by default)                                                       | `run`, `reschedule`                 |
 | `--pool`               | `-p`  | `SPEC`   | Pool selection (see syntax below). Aliases: `--pools`, `--pool-list`.                                                            | All commands except `list`          |
-| `--force`              | `-f`  |          | Override safety checks (dispatch to busy pool, hot-deploy)                                                                       | `run`, `deploy`                     |
+| `--fresh`              | `-F`  |          | Clear old results and run all suites from scratch. Aliases: `-f`, `--force`.                                                     | `run`                               |
 | `--dev`                | `-d`  |          | Push local source to `~/aba` on conN instead of git clone                                                                        | `run`, `deploy`, `restart`          |
 | `--resume`             | `-r`  |          | Skip previously-passed tests (checkpointed). Rarely needed -- the interactive mini-menu (`[R]etry`, `[s]kip`) is usually easier. | `run`, `restart`                    |
+| `--loop`               | `-L`  |          | Keep pools busy: re-queue all suites when the queue drains. Runs indefinitely until manually stopped.                            | `run`, `daemon`                     |
 | `--dry-run`            | `-n`  |          | Show dispatch plan, don't execute                                                                                                | `run`                               |
-| `--clean`              | `-c`  |          | Delete clusters/mirrors before stopping/destroying                                                                               | `stop`, `destroy`                   |
+| `--no-clean`           |       |          | Skip cluster/mirror cleanup during stop/destroy (default is to clean)                                                            | `stop`, `destroy`                   |
 | `--revert`             | `-V`  |          | Revert pool VMs to pool-ready snapshot before running                                                                            | `run`                               |
 | `--recreate-golden`    | `-G`  |          | Force rebuild golden VM from template (implies `-R`)                                                                             | `run`                               |
 | `--recreate-vms`       | `-R`  |          | Force reclone conN/disN from golden (scoped to `-p`)                                                                             | `run`                               |
@@ -679,10 +744,10 @@ Applicable options: `-p`
 - `--user` / `-u` is shorthand for `--con-user USER --dis-user USER`
 - `--con-user` and `--dis-user` override `--user` if both are specified
 - `-q` implies `-y` (quiet mode auto-accepts all prompts)
-- `--force` / `-f` with `run`: wipes queue state and dispatches even to busy pools
-- `--force` / `-f` with `deploy`: hot-deploys to conN even if a suite is running
-- `--clean` / `-c` with `stop`: runs `aba delete`/`aba uninstall` before killing runner
-- `--clean` / `-c` with `destroy`: runs cleanup before destroying VMs
+- `--fresh` / `-F` (aliases: `-f`/`--force`) with `run`: clears old results and dispatches from scratch
+- `--fresh` / `-F` with `deploy`: hot-deploys to conN even if a suite is running
+- `--no-clean` with `stop`: skips `aba delete`/`aba uninstall` before killing runner (default is to clean)
+- `--no-clean` with `destroy`: skips cleanup before destroying VMs (default is to clean)
 - `--revert` / `-V` reverts to `pool-ready` snapshot; `--recreate-vms` / `-R` does a full
 reclone from golden (both scoped to the pools selected by `-p`);
 `--recreate-golden` / `-G` rebuilds golden from template first (implies `-R`)
@@ -968,6 +1033,46 @@ suite lifecycle** -- no operation may wipe or overwrite `~/aba`:
 - No suite, framework function, or runner step may `rm -rf ~/aba`, `git clone`
   into `~/aba`, or otherwise replace the contents of `~/aba` when
   `E2E_DEV_MODE=1` is set.
+
+### Auto-deploy: automatic dev branch deployment
+
+The dispatcher automatically deploys new `dev` branch commits to pools at
+dispatch time via `_auto_deploy_dev_branch()` in `lib/dispatcher.sh`.
+
+**Mechanism:**
+
+1. At each `_dispatch_suite()` call, the function compares bastion's `git HEAD`
+   against `/tmp/e2e-auto-deploy-commit-N` (per-pool last-deployed commit marker).
+2. Every 5 minutes (`_AUTO_DEPLOY_FETCH_INTERVAL`), it fetches `origin/dev` to
+   detect remote pushes. If origin is ahead and the working tree is clean, it
+   fast-forwards bastion (`git merge --ff-only`).
+3. If HEAD differs from any pool's marker, it builds the tarball once
+   (`git archive HEAD`) and deploys to **all pools** that are behind — not
+   just the one being dispatched.
+4. On success, each pool's marker is updated to HEAD. Subsequent dispatches
+   skip (HEAD == marker) until the next commit.
+
+**Triggers:**
+
+- Someone pushes to `origin/dev` (detected via periodic fetch)
+- User commits locally on bastion (HEAD advances past the marker)
+
+**Safety guards:**
+
+- Only fires when bastion is on the `dev` branch
+- Uncommitted changes block the `git pull` (won't clobber WIP)
+- Fast-forward only — diverged branches are skipped
+- Rate-limited fetch (5-minute interval, not every dispatch)
+
+**Relationship with `--dev` mode:**
+
+`--dev` is a manual overlay that pushes whatever is on disk (including
+uncommitted changes) via `run.sh deploy --dev` using `_make_source_tar()`.
+Auto-deploy uses `git archive HEAD` to build the tarball, so it deploys
+**only committed code** — uncommitted WIP on bastion is never pushed
+automatically. They are independent: auto-deploy runs regardless of whether
+`--dev` mode is active. `--dev` is for testing WIP; auto-deploy ensures
+committed changes reach pools without manual intervention.
 
 ### Infra space vs user space
 
@@ -1412,12 +1517,16 @@ leaves the system in an inconsistent state. If `aba delete` or
 **Exit code convention:**
 
 - **0**: suite passed
-- **1-2, 5-98**: suite failed (product bug detected by the test). Dispatcher
+- **1-2, 6-98**: suite failed (product bug detected by the test). Dispatcher
 retries up to `_MAX_RETRIES` times before marking as final FAIL.
 - **3**: suite skipped (dispatcher marks as SKIP, not counted as pass or fail)
 - **4**: restart requested by user via interactive menu. Handled entirely
 inside `runner.sh`'s while loop -- the suite re-runs without exiting
 the runner, so this exit code never reaches the dispatcher.
+- **5**: post-suite integrity failure. The suite itself passed (exit 0) but
+the runner's post-suite checks detected a problem (e.g. `suite_end`
+reported failures despite exit 0, or stale registry data dirs remain).
+Dispatcher treats this the same as a suite failure.
 - **99**: framework/infrastructure failure (NOT a suite failure) -- the runner
 sets this when pre-suite cleanup FAILs, lock cannot be acquired, harness
 files are missing, govc bootstrap fails, or disN revert fails. The
@@ -1742,6 +1851,54 @@ test/e2e/
     dev/
       SPEC.md               # This file
 ```
+
+---
+
+## Recent Changes (October 2026)
+
+Changes implemented after the initial v2 spec was written. Documenting here
+for completeness; relevant sections above have been updated where applicable.
+
+### Vendor rename: `quay-ng` → `omr`
+
+The experimental Quay-NG vendor was renamed to **OMR** (OpenShift Mirror Registry).
+This is a full codebase rename: filenames, config values, test names, and docs.
+The constant `_OMR_VENDOR` in `scripts/include_all.sh` is the single rename point.
+No backward-compatibility shim exists — clean break.
+
+### Quay registry stop/start uses pod operations
+
+The Quay mirror-registry runs as a pod (`quay-pod`) with an infra container
+that owns the port mapping. `reg_stop_vendor()` and `reg_start_vendor()` in
+`scripts/reg-common.sh` now use `podman pod stop/start quay-pod` instead of
+stopping individual containers. After pod start, a readiness loop polls
+`/health/instance` for up to 60 seconds to wait for the quay-app backend
+(nginx starts immediately but quay-app needs initialization time).
+
+### `--runtime` flag and `reg_running` state
+
+`mirror-status.sh --runtime` returns machine-parseable state (`reg_state`,
+`reg_listening`, `reg_running`). Used by the TUI for accurate status labels
+(especially distinguishing "stopped" from "absent"). `reg_running` is persisted
+in `state.sh` by `reg-stop.sh` / `reg-start.sh`.
+
+### New suites
+
+- **`mirror-stop-start`**: Tests stop/start/verify cycle for all three vendors
+  (docker, omr, quay), plus stop→uninstall→reinstall data preservation,
+  and `--runtime` state verification. Uses `-H $CON_HOST` to override
+  the default `reg_host` (which comes from the template's `hostname.domain`
+  and may not have a DNS record in pool environments).
+
+- **`state-management`**: Tests registry state persistence, drift detection,
+  idempotent install, tilde expansion, and directory recreation from state backup.
+
+### Suite pattern: `-H $CON_HOST` for local registry hostname
+
+Suites that install registries locally must pass `-H $CON_HOST` to `aba install`
+to override the default `reg_host` from `mirror.conf.j2` (which constructs
+`hostname.domain` using the OCP base domain, not the VM's actual FQDN).
+`CON_HOST` is set at the top of each suite as `con${POOL_NUM}.${VM_BASE_DOMAIN}`.
 
 ---
 

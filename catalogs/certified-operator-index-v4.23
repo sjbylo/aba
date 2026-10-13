@@ -36,6 +36,7 @@ hpe-ezmeral-csi-operator HPE Ezmeral Data Fabric CSI Operator for Kubernetes sta
 ibm-application-gateway-operator IBM Application Gateway Operator stable
 ibm-block-csi-operator IBM block storage CSI driver operator stable
 ibm-security-verify-access-operator IBM Verify Identity Access Operator stable
+ibm-storage-odf-operator IBM Storage ODF operator stable-v1.9
 infoscale-dr-manager InfoScale™ DR Manager fast
 infoscale-licensing-operator InfoScale™ Licensing Operator fast
 infoscale-sds-operator InfoScale™ SDS Operator fast

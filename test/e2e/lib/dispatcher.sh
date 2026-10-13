@@ -9,7 +9,11 @@
 #   lib/constants.sh  -- E2E_TMUX_SESSION, E2E_RC_PREFIX, E2E_DISPATCH_STATE, etc.
 #   lib/remote.sh     -- _essh, _escp, _ssh_con, _con_target, _dis_target, _wait_for_ssh
 #   lib/cleanup.sh    -- _e2e_process_cleanup_dir (aba delete/uninstall)
-#   lib/deploy.sh     -- sync_harness, sync_extras
+#   lib/deploy.sh     -- sync_harness, sync_extras, sync_source, _make_source_tar
+#
+# Auto-deploy: _auto_deploy_dev_branch() runs on every poll cycle and at
+# each dispatch, deploying new dev branch commits to ALL pools.  See the
+# function and README.md "Auto-deploy" section for details.
 #
 # Caller must declare these arrays before calling dispatcher functions:
 #   declare -A _completed=() _busy_pools=() _results=() _result_pool=()
@@ -151,6 +155,106 @@ _process_pool_cleanup_files() {
 	_run_cleanup_on_host "$target" "    " "$allowed"
 }
 
+# --- Auto-deploy dev branch when bastion HEAD advances -----------------------
+# Compares bastion HEAD against the last-deployed commit. Triggers when:
+#   (a) someone pushes to origin/dev (fetch pulls it, HEAD advances), OR
+#   (b) the user commits locally (HEAD advances past last deploy).
+# Also fetches origin/dev periodically (rate-limited) to pick up remote pushes.
+# Independent of --dev mode (which overlays uncommitted local changes).
+
+_AUTO_DEPLOY_META_PREFIX="/tmp/e2e-auto-deploy-commit"
+_AUTO_DEPLOY_FETCH_INTERVAL=300
+_auto_deploy_last_fetch_s=0
+
+_auto_deploy_dev_branch() {
+	# Only auto-deploy if bastion workspace is on the dev branch
+	local _branch
+	_branch=$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || return 0
+	[ "$_branch" = "dev" ] || return 0
+
+	# Periodically fetch origin/dev to detect remote pushes
+	local _now=${SECONDS:-0}
+	if (( _now - _auto_deploy_last_fetch_s >= _AUTO_DEPLOY_FETCH_INTERVAL )); then
+		_auto_deploy_last_fetch_s=$_now
+		git -C "$_ABA_ROOT" fetch origin dev --quiet 2>/dev/null || true
+
+		# If origin is ahead of local, notify but NEVER merge.
+		# The daemon must not modify the user's working tree — that
+		# clobbers uncommitted edits.  The user pulls when ready.
+		local _local_head _remote_head
+		_local_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+		_remote_head=$(git -C "$_ABA_ROOT" rev-parse origin/dev 2>/dev/null) || return 0
+		if [ "$_local_head" != "$_remote_head" ]; then
+			echo "    AUTO-DEPLOY: origin/dev ($(echo "$_remote_head" | head -c 8)) ahead of local ($(echo "$_local_head" | head -c 8)) -- run 'git pull' to deploy remote changes"
+		fi
+	fi
+
+	# Compare bastion HEAD against per-pool markers.  If ANY pool is behind,
+	# build the tarball once and deploy to ALL stale pools.  This ensures a
+	# commit reaches every pool promptly — not just the one being dispatched.
+	local _head
+	_head=$(git -C "$_ABA_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+
+	# Quick check: is any pool behind HEAD?
+	local _any_stale=""
+	local _p _p_meta _p_last
+	for _p in $CLI_POOL_LIST; do
+		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
+		_p_last=""
+		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
+		[ "$_head" != "$_p_last" ] && _any_stale=1 && break
+	done
+	[ -z "$_any_stale" ] && return 0
+
+	# Build the tarball once (committed code only — git archive, not disk).
+	# Uncommitted WIP is never pushed; use --dev for that.
+	local _tar _manifest _paths=()
+	_tar=$(mktemp /tmp/aba-auto-deploy.XXXXXX.tar.gz)
+	_manifest="$_ABA_ROOT/test/e2e/.deploy-manifest"
+	if [ -f "$_manifest" ]; then
+		while IFS= read -r _line; do
+			_line="${_line%%#*}"; _line="${_line## }"; _line="${_line%% }"
+			[ -z "$_line" ] && continue
+			_paths+=("$_line")
+		done < "$_manifest"
+	else
+		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
+	fi
+	if ! git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
+		echo "    AUTO-DEPLOY: git archive failed -- skipping"
+		rm -f "$_tar"
+		return 0
+	fi
+
+	# Deploy to every pool that is behind HEAD
+	local _p _p_meta _p_last _p_target _deployed_any=""
+	for _p in $CLI_POOL_LIST; do
+		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
+		_p_last=""
+		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
+		[ "$_head" = "$_p_last" ] && continue
+
+		_export_pool_ssh_users "$_p"
+		_p_target=$(_con_target "$_p")
+		echo "    AUTO-DEPLOY: new code ($(echo "${_p_last:-none}" | head -c 8)..$(echo "$_head" | head -c 8)) -> con${_p}"
+		if sync_source "$_p_target" "$_tar"; then
+			echo "$_head" > "$_p_meta"
+			echo "    AUTO-DEPLOY: source deployed to con${_p} ($(echo "$_head" | head -c 8))"
+			_deployed_any=1
+		else
+			echo "    AUTO-DEPLOY: source deploy FAILED to con${_p}"
+		fi
+	done
+
+	# Update deploy meta once (for verify-code tracking)
+	if [ -n "$_deployed_any" ]; then
+		local _cksum
+		_cksum=$(md5sum "$_tar" | cut -d' ' -f1)
+		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') git:$(echo "$_head" | head -c 8)" > /tmp/e2e-last-deploy.meta
+	fi
+	rm -f "$_tar"
+}
+
 # --- Dispatch a single suite to a pool ----------------------------------------
 
 _dispatch_suite() {
@@ -219,6 +323,10 @@ _dispatch_suite() {
 	# Sync latest harness to conN + infra-owned aba to disN
 	local target
 	target=$(_con_target "$pool_num")
+
+	# Auto-deploy: if bastion HEAD has advanced past last deploy, push source
+	_auto_deploy_dev_branch
+
 	if ! sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 		echo "    DIAG: sync_harness attempt 1 failed on pool ${pool_num} -- retrying in 5s" >&2
 		sleep 5
@@ -283,7 +391,7 @@ _check_pool() {
 
 	_export_pool_ssh_users "$pool_num"
 
-	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc'") || rc_content=""
+	rc_content=$(_ssh_con "$pool_num" "[ -f '${_RC_PREFIX}-${suite}.rc' ] && cat '${_RC_PREFIX}-${suite}.rc'") || rc_content=""
 	if [ -n "$rc_content" ]; then
 		# .rc may appear before the runner fully exits (legacy early write, or EXIT
 		# trap still running cleanup). A live lock means harness must NOT be
@@ -394,9 +502,11 @@ _find_free_pool() {
 			unset '_pool_cooldown_until[$_p]'
 			_export_pool_ssh_users "$_p"
 			if _essh "$(_con_target "$_p")" "true"; then
-				local _has_sess=""
-				_has_sess=$(_tmux_has_session "$_p") || _has_sess=""
-				[ "$_has_sess" = "yes" ] && continue
+				# Trust _busy_pools as the authority.  Tmux sessions from
+				# external processes, stale leftovers, or live-pane monitors
+				# must not block dispatch.  The startup scan
+				# (_detect_running_and_completed) already populates
+				# _busy_pools for suites surviving a daemon restart.
 				echo "$_p"
 				return 0
 			fi
@@ -1173,6 +1283,9 @@ _dispatch_loop() {
 			_recheck_unreachable_pools
 			_last_ext_refresh=$SECONDS
 		fi
+
+		# Auto-deploy: check on every poll, even when all pools are busy
+		_auto_deploy_dev_branch
 
 		# Adaptive polling: short interval after state changes, back off when idle
 		if [ -n "$_state_changed" ]; then

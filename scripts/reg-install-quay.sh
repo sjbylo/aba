@@ -7,10 +7,25 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_load_config
+aba_progress "DONE|reg_config"
+aba_progress "START|reg_env"
+
 reg_detect_existing
+_skip_to_post_install=$?
+
 reg_check_fqdn
 reg_setup_data_dir quay
 reg_generate_password
+
+if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
+	# Previous install was interrupted but registry is healthy — skip to post_install
+	aba_progress "DONE|reg_env"
+	aba_progress "DONE|reg_firewall"
+	aba_progress "DONE|reg_download"
+	aba_progress "DONE|reg_install"
+	aba_progress "START|reg_postcfg"
+else
+
 reg_verify_localhost
 reg_check_quay_resources
 
@@ -116,9 +131,15 @@ fi
 
 ask "Install Quay mirror registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
+aba_progress "DONE|reg_env"
+aba_progress "START|reg_firewall"
+
 aba_info "Installing Quay registry on localhost ..."
 
 reg_open_firewall
+
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_download"
 
 # Ensure the quay_installer SSH key exists (used internally by mirror-registry)
 if [ ! -s $HOME/.ssh/quay_installer ]; then
@@ -134,6 +155,12 @@ if ! ensure_quay_registry; then
 	aba_abort "Failed to extract mirror-registry:\n$error_msg"
 fi
 
+aba_progress "DONE|reg_download"
+aba_progress "START|reg_install"
+
+# Mark state as "installing" so a retry can detect and recover from a partial install
+reg_mark_installing quay
+
 # mirror-registry hardcodes --name ansible_runner_instance without
 # --replace.  A prior interrupted run leaves it behind (--rm is
 # unreliable on signal kill), blocking all subsequent calls.
@@ -143,8 +170,14 @@ podman rm -f ansible_runner_instance 2>/dev/null || true
 # $reg_pw is quoted to preserve special characters (e.g. " ! @ #).
 # shellcheck disable=SC2086
 if ! ./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_hostport" $reg_root_opts --initPassword "$reg_pw"; then
+	aba_progress "FAIL|reg_install"
 	aba_abort "Quay mirror-registry install failed. Check the output above for details."
 fi
+
+aba_progress "DONE|reg_install"
+aba_progress "START|reg_postcfg"
+
+fi  # end of skip_to_post_install guard
 
 reg_post_install "$reg_root/quay-rootCA/rootCA.pem" quay
 
@@ -157,3 +190,7 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To verify:    cd $PWD && aba verify
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
+
+aba_progress "DONE|reg_postcfg"
+reg_cleanup_backup
+aba_progress "DONE|reg_verify"

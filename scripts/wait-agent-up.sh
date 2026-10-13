@@ -12,7 +12,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh "$@")" || exit 1
 fi
 
-[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "$ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
 grep -E -q "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$" "$ASSETS_DIR/rendezvousIP" || exit 0 # Ignore if not an IP
 
 aba_info =================================================================================
@@ -23,7 +23,11 @@ if [ ! -f .install-complete ]; then
 	AGENT_PORT=8090
 	agent_url="http://$AGENT_IP:$AGENT_PORT/"
 
-	[ "$no_proxy" ] && no_proxy="$AGENT_IP,$no_proxy"
+	if [ "$no_proxy" ]; then
+		no_proxy="$AGENT_IP,$no_proxy"
+	elif [ "${http_proxy:-}${https_proxy:-}" ]; then
+		no_proxy="$AGENT_IP"
+	fi
 	[ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy"
 
 	# Agent returns 4xx when alive (API endpoints return 404 at root)

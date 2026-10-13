@@ -141,26 +141,32 @@ _cluster_configured=0
 _cluster_dirs=()
 _cluster_installed_dirs=()
 _cluster_installing_dirs=()
+_cluster_configured_dirs=()
 for _d in */cluster.conf; do
 	[ -f "$_d" ] || continue
 	_dir="${_d%/cluster.conf}"
 	[[ "$_dir" == "mirror" || "$_dir" == "templates" ]] && continue
 
-	# Skip stale dirs (no .init, no iso-agent-based)
-	[ ! -f "$_dir/.init" ] && [ ! -d "$_dir/iso-agent-based" ] && continue
-
-	_cluster_count=$(( _cluster_count + 1 ))
-	_cluster_dirs+=("$_dir")
 	if [ -f "$_dir/.install-complete" ]; then
+		_cluster_count=$(( _cluster_count + 1 ))
 		_cluster_installed=$(( _cluster_installed + 1 ))
+		_cluster_dirs+=("$_dir")
 		_cluster_installed_dirs+=("$_dir")
 	elif [ -d "$_dir/iso-agent-based" ]; then
-		# Actually installing (ISO was generated)
+		_cluster_count=$(( _cluster_count + 1 ))
 		_cluster_installing=$(( _cluster_installing + 1 ))
+		_cluster_dirs+=("$_dir")
 		_cluster_installing_dirs+=("$_dir")
-	else
-		# Configured (.init exists) but install not started
+	elif [ -f "$_dir/.init" ]; then
+		_cluster_count=$(( _cluster_count + 1 ))
 		_cluster_configured=$(( _cluster_configured + 1 ))
+		_cluster_dirs+=("$_dir")
+		_cluster_configured_dirs+=("$_dir")
+	elif [ -f "$_dir/cluster.conf" ]; then
+		# Has cluster.conf but no .init — cleaned, ready to rebuild
+		_cluster_count=$(( _cluster_count + 1 ))
+		_cluster_configured=$(( _cluster_configured + 1 ))
+		_cluster_configured_dirs+=("$_dir")
 	fi
 done
 
@@ -187,8 +193,9 @@ shell)
 	echo "mirror_installed=$_mirror_installed"
 	echo "mirror_has_release=$_mirror_has_release"
 	echo "cluster_count=$_cluster_count"
-	echo "cluster_installed=$_cluster_installed"
-	echo "cluster_installing=$_cluster_installing"
+	echo "cluster_installed_count=$_cluster_installed"
+	echo "cluster_installing_count=$_cluster_installing"
+	echo "cluster_configured_count=$_cluster_configured"
 	;;
 
 *)
@@ -219,13 +226,13 @@ shell)
 
 		echo
 		aba_info "  Mirror"
-		aba_info "    Registry:     $([ "$_mirror_installed" = "true" ] && echo "installed" || echo "not installed")"
+		aba_info "    Registry:         $([ "$_mirror_installed" = "true" ] && echo "installed" || echo "not installed")"
 		aba_info "    Quay installer:   $([ "$_reg_installer_quay" = "true" ] && echo "available" || echo "not found")"
 		aba_info "    Docker installer: $([ "$_reg_installer_docker" = "true" ] && echo "available" || echo "not found")"
 		aba_info "    Saved archives:   $([ "$_saved_archives" = "true" ] && echo "yes" || echo "none")"
 
 		echo
-		aba_info "  Clusters:       $_cluster_count (installed: $_cluster_installed, installing: $_cluster_installing)"
+		aba_info "  Clusters:       $_cluster_count (installed: $_cluster_installed, installing: $_cluster_installing, configured: $_cluster_configured)"
 
 		# In --all mode, also run cluster-status if clusters exist
 		if [ $_cluster_count -gt 0 ]; then
@@ -256,7 +263,11 @@ shell)
 	fi
 
 	if [ "$_aba_conf_exists" = "true" ] && [ "$_pull_secret_ok" = "true" ]; then
-		_milestone="OCP ${_ocp_version:-?} configured, pull secret ready"
+		if [ -n "${_ocp_version:-}" ]; then
+			_milestone="OCP $_ocp_version configured, pull secret ready"
+		else
+			_milestone="pull secret ready, OCP version not set"
+		fi
 	fi
 
 	if [ "$_mirror_installed" != "true" ] && [ "$_pull_secret_ok" = "true" ]; then
@@ -288,6 +299,12 @@ shell)
 	if [ ${#_cluster_installing_dirs[@]} -gt 0 ]; then
 		for _dir in "${_cluster_installing_dirs[@]}"; do
 			_next_steps+=("Run 'aba -d $_dir mon' to monitor installation")
+		done
+	fi
+
+	if [ ${#_cluster_configured_dirs[@]} -gt 0 ]; then
+		for _dir in "${_cluster_configured_dirs[@]}"; do
+			_next_steps+=("Run 'aba -d $_dir install' to install cluster '$_dir'")
 		done
 	fi
 

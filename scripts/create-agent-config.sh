@@ -9,7 +9,7 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -161,6 +161,7 @@ else
 
 	mac_list=$(
 		for ((i=1; i <= num_nodes * num_ports; i++)); do
+			[ "$i" -gt 255 ] && aba_abort "MAC address overflow: need $((num_nodes * num_ports)) addresses but last octet max is 255 (ff)"
 			printf "%s%02x\n" "$mac_prefix" "$i"
 		done
 	)
@@ -174,10 +175,9 @@ export arr_macs=$(echo "$mac_list" | tr "\n" " " | tr -s "[:space:]")
 export arr_dns_servers=$(echo $dns_servers | tr "," " " | tr -s "[:space:]")
 aba_info "Adding DNS server(s): $arr_dns_servers"
 
-# Set up the ntp server(s)
-# scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+# NTP is configured via additionalNTPSources in the agent-config.yaml template (supported since OCP 4.15).
 export arr_ntp_servers=$(echo $ntp_servers | tr "," " " | tr -s "[:space:]")
-aba_info "Adding NTP server(s): $arr_ntp_servers"
+[ "$arr_ntp_servers" ] && aba_info "Adding NTP server(s): $arr_ntp_servers"
 
 # Use j2cli to render the templates
 echo
