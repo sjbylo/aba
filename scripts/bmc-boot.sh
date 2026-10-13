@@ -355,7 +355,7 @@ _bm_rollback() {
 		esac
 	done
 	if [ -n "$mounted_nodes" ]; then
-		aba_warning "BMC: partial-failure rollback - ejecting media from:$mounted_nodes"
+		aba_warn "BMC: partial-failure rollback - ejecting media from:$mounted_nodes"
 		# Unquoted $mounted_nodes: intentional IFS split of space-separated node names.
 		# Values are alphanumeric + underscore + hyphen only (bmc_host_ regex at source).
 		scripts/bmc-unmount.sh $mounted_nodes
@@ -483,7 +483,7 @@ _bm_boot_one_node() {
 
 	# Step 2: discover IDs (cached into MANAGER_ID_<node> / MEDIA_ID_<node> / SYSTEM_ID_<node>).
 	if ! bmc_discover_ids "$node"; then
-		aba_warning "BMC: $node phase=discover adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=discover adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		return 1
 	fi
@@ -491,7 +491,7 @@ _bm_boot_one_node() {
 
 	# Step 3: stale-media eject (BMC-02).
 	if ! bmc_eject_media "$node"; then
-		aba_warning "BMC: $node phase=eject-stale adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=eject-stale adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		return 1
 	fi
@@ -499,7 +499,7 @@ _bm_boot_one_node() {
 
 	# Step 4: insert media.
 	if ! bmc_insert_media "$node"; then
-		aba_warning "BMC: $node phase=insert adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=insert adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		return 1
 	fi
@@ -512,7 +512,7 @@ _bm_boot_one_node() {
 
 	# Step 6: wait Connected:true (fixed 15s at 1s interval per D-20).
 	if ! bmc_wait_connected "$node"; then
-		aba_warning "BMC: $node phase=wait-connected adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=wait-connected adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		return 1
 	fi
@@ -520,7 +520,7 @@ _bm_boot_one_node() {
 
 	# Step 7: set boot override Cd / Once / UEFI (PATCH; ETag handled by wrapper per D-04).
 	if ! bmc_set_boot_override "$node"; then
-		aba_warning "BMC: $node phase=boot-override adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=boot-override adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		return 1
 	fi
@@ -528,7 +528,7 @@ _bm_boot_one_node() {
 
 	# Step 8: power-state-aware reset (BMC-05).
 	if ! bmc_power_reset "$node"; then
-		aba_warning "BMC: $node phase=reset adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+		aba_warn "BMC: $node phase=reset adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 		bmc_session_logout "$node"
 		return 1
 	fi
@@ -549,12 +549,12 @@ _bm_boot_one_node() {
 			if bmc_session_login "$node" && bmc_wait_power_on "$node"; then
 				_bm_state_write "$node" "wait-power"
 			else
-				aba_warning "BMC: $node phase=wait-power adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+				aba_warn "BMC: $node phase=wait-power adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 				bmc_session_logout "$node"
 				return 1
 			fi
 		else
-			aba_warning "BMC: $node phase=wait-power adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
+			aba_warn "BMC: $node phase=wait-power adapter=$adapter http=$_REDFISH_LAST_CODE reason=\"$_REDFISH_LAST_REASON\""
 			bmc_session_logout "$node"
 			return 1
 		fi
@@ -570,7 +570,7 @@ _bm_boot_one_node() {
 	_bm_state_write "$node" "session-logout"
 
 	# UX-01 success per D-17.
-	aba_info_ok "BMC: $node booted from ISO (adapter=$adapter)"
+	aba_success "BMC: $node booted from ISO (adapter=$adapter)"
 	return 0
 }
 
@@ -605,7 +605,7 @@ if [ "$total" = "0" ]; then
 fi
 
 if [ "$ok_count" = "$total" ]; then
-	aba_info_ok "BMC: $ok_count/$total nodes booted from ISO"
+	aba_success "BMC: $ok_count/$total nodes booted from ISO"
 	touch .bm-bmc-boot-done
 	exit 0
 fi
@@ -613,6 +613,6 @@ fi
 # D-19 branch (c): any node failed. Stamp NOT written; exit non-zero so make halts.
 # Phase 7 D-14..D-18: ERR-03 rollback of state-file-identified mounted nodes
 # BEFORE exit 1. _bm_rollback best-effort; never masks the original failure code.
-aba_warning "BMC: $ok_count/$total nodes booted from ISO; failed:$failed_list"
+aba_warn "BMC: $ok_count/$total nodes booted from ISO; failed:$failed_list"
 _bm_rollback
 exit 1

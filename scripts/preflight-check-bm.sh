@@ -54,15 +54,15 @@ _bm_required_fields() {
 		pass="${!pass_var}"
 		btype="${!type_var}"
 		if [ -z "$user" ]; then
-			aba_warning "BMC: $node missing required field bmc_user_${node} in bmc.conf"
+			aba_warn "BMC: $node missing required field bmc_user_${node} in bmc.conf"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 		fi
 		if [ -z "$pass" ]; then
-			aba_warning "BMC: $node missing required field bmc_password_${node} in bmc.conf"
+			aba_warn "BMC: $node missing required field bmc_password_${node} in bmc.conf"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 		fi
 		if [ -z "$btype" ]; then
-			aba_warning "BMC: $node missing required field bmc_type_${node} in bmc.conf"
+			aba_warn "BMC: $node missing required field bmc_type_${node} in bmc.conf"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 		else
 			case "$btype" in
@@ -70,7 +70,7 @@ _bm_required_fields() {
 					aba_debug "BMC: $node bmc_type=$btype (allowed)"
 					;;
 				*)
-					aba_warning "BMC: $node bmc_type_${node}='$btype' not in allowlist {irmc, redfish, idrac, ilo, supermicro, lenovo}"
+					aba_warn "BMC: $node bmc_type_${node}='$btype' not in allowlist {irmc, redfish, idrac, ilo, supermicro, lenovo}"
 					_preflight_errors=$(( _preflight_errors + 1 ))
 					;;
 			esac
@@ -95,7 +95,7 @@ _bm_check_shipped_vendors() {
 				aba_debug "BMC: $node bmc_type=$btype (shipped in this release)"
 				;;
 			*)
-				aba_warning "BMC: $node bmc_type $btype: not certified in this release; set bmc_type=redfish to try the generic adapter at your own risk"
+				aba_warn "BMC: $node bmc_type $btype: not certified in this release; set bmc_type=redfish to try the generic adapter at your own risk"
 				_preflight_errors=$(( _preflight_errors + 1 ))
 				;;
 		esac
@@ -112,14 +112,14 @@ _bm_validate_iso_url() {
 
 	# Sub-check 1: scheme must be exactly http://
 	if [[ "$iso_url" != http://* ]]; then
-		aba_warning "BMC: iso_url must use http:// scheme (https:// rejected in v1.1; opt-in deferred)"
+		aba_warn "BMC: iso_url must use http:// scheme (https:// rejected in v1.1; opt-in deferred)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
 
 	# Sub-check 2: no ? or & (iDRAC and iRMC reject special chars in InsertMedia).
 	if [[ "$iso_url" == *"?"* ]] || [[ "$iso_url" == *"&"* ]]; then
-		aba_warning "BMC: iso_url must not contain '?' or '&' (iDRAC/iRMC reject special chars in InsertMedia)"
+		aba_warn "BMC: iso_url must not contain '?' or '&' (iDRAC/iRMC reject special chars in InsertMedia)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -139,7 +139,7 @@ _bm_validate_iso_url() {
 			aba_debug "BMC: iso_url host '$host' resolves via getent"
 		else
 			rm -f "$getent_tmp"
-			aba_warning "BMC: iso_url host '$host' does not resolve (check /etc/hosts or DNS)"
+			aba_warn "BMC: iso_url host '$host' does not resolve (check /etc/hosts or DNS)"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1
 		fi
@@ -150,17 +150,17 @@ _bm_validate_iso_url() {
 	local head_out rc=0
 	head_out=$(curl -sI --fail --max-time 10 "$iso_url" 2>&1) || rc=$?
 	if [ "$rc" -ne 0 ]; then
-		aba_warning "BMC: iso_url HEAD failed: $(printf '%s' "$head_out" | head -1)"
+		aba_warn "BMC: iso_url HEAD failed: $(printf '%s' "$head_out" | head -1)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
 	if ! printf '%s' "$head_out" | grep -qi '^Content-Length:'; then
-		aba_warning "BMC: iso_url HEAD has no Content-Length header (some BMC firmware will reject - serve via python3 -m http.server or nginx)"
+		aba_warn "BMC: iso_url HEAD has no Content-Length header (some BMC firmware will reject - serve via python3 -m http.server or nginx)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
 	if printf '%s' "$head_out" | grep -qi '^Transfer-Encoding:[[:space:]]*chunked'; then
-		aba_warning "BMC: iso_url HEAD has Transfer-Encoding: chunked (older BMC firmware rejects chunked; serve via python3 -m http.server)"
+		aba_warn "BMC: iso_url HEAD has Transfer-Encoding: chunked (older BMC firmware rejects chunked; serve via python3 -m http.server)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -175,7 +175,7 @@ _bm_validate_iso_url() {
 	done
 	if [ "$has_idrac" = "1" ]; then
 		if [ "${#iso_url}" -gt 255 ]; then
-			aba_warning "BMC: iso_url length ${#iso_url} exceeds 255 chars (Dell iDRAC9 limit); shorten the URL or move to a shorter hostname"
+			aba_warn "BMC: iso_url length ${#iso_url} exceeds 255 chars (Dell iDRAC9 limit); shorten the URL or move to a shorter hostname"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1
 		fi
@@ -198,7 +198,7 @@ _bm_derive_iso_url() {
 	local route_out rc=0
 	route_out=$(ip route get "$bmc_host" 2>&1) || rc=$?
 	if [ "$rc" -ne 0 ]; then
-		aba_warning "BMC: cannot derive bastion src IP - 'ip route get $bmc_host' failed: $(printf '%s' "$route_out" | head -1)"
+		aba_warn "BMC: cannot derive bastion src IP - 'ip route get $bmc_host' failed: $(printf '%s' "$route_out" | head -1)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -208,7 +208,7 @@ _bm_derive_iso_url() {
 	local src_ip
 	src_ip=$(printf '%s\n' "$route_out" | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}')
 	if [ -z "$src_ip" ]; then
-		aba_warning "BMC: cannot derive bastion src IP from 'ip route get $bmc_host' output (no 'src' token found - check default route)"
+		aba_warn "BMC: cannot derive bastion src IP from 'ip route get $bmc_host' output (no 'src' token found - check default route)"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -217,7 +217,7 @@ _bm_derive_iso_url() {
 	local addr_list
 	addr_list=$(ip -o -4 addr show | awk '{print $4}' | cut -d/ -f1)
 	if ! printf '%s\n' "$addr_list" | grep -qxF "$src_ip"; then
-		aba_warning "BMC: $bmc_host auto-derived bastion src IP $src_ip is not present on any local interface"
+		aba_warn "BMC: $bmc_host auto-derived bastion src IP $src_ip is not present on any local interface"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -228,7 +228,7 @@ _bm_derive_iso_url() {
 	if [ ! -f "$iso_path" ]; then
 		aba_debug "BMC: $bmc_host iso file $iso_path not yet generated - deferring existence check to Phase 6 server-start"
 	elif [ ! -r "$iso_path" ]; then
-		aba_warning "BMC: iso file $iso_path exists but is not readable"
+		aba_warn "BMC: iso file $iso_path exists but is not readable"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -239,7 +239,7 @@ _bm_build_auth() {
 	# Credential construction for BMC Authorization header. Single grep-able audit surface.
 	# Arg: node name (bmc_host_<node> suffix).
 	# Stdout: base64(user:pass) with NO trailing newline and NO line wrap.
-	# Return: 0 on success; 1 on missing user/pass (with aba_warning).
+	# Return: 0 on success; 1 on missing user/pass (with aba_warn).
 	#
 	# D-06 invariants:
 	# - Every password read uses ${!pass_var} indirection (grep-auditable).
@@ -254,7 +254,7 @@ _bm_build_auth() {
 	user="${!user_var}"
 	pass="${!pass_var}"
 	if [ -z "$user" ] || [ -z "$pass" ]; then
-		aba_warning "BMC: $node bmc_user_${node} or bmc_password_${node} not set in bmc.conf"
+		aba_warn "BMC: $node bmc_user_${node} or bmc_password_${node} not set in bmc.conf"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -266,7 +266,7 @@ _bm_probe_l1() {
 	# Uses bash /dev/tcp redirect inside a `timeout 3 bash -c ...` invocation.
 	# UX-05 compliance: bash's own "connect: Connection refused" noise is CAPTURED
 	# via 2>&1 into a local `err` variable (NOT suppressed). On failure, the captured
-	# stderr is surfaced to the operator in the aba_warning message, so the underlying
+	# stderr is surfaced to the operator in the aba_warn message, so the underlying
 	# kernel/network reason is visible. On success, `err` is discarded.
 
 	local node="$1"
@@ -290,7 +290,7 @@ _bm_probe_l1() {
 	if [ -z "$err_one" ]; then
 		err_one="timeout or unknown error (rc=$rc)"
 	fi
-	aba_warning "BMC: $node L1=FAIL reason=\"cannot reach $host:443 (TCP): $err_one - check DNS/firewall/bmc_host_${node}\""
+	aba_warn "BMC: $node L1=FAIL reason=\"cannot reach $host:443 (TCP): $err_one - check DNS/firewall/bmc_host_${node}\""
 	_preflight_errors=$(( _preflight_errors + 1 ))
 	return 1
 }
@@ -327,7 +327,7 @@ _bm_probe_l2() {
 		"https://$host/redfish/v1/") || code="000"
 	rm -f "$root_tmp"
 	if [ "$code" != "200" ]; then
-		aba_warning "BMC: $node L2=FAIL reason=\"HTTP $code on /redfish/v1/\""
+		aba_warn "BMC: $node L2=FAIL reason=\"HTTP $code on /redfish/v1/\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -378,7 +378,7 @@ _bm_probe_l2() {
 
 	local half=$(( max / 2 ))
 	if [ "$used" -ge "$half" ] && [ "$half" -gt 0 ]; then
-		aba_warning "BMC: $node $used/$max Redfish sessions in use (near limit)"
+		aba_warn "BMC: $node $used/$max Redfish sessions in use (near limit)"
 		_preflight_warnings=$(( _preflight_warnings + 1 ))
 	else
 		aba_debug "BMC: $node session count $used/$max (ok)"
@@ -420,7 +420,7 @@ _bm_probe_l3() {
 	fi
 	rm -f "$mgr_tmp"
 	if [ -z "$mgr_link" ]; then
-		aba_warning "BMC: $node L3=FAIL reason=\"Managers collection (HTTP $mgr_code) has no members\""
+		aba_warn "BMC: $node L3=FAIL reason=\"Managers collection (HTTP $mgr_code) has no members\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -437,13 +437,13 @@ _bm_probe_l3() {
 
 	if [ "$vm_code" = "403" ] || [ "$vm_code" = "404" ]; then
 		rm -f "$vm_tmp"
-		aba_warning "BMC: $node L3=FAIL reason=\"VirtualMedia not licensed on this BMC\""
+		aba_warn "BMC: $node L3=FAIL reason=\"VirtualMedia not licensed on this BMC\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
 	if [ "$vm_code" != "200" ]; then
 		rm -f "$vm_tmp"
-		aba_warning "BMC: $node L3=FAIL reason=\"HTTP $vm_code on VirtualMedia collection\""
+		aba_warn "BMC: $node L3=FAIL reason=\"HTTP $vm_code on VirtualMedia collection\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -453,7 +453,7 @@ _bm_probe_l3() {
 	members=$(jq -r '.Members[]."@odata.id"' "$vm_tmp")
 	rm -f "$vm_tmp"
 	if [ -z "$members" ]; then
-		aba_warning "BMC: $node L3=FAIL reason=\"VirtualMedia collection empty\""
+		aba_warn "BMC: $node L3=FAIL reason=\"VirtualMedia collection empty\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -487,7 +487,7 @@ _bm_probe_l3() {
 	done
 
 	if [ "$found_cd" = "0" ]; then
-		aba_warning "BMC: $node L3=FAIL reason=\"no VirtualMedia slot accepts CD/DVD inserts with InsertMedia action\""
+		aba_warn "BMC: $node L3=FAIL reason=\"no VirtualMedia slot accepts CD/DVD inserts with InsertMedia action\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -527,7 +527,7 @@ _bm_probe_l4() {
 	fi
 	rm -f "$sys_tmp"
 	if [ -z "$sys_link" ]; then
-		aba_warning "BMC: $node L4=FAIL reason=\"Systems collection (HTTP $sys_code) has no members\""
+		aba_warn "BMC: $node L4=FAIL reason=\"Systems collection (HTTP $sys_code) has no members\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -543,7 +543,7 @@ _bm_probe_l4() {
 		"https://$host$sys_link") || one_code="000"
 	if [ "$one_code" != "200" ]; then
 		rm -f "$one_tmp"
-		aba_warning "BMC: $node L4=FAIL reason=\"HTTP $one_code on $sys_link\""
+		aba_warn "BMC: $node L4=FAIL reason=\"HTTP $one_code on $sys_link\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -556,12 +556,12 @@ _bm_probe_l4() {
 	rm -f "$one_tmp"
 
 	if [ -z "$target_ok" ]; then
-		aba_warning "BMC: $node L4=FAIL reason=\"neither Cd nor UsbCd in BootSourceOverrideTarget allowables\""
+		aba_warn "BMC: $node L4=FAIL reason=\"neither Cd nor UsbCd in BootSourceOverrideTarget allowables\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
 	if [ -z "$enabled_ok" ]; then
-		aba_warning "BMC: $node L4=FAIL reason=\"Once not in BootSourceOverrideEnabled allowables\""
+		aba_warn "BMC: $node L4=FAIL reason=\"Once not in BootSourceOverrideEnabled allowables\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -607,7 +607,7 @@ _bm_probe_l5_idrac() {
 	fi
 	rm -f "$mgr_tmp"
 	if [ -z "$mgr_link" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -627,7 +627,7 @@ _bm_probe_l5_idrac() {
 	fi
 	rm -f "$m_tmp"
 	if [ -z "$fwver" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $m_code on Manager resource (FirmwareVersion missing)\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $m_code on Manager resource (FirmwareVersion missing)\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -635,7 +635,7 @@ _bm_probe_l5_idrac() {
 	# Step 3: iDRAC10 hard-fail (D-05a). Check BEFORE firmware floor so the message
 	# is accurate ("not yet supported" instead of misleading "below minimum").
 	if echo "$model" | grep -qi "iDRAC10" || [[ "$fwver" == 7.* ]]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"iDRAC10 not yet supported - bmc_type=idrac targets iDRAC9 only in v1.1; downgrade to iDRAC9 or set bmc_type=redfish to try the generic adapter at your own risk\""
+		aba_warn "BMC: $node L5=FAIL reason=\"iDRAC10 not yet supported - bmc_type=idrac targets iDRAC9 only in v1.1; downgrade to iDRAC9 or set bmc_type=redfish to try the generic adapter at your own risk\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -646,7 +646,7 @@ _bm_probe_l5_idrac() {
 	IFS=. read -r major minor patch build <<<"$fwver"
 	case "$major" in
 		''|*[!0-9]*)
-			aba_warning "BMC: $node L5=FAIL reason=\"iDRAC FirmwareVersion '$fwver' not parseable as N.N.N.N\""
+			aba_warn "BMC: $node L5=FAIL reason=\"iDRAC FirmwareVersion '$fwver' not parseable as N.N.N.N\""
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1
 			;;
@@ -671,7 +671,7 @@ _bm_probe_l5_idrac() {
 		fi
 	fi
 	if [ "$floor_ok" = "0" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"iDRAC firmware $fwver below v1.1 minimum (4.40.10.00 Intel / 6.00.00.00 AMD); upgrade or set bmc_type=redfish at your own risk\""
+		aba_warn "BMC: $node L5=FAIL reason=\"iDRAC firmware $fwver below v1.1 minimum (4.40.10.00 Intel / 6.00.00.00 AMD); upgrade or set bmc_type=redfish at your own risk\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -713,7 +713,7 @@ _bm_probe_l5_ilo() {
 	fi
 	rm -f "$mgr_tmp"
 	if [ -z "$mgr_link" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -732,14 +732,14 @@ _bm_probe_l5_ilo() {
 	fi
 	rm -f "$m_tmp"
 	if [ -z "$model" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $m_code on Manager resource (Model missing)\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $m_code on Manager resource (Model missing)\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
 
 	# Step 3: iLO 4 hard-fail (case-insensitive substring match per D-08a).
 	if echo "$model" | grep -qiE 'iLO 4|Integrated Lights-Out 4'; then
-		aba_warning "BMC: $node L5=FAIL reason=\"iLO 4 not supported - Redfish VirtualMedia non-standard; upgrade to iLO 5 or replace hardware\""
+		aba_warn "BMC: $node L5=FAIL reason=\"iLO 4 not supported - Redfish VirtualMedia non-standard; upgrade to iLO 5 or replace hardware\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -782,7 +782,7 @@ _bm_probe_l5_supermicro() {
 	fi
 	rm -f "$mgr_tmp"
 	if [ -z "$mgr_link" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -812,7 +812,7 @@ _bm_probe_l5_supermicro() {
 		aba_debug "BMC: $node L5 Supermicro model=\"$model\" (X12/X13 ok)"
 		return 0
 	fi
-	aba_warning "BMC: $node L5 Supermicro model=\"$model\" not in tested set {X12, X13}; proceeding at operator risk"
+	aba_warn "BMC: $node L5 Supermicro model=\"$model\" not in tested set {X12, X13}; proceeding at operator risk"
 	return 0
 }
 
@@ -851,7 +851,7 @@ _bm_probe_l5_lenovo() {
 	fi
 	rm -f "$mgr_tmp"
 	if [ -z "$mgr_link" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $mgr_code on /redfish/v1/Managers\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -870,7 +870,7 @@ _bm_probe_l5_lenovo() {
 	fi
 	rm -f "$m_tmp"
 	if [ "$m_code" != "200" ]; then
-		aba_warning "BMC: $node L5=FAIL reason=\"HTTP $m_code on Manager resource\""
+		aba_warn "BMC: $node L5=FAIL reason=\"HTTP $m_code on Manager resource\""
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -885,7 +885,7 @@ _bm_probe_l5_lenovo() {
 		aba_debug "BMC: $node L5 Lenovo license features=\"$features\" (RemoteMedia/VirtualMedia ok)"
 		return 0
 	fi
-	aba_warning "BMC: $node L5=FAIL reason=\"Lenovo XCC license tier missing RemoteMedia/VirtualMedia feature; Enterprise license required (per Red Hat KCS 6958685); upgrade license or set bmc_type=redfish at your own risk\""
+	aba_warn "BMC: $node L5=FAIL reason=\"Lenovo XCC license tier missing RemoteMedia/VirtualMedia feature; Enterprise license required (per Red Hat KCS 6958685); upgrade license or set bmc_type=redfish at your own risk\""
 	_preflight_errors=$(( _preflight_errors + 1 ))
 	return 1
 }
@@ -926,7 +926,7 @@ _bm_discover_macs() {
 	local op_mac="${!op_mac_var:-}"
 	if [ "$mac_disc" = "disabled" ]; then
 		if [ -z "$op_mac" ]; then
-			aba_warning "BMC: $node MAC-09: mac_discovery_${node}=disabled but mac_${node} not set; set mac_${node} in bmc.conf or remove the opt-out"
+			aba_warn "BMC: $node MAC-09: mac_discovery_${node}=disabled but mac_${node} not set; set mac_${node} in bmc.conf or remove the opt-out"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1
 		fi
@@ -975,7 +975,7 @@ _bm_discover_macs() {
 	# generic-adapter path needs the discover fallback.
 	if [ -z "$(_bm_system_id "$node")" ]; then
 		if ! bmc_discover_ids "$node"; then
-			aba_warning "BMC: $node MAC-08: discovery preflight failed - $_REDFISH_LAST_REASON"
+			aba_warn "BMC: $node MAC-08: discovery preflight failed - $_REDFISH_LAST_REASON"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1
 		fi
@@ -984,7 +984,7 @@ _bm_discover_macs() {
 	local nic_lines rc=0
 	nic_lines=$(_bm_get_ethernetinterfaces "$node") || rc=$?
 	if [ "$rc" -ne 0 ]; then
-		aba_warning "BMC: $node MAC-08: Redfish EthernetInterfaces call failed - $_REDFISH_LAST_REASON"
+		aba_warn "BMC: $node MAC-08: Redfish EthernetInterfaces call failed - $_REDFISH_LAST_REASON"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -995,7 +995,7 @@ _bm_discover_macs() {
 		0)  : ;;  # _BM_DISCOVERED_MAC + _BM_DISCOVERED_NIC_ID populated
 		4)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-04 emitted inside helper
 		5)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-05 emitted inside helper
-		*)  aba_warning "BMC: $node MAC-08: unexpected resolver rc=$rc"
+		*)  aba_warn "BMC: $node MAC-08: unexpected resolver rc=$rc"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1 ;;
 	esac
@@ -1017,12 +1017,12 @@ _bm_discover_macs() {
 					nic_summary="${nic_summary}, ${nic_id}=${mac}"
 				fi
 			done <<<"$nic_lines"
-			aba_warning "BMC: $node MAC-03: operator mac_${node}=$op_mac not in BMC EthernetInterfaces report; reported NICs: [$nic_summary]"
+			aba_warn "BMC: $node MAC-03: operator mac_${node}=$op_mac not in BMC EthernetInterfaces report; reported NICs: [$nic_summary]"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 			return 1
 		fi
 	else
-		aba_info_ok "BMC: $node MAC discovered=$_BM_DISCOVERED_MAC (nic=$_BM_DISCOVERED_NIC_ID)"
+		aba_success "BMC: $node MAC discovered=$_BM_DISCOVERED_MAC (nic=$_BM_DISCOVERED_NIC_ID)"
 	fi
 
 	# Step 6: persist to sidecar via Task 2 helper (D-16 cache benefit on re-run).
@@ -1110,8 +1110,8 @@ preflight_check_bm() {
 		_bm_discover_macs "$node" || continue
 		ok_count=$(( ok_count + 1 ))
 		case "$btype" in
-			irmc|redfish) aba_info_ok "BMC: $node L1=ok L2=ok L3=ok L4=ok MAC=ok" ;;
-			*)            aba_info_ok "BMC: $node L1=ok L2=ok L3=ok L4=ok L5=ok MAC=ok" ;;
+			irmc|redfish) aba_success "BMC: $node L1=ok L2=ok L3=ok L4=ok MAC=ok" ;;
+			*)            aba_success "BMC: $node L1=ok L2=ok L3=ok L4=ok L5=ok MAC=ok" ;;
 		esac
 	done
 
@@ -1121,9 +1121,9 @@ preflight_check_bm() {
 		return 0
 	fi
 	if [ "$ok_count" = "$total" ]; then
-		aba_info_ok "BMC: preflight $ok_count/$total nodes ready"
+		aba_success "BMC: preflight $ok_count/$total nodes ready"
 	else
-		aba_warning "BMC: preflight $ok_count/$total nodes ready ($(( total - ok_count )) failed - see BMC: messages above)"
+		aba_warn "BMC: preflight $ok_count/$total nodes ready ($(( total - ok_count )) failed - see BMC: messages above)"
 	fi
 	return 0
 }

@@ -43,7 +43,7 @@ test_fail() { echo -e "${RED}FAIL${NC}: $1"; exit 1; }
 source "${REPO_ROOT}/test/func/lib/bmc-redfish-stub.sh"
 
 # ---------------------------------------------------------------------------
-# Source runtime helpers (aba_info_ok / aba_warning / aba_abort / aba_debug
+# Source runtime helpers (aba_success / aba_warn / aba_abort / aba_debug
 # + normalize-bmc-conf + bmc_redact_env). Must come before preflight script.
 # ---------------------------------------------------------------------------
 source "${REPO_ROOT}/scripts/include_all.sh"
@@ -215,7 +215,7 @@ _bm_probe_l1() {
 	local node="$1"
 	local host_var="bmc_host_${node}"
 	local host="${!host_var}"
-	aba_warning "BMC: $node L1=FAIL reason=\"cannot reach $host:443 (TCP): Connection refused - check DNS/firewall/bmc_host_${node}\""
+	aba_warn "BMC: $node L1=FAIL reason=\"cannot reach $host:443 (TCP): Connection refused - check DNS/firewall/bmc_host_${node}\""
 	_preflight_errors=$(( _preflight_errors + 1 ))
 	return 1
 }
@@ -483,7 +483,7 @@ _mac_disco_wired() {
 
 # ---------------------------------------------------------------------------
 # Path mac_happy: per-node success line ends with MAC=ok (Plan 10-02 Task 1
-# step 5 updates the aba_info_ok format to include MAC=ok).
+# step 5 updates the aba_success format to include MAC=ok).
 # ---------------------------------------------------------------------------
 # path_mac_happy
 _path_setup_mac_happy() {

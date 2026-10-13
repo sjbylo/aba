@@ -90,7 +90,7 @@ _bm_resolve_mac() {
 	_BM_DISCOVERED_NIC_ID=""
 
 	if [ "$count" -eq 0 ]; then
-		aba_warning "BMC: $node MAC-04: no enabled NIC with link reported"
+		aba_warn "BMC: $node MAC-04: no enabled NIC with link reported"
 		return 4
 	fi
 
@@ -114,7 +114,7 @@ _bm_resolve_mac() {
 			list="${list}, ${nic_id}=${mac}"
 		fi
 	done <<<"$filtered"
-	aba_warning "BMC: $node MAC-05: ambiguous - candidates for $node: [$list]; set mac_${node}=<address> in bmc.conf to disambiguate"
+	aba_warn "BMC: $node MAC-05: ambiguous - candidates for $node: [$list]; set mac_${node}=<address> in bmc.conf to disambiguate"
 	return 5
 }
 
@@ -145,6 +145,6 @@ _bm_get_mac() {
 		fi
 	fi
 
-	aba_warning "BMC: $node MAC unavailable - no operator mac_${node} and no discovered_mac in .bmc-state.${node}"
+	aba_warn "BMC: $node MAC unavailable - no operator mac_${node} and no discovered_mac in .bmc-state.${node}"
 	return 1
 }
