@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.7...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.0...HEAD)
+
+---
+
+## [1.4.0](https://github.com/sjbylo/aba/releases/tag/v1.4.0) - 2026-10-13
+
+OMRv3 registry support, mirror reinstall without data loss, and real-time progress in the TUI
+
 
 New mirror registry vendor (OMR), TUI progress tracking, mirror stop/start, idempotent install, OCP 5.x readiness, and 60+ bug fixes across 198 commits.
 
