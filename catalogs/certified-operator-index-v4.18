@@ -82,6 +82,7 @@ hspc-operator Hitachi Storage Plug-in for Containers stable
 hulft HULFT10 for Container Platform stable
 iax-webhook-router ITRS Analytics Webhook Router stable
 ibm-application-gateway-operator IBM Application Gateway Operator stable
+ibm-app-mod-accelerator IBM Application Modernization Accelerator (AMA) v5.1
 ibm-block-csi-operator IBM block storage CSI driver operator stable
 ibm-common-service-operator IBM Cloud Pak foundational services v4.12
 ibm-commonui-operator-app Ibm Common UI v4.7
@@ -206,7 +207,7 @@ redis-enterprise-operator-cert Redis Enterprise Operator 8.0.20
 runtime-component-operator-certified Runtime Component v1.6
 runtime-fabric-operator Runtime Fabric Operator stable
 sanstoragecsi-operator-bundle NEC Storage M Series CSI Operator stable
-scaleops-operator ScaleOps stable-v1.34
+scaleops-operator ScaleOps stable-v1.35
 seawise-backup-operator Seawise Backup Dashboard alpha
 silicom-sts-operator Silicom STS Operator stable
 smilecdr-operator Smilecdr Operator alpha
@@ -243,9 +244,9 @@ tigera-operator Tigera Operator v1.38 release-v1.40
 timemachine-operator Time Machine Operator alpha
 trident-operator NetApp Trident stable
 tvo-operator Trilio for OpenStack 6.0.x
-uma-admin-operator DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy alpha
-uma-operator DX Operational Observability Universal Monitoring Agent alpha
-uma-team-operator DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy alpha
+uma-admin-operator DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy beta
+uma-operator DX Operational Observability Universal Monitoring Agent beta
+uma-team-operator DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy beta
 vast-csi-operator VAST CSI driver operator stable
 vault-secrets-operator Vault Secrets Operator stable
 vcp-operator CyberArk Certificate Manager Operator stable

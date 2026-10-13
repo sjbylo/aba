@@ -28,7 +28,7 @@ cluster-logging Red Hat OpenShift Logging stable-6.6
 cluster-observability-operator Cluster Observability Operator stable
 clusterresourceoverride ClusterResourceOverride Operator stable
 compliance-operator Compliance Operator stable
-container-security-operator Red Hat Quay Container Security Operator stable-3.17
+container-security-operator Container Security stable-3.18
 costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
@@ -39,7 +39,7 @@ dns-operator DNS Operator stable
 dpu-network-operator DPU Network Operator stable
 dpu-operator DPU Operator stable
 eap JBoss EAP stable
-exploit-iq-operator Red Hat Trusted Profile Analyzer exploit intelligence stable
+exploit-iq-operator Red Hat Trusted Profile Analyzer exploit intelligence stable-v3
 external-dns-operator ExternalDNS Operator stable-v1
 fence-agents-remediation Fence Agents Remediation Operator stable
 file-integrity-operator File Integrity Operator stable
@@ -109,8 +109,8 @@ pf-status-relay-operator pf-status-relay-operator stable
 policy-controller-operator Policy Controller Operator stable
 power-monitoring-operator Power monitoring for Red Hat OpenShift tech-preview
 ptp-operator PTP Operator stable
-quay-bridge-operator Red Hat Quay Bridge Operator stable-3.17
-quay-operator Red Hat Quay stable-3.17
+quay-bridge-operator Quay Bridge Operator stable-3.18
+quay-operator Quay stable-3.18
 recipe Recipe stable-4.20
 red-hat-camel-k Red Hat Integration - Camel K 1.10.x
 red-hat-hawtio-operator HawtIO Operator v2
