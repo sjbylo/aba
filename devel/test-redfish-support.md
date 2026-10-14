@@ -158,6 +158,92 @@ BMC: preflight 0/1 nodes ready (1 failed - see BMC: messages above)
 
 ---
 
+## Using Discovered MACs for the Agent Config
+
+BMC preflight discovers which NICs are active on each server and
+reports their MAC addresses.  However, ABA **does not** automatically
+insert discovered MACs into `agent-config.yaml` — the user must
+choose the correct NIC (a server may have multiple active NICs on
+different subnets/VLANs) and provide the MACs explicitly.
+
+### Workflow
+
+**Step 1 — Run preflight and note the discovered MACs.**
+
+```bash
+aba -d bmc-test preflight
+```
+
+The output shows one line per node:
+
+```
+# Single NIC detected — unambiguous:
+BMC: master0 MAC discovered=aa:bb:cc:dd:ee:01 (nic=NIC.Integrated.1)
+
+# Multiple NICs detected — you must choose:
+BMC: master0 MAC-05: ambiguous - candidates for master0: [NIC.Integrated.1=aa:bb:cc:dd:ee:01, NIC.Integrated.2=aa:bb:cc:dd:ee:02]; set mac_master0=<address> in bmc.conf to disambiguate
+```
+
+**Step 2 — Identify which MAC belongs to the cluster network.**
+
+The BMC reports all NICs that are physically LinkUp, but it does not
+know which one is connected to your OpenShift machine network.  You
+need to verify this yourself (check cabling, switch port VLAN, or
+your network diagram).
+
+**Step 3 — Write the MACs to `macs.conf` in the cluster directory.**
+
+One MAC per node per network port, top-to-bottom in node order
+(masters first, then workers):
+
+```bash
+cat > bmc-test/macs.conf <<EOF
+aa:bb:cc:dd:ee:01
+aa:bb:cc:dd:ee:02
+aa:bb:cc:dd:ee:03
+EOF
+```
+
+For port bonding (2 ports per node), provide 2 MACs per node:
+
+```bash
+cat > bmc-test/macs.conf <<EOF
+aa:bb:cc:dd:ee:01
+aa:bb:cc:dd:ee:11
+aa:bb:cc:dd:ee:02
+aa:bb:cc:dd:ee:12
+aa:bb:cc:dd:ee:03
+aa:bb:cc:dd:ee:13
+EOF
+```
+
+**Step 4 — Regenerate `agent-config.yaml` so the ISO uses the real MACs.**
+
+```bash
+rm bmc-test/agent-config.yaml
+aba -d bmc-test agentconf
+```
+
+You can verify the MACs were picked up:
+
+```bash
+aba -d bmc-test verify 2>&1 | grep -i mac
+```
+
+Now proceed to Level 3 (`aba -d bmc-test install`) — the ISO will
+contain the correct MACs and the Agent-Based Installer will match
+each booting node to its intended role.
+
+> **Why can't ABA do this automatically?**
+> A bare-metal server often has multiple NICs that are physically
+> LinkUp (management, data, storage networks).  The BMC sees link
+> state but not which subnet or VLAN each NIC is on.  Only the
+> operator knows which NIC is connected to the OpenShift machine
+> network.  ABA refuses to guess (MAC-05 ambiguous error) and
+> requires explicit selection.
+
+---
+
 ## Level 3 — Full Boot E2E (destructive — reboots the server)
 
 > **Warning**: This mounts an ISO and reboots the bare-metal server.
@@ -227,6 +313,12 @@ admin notes, and the MAC discovery error table).
 
 ## Known Limitations (this branch)
 
+- **MAC discovery does not auto-populate `agent-config.yaml`**: The
+  BMC preflight discovers NICs and reports their MACs, but does not
+  write them into `agent-config.yaml`.  The user must copy the correct
+  MACs into `macs.conf` and regenerate the agent config (see
+  "Using Discovered MACs" above).  Auto-population is not feasible
+  because the BMC cannot determine which NIC is on the cluster network.
 - **Makefile integration incomplete**: `bmc-boot.sh` documents a
   `.bm-bmc-boot-done` stamp target in `Makefile.cluster`, but that
   target is not yet wired in.  The boot orchestrator works when called
