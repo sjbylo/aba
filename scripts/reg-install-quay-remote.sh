@@ -13,9 +13,9 @@ if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
 	# Previous install was interrupted but registry is healthy — skip to post_install
 	aba_progress "DONE|reg_config"
 	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_firewall"
 	aba_progress "DONE|reg_download"
 	aba_progress "DONE|reg_install"
+	aba_progress "DONE|reg_firewall"
 	aba_progress "DONE|reg_postcfg"
 	aba_progress "START|reg_verify"
 else
@@ -42,8 +42,6 @@ fi
 ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
 aba_progress "DONE|reg_env"
-aba_progress "START|reg_firewall"
-aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_download"
 
 aba_info "Installing Quay registry on remote host $reg_host ..."
@@ -81,6 +79,8 @@ if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then
 fi
 
 aba_progress "DONE|reg_install"
+aba_progress "START|reg_firewall"
+aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
