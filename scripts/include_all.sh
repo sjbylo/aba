@@ -908,7 +908,7 @@ suggest_starting_ip() {
 }
 
 # Cross-validate networking fields against each other.
-# Checks: starting_ip not network/broadcast, IP collisions, VIP overlap.
+# Checks: starting_ip not network/broadcast, gateway in CIDR, IP collisions, VIP overlap.
 # Reads cluster.conf variables from the environment (already sourced by caller).
 # Returns 0 if consistent, 1 on error (all errors printed to stderr).
 _validate_network_consistency() {
@@ -928,14 +928,17 @@ _validate_network_consistency() {
 		_ret=1
 	fi
 
-	# Note: gateway (next_hop_address) is NOT checked against machine_network —
-	# in routed/lab environments the gateway is often on a different subnet.
+	# 2. Gateway must be within the machine_network CIDR
+	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null; then
+		if ! ip_in_cidr "$next_hop_address" "$machine_network" "$prefix_length"; then
+			echo_red "Error: next_hop_address ($next_hop_address) is outside the machine_network ($machine_network/$prefix_length)" >&2
+			_ret=1
+		fi
+	fi
 
-	# 2. Collision detection: build reserved IP list, check against node range
+	# 3. Collision detection: build reserved IP list, check against node range
 	local -A _reserved=()
-	# Only flag gateway collision if it's in the same CIDR as nodes
-	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null && \
-	   ip_in_cidr "$next_hop_address" "$machine_network" "$prefix_length"; then
+	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null; then
 		_reserved["$next_hop_address"]="next_hop_address (gateway)"
 	fi
 	if (( num_masters > 1 )); then
