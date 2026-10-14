@@ -94,15 +94,13 @@ _vc_check_dns() {
 		return
 	fi
 
-	# Bastion DNS failed — warn (bastion may not have cluster DNS records)
-	aba_warn "$display_fqdn: bastion DNS returned '${bastion_ip:-<empty>}' (expected $expected_ip)"
-
+	# Bastion DNS failed — try cluster DNS before warning
 	# Step 2: cluster DNS (if configured and different from bastion's result)
 	local cluster_ip
 	cluster_ip=$(_vc_resolve_via_cluster_dns "$fqdn")
 
 	if [ "$cluster_ip" = "$expected_ip" ]; then
-		aba_success "DNS record for $label ($display_fqdn) resolved via cluster DNS ($dns_servers): $cluster_ip"
+		aba_warn "$display_fqdn resolves via cluster DNS ($cluster_ip) but not from bastion — consider 'aba setup dns' or add $dns_servers to /etc/resolv.conf"
 		return
 	fi
 
