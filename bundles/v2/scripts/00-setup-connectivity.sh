@@ -63,7 +63,7 @@ if [ ${#stale_dirs[@]} -gt 0 ] || [ "$has_running_registry" ]; then
 		echo "  Stale work dirs:"
 		for d in "${stale_dirs[@]}"; do echo "    - $d"; done
 	fi
-	[ "$has_running_registry" ] && echo "  Running Quay registry detected (will be uninstalled first)"
+	[ "$has_running_registry" ] && echo "  Running mirror registry detected (will be uninstalled first)"
 	echo
 
 	if [ "$BATCH" ]; then

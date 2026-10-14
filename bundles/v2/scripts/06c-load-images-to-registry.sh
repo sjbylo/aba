@@ -12,19 +12,15 @@ int_down
 
 cd "$WORK_TEST_INSTALL/aba"
 
-echo_step "Load images into Quay ..."
+echo_step "Load images into mirror registry ..."
 
-# On re-run after a failed load, Quay may have crashed. Verify it's up first.
+# On re-run after a failed load, the registry may have crashed. Verify it's up first.
 if ! curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null; then
-	echo_step "Quay is not responding -- restarting the pod ..."
-	systemctl --user restart quay-pod.service
-	sleep 10
-	systemctl --user restart quay-redis.service
-	sleep 3
-	systemctl --user restart quay-app.service
+	echo_step "Registry is not responding -- attempting restart ..."
+	aba -d mirror start || true
 	sleep 30
-	curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Quay still not responding after restart!"; exit 1; }
-	echo_step "Quay recovered after pod restart."
+	curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry still not responding after restart!"; exit 1; }
+	echo_step "Registry recovered after restart."
 fi
 
 # ABA writes the real oc-mirror exit code to mirror/.oc-mirror-exit-code,
@@ -85,8 +81,7 @@ fi
 
 # Verify registry is still healthy after load
 echo_step "Verifying registry is accessible after load ..."
-podman ps | grep -q "quay-app" || { echo "ERROR: Quay is not running after load!"; exit 1; }
-curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry at $TEST_HOST:8443 is not responding!"; exit 1; }
+curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry at $TEST_HOST:8443 is not responding after load!"; exit 1; }
 
 # Verify all CLI files can install and are executable
 scripts/cli-install-all.sh --wait
@@ -100,5 +95,5 @@ if [ $load_rc -ne 0 ]; then
 	echo "Images loaded with warnings (oc-mirror exit ${_real_rc:-unavailable}) -- some images may have failed to load" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
 	echo "${_real_rc:-unknown}" > "$WORK_BUNDLE_DIR_BUILD/load-exit-code"
 else
-	echo "All images loaded (disk2mirror) into Quay: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
+	echo "All images loaded into mirror registry: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
 fi
