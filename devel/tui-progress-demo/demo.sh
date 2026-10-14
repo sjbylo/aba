@@ -181,7 +181,16 @@ _parse_event() {
 				fi
 			fi
 			;;
-		START)       [ "${_status[$id]:-9}" != "0" ] && _status[$id]="77"; _real_done[$id]="started" ;;
+		START)
+			if [ "${_status[$id]:-9}" != "0" ]; then
+				_status[$id]="77"
+			fi
+			_real_done[$id]="started"
+			# Catch missing PLAN declarations early
+			if [ -z "${_text[$id]:-}" ]; then
+				echo "[DEBUG] Progress: START for unplanned step '$id'" >&2
+			fi
+			;;
 		DONE)        _status[$id]="0"; _real_done[$id]="done" ;;
 		FAIL)        _status[$id]="1"; _real_done[$id]="fail"; _failed+=("${_text[$id]:-$id}") ;;
 		ERROR)       _errors+=("${arg1:-$id}") ;;
@@ -427,6 +436,7 @@ _sweep_skipped() {
 				_status[$id]="6"
 				_any=1
 			fi
+			echo "[DEBUG] Progress: PLANned step '$id' (${_text[$id]:-?}) was never started" >&2
 		fi
 	done
 	return $(( 1 - _any ))

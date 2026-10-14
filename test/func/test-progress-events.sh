@@ -199,7 +199,7 @@ test_plan_count sync      8
 test_plan_count save      6
 test_plan_count load      5
 test_plan_count uninstall 2
-test_plan_count bundle    8
+test_plan_count bundle    9
 test_plan_count day2      8
 test_plan_count day2-ntp  3
 test_plan_count day2-osus 4
@@ -217,7 +217,9 @@ echo ""
 
 echo "--- PLAN ID ↔ START/DONE cross-check ---"
 test_plan_id_coverage install 8 \
-	scripts/install-rpms.sh scripts/reg-install.sh scripts/reg-install-docker.sh scripts/reg-install-quay.sh
+	scripts/install-rpms.sh scripts/reg-install.sh \
+	scripts/reg-install-docker.sh scripts/reg-install-quay.sh scripts/reg-install-omr.sh \
+	scripts/reg-install-docker-remote.sh scripts/reg-install-quay-remote.sh scripts/reg-install-omr-remote.sh
 
 test_plan_id_coverage sync 8 \
 	scripts/install-rpms.sh scripts/reg-sync.sh scripts/download-catalogs-wait.sh
@@ -232,7 +234,7 @@ test_plan_id_coverage uninstall 2 \
 	scripts/reg-uninstall.sh scripts/reg-uninstall-docker.sh scripts/reg-uninstall-quay.sh \
 	scripts/reg-uninstall-omr.sh scripts/reg-uninstall-remote.sh
 
-test_plan_id_coverage bundle 8 \
+test_plan_id_coverage bundle 9 \
 	scripts/make-bundle.sh scripts/install-rpms.sh scripts/reg-save.sh
 
 test_plan_id_coverage day2 8 \
@@ -255,6 +257,41 @@ test_plan_id_coverage cluster-startup 6 \
 
 test_plan_id_coverage cluster-upgrade 4 \
 	scripts/cluster-upgrade.sh
+
+echo ""
+
+# ── Orphan emitter check — START IDs that have no PLAN ──
+echo "--- Orphan emitters (START without any PLAN) ---"
+
+# Collect all PLAN IDs across all workflows
+_all_plan_ids=""
+for wf in install sync save load uninstall stop start bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade; do
+	_tmpf=$(capture_plans "$wf")
+	_all_plan_ids="$_all_plan_ids $(grep '^PLAN|' "$_tmpf" 2>/dev/null | cut -d'|' -f2)"
+	rm -f "$_tmpf"
+done
+_all_plan_ids=$(echo "$_all_plan_ids" | tr ' ' '\n' | sort -u)
+
+# Collect all START IDs from production scripts (exclude test/demo/progress-plan)
+_all_start_ids=$(grep -rh 'aba_progress "START|' scripts/*.sh 2>/dev/null | \
+	grep -v 'progress-plan\|tui-progress' | \
+	sed 's/.*START|//;s/".*//' | \
+	grep -v '^\$' | \
+	sort -u)
+
+# Find START IDs missing from any PLAN
+_orphans=""
+for sid in $_all_start_ids; do
+	if ! echo "$_all_plan_ids" | grep -qx "$sid"; then
+		_orphans="$_orphans $sid"
+	fi
+done
+
+if [ -z "$_orphans" ]; then
+	pass "No orphan START IDs (all emitters have a matching PLAN)"
+else
+	fail "Orphan START IDs (no PLAN):$_orphans"
+fi
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
