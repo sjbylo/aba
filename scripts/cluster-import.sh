@@ -40,7 +40,9 @@ done
 [ -z "$_kubeconfig" ] && aba_abort "Missing required --kubeconfig flag. Use: aba import --kubeconfig <path>"
 
 # Resolve relative paths
-_kubeconfig=$(cd "$(dirname "$_kubeconfig")" && echo "$PWD/$(basename "$_kubeconfig")")
+_kc_dir=$(dirname "$_kubeconfig")
+[ -d "$_kc_dir" ] || aba_abort "Kubeconfig directory not found: $_kc_dir"
+_kubeconfig=$(cd "$_kc_dir" && echo "$PWD/$(basename "$_kubeconfig")")
 [ -f "$_kubeconfig" ] || aba_abort "Kubeconfig not found: $_kubeconfig"
 
 export KUBECONFIG="$_kubeconfig"
