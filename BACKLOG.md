@@ -51,18 +51,16 @@ The core (`_valid_cluster_name` block in `include_all.sh`) already checks:
 - api_vip / ingress_vip within machine_network CIDR ✅
 - api_vip ≠ ingress_vip ✅
 
-But these checks are **missing**:
-1. **Gateway within CIDR** — gateway should be inside the machine_network
-2. **DNS servers reachable** — if DNS IPs are in the machine_network, verify
-   they're within CIDR; if outside, that's fine (routed)
-3. **IP collision detection** — no two of {starting_ip..last_node_ip, gateway,
-   api_vip, ingress_vip} should overlap
-4. **Starting IP ≠ network/broadcast** — starting_ip should not be the network
+But these checks were **missing** (now implemented):
+1. **Starting IP ≠ network/broadcast** — starting_ip should not be the network
    address or broadcast address of the CIDR
-5. **Gateway ≠ any node IP** — gateway must not collide with any node IP in
+2. **IP collision detection** — no two of {starting_ip..last_node_ip, gateway,
+   api_vip, ingress_vip} should overlap (gateway only when in same CIDR)
+3. **VIPs outside node range** — api_vip and ingress_vip should not fall within
    the starting_ip..starting_ip+N range
-6. **VIPs outside node range** — api_vip and ingress_vip should not fall within
-   the starting_ip..starting_ip+N range
+
+Note: gateway (next_hop_address) is NOT validated against machine_network CIDR
+because in routed/lab environments the gateway is often on a different subnet.
 
 **Proposed fix:** Create a shared function `_validate_network_consistency()` in
 `include_all.sh` that performs all cross-checks using the existing `ip_in_cidr`,
