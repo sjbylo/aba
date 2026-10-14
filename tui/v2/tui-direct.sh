@@ -769,7 +769,7 @@ _direct_operators() {
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
 			1) mirror_select_operators ;;
-			2) _operator_search "$(_ver_minor "$ocp_version")" ;;
+			2) _operator_search "$(_ver_minor "$ocp_version")"; _persist_operator_basket ;;
 			esac
 			DIALOG_RC="next"
 			;;
@@ -865,8 +865,7 @@ without a mirror registry.
 
 Workflow:
   1. Install Cluster — configure, review, and provision OpenShift
-  2. Monitor Cluster — track install progress until completion
-  3. Day-2 — post-install config (resources, NTP, update service, etc.)
+  2. Day-2 — post-install config (resources, NTP, update service, etc.)
 
 Other:
   • Rerun Wizard — re-run the initial setup wizard
