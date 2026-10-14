@@ -302,12 +302,17 @@ aba -d bmc-test status
 
 | `bmc_type` value | Hardware | Notes |
 |------------------|----------|-------|
-| `irmc` | Fujitsu iRMC S5/S6 | Fully tested; uses generic DSP0266 (no L5 gate) |
-| `idrac` | Dell iDRAC9 | Firmware ≥ 4.40.10.00 (Intel) / 6.00.00.00 (AMD); iDRAC10 not yet supported |
-| `ilo` | HPE iLO 5/6 | iLO 4 hard-fails at preflight L5 |
-| `supermicro` | Supermicro X12/X13 | Requires SFT-OOB-LIC or SFT-DCMS-SINGLE license |
-| `lenovo` | Lenovo XCC | Requires Enterprise license; uses PATCH (not POST) for InsertMedia |
-| `redfish` | Any DSP0266 BMC | Generic fallback; no vendor-specific L5 gate |
+| `irmc` | Fujitsu iRMC S5/S6 | Real-HW validated in lab; uses generic DSP0266 (no L5 gate) |
+| `idrac` | Dell iDRAC9 | Firmware ≥ 4.40.10.00 (Intel) / 6.00.00.00 (AMD); iDRAC10 hard-fails at L5. Stub-tested only |
+| `ilo` | HPE iLO 5/6 | iLO 4 hard-fails at L5. Stub-tested only |
+| `supermicro` | Supermicro X12/X13 | VirtualMedia license (SFT-OOB-LIC or SFT-DCMS-SINGLE) checked at L3. Stub-tested only |
+| `lenovo` | Lenovo XCC | Enterprise license checked at L5; uses PATCH (not POST) for InsertMedia. Stub-tested only |
+| `redfish` | Any DSP0266 BMC | Generic fallback; no vendor-specific L5 gate. Stub-tested only |
+
+> Only Fujitsu iRMC has been validated against real hardware (see
+> `Troubleshooting.md` → "Per-vendor real-HW validation status").
+> All other vendors are code-complete with full mocked test coverage.
+> Report issues via GitHub.
 
 ---
 
