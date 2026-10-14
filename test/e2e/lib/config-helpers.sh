@@ -49,6 +49,15 @@ pool_machine_network() {
     echo "${POOL_MACHINE_NETWORK:-10.0.0.0/20}"
 }
 
+# Get the default gateway for the pool machine network (first usable IP).
+# E.g. 10.0.0.0/20 → 10.0.0.1.  The IP need not actually exist — cluster
+# nodes just need a syntactically valid gateway within the CIDR.
+pool_gateway() {
+    local _mn
+    _mn="$(pool_machine_network "$@")"
+    echo "${POOL_GATEWAY:-$(echo "$_mn" | sed 's|\.[0-9]*/.*|.1|')}"
+}
+
 # Get the connected bastion's lab IP (ens192): pool_con_ip [POOL_NUM]
 # This is the .x0 address in the pool's decade: 10.0.2.(N*10)
 pool_con_ip() {
