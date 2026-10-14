@@ -717,6 +717,26 @@ _reg_host_run() {
 	fi
 }
 
+# --- _reg_port_closed ---------------------------------------------------------
+# Returns 0 if the port is NOT listening (closed). For use with try_cmd.
+# Usage: _reg_port_closed [<ssh_cmd>] <port>
+_reg_port_closed() {
+	local ssh_cmd="$1"
+	local port="$2"
+	! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"
+}
+
+# --- _reg_quay_ready ----------------------------------------------------------
+# Returns 0 when Quay backend is ready (health endpoint returns non-502/503).
+# Usage: _reg_quay_ready [<ssh_cmd>] <port>
+_reg_quay_ready() {
+	local ssh_cmd="$1"
+	local port="$2"
+	local _code
+	_code=$(_reg_host_run "$ssh_cmd" "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
+	[ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]
+}
+
 # --- _reg_probe_set -----------------------------------------------------------
 # Run a probe that uses exit 0 = present (stale), 1 = absent.
 # Any other exit (SSH drop, missing tool, etc.) aborts -- never treat as gone.
@@ -1314,15 +1334,10 @@ reg_stop_vendor() {
 	esac
 
 	# Verify stopped — pods may take a moment to release ports
-	local _attempts=0
-	while _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; do
-		_attempts=$(( _attempts + 1 ))
-		if [ "$_attempts" -ge 30 ]; then
-			aba_abort "Failed to stop $vendor registry on $_where — port $port still listening after 60s"
-		fi
-		[ "$_attempts" -eq 1 ] && aba_info "Waiting for port $port to close ..."
-		sleep 2
-	done
+	if ! try_cmd -n 30 -d 2 -m "Wait for port $port to close on $_where" -q -- \
+		_reg_port_closed "$ssh_cmd" "$port"; then
+		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening after 60s"
+	fi
 
 	aba_info "$vendor registry stopped on $_where"
 }
@@ -1363,35 +1378,18 @@ reg_start_vendor() {
 	esac
 
 	# Wait for port to come up (registry may need a moment)
-	local _attempts=0
-	while ! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; do
-		_attempts=$(( _attempts + 1 ))
-		if [ "$_attempts" -ge 10 ]; then
-			aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 10s"
-		fi
-		sleep 1
-	done
+	if ! try_cmd -n 10 -d 1 -m "Wait for port $port on $_where" -q -- \
+		_reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 10s"
+	fi
 
 	# Quay uses nginx in front of quay-app; the port opens immediately (nginx)
 	# but the backend needs time to initialize.  Wait for a non-502 response.
 	# Quay can take 2-4 minutes to fully start (database init, migrations).
 	if [ "$vendor" = "quay" ]; then
-		local _ready=0
 		aba_info "Waiting for Quay backend to become ready (this can take 2-4 minutes) ..."
-		for (( _i=0; _i<150; _i++ )); do
-			local _code
-			if [ -n "$ssh_cmd" ]; then
-				_code=$($ssh_cmd "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
-			else
-				_code=$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${port}/health/instance" 2>/dev/null) || _code="000"
-			fi
-			if [ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]; then
-				_ready=1
-				break
-			fi
-			sleep 2
-		done
-		if [ "$_ready" -eq 0 ]; then
+		if ! try_cmd -n 150 -d 2 -m "Quay backend readiness on $_where" -q -- \
+			_reg_quay_ready "$ssh_cmd" "$port"; then
 			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 300s"
 		fi
 	fi
