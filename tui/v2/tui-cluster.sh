@@ -2199,7 +2199,7 @@ cluster_day2_menu() {
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
 			"" "──── Configuration ────────────────" \
-			"R" "Configure OperatorHub (after mirror load/sync)" \
+			"R" "Configure OperatorHub$( [[ "$_TUI_MODE" != "DIRECT" ]] && echo ' (after mirror load/sync)')" \
 			"N" "Network Time Protocol" \
 			"O" "OpenShift Update Service (OSUS)" \
 			"V" "Virtualization Boot Sources" \
@@ -2770,8 +2770,9 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
-	source <(normalize-aba-conf) 2>/dev/null || true
-	[[ "$platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
+	local _cl_platform=""
+	_cl_platform=$(awk -F= '/^platform=/{print $2}' "$ABA_ROOT/$SELECTED_CLUSTER/cluster.conf" 2>/dev/null)
+	[[ "$_cl_platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
