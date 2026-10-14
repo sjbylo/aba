@@ -752,10 +752,10 @@ cluster_install_flow() {
 		# Smart guess VIPs from DNS (if base domain available)
 		if [[ -n "$cl_domain" ]]; then
 			local api_dns ingress_dns
-			api_dns=$(dig +short "api.${cl_name}.${cl_domain}" A 2>/dev/null | head -1)
+			api_dns=$(dig +short "api.${cl_name}.${cl_domain}" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
 			[[ -n "$api_dns" ]] && cl_api_vip="$api_dns"
-			ingress_dns=$(dig +short "*.apps.${cl_name}.${cl_domain}" A 2>/dev/null | head -1)
-			[[ -z "$ingress_dns" ]] && ingress_dns=$(dig +short "apps.${cl_name}.${cl_domain}" A 2>/dev/null | head -1)
+			ingress_dns=$(dig +short "*.apps.${cl_name}.${cl_domain}" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
+			[[ -z "$ingress_dns" ]] && ingress_dns=$(dig +short "apps.${cl_name}.${cl_domain}" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
 			[[ -n "$ingress_dns" ]] && cl_ingress_vip="$ingress_dns"
 		fi
 
@@ -2353,8 +2353,12 @@ _day2_status() {
 	local _api_host _api_port _api_up=true
 	_api_host=$(KUBECONFIG="$kc" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null \
 		| sed 's|https\?://||; s|/.*||')
-	_api_port="${_api_host##*:}"                   # extract port (host:6443 → 6443)
-	_api_host="${_api_host%%:*}"                   # extract host (host:6443 → host)
+	if [[ "$_api_host" == *:* ]]; then
+		_api_port="${_api_host##*:}"               # extract port (host:6443 → 6443)
+		_api_host="${_api_host%%:*}"               # extract host (host:6443 → host)
+	else
+		_api_port="6443"                           # default API port
+	fi
 	if [[ -n "$_api_host" ]]; then
 		if ! timeout 3 bash -c "echo >/dev/tcp/$_api_host/${_api_port:-6443}" 2>/dev/null; then
 			_api_up=false
