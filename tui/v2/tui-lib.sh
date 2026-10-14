@@ -673,7 +673,8 @@ _exec_in_tui() {
 	box_height=$((term_height - 2))
 	box_width=$((term_width - 2))
 
-	trap : INT
+	local _got_int=false
+	trap '_got_int=true' INT
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
 	# Unset KUBECONFIG so child resolves it from the cluster dir, not stale TUI state
 	{ echo "Executing: $cmd"; echo; KUBECONFIG= PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
@@ -683,6 +684,11 @@ _exec_in_tui() {
 	local exit_code=${PIPESTATUS[0]}
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
+
+	# SIGINT during pipeline can leave PIPESTATUS[0]=0 falsely (#942)
+	if $_got_int && [[ $exit_code -eq 0 ]]; then
+		exit_code=130
+	fi
 
 	# Run post-command hook unconditionally — mirror state is uncertain after
 	# any attempt (even failed ones), so always recheck.
