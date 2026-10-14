@@ -2247,6 +2247,37 @@ Note: The Quay mirror registry is supported by Red Hat. OMR (v3) is in Tech Prev
 
 ---
 
+## Q: `aba load` or `aba sync` fails with "manifest invalid" for NVIDIA GPU images from `nvcr.io`
+
+When using the **Quay** mirror registry, loading NVIDIA GPU operator images may fail with errors like:
+
+```
+error: unable to push manifest list ... manifest invalid
+error: unable to push ... manifest list cannot be converted
+```
+
+Images from `nvcr.io` (e.g. `dra-driver-nvidia-gpu`, `dcgm-exporter`, `kubevirt-gpu-device-plugin`) use multi-arch manifest lists that the Quay appliance cannot handle correctly. The `aba save` step works fine — the error only appears during `aba load` or `aba sync` when pushing to the registry.
+
+**Fix:** Switch to **OMR v3** or **Docker Registry**, which handle multi-arch manifest lists correctly:
+
+```
+aba -d mirror uninstall                        # Uninstall Quay
+aba -d mirror install --vendor omr             # Install OMR v3 (recommended)
+aba -d mirror load                             # Reload — all images succeed
+```
+
+Or use Docker Registry:
+
+```
+aba -d mirror uninstall
+aba -d mirror install --vendor docker
+aba -d mirror load
+```
+
+This is especially important for **NVIDIA DRA (Dynamic Resource Allocation)** workflows — the `dra-driver-nvidia-gpu` image is critical for the DRA controller and will not load into Quay.
+
+---
+
 ## Q: `aba load` or `aba sync` fails with "context deadline exceeded" when pushing large images (e.g. RHOAI)
 
 This typically means the Quay registry ran out of memory. Quay's gunicorn workers buffer upload data in memory, and large image layers (common with AI/ML operators like RHOAI) can cause the Linux OOM killer to terminate the registry process mid-upload.
