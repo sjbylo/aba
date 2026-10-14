@@ -61,6 +61,23 @@ aba --version          # Should show the ABA version
 aba --help             # Overview of all commands
 ```
 
+### Initial configuration
+
+Before using any `aba` commands that need OCP content (mirror, cluster,
+etc.), configure `aba.conf`:
+
+```bash
+aba                    # Interactive — prompts for OCP version, pull secret, etc.
+```
+
+Or non-interactively (e.g. for scripted testing):
+
+```bash
+aba --version 4.17 --noask
+```
+
+See [README.md](../README.md#quick-start) for the full guided walkthrough.
+
 ---
 
 ## Level 1 — Functional Tests (stub-based, no hardware needed)
@@ -105,10 +122,16 @@ read-only Redfish GETs are performed.
 
 - A bare-metal server with a reachable BMC (iDRAC, iLO, iRMC, Supermicro, Lenovo, or any DSP0266 Redfish BMC)
 - BMC credentials (a user with at least read access to the Redfish tree)
-- A configured ABA mirror registry — if you don't have one yet:
+- A configured ABA mirror registry — if you don't have one yet,
+  follow the [Quick Start](../README.md#quick-start) or run:
 
 ```bash
-# Create and install a mirror registry (one-time setup)
+# Configure aba.conf (version, channel, pull secret, etc.)
+aba                            # Interactive — prompts for OCP version and settings
+# Or non-interactively:
+# aba --version 4.17 --noask
+
+# Create and install a mirror registry
 aba mirror                     # Creates the mirror/ directory and mirror.conf
 aba -d mirror install          # Installs the registry (Docker, Quay, or OMR)
 aba -d mirror sync             # Syncs OpenShift content to the registry
