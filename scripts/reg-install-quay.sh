@@ -20,9 +20,9 @@ reg_generate_password
 if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
 	# Previous install was interrupted but registry is healthy — skip to post_install
 	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_firewall"
 	aba_progress "DONE|reg_download"
 	aba_progress "DONE|reg_install"
+	aba_progress "DONE|reg_firewall"
 	aba_progress "START|reg_postcfg"
 else
 
@@ -132,13 +132,9 @@ fi
 ask "Install Quay mirror registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
 aba_progress "DONE|reg_env"
-aba_progress "START|reg_firewall"
 
 aba_info "Installing Quay registry on localhost ..."
 
-reg_open_firewall
-
-aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_download"
 
 # Ensure the quay_installer SSH key exists (used internally by mirror-registry)
@@ -175,6 +171,11 @@ if ! ./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_ho
 fi
 
 aba_progress "DONE|reg_install"
+aba_progress "START|reg_firewall"
+
+reg_open_firewall
+
+aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 
 fi  # end of skip_to_post_install guard
@@ -193,4 +194,5 @@ BREADCRUMB
 
 aba_progress "DONE|reg_postcfg"
 reg_cleanup_backup
+aba_progress "START|reg_verify"
 aba_progress "DONE|reg_verify"

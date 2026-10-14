@@ -20,9 +20,9 @@ reg_generate_password
 if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
 	# Previous install was interrupted but registry is healthy — skip to post_install
 	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_firewall"
 	aba_progress "DONE|reg_download"
 	aba_progress "DONE|reg_install"
+	aba_progress "DONE|reg_firewall"
 	aba_progress "START|reg_postcfg"
 else
 
@@ -39,11 +39,6 @@ if [ "$_skip_to_post_install" -ne "$REG_RC_COMPLETING" ]; then
 ask "Install Docker registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
 aba_progress "DONE|reg_env"
-aba_progress "START|reg_firewall"
-
-reg_open_firewall
-
-aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_download"
 
 aba_info "Installing Docker registry on localhost ..."
@@ -154,6 +149,11 @@ else
 fi
 
 aba_progress "DONE|reg_install"
+aba_progress "START|reg_firewall"
+
+reg_open_firewall
+
+aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 
 fi  # end of skip_to_post_install guard
