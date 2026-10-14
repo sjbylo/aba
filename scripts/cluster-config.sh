@@ -19,11 +19,6 @@ unset WORKER_NAMES
 unset WKR_MAC_ADDRS
 unset WKR_IP_ADDR
 
-yaml2json()
-{
-	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
-}
-
 # This fn() prints the macs out on a per node basis, just for display purposes
 distribute_macs() {
 	local macs="$1"
