@@ -73,7 +73,7 @@ aba                    # Interactive — prompts for OCP version, pull secret, e
 Or non-interactively (e.g. for scripted testing):
 
 ```bash
-aba --version 4.17 --noask
+aba --version 4.17
 ```
 
 See [README.md](../README.md#quick-start) for the full guided walkthrough.
@@ -129,7 +129,7 @@ read-only Redfish GETs are performed.
 # Configure aba.conf (version, channel, pull secret, etc.)
 aba                            # Interactive — prompts for OCP version and settings
 # Or non-interactively:
-# aba --version 4.17 --noask
+# aba --version 4.17
 
 # Create and install a mirror registry
 aba mirror                     # Creates the mirror/ directory and mirror.conf
