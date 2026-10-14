@@ -28,6 +28,7 @@ set -eo pipefail
 
 ABA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ABA_ROOT/scripts/include_all.sh"
+export INFO_ABA=1
 
 # --- Parse arguments ---
 bastion_ip=""
@@ -61,7 +62,7 @@ if [ -z "$bastion_ip" ]; then
 		aba_abort "Cannot detect bastion network interface." \
 			"Use --bastion-ip to specify manually."
 	fi
-	bastion_ip=$(ip -o -4 addr show dev "$local_iface" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)
+	bastion_ip=$(ip -o -4 addr show dev "$local_iface" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1 || true)
 	if [ -z "$bastion_ip" ]; then
 		aba_abort "Cannot detect bastion IP from interface $local_iface." \
 			"Use --bastion-ip to specify manually."
@@ -73,10 +74,10 @@ if [ -z "$upstream" ]; then
 	local_iface=${local_iface:-$(_pick_install_iface 2>/dev/null || true)}
 	if [ -n "$local_iface" ] && command -v nmcli >/dev/null 2>&1; then
 		upstream=$(nmcli -t -f IP4.DNS dev show "$local_iface" 2>/dev/null \
-			| cut -d: -f2 | grep -E '^[0-9.]+' | head -1)
+			| cut -d: -f2 | grep -E '^[0-9.]+' | head -1 || true)
 	fi
 	if [ -z "$upstream" ]; then
-		upstream=$(grep -m1 '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print $2}')
+		upstream=$(grep -m1 '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print $2}' || true)
 	fi
 	if [ -z "$upstream" ]; then
 		aba_abort "Cannot detect upstream DNS server." \
