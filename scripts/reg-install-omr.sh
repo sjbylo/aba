@@ -13,20 +13,10 @@ aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 reg_detect_existing
-_skip_to_post_install=$?
 
 reg_check_fqdn
 reg_setup_data_dir "$_OMR_VENDOR"
 reg_generate_password
-
-if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-	# Previous install was interrupted but registry is healthy — skip to post_install
-	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_download"
-	aba_progress "DONE|reg_install"
-	aba_progress "DONE|reg_firewall"
-	aba_progress "START|reg_postcfg"
-else
 
 reg_verify_localhost
 
@@ -107,38 +97,43 @@ fi
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
 
-# Mark state as "installing" so a retry can detect and recover from a partial install
-reg_mark_installing "$_OMR_VENDOR"
-
-# Install or reinstall via the tool's own 'install' command.
-# Fresh install: pass -init-user/-init-password-stdin for admin setup.
-# Reinstall (data preserved, service removed): omit init flags — the tool
-# detects existing data, skips admin provisioning, creates Quadlet, starts service.
-if [ -f "$reg_root/auth/admin-password" ]; then
-	aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
-	if ! ./"$_OMR_BIN" install \
-		$_OMR_LOG_FLAG \
-		-data-dir "$reg_root" \
-		-hostname "$reg_host" \
-		-port "$reg_port" \
-		-image-archive "$_OMR_IMAGE_FILE"; then
-		aba_abort \
-			"$_OMR_VENDOR reinstall failed." \
-			"Check the output above for errors."
-	fi
+# --- Skip install if registry already running (idempotent resume) ---
+if probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+	aba_info "Registry already running at $reg_host:$reg_port — skipping install"
 else
-	aba_info "Running: $_OMR_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
-	if ! echo "$reg_pw" | ./"$_OMR_BIN" install \
-		$_OMR_LOG_FLAG \
-		-data-dir "$reg_root" \
-		-hostname "$reg_host" \
-		-port "$reg_port" \
-		-init-user "$reg_user" \
-		-init-password-stdin \
-		-image-archive "$_OMR_IMAGE_FILE"; then
-		aba_abort \
-			"$_OMR_VENDOR install failed." \
-			"Check the output above for errors."
+	# Mark state as "installing" so a retry can detect and recover from a partial install
+	reg_mark_installing "$_OMR_VENDOR"
+
+	# Install or reinstall via the tool's own 'install' command.
+	# Fresh install: pass -init-user/-init-password-stdin for admin setup.
+	# Reinstall (data preserved, service removed): omit init flags — the tool
+	# detects existing data, skips admin provisioning, creates Quadlet, starts service.
+	if [ -f "$reg_root/auth/admin-password" ]; then
+		aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
+		if ! ./"$_OMR_BIN" install \
+			$_OMR_LOG_FLAG \
+			-data-dir "$reg_root" \
+			-hostname "$reg_host" \
+			-port "$reg_port" \
+			-image-archive "$_OMR_IMAGE_FILE"; then
+			aba_abort \
+				"$_OMR_VENDOR reinstall failed." \
+				"Check the output above for errors."
+		fi
+	else
+		aba_info "Running: $_OMR_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
+		if ! echo "$reg_pw" | ./"$_OMR_BIN" install \
+			$_OMR_LOG_FLAG \
+			-data-dir "$reg_root" \
+			-hostname "$reg_host" \
+			-port "$reg_port" \
+			-init-user "$reg_user" \
+			-init-password-stdin \
+			-image-archive "$_OMR_IMAGE_FILE"; then
+			aba_abort \
+				"$_OMR_VENDOR install failed." \
+				"Check the output above for errors."
+		fi
 	fi
 fi
 
@@ -159,8 +154,6 @@ reg_open_firewall
 
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
-
-fi  # end of skip_to_post_install guard
 
 reg_post_install "$reg_root/ssl.cert" "$_OMR_VENDOR"
 

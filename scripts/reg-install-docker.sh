@@ -11,30 +11,17 @@ aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 reg_detect_existing
-_skip_to_post_install=$?
 
 reg_check_fqdn
 reg_setup_data_dir docker
 reg_generate_password
 
-if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-	# Previous install was interrupted but registry is healthy — skip to post_install
-	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_download"
-	aba_progress "DONE|reg_install"
-	aba_progress "DONE|reg_firewall"
-	aba_progress "START|reg_postcfg"
-else
-
 reg_verify_localhost
-fi
 
 REGISTRY_NAME="registry-${reg_port}"
 REGISTRY_DATA_DIR="$reg_root/data"
 REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
-
-if [ "$_skip_to_post_install" -ne "$REG_RC_COMPLETING" ]; then
 
 ask "Install Docker registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
@@ -97,54 +84,58 @@ fi
 aba_info "Creating authentication file ..."
 htpasswd -Bbn "$reg_user" "$reg_pw" > "$REGISTRY_AUTH_DIR/htpasswd"
 
-# --- Abort if a container with this name already exists ---
-if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
-	aba_abort "Container '$REGISTRY_NAME' already exists." \
-		"A previous install may have failed or was not fully uninstalled." \
-		"Clean up with: podman rm -f $REGISTRY_NAME" \
-		"Then retry: aba -d $(basename "$PWD") install"
-fi
-
-# --- Start the registry container ---
-# Use --network host to avoid rootless podman pasta hairpin NAT bug:
-# with -p port mapping, connections from the host to its own FQDN/external IP
-# go through pasta's userspace proxy, which breaks the TLS handshake.
-aba_info "Starting Docker registry at $reg_url (data: $REGISTRY_DATA_DIR) ..."
-podman run -d \
-	--network host \
-	--restart=always \
-	--name "$REGISTRY_NAME" \
-	-v "${REGISTRY_DATA_DIR}:/var/lib/registry:Z" \
-	-v "${REGISTRY_CERTS_DIR}:/certs:Z" \
-	-v "${REGISTRY_AUTH_DIR}:/auth:Z" \
-	-e REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port} \
-	-e REGISTRY_HTTP_DEBUG_ADDR=localhost:$(( reg_port + 10000 )) \
-	-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
-	-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
-	-e REGISTRY_AUTH=htpasswd \
-	-e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
-	-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
-	docker.io/library/registry:latest
-
-# Ensure podman containers with --restart=always survive VM reboot
-if [ "$(id -u)" -ne 0 ]; then
-	# Rootless: keep user session alive after logout
-	if command -v loginctl >/dev/null 2>&1; then
-		if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
-			aba_info "Enabling loginctl linger for $USER (so registry survives reboot) ..."
-			$SUDO loginctl enable-linger "$USER"
-		fi
-	fi
-	# Rootless: enable the user-level restart service
-	if ! systemctl --user is-enabled podman-restart.service >/dev/null 2>&1; then
-		aba_info "Enabling podman-restart service for $USER ..."
-		systemctl --user enable podman-restart.service
-	fi
+# --- Skip container creation if already running (idempotent resume) ---
+if podman ps --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
+	aba_info "Registry container $REGISTRY_NAME already running — skipping install"
 else
-	# Root: enable the system-level restart service
-	if ! systemctl is-enabled podman-restart.service >/dev/null 2>&1; then
-		aba_info "Enabling podman-restart service ..."
-		systemctl enable podman-restart.service
+	if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
+		aba_abort "Container '$REGISTRY_NAME' already exists but is not running." \
+			"A previous install may have failed or was not fully uninstalled." \
+			"Clean up with: podman rm -f $REGISTRY_NAME" \
+			"Then retry: aba -d $(basename "$PWD") install"
+	fi
+
+	# --- Start the registry container ---
+	# Use --network host to avoid rootless podman pasta hairpin NAT bug:
+	# with -p port mapping, connections from the host to its own FQDN/external IP
+	# go through pasta's userspace proxy, which breaks the TLS handshake.
+	aba_info "Starting Docker registry at $reg_url (data: $REGISTRY_DATA_DIR) ..."
+	podman run -d \
+		--network host \
+		--restart=always \
+		--name "$REGISTRY_NAME" \
+		-v "${REGISTRY_DATA_DIR}:/var/lib/registry:Z" \
+		-v "${REGISTRY_CERTS_DIR}:/certs:Z" \
+		-v "${REGISTRY_AUTH_DIR}:/auth:Z" \
+		-e REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port} \
+		-e REGISTRY_HTTP_DEBUG_ADDR=localhost:$(( reg_port + 10000 )) \
+		-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
+		-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
+		-e REGISTRY_AUTH=htpasswd \
+		-e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+		-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+		docker.io/library/registry:latest
+
+	# Ensure podman containers with --restart=always survive VM reboot
+	if [ "$(id -u)" -ne 0 ]; then
+		# Rootless: keep user session alive after logout
+		if command -v loginctl >/dev/null 2>&1; then
+			if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
+				aba_info "Enabling loginctl linger for $USER (so registry survives reboot) ..."
+				$SUDO loginctl enable-linger "$USER"
+			fi
+		fi
+		# Rootless: enable the user-level restart service
+		if ! systemctl --user is-enabled podman-restart.service >/dev/null 2>&1; then
+			aba_info "Enabling podman-restart service for $USER ..."
+			systemctl --user enable podman-restart.service
+		fi
+	else
+		# Root: enable the system-level restart service
+		if ! systemctl is-enabled podman-restart.service >/dev/null 2>&1; then
+			aba_info "Enabling podman-restart service ..."
+			systemctl enable podman-restart.service
+		fi
 	fi
 fi
 
@@ -155,8 +146,6 @@ reg_open_firewall
 
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
-
-fi  # end of skip_to_post_install guard
 
 # Save credentials and state BEFORE the connectivity check, so the user
 # can recover with 'aba verify' or 'aba uninstall' if networking fails.

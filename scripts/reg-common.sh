@@ -26,10 +26,6 @@
 if [ "${_REG_COMMON_LOADED:-}" ]; then return 0; fi
 _REG_COMMON_LOADED=1
 
-# Return code from reg_detect_existing() meaning "previous install was
-# interrupted but the service is healthy — skip to post-install".
-readonly REG_RC_COMPLETING=90
-
 # Enable INFO messages when called from make (unless parent set --quiet)
 if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
 
@@ -151,7 +147,7 @@ reg_check_fqdn() {
 # --- reg_mark_installing ------------------------------------------------------
 # Write a minimal state.sh with reg_status=installing BEFORE the vendor install.
 # This lets reg_detect_existing() recognize a retry of a failed install and
-# either complete it (if the service came up) or retry from scratch.
+# distinguish it from an unknown external registry.
 reg_mark_installing() {
 	local vendor="$1"
 	mkdir -p "$regcreds_dir"
@@ -180,9 +176,9 @@ reg_mark_installing() {
 # matching reg_host).  There is no "reinstall" -- user must uninstall first.
 #
 # If state.sh has reg_status=installing (previous install failed midway),
-# check if the service actually came up.  If healthy, complete the install
-# by returning REG_RC_COMPLETING that callers use to skip straight
-# to reg_post_install.  If not healthy, remove the partial state and retry.
+# check if the service actually came up.  If healthy, return 0 and let the
+# caller's idempotent flow handle resume.  If not healthy, remove the
+# partial state and retry from scratch.
 reg_detect_existing() {
 	if [ -s "$regcreds_dir/state.sh" ]; then
 		local _reg_status=""
@@ -192,8 +188,8 @@ reg_detect_existing() {
 			# Previous install attempt was interrupted — check if the service came up
 			if probe_host --any "$reg_url/v2/" "registry from previous install" 2>/dev/null; then
 				aba_info "Previous install was interrupted but registry is healthy at $reg_host:$reg_port"
-				aba_info "Completing installation ..."
-				return $REG_RC_COMPLETING
+				aba_info "Resuming installation ..."
+				return 0
 			else
 				aba_info "Previous install was interrupted and registry is not running — retrying ..."
 				rm -f "$regcreds_dir/state.sh"
@@ -1171,16 +1167,10 @@ reg_remote_pre_install() {
 
 	reg_load_config
 	reg_detect_existing
-	_skip_to_post_install=$?
 
 	reg_check_fqdn
 	reg_setup_data_dir "$vendor"
 	reg_generate_password
-
-	# If previous install was interrupted but healthy, skip SSH checks
-	if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-		return $REG_RC_COMPLETING
-	fi
 
 	aba_info "Registry configured for *remote* install (reg_ssh_key is defined in mirror.conf)."
 	aba_info "Verifying SSH access to $reg_ssh_user@$reg_host ..."

@@ -82,10 +82,6 @@ source scripts/include_all.sh 2>/dev/null
 # Source reg-common.sh for the functions under test
 source scripts/reg-common.sh
 
-echo "=== Test: REG_RC_COMPLETING constant ==="
-assert_eq "REG_RC_COMPLETING is defined and numeric" "90" "$REG_RC_COMPLETING"
-
-echo ""
 echo "=== Test: reg_mark_installing ==="
 rm -rf "$regcreds_dir"
 reg_mark_installing "omr" 2>/dev/null
@@ -157,7 +153,7 @@ rm -rf "$regcreds_dir"
 reg_mark_installing "omr" 2>/dev/null
 _rc=0
 reg_detect_existing 2>/dev/null || _rc=$?
-assert_eq "returns REG_RC_COMPLETING ($REG_RC_COMPLETING) when installing+healthy" "$REG_RC_COMPLETING" "$_rc"
+assert_eq "returns 0 when installing+healthy (idempotent resume)" "0" "$_rc"
 assert_exists "state.sh preserved (will be overwritten by post_install)" "$regcreds_dir/state.sh"
 
 echo ""
