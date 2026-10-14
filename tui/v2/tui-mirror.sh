@@ -1957,8 +1957,8 @@ _operator_search() {
 	local line op_name display_name state catalog_label
 	declare -A _seen_ops=()
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"              # trim leading whitespace
-		line="${line%%[[:space:]]}"              # trim trailing whitespace
+		line="${line#"${line%%[![:space:]]*}"}"  # trim all leading whitespace
+		line="${line%"${line##*[![:space:]]}"}"  # trim all trailing whitespace
 		[[ -z "$line" ]] && continue
 		# Multi-file grep prepends "filename:line" — extract catalog from the filename
 		catalog_label=""
@@ -2004,8 +2004,8 @@ _operator_search() {
 	# Build set of what user selected
 	declare -A _SEL=()
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"              # trim leading whitespace
-		line="${line%%[[:space:]]}"              # trim trailing whitespace
+		line="${line#"${line%%[![:space:]]*}"}"  # trim all leading whitespace
+		line="${line%"${line##*[![:space:]]}"}"  # trim all trailing whitespace
 		[[ -n "$line" ]] && _SEL["$line"]=1
 	done < "$_TUI_TMP"
 
