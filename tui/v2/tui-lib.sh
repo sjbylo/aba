@@ -104,7 +104,7 @@ _valid_ip_or_host_list() {
 		[[ -z "$entry" ]] && continue
 		# Accept valid IPs or valid hostnames
 		if ! _valid_ip "$entry"; then
-			[[ "$entry" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || return 1
+			_valid_domain "$entry" || return 1
 		fi
 	done
 	return 0
@@ -1503,13 +1503,13 @@ _resolve_minor_to_patch() {
 	local _channel="${2:-stable}"
 
 	# Already x.y.z or x.y.z-rc.N? Return as-is
-	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+	if _is_version_string "$_ver"; then
 		echo "$_ver"
 		return 0
 	fi
 
 	# x.y format — resolve to latest z (include_all expects channel then minor)
-	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+	if _is_minor_version "$_ver"; then
 		local _resolved
 		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null) || true
 		if [[ -n "$_resolved" ]]; then

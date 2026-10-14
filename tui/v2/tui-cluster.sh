@@ -2695,7 +2695,7 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 			continue
 		elif [[ "$choice" == "M" ]]; then
 			:
-		elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+		elif _is_version_string "$choice"; then
 			# Confirm if conditional version selected
 			if [[ -n "${_cond_set[$choice]:-}" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "Conditional Version" \
@@ -2732,7 +2732,7 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
 			continue
 		fi
-		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+		if ! _is_version_string "$target_ver"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.15 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
