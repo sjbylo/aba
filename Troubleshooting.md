@@ -224,6 +224,11 @@ When reinstalling a cluster, run `aba -d mycluster clean` first (not `aba -d myc
 
 For bare-metal installs (`platform=bm` in aba.conf), aba can mount the agent ISO on each node via Redfish VirtualMedia and one-shot boot - no manual virtual-media interaction required. Configure per-node BMC credentials in `bmc.conf` (mode 0600 enforced); see [templates/bmc.conf](templates/bmc.conf) for the schema.
 
+> **See also:**
+> - [Testing guide](devel/test-redfish-support.md) — step-by-step instructions for testing BMC support (Levels 1–3)
+> - [Mirror Registry Commands](README.md#mirror-registry-commands) — set up a mirror registry before bare-metal install
+> - [Air-Gapped Prerequisites](README.md#air-gapped-prerequisites) — requirements for disconnected bare-metal installs
+
 ### For operators: reading the output
 
 aba emits one line per BMC event using the `BMC:` prefix. Lines are greppable; `aba install` is quiet on success.

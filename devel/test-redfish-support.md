@@ -6,6 +6,29 @@ This document covers how to install ABA from this branch and test the
 Redfish-based bare-metal BMC automation feature (PR #27) at three
 levels — from zero-hardware stub tests to a full bare-metal install.
 
+> **Feedback needed!** This feature is on a development branch and requires
+> community testing before it can be merged into ABA.  If you test against
+> real BMC hardware (any vendor), please report your results — success or
+> failure — via [GitHub Issues](https://github.com/sjbylo/aba/issues).
+> Include your `bmc_type`, firmware version, and the preflight output.
+> Your feedback directly determines when this feature ships.
+
+---
+
+## Useful References
+
+Before testing, you may want to review these sections of the
+[ABA README](../README.md):
+
+- [Prerequisites](../README.md#prerequisites) — system requirements
+- [Mirror Registry Commands](../README.md#mirror-registry-commands) — `install`, `sync`, `save`, `load`
+- [Air-Gapped Prerequisites](../README.md#air-gapped-prerequisites) — what's needed for disconnected installs
+- [Pre-flight Validation](../README.md#pre-flight-validation) — how ABA validates configs before install
+- [Pre-release Versions (RC / EC)](../README.md#pre-release-versions-rc--ec) — testing with candidate OCP versions
+
+For troubleshooting BMC issues, see
+[Troubleshooting.md → Bare-metal BMC Automation](../Troubleshooting.md#bare-metal-bmc-automation).
+
 ---
 
 ## Getting Started — Install ABA from this Branch
