@@ -482,9 +482,13 @@ _test_vmw_connection() {
 _configure_kvm_form() {
 	local conf_path="$ABA_ROOT/kvm.conf"
 
-	# Create from template if missing
+	# Populate from home cache or template if missing
 	if [[ ! -s "$conf_path" ]]; then
-		cp "$ABA_ROOT/templates/kvm.conf" "$conf_path"
+		if [[ -s "$HOME/.kvm.conf" ]]; then
+			cp "$HOME/.kvm.conf" "$conf_path"
+		else
+			cp "$ABA_ROOT/templates/kvm.conf" "$conf_path"
+		fi
 	fi
 
 	# Load current values
