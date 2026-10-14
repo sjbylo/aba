@@ -222,7 +222,7 @@ When reinstalling a cluster, run `aba -d mycluster clean` first (not `aba -d myc
 
 ## Bare-metal BMC Automation
 
-For bare-metal installs (`platform=bm` in cluster.conf), aba can mount the agent ISO on each node via Redfish VirtualMedia and one-shot boot - no manual virtual-media interaction required. Configure per-node BMC credentials in `bmc.conf` (mode 0600 enforced); see [templates/bmc.conf](templates/bmc.conf) for the schema.
+For bare-metal installs (`platform=bm` in aba.conf), aba can mount the agent ISO on each node via Redfish VirtualMedia and one-shot boot - no manual virtual-media interaction required. Configure per-node BMC credentials in `bmc.conf` (mode 0600 enforced); see [templates/bmc.conf](templates/bmc.conf) for the schema.
 
 ### For operators: reading the output
 

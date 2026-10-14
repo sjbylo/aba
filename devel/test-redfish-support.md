@@ -120,8 +120,9 @@ bmc_insecure_master0=true           # true for self-signed BMC certs
 ```
 
 Also fill in the cluster networking in `bmc-test/cluster.conf`
-(at minimum `starting_ip`, `api_vip`, `ingress_vip`, `gateway`,
-`machine_network`, `dns1`).
+(at minimum `starting_ip`, `gateway`, `machine_network`, `dns1`;
+for compact/standard clusters also `api_vip` and `ingress_vip` —
+SNO ignores VIPs since both point to the single node IP).
 
 ```bash
 # 4. Run preflight only (does NOT boot or mount anything)
