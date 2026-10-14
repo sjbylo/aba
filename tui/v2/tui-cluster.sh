@@ -1039,12 +1039,12 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 					# Reject IPv4 addresses (all-numeric labels separated by dots)
 					if [[ "$dom_input" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid base domain: '$dom_input' looks like an IP address.\n\nThe base domain must be a DNS name (e.g. example.com, lab.internal),\nnot an IP address." 0 0 || true
+							"Invalid base domain: '$dom_input' looks like an IP address.\n\nThe base domain must be a DNS name (e.g. lab, example.com, lab.internal),\nnot an IP address." 0 0 || true
 						continue
 					fi
-					if [[ ! "$dom_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
+					if ! _valid_domain "$dom_input"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
+							"Invalid base domain.\n\nMust be a valid domain name (e.g. lab, example.com, lab.internal)." 0 0 || true
 						continue
 					fi
 				fi
