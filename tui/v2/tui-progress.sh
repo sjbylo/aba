@@ -142,7 +142,16 @@ _tp_parse_event() {
 				fi
 			fi
 			;;
-		START)       [ "${_tp_status[$id]:-9}" != "0" ] && _tp_status[$id]="77"; _tp_real_done[$id]="started" ;;
+		START)
+			if [ "${_tp_status[$id]:-9}" != "0" ]; then
+				_tp_status[$id]="77"
+			fi
+			_tp_real_done[$id]="started"
+			# Catch missing PLAN declarations early — visible in debug logs (aba -D)
+			if [ -z "${_tp_text[$id]:-}" ]; then
+				aba_debug "Progress: START for unplanned step '$id' — add PLAN|$id to progress-plan.sh"
+			fi
+			;;
 		DONE)        _tp_status[$id]="0"; _tp_real_done[$id]="done" ;;
 		FAIL)        _tp_status[$id]="1"; _tp_real_done[$id]="fail"; _tp_failed+=("${_tp_text[$id]:-$id}") ;;
 		ERROR)       _tp_errors+=("${arg1:-$id}") ;;
@@ -313,6 +322,10 @@ _tp_sweep_skipped() {
 				_tp_status[$id]="6"
 				_any=1
 			fi
+			# Flag PLANned steps that never got any real events.
+			# Intentional skips (RPMs already installed, registry already available)
+			# are normal — this is debug-level for catching missing aba_progress calls.
+			aba_debug "Progress: PLANned step '$id' (${_tp_text[$id]:-?}) was never started"
 		fi
 	done
 	return $(( 1 - _any ))
