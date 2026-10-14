@@ -33,6 +33,108 @@ Issues or Pull Requests.
 
 ---
 
+## Cross-validate networking values (IPs, CIDRs, collisions)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-14
+
+**Problem:** The networking page (Cluster — Networking) validates each field
+individually (valid IP? valid CIDR?) but does not cross-validate fields against
+each other. A user can configure values that are individually valid but
+collectively broken — e.g. a gateway outside the machine network, a starting IP
+that collides with the DNS server, or node IPs that overlap the gateway.
+
+The core (`_valid_cluster_name` block in `include_all.sh`) already checks:
+- starting_ip is within machine_network CIDR ✅
+- all node IPs fit within machine_network CIDR ✅
+- api_vip / ingress_vip within machine_network CIDR ✅
+- api_vip ≠ ingress_vip ✅
+
+But these checks are **missing**:
+1. **Gateway within CIDR** — gateway should be inside the machine_network
+2. **DNS servers reachable** — if DNS IPs are in the machine_network, verify
+   they're within CIDR; if outside, that's fine (routed)
+3. **IP collision detection** — no two of {starting_ip..last_node_ip, gateway,
+   api_vip, ingress_vip} should overlap
+4. **Starting IP ≠ network/broadcast** — starting_ip should not be the network
+   address or broadcast address of the CIDR
+5. **Gateway ≠ any node IP** — gateway must not collide with any node IP in
+   the starting_ip..starting_ip+N range
+6. **VIPs outside node range** — api_vip and ingress_vip should not fall within
+   the starting_ip..starting_ip+N range
+
+**Proposed fix:** Create a shared function `_validate_network_consistency()` in
+`include_all.sh` that performs all cross-checks using the existing `ip_in_cidr`,
+`ip_to_int`, `int_to_ip`, and `cidr_last_ip` helpers. Returns 0 on success,
+prints all errors to stderr (so the user sees every problem, not just the first).
+
+```bash
+# include_all.sh
+_validate_network_consistency() {
+    local ret=0
+    local net_addr prefix_length
+    net_addr="${machine_network%/*}"    # already split by caller
+    # ... or accept args
+
+    # 1. Gateway within CIDR
+    if [ -n "${gateway:-}" ]; then
+        ip_in_cidr "$gateway" "$net_addr" "$prefix_length" || {
+            echo_red "Error: gateway ($gateway) is outside machine_network ($machine_network)" >&2
+            ret=1
+        }
+    fi
+
+    # 2. Starting IP is not network or broadcast address
+    local net_int=$(ip_to_int "$net_addr")
+    local bcast=$(cidr_last_ip "$net_addr" "$prefix_length")
+    if [ "$starting_ip" = "$net_addr" ] || [ "$starting_ip" = "$bcast" ]; then
+        echo_red "Error: starting_ip ($starting_ip) is the network or broadcast address" >&2
+        ret=1
+    fi
+
+    # 3. Collision detection: build list of reserved IPs, check node range
+    local -A reserved=()
+    [ -n "${gateway:-}" ]     && reserved["$gateway"]="gateway"
+    [ -n "${api_vip:-}" ]     && reserved["$api_vip"]="api_vip"
+    [ -n "${ingress_vip:-}" ] && reserved["$ingress_vip"]="ingress_vip"
+    # Check each node IP against reserved
+    local start_int=$(ip_to_int "$starting_ip")
+    local total=$(( num_masters + num_workers ))
+    for (( i=0; i<total; i++ )); do
+        local node_ip=$(int_to_ip $(( start_int + i )))
+        if [ -n "${reserved[$node_ip]:-}" ]; then
+            echo_red "Error: node IP $node_ip collides with ${reserved[$node_ip]}" >&2
+            ret=1
+        fi
+    done
+
+    return $ret
+}
+```
+
+Call this function:
+- In the **core** `normalize_cluster_conf` / validation block (where existing
+  `ip_in_cidr` checks already run)
+- In the **TUI** networking page, on "Next" — show a msgbox with all errors
+  before allowing the user to proceed
+
+**TUI integration sketch:**
+```bash
+# tui-cluster.sh — when user presses Next on networking page
+local _net_errors
+_net_errors=$(_validate_network_consistency 2>&1) || {
+    dlg --backtitle "$(ui_backtitle)" --title "Network Errors" \
+        --msgbox "$_net_errors" 0 0
+    continue
+}
+```
+
+**Workaround:** Currently, errors are caught later during `verify-config.sh`
+or at install time, but with less helpful messages.
+
+---
+
 ## Review all aba_progress calls for correctness and completeness
 
 **Severity:** MEDIUM
