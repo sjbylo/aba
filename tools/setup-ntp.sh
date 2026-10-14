@@ -61,15 +61,17 @@ fi
 
 # --- Determine allow network ---
 if [ -z "$allow_network" ]; then
-	local_iface=${local_iface:-$(_pick_install_iface 2>/dev/null || true)}
-	if [ -n "$local_iface" ]; then
-		# Use the kernel route for this interface (e.g. 10.0.0.0/24)
-		allow_network=$(ip -o -4 route list dev "$local_iface" proto kernel scope link 2>/dev/null \
+	# Find the interface that owns bastion_ip, so we allow the correct network
+	_ntp_iface=""
+	_ntp_iface=$(ip -o -4 addr show 2>/dev/null | awk -v ip="$bastion_ip" '$4 ~ "^"ip"/" {print $2; exit}')
+	_ntp_iface=${_ntp_iface:-${local_iface:-$(_pick_install_iface 2>/dev/null || true)}}
+
+	if [ -n "$_ntp_iface" ]; then
+		allow_network=$(ip -o -4 route list dev "$_ntp_iface" proto kernel scope link 2>/dev/null \
 			| awk '$1 ~ "/" {print $1; exit}')
 	fi
 	if [ -z "$allow_network" ]; then
-		# Fallback: derive from interface CIDR
-		local_cidr=$(ip -o -4 addr show dev "${local_iface:-lo}" 2>/dev/null | awk '{print $4; exit}')
+		local_cidr=$(ip -o -4 addr show dev "${_ntp_iface:-lo}" 2>/dev/null | awk '{print $4; exit}')
 		allow_network="${local_cidr:-0.0.0.0/0}"
 	fi
 fi
