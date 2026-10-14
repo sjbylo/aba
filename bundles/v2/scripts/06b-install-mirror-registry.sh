@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# Phase 06b: Configure aba, install Quay mirror registry
+# Phase 06b: Configure aba, install mirror registry
 
 set -x
 
@@ -21,12 +21,12 @@ aba
 aba --noask
 aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --gateway-ip 10.0.1.1
 
-echo_step "Install Quay mirror registry ..."
+echo_step "Install mirror registry ..."
 
-# If a previous install attempt left a broken Quay, clean it up first
-if podman ps | grep -q quay-app; then
-	echo_step "Found existing Quay from a previous failed attempt, uninstalling first ..."
-	aba -d mirror uninstall -y
+# If a previous run left any registry (Quay, Docker, or OMR), clean it up first
+if podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres|^registry(-[0-9]+)?$|^systemd-quay$'; then
+	echo_step "Found existing registry from a previous run, uninstalling first ..."
+	aba -d mirror uninstall -y || true
 	cleanup_orphaned_quay_services
 fi
 
@@ -45,7 +45,6 @@ aba -d mirror install -H $TEST_HOST
 
 # Verify registry is actually working after install
 echo_step "Verifying registry is accessible ..."
-podman ps | grep -q "quay-app" || { echo "ERROR: Quay is not running after install!"; exit 1; }
-curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry at $TEST_HOST:8443 is not responding!"; exit 1; }
+curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry at $TEST_HOST:8443 is not responding after install!"; exit 1; }
 
-echo "Quay installed: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06b.txt"
+echo "Registry installed: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06b.txt"
