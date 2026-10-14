@@ -5706,9 +5706,10 @@ Single quotes inside a double-quoted SSH string do not prevent shell expansion o
 **Fix suggestion:** Add the same `~/.kvm.conf` check: `if [[ -s "$HOME/.kvm.conf" ]]; then cp "$HOME/.kvm.conf" "$conf_path"; else cp "$ABA_ROOT/templates/kvm.conf" "$conf_path"; fi`
 **Notes:** Found by code review 2026-10-12. Both forms save back to the home cache on exit (VMware: line 452, KVM: line 574), so the asymmetry is only in the initialization path.
 
-### Bug #1300 — Changing machine network in wizard does not recalculate starting IP
+### Bug #1300 — Changing machine network in wizard does not recalculate starting IP — POSTPONED
 
 **Severity:** Low
+**Status:** POSTPONED — fix requires care around user-set vs auto-detected values
 **Mode:** ALL
 **File:** `tui/v2/tui-cluster.sh` cluster wizard network page
 **Status:** New
