@@ -128,8 +128,6 @@ if [ -z "$_image_source" ]; then
 
 	if [ "$(( _has_idms + _has_itms + _has_icsp ))" -gt 0 ]; then
 		_image_source="mirror"
-	elif [ -f mirror/.available ]; then
-		_image_source="mirror"
 	else
 		_proxy_http=$(oc get proxy/cluster -o jsonpath='{.spec.httpProxy}' 2>/dev/null) || true
 		if [ -n "$_proxy_http" ]; then
