@@ -77,7 +77,7 @@ in the scripts, and TUI integration via `_exec_with_progress`.
 ## TUI progress: use `less -r` to view output after task completion
 
 **Severity:** LOW
-**Status:** In Progress
+**Status:** Done
 **Added:** 2026-10-14
 
 **Problem:** When a TUI progress workflow finishes (success or failure), the
