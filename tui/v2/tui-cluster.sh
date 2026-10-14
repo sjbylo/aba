@@ -1035,10 +1035,18 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				[[ $? -ne 0 ]] && break
 				local dom_input
 				dom_input=$(<"$_TUI_TMP")
-				if [[ -n "$dom_input" && ! "$dom_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
-					continue
+				if [[ -n "$dom_input" ]]; then
+					# Reject IPv4 addresses (all-numeric labels separated by dots)
+					if [[ "$dom_input" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid base domain: '$dom_input' looks like an IP address.\n\nThe base domain must be a DNS name (e.g. example.com, lab.internal),\nnot an IP address." 0 0 || true
+						continue
+					fi
+					if [[ ! "$dom_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
+						continue
+					fi
 				fi
 				[[ -n "$dom_input" ]] && cl_domain="${dom_input,,}"  # lowercase the domain
 				break
@@ -1087,9 +1095,9 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 					[[ $? -ne 0 ]] && break
 					local wrk_input
 					wrk_input=$(<"$_TUI_TMP")
-				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^[0-9]+$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
+				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^(0|[1-9][0-9]*)$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid worker count.\n\nMust be a positive number (e.g. 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+						"Invalid worker count.\n\nMust be a number without leading zeros (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
 					continue
 				fi
 					[[ -n "$wrk_input" ]] && cl_workers="$wrk_input"
