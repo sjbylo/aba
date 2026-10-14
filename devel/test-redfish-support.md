@@ -134,6 +134,11 @@ aba -d bmc-test preflight
 Success (all levels pass):
 
 ```
+# irmc or generic redfish (no L5 vendor gate):
+BMC: master0 L1=ok L2=ok L3=ok L4=ok MAC=ok
+BMC: preflight 1/1 nodes ready
+
+# idrac, ilo, supermicro, or lenovo (with L5 vendor gate):
 BMC: master0 L1=ok L2=ok L3=ok L4=ok L5=ok MAC=ok
 BMC: preflight 1/1 nodes ready
 ```

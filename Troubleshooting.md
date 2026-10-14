@@ -231,8 +231,8 @@ aba emits one line per BMC event using the `BMC:` prefix. Lines are greppable; `
 **Line formats (per-node):**
 
 ```
-BMC: <node> L1=ok L2=ok L3=ok L4=ok                        # preflight passed (irmc / redfish)
-BMC: <node> L1=ok L2=ok L3=ok L4=ok L5=ok                  # preflight passed with vendor L5 gate (idrac / ilo / supermicro / lenovo)
+BMC: <node> L1=ok L2=ok L3=ok L4=ok MAC=ok                 # preflight passed (irmc / redfish)
+BMC: <node> L1=ok L2=ok L3=ok L4=ok L5=ok MAC=ok            # preflight passed with vendor L5 gate (idrac / ilo / supermicro / lenovo)
 BMC: <node> L<n>=FAIL reason="<message>"                   # preflight failed at level n (n=1..5)
 BMC: <node> phase=<phase-name> adapter=<adapter> http=<code> reason="<reason>"   # runtime phase failure
 BMC: <node> booted from ISO (adapter=<adapter>)            # per-node success
@@ -272,7 +272,7 @@ aba install resumes per-node from the last successful step. No special flag requ
 
 ### MAC discovery
 
-For nodes with `bmc_host_<node>` set in bmc.conf, aba queries the BMC's Redfish EthernetInterfaces collection during preflight and either populates a missing `mac_<node>` from what the BMC reports, or validates the operator-supplied `mac_<node>` against the BMC's report. The discovered MAC is cached in `.bmc-state.<node>` so subsequent runs skip the Redfish call when nothing has changed.
+For nodes with `bmc_host_<node>` set in bmc.conf, aba queries the BMC's Redfish EthernetInterfaces collection during preflight and reports which NICs are active.  If a `mac_<node>` is already set in bmc.conf, aba validates it against the BMC's report; if not, the discovered MAC is cached in `.bmc-state.<node>` for use by downstream scripts (e.g. ARP-conflict checking).  Note: discovered MACs are **not** automatically written into `agent-config.yaml` — the operator must copy the correct MAC into `macs.conf` and regenerate the agent config (see `devel/test-redfish-support.md` for the workflow).
 
 #### How a NIC is selected
 
