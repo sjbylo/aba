@@ -1314,10 +1314,15 @@ reg_stop_vendor() {
 	esac
 
 	# Verify stopped — pods may take a moment to release ports
-	sleep 2
-	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
-		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening"
-	fi
+	local _attempts=0
+	while _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; do
+		_attempts=$(( _attempts + 1 ))
+		if [ "$_attempts" -ge 30 ]; then
+			aba_abort "Failed to stop $vendor registry on $_where — port $port still listening after 60s"
+		fi
+		[ "$_attempts" -eq 1 ] && aba_info "Waiting for port $port to close ..."
+		sleep 2
+	done
 
 	aba_info "$vendor registry stopped on $_where"
 }
@@ -1369,9 +1374,11 @@ reg_start_vendor() {
 
 	# Quay uses nginx in front of quay-app; the port opens immediately (nginx)
 	# but the backend needs time to initialize.  Wait for a non-502 response.
+	# Quay can take 2-4 minutes to fully start (database init, migrations).
 	if [ "$vendor" = "quay" ]; then
 		local _ready=0
-		for (( _i=0; _i<60; _i++ )); do
+		aba_info "Waiting for Quay backend to become ready (this can take 2-4 minutes) ..."
+		for (( _i=0; _i<150; _i++ )); do
 			local _code
 			if [ -n "$ssh_cmd" ]; then
 				_code=$($ssh_cmd "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
@@ -1385,7 +1392,7 @@ reg_start_vendor() {
 			sleep 2
 		done
 		if [ "$_ready" -eq 0 ]; then
-			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 120s"
+			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 300s"
 		fi
 	fi
 
