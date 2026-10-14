@@ -1016,9 +1016,9 @@ change your channel when selected." 0 0
 					[[ $? -ne 0 ]] && { _target_ver=""; break; }
 					_target_ver=$(<"$_TUI_TMP")
 					_target_ver=$(echo "$_target_ver" | tr -d ' ')
-					if [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+					if _is_version_string "$_target_ver"; then
 						break
-					elif [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+					elif _is_minor_version "$_target_ver"; then
 						dlg --backtitle "$(ui_backtitle)" --infobox \
 							"Resolving $_target_ver to latest z-stream..." 0 0
 						local _resolved=""
@@ -1077,7 +1077,7 @@ change your channel when selected." 0 0
 			local _new_base
 			_new_base=$(<"$_TUI_TMP")
 			_new_base=$(echo "$_new_base" | tr -d ' ')
-			if [[ ! "$_new_base" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			if ! _is_version_string "$_new_base"; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format. Use x.y.z or x.y.z-rc.N" 0 0
 				continue
 			fi
