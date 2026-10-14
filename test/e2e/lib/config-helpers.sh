@@ -87,6 +87,18 @@ pool_small_cidr() {
 	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/29"
 }
 
+# Get the first usable IP (network + 1) from an arbitrary CIDR string.
+# E.g. 10.0.2.40/29 → 10.0.2.41, 10.0.2.42/30 → 10.0.2.41, 10.0.0.0/20 → 10.0.0.1
+cidr_gateway() {
+	local ip="${1%/*}" prefix="${1#*/}"
+	local a b c d
+	IFS=. read -r a b c d <<< "$ip"
+	local ip_int=$(( (a << 24) + (b << 16) + (c << 8) + d ))
+	local mask=$(( 0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF ))
+	local gw=$(( (ip_int & mask) + 1 ))
+	printf "%d.%d.%d.%d\n" $(( (gw >> 24) & 255 )) $(( (gw >> 16) & 255 )) $(( (gw >> 8) & 255 )) $(( gw & 255 ))
+}
+
 # Convenience aliases -- all cluster types share the same IPs.
 # SNO uses node_ip for everything; compact/standard use node_ip + VIPs.
 pool_sno_ip()             { pool_node_ip "$@"; }
