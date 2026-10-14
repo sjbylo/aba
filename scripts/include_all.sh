@@ -54,6 +54,15 @@ _OMR_LOG_FLAG=""
 [ "${DEBUG_ABA:-}" ] && _OMR_LOG_FLAG="-log-level debug"
 
 # ===========================
+# YAML / JSON
+# ===========================
+
+# Convert YAML on stdin to JSON on stdout.
+yaml2json() {
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))'
+}
+
+# ===========================
 # Color Echo Functions
 # ===========================
 
@@ -2688,7 +2697,7 @@ resolve_cluster_channel() {
 		# Read the last platform channel entry (upgrade channels are appended).
 		# Use yaml2json + jq to reliably extract from the platform section only.
 		local isc_ch isc_max _isc_json
-		_isc_json=$(python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$isc_file")
+		_isc_json=$(yaml2json < "$isc_file")
 		isc_ch=$(echo "$_isc_json" | jq -r '[.mirror.platform.channels[].name] | last')
 		isc_max=$(echo "$_isc_json" | jq -r '.mirror.platform.channels[-1].maxVersion')
 
@@ -4107,7 +4116,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 _isc_operator_list() {
 	local _isc="${1:?Usage: _isc_operator_list <isc-path>}"
 	[ -f "$_isc" ] || return 0
-	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+	yaml2json < "$_isc" | \
 		jq -r '[.mirror.operators[]?.packages[]?.name] | sort | join(",")' 2>/dev/null
 }
 
@@ -4116,14 +4125,14 @@ _isc_operator_list() {
 _isc_operator_count() {
 	local _isc="${1:?Usage: _isc_operator_count <isc-path>}"
 	[ -f "$_isc" ] || return 0
-	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+	yaml2json < "$_isc" | \
 		jq -r '[.mirror.operators[]?.packages[]?.name] | length' 2>/dev/null || echo 0
 }
 
 _isc_additional_count() {
 	local _isc="${1:?Usage: _isc_additional_count <isc-path>}"
 	[ -f "$_isc" ] || { echo 0; return 0; }
-	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+	yaml2json < "$_isc" | \
 		jq -r '[.mirror.additionalImages[]?.name] | length' 2>/dev/null || echo 0
 }
 
