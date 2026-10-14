@@ -7,36 +7,26 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_remote_pre_install "quay"
-_skip_to_post_install=$?
-
-if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-	# Previous install was interrupted but registry is healthy — skip to post_install
-	aba_progress "DONE|reg_config"
-	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_download"
-	aba_progress "DONE|reg_install"
-	aba_progress "DONE|reg_firewall"
-	aba_progress "DONE|reg_postcfg"
-	aba_progress "START|reg_verify"
-else
 
 aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 reg_check_quay_resources "$_ssh"
 
-# Pre-install assertion: detect stale state from a previous install that
-# was not fully uninstalled.
-_stale=""
-$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-$_ssh "podman secret ls --format '{{.Name}}' | grep -q redis_pass" && _stale+="  redis_pass podman secret exists"$'\n'
-$_ssh "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" && _stale+="  Quay containers still present"$'\n'
-if [ -n "$_stale" ]; then
-	aba_abort \
-		"Stale registry state detected on $reg_host before install:" \
-		"$_stale" \
-		"A previous install was not fully cleaned up." \
-		"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+# Pre-install assertion: detect stale state from a previous install.
+# Skip on resume — if the registry is responding, these are our resources.
+if ! probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+	_stale=""
+	$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
+	$_ssh "podman secret ls --format '{{.Name}}' | grep -q redis_pass" && _stale+="  redis_pass podman secret exists"$'\n'
+	$_ssh "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" && _stale+="  Quay containers still present"$'\n'
+	if [ -n "$_stale" ]; then
+		aba_abort \
+			"Stale registry state detected on $reg_host before install:" \
+			"$_stale" \
+			"A previous install was not fully cleaned up." \
+			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+	fi
 fi
 
 ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
@@ -61,21 +51,26 @@ $_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
 
-# Mark state as "installing" so a retry can detect and recover from a partial install
-reg_mark_installing quay
+# --- Skip install if registry already running (idempotent resume) ---
+if probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+	aba_info "Registry already running at $reg_host:$reg_port — skipping install"
+else
+	# Mark state as "installing" so a retry can detect and recover from a partial install
+	reg_mark_installing quay
 
-# printf '%q' safely escapes all shell metacharacters for remote evaluation
-_escaped_pw=$(printf '%q' "$reg_pw")
-cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword \"\$_reg_pw\" $reg_root_opts"
+	# printf '%q' safely escapes all shell metacharacters for remote evaluation
+	_escaped_pw=$(printf '%q' "$reg_pw")
+	cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword \"\$_reg_pw\" $reg_root_opts"
 
-# mirror-registry hardcodes --name ansible_runner_instance without --replace.
-$_ssh "podman rm -f ansible_runner_instance 2>/dev/null" || true
+	# mirror-registry hardcodes --name ansible_runner_instance without --replace.
+	$_ssh "podman rm -f ansible_runner_instance 2>/dev/null" || true
 
-aba_info "Extracting and installing Quay registry on remote host ..."
-aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword *** $reg_root_opts"
-if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then
-	aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
-		"Check the output above for details."
+	aba_info "Extracting and installing Quay registry on remote host ..."
+	aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword *** $reg_root_opts"
+	if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then
+		aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
+			"Check the output above for details."
+	fi
 fi
 
 aba_progress "DONE|reg_install"
@@ -84,8 +79,6 @@ aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
-
-fi  # end of skip_to_post_install guard
 
 reg_remote_post_install "quay" "$reg_root/quay-rootCA/rootCA.pem"
 

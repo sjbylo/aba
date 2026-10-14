@@ -9,34 +9,24 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_remote_pre_install "$_OMR_VENDOR"
-_skip_to_post_install=$?
-
-if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-	# Previous install was interrupted but registry is healthy — skip to post_install
-	aba_progress "DONE|reg_config"
-	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_download"
-	aba_progress "DONE|reg_install"
-	aba_progress "DONE|reg_firewall"
-	aba_progress "DONE|reg_postcfg"
-	aba_progress "START|reg_verify"
-else
 
 aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 # Pre-install assertion: detect stale state.
-# The tool refuses to install if a Quadlet file exists (even if service is dead).
-_stale=""
-$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-$_ssh "systemctl --user is-active quay.service &>/dev/null || sudo systemctl is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
-$_ssh "test -f ~/.config/containers/systemd/quay.container 2>/dev/null || test -f /etc/containers/systemd/quay.container 2>/dev/null" && _stale+="  Leftover Quadlet file (quay.container)"$'\n'
-if [ -n "$_stale" ]; then
-	aba_abort \
-		"Stale registry state detected on $reg_host before install:" \
-		"$_stale" \
-		"A previous install was not fully cleaned up." \
-		"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+# Skip on resume — if the registry is responding, these are our resources.
+if ! probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+	_stale=""
+	$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
+	$_ssh "systemctl --user is-active quay.service &>/dev/null || sudo systemctl is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
+	$_ssh "test -f ~/.config/containers/systemd/quay.container 2>/dev/null || test -f /etc/containers/systemd/quay.container 2>/dev/null" && _stale+="  Leftover Quadlet file (quay.container)"$'\n'
+	if [ -n "$_stale" ]; then
+		aba_abort \
+			"Stale registry state detected on $reg_host before install:" \
+			"$_stale" \
+			"A previous install was not fully cleaned up." \
+			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+	fi
 fi
 
 ask "Install $_OMR_VENDOR registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
@@ -87,43 +77,48 @@ $_scp "$_bin" "$_image_file" "$_target:$remote_dir/"
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
 
-# Mark state as "installing" so a retry can detect and recover from a partial install
-reg_mark_installing "$_OMR_VENDOR"
+# --- Skip install if registry already running (idempotent resume) ---
+if probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+	aba_info "Registry already running at $reg_host:$reg_port — skipping install"
+else
+	# Mark state as "installing" so a retry can detect and recover from a partial install
+	reg_mark_installing "$_OMR_VENDOR"
 
-# Install or reinstall on remote host via the tool's own 'install' command.
-# Fresh install: pass -init-user/-init-password-stdin for admin setup.
-# Reinstall (data preserved, service removed): omit init flags — the tool
-# detects existing data, skips admin provisioning, creates Quadlet, starts service.
-aba_info "Running $_OMR_VENDOR install on remote host ..."
-if ! $_ssh "
-	set -e
-	if [ -f $reg_root/auth/admin-password ]; then
-		echo '[ABA] Existing data detected — reinstalling (preserving data) ...'
-		$remote_dir/mirror-registry install \
-			$_OMR_LOG_FLAG \
-			-data-dir $reg_root \
-			-hostname $reg_host \
-			-port $reg_port \
-			-image-archive $remote_dir/$_image_file
-	else
-		echo '$reg_pw' | $remote_dir/mirror-registry install \
-			$_OMR_LOG_FLAG \
-			-data-dir $reg_root \
-			-hostname $reg_host \
-			-port $reg_port \
-			-init-user $reg_user \
-			-init-password-stdin \
-			-image-archive $remote_dir/$_image_file
-	fi
-	# Enable linger so the user's systemd instance survives logout
-	if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
-		if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
-			$SUDO loginctl enable-linger \"\$USER\"
+	# Install or reinstall on remote host via the tool's own 'install' command.
+	# Fresh install: pass -init-user/-init-password-stdin for admin setup.
+	# Reinstall (data preserved, service removed): omit init flags — the tool
+	# detects existing data, skips admin provisioning, creates Quadlet, starts service.
+	aba_info "Running $_OMR_VENDOR install on remote host ..."
+	if ! $_ssh "
+		set -e
+		if [ -f $reg_root/auth/admin-password ]; then
+			echo '[ABA] Existing data detected — reinstalling (preserving data) ...'
+			$remote_dir/mirror-registry install \
+				$_OMR_LOG_FLAG \
+				-data-dir $reg_root \
+				-hostname $reg_host \
+				-port $reg_port \
+				-image-archive $remote_dir/$_image_file
+		else
+			echo '$reg_pw' | $remote_dir/mirror-registry install \
+				$_OMR_LOG_FLAG \
+				-data-dir $reg_root \
+				-hostname $reg_host \
+				-port $reg_port \
+				-init-user $reg_user \
+				-init-password-stdin \
+				-image-archive $remote_dir/$_image_file
 		fi
+		# Enable linger so the user's systemd instance survives logout
+		if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
+			if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+				$SUDO loginctl enable-linger \"\$USER\"
+			fi
+		fi
+	"; then
+		aba_abort "$_OMR_VENDOR install failed on remote host $reg_host." \
+			"Check the output above for details."
 	fi
-"; then
-	aba_abort "$_OMR_VENDOR install failed on remote host $reg_host." \
-		"Check the output above for details."
 fi
 
 aba_progress "DONE|reg_install"
@@ -147,8 +142,6 @@ fi
 
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
-
-fi  # end of skip_to_post_install guard
 
 reg_remote_post_install "$_OMR_VENDOR" "$reg_root/ssl.cert"
 
