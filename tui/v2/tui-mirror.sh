@@ -779,8 +779,16 @@ mirror_save() {
 	_ensure_platform_for_upgrade
 
 	local _tmp_excl=false
+	_restore_excl_platform() {
+		if [[ "$_tmp_excl" == "true" ]]; then
+			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+			tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+			tui_log "Guard: restored excl_platform=false (trap)"
+		fi
+	}
 	if _offer_excl_platform_for_save; then
 		_tmp_excl=true
+		trap _restore_excl_platform EXIT
 		replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating imageset-config.yaml (operators only)..." 3 60
@@ -789,8 +797,8 @@ mirror_save() {
 
 	_mirror_op_confirm "$TUI2_LABEL_SAVE" save || {
 		if [[ "$_tmp_excl" == "true" ]]; then
-			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-			tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+			trap - EXIT
+			_restore_excl_platform
 		fi
 		return 1
 	}
@@ -800,8 +808,8 @@ mirror_save() {
 	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache && rc=$?
 
 	if [[ "$_tmp_excl" == "true" ]]; then
-		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+		trap - EXIT
+		_restore_excl_platform
 		tui_log "Guard: restored excl_platform=false after save"
 	fi
 
@@ -851,7 +859,7 @@ mirror_prep_upgrade() {
 	# Check other channels for additional versions not on user's channel.
 	# _fb_items: array of "TAG|VERSION|CHANNEL" entries for fallback versions.
 	local _fb_items=() _shown_hint=false
-	local _all_seen="${_zstream}|${_next}|${_next1}|${_current_ver}"
+	local _all_seen="|${_zstream}|${_next}|${_next1}|${_current_ver}|"
 
 	_add_fallback_items() {
 		local _fb_ch="$1" _fb_tag_prefix="$2"
@@ -867,9 +875,9 @@ mirror_prep_upgrade() {
 			esac
 		done <<< "$_fb_targets"
 		# Add versions not already shown from the user's own channel
-		[[ -n "$_fb_n"  && "$_all_seen" != *"$_fb_n"*  ]] && _fb_items+=("${_fb_tag_prefix}n|$_fb_n|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_n}"
-		[[ -n "$_fb_z"  && "$_all_seen" != *"$_fb_z"*  ]] && _fb_items+=("${_fb_tag_prefix}z|$_fb_z|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_z}"
-		[[ -n "$_fb_n1" && "$_all_seen" != *"$_fb_n1"* ]] && _fb_items+=("${_fb_tag_prefix}1|$_fb_n1|$_fb_ch") && _all_seen="${_all_seen}|${_fb_n1}"
+		[[ -n "$_fb_n"  && "$_all_seen" != *"|$_fb_n|"*  ]] && _fb_items+=("${_fb_tag_prefix}n|$_fb_n|$_fb_ch")  && _all_seen="${_all_seen}${_fb_n}|"
+		[[ -n "$_fb_z"  && "$_all_seen" != *"|$_fb_z|"*  ]] && _fb_items+=("${_fb_tag_prefix}z|$_fb_z|$_fb_ch")  && _all_seen="${_all_seen}${_fb_z}|"
+		[[ -n "$_fb_n1" && "$_all_seen" != *"|$_fb_n1|"* ]] && _fb_items+=("${_fb_tag_prefix}1|$_fb_n1|$_fb_ch") && _all_seen="${_all_seen}${_fb_n1}|"
 	}
 
 	[[ "$_channel" != "fast"      ]] && _add_fallback_items "fast" "f"
