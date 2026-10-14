@@ -836,6 +836,8 @@ The ISO must be written as a raw disk image (byte-for-byte), not extracted or "b
 Use `aba write-usb` for guided USB writing, or `dd if=agent.x86_64.iso of=/dev/sdX bs=4M conv=fsync status=progress`.
 Most server management interfaces (iLO, iDRAC, BMC) can also mount the ISO as virtual media — no USB required.
 
+> **BMC automation (experimental):** ABA can automate ISO mounting and one-shot boot via Redfish VirtualMedia — no manual BMC interaction required. Supports Dell iDRAC, HPE iLO, Fujitsu iRMC, Supermicro, Lenovo, and generic Redfish BMCs. This feature is on the [`bm-auto-redfish`](https://github.com/sjbylo/aba/tree/bm-auto-redfish) branch and needs community testing before merging. See [devel/test-redfish-support.md](devel/test-redfish-support.md) for setup, testing instructions, and how to report results.
+
 > **USB boot note:** If booting from USB, prepare **one USB drive per server**. The Agent-based Installer waits until all hosts have registered, synced NTP, and passed validation before proceeding — you cannot boot servers sequentially with a single USB drive because removing the drive from one server to boot another will stall the installation.
 
 For VMware or KVM, installation is fully automated (VM creation, ISO attach, and boot).
