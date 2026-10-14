@@ -4986,7 +4986,7 @@ _merge_images_conf() {
 		while IFS= read -r _line; do
 			if [ -z "${_seen_images[$_line]+x}" ]; then
 				_seen_images["$_line"]=1
-				_image_source["$_line"]="mirror/images.conf"
+				_image_source["$_line"]="$(basename "$mirror_dir")/images.conf"
 				_ordered_images+=("$_line")
 			else
 				# Already seen from repo file — mark as "both"
@@ -5337,7 +5337,7 @@ check_internet_connectivity() {
 		FAILED_SITES="api.openshift.com"
 		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
 		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		ERROR_DETAILS="api.openshift.com: $err_msg"
+		ERROR_DETAILS="  api.openshift.com: $err_msg"
 	fi
 	
 	if ! run_once -w -q -S -i "${prefix}:check:mirror.openshift.com"; then
@@ -5345,8 +5345,8 @@ check_internet_connectivity() {
 		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
 		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
 		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'"  "
-		ERROR_DETAILS="${ERROR_DETAILS}mirror.openshift.com: $err_msg"
+		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
+		ERROR_DETAILS="${ERROR_DETAILS}  mirror.openshift.com: $err_msg"
 	fi
 	
 	if ! run_once -w -q -S -i "${prefix}:check:registry.redhat.io"; then
@@ -5354,8 +5354,8 @@ check_internet_connectivity() {
 		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
 		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
 		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'"  "
-		ERROR_DETAILS="${ERROR_DETAILS}registry.redhat.io: $err_msg"
+		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
+		ERROR_DETAILS="${ERROR_DETAILS}  registry.redhat.io: $err_msg"
 	fi
 	
 	# Return status
