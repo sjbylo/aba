@@ -956,9 +956,9 @@ reg_omr_remove() {
 		local _remote_bin="$reg_root/../$_bin_dir/mirror-registry"
 		aba_info "Running: mirror-registry uninstall on $reg_host ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
+			$ssh_cmd "$_remote_bin uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
 		else
-			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve" || _uninst_rc=$?
+			$ssh_cmd "$_remote_bin uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve" || _uninst_rc=$?
 		fi
 	else
 		# Local
@@ -970,9 +970,9 @@ reg_omr_remove() {
 
 		aba_info "Running: mirror-registry uninstall -data-dir $reg_root ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve -purge || _uninst_rc=$?
+			./"$_bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve -purge || _uninst_rc=$?
 		else
-			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
+			./"$_bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
 		fi
 	fi
 

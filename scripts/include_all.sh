@@ -49,6 +49,10 @@ _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.c
 _OMR_VENDOR="omr"
 _OMR_IMAGE="${OMR_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
 
+# OMR debug flag: pass -log-level debug when ABA is in debug mode (aba -D)
+_OMR_LOG_FLAG=""
+[ "${DEBUG_ABA:-}" ] && _OMR_LOG_FLAG="-log-level debug"
+
 # ===========================
 # Color Echo Functions
 # ===========================

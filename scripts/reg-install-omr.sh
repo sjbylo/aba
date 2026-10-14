@@ -41,29 +41,67 @@ ask "Install $_OMR_VENDOR registry on localhost ($(hostname -s)), accessible via
 aba_progress "START|reg_download"
 aba_info "Installing $_OMR_VENDOR registry on localhost ..."
 
-# Load image from tarball (air-gapped) or pull from registry (connected).
-# Ensure the tarball always exists — the install binary needs -image-archive
-# because its compiled-in image reference differs from $_OMR_IMAGE.
-if [ -f "$_OMR_IMAGE_FILE" ]; then
-	aba_info "Loading $_OMR_VENDOR image from $_OMR_IMAGE_FILE ..."
-	podman load -i "$_OMR_IMAGE_FILE"
-else
-	if ! podman image exists "$_OMR_IMAGE" 2>/dev/null; then
-		aba_info "Pulling $_OMR_VENDOR image: $_OMR_IMAGE ..."
-		podman pull "$_OMR_IMAGE"
-	fi
-	aba_info "Saving $_OMR_VENDOR image to $_OMR_IMAGE_FILE ..."
-	podman save -o "$_OMR_IMAGE_FILE" "$_OMR_IMAGE"
+# Load image + extract binary only if the binary doesn't exist or is corrupt.
+# The OMR install binary handles its own image loading via -image-archive,
+# so ABA doesn't need to pre-load the image when the binary is already extracted.
+# Skipping the redundant podman load avoids a slow double-load on hosts with
+# large image stores.
+_need_extract=""
+if [ ! -x "$_OMR_BIN" ]; then
+	_need_extract=1
+elif ! ./"$_OMR_BIN" version >/dev/null 2>&1; then
+	aba_warn "Binary $_OMR_BIN exists but appears corrupt — re-extracting"
+	rm -f "$_OMR_BIN"
+	_need_extract=1
 fi
 
-# Extract the install binary from the container image
-if [ ! -x "$_OMR_BIN" ]; then
+if [ -n "$_need_extract" ]; then
+	# Need the image loaded to extract the binary via podman create/cp.
+	if [ -f "$_OMR_IMAGE_FILE" ]; then
+		aba_info "Loading $_OMR_VENDOR image from $_OMR_IMAGE_FILE ..."
+		if ! podman load -i "$_OMR_IMAGE_FILE"; then
+			aba_abort "Failed to load $_OMR_VENDOR image from $_OMR_IMAGE_FILE." \
+				"The archive may be corrupt. Delete it and retry."
+		fi
+	else
+		if ! podman image exists "$_OMR_IMAGE" 2>/dev/null; then
+			aba_info "Pulling $_OMR_VENDOR image: $_OMR_IMAGE ..."
+			if ! podman pull "$_OMR_IMAGE"; then
+				aba_abort "Failed to pull $_OMR_VENDOR image: $_OMR_IMAGE" \
+					"Check network connectivity and registry credentials."
+			fi
+		fi
+		aba_info "Saving $_OMR_VENDOR image to $_OMR_IMAGE_FILE ..."
+		if ! podman save -o "$_OMR_IMAGE_FILE" "$_OMR_IMAGE"; then
+			rm -f "$_OMR_IMAGE_FILE"
+			aba_abort "Failed to save $_OMR_VENDOR image to $_OMR_IMAGE_FILE." \
+				"Check available disk space."
+		fi
+	fi
+
 	aba_info "Extracting $_OMR_VENDOR install binary ..."
 	mkdir -p "$_OMR_BIN_DIR"
 	_cid=$(podman create "$_OMR_IMAGE")
 	podman cp "$_cid:/mirror-registry" "$_OMR_BIN"
 	podman rm "$_cid" >/dev/null
 	chmod +x "$_OMR_BIN"
+else
+	# Binary exists and is healthy; ensure the image tarball exists for the install command.
+	if [ ! -f "$_OMR_IMAGE_FILE" ]; then
+		if ! podman image exists "$_OMR_IMAGE" 2>/dev/null; then
+			aba_info "Pulling $_OMR_VENDOR image: $_OMR_IMAGE ..."
+			if ! podman pull "$_OMR_IMAGE"; then
+				aba_abort "Failed to pull $_OMR_VENDOR image: $_OMR_IMAGE" \
+					"Check network connectivity and registry credentials."
+			fi
+		fi
+		aba_info "Saving $_OMR_VENDOR image to $_OMR_IMAGE_FILE ..."
+		if ! podman save -o "$_OMR_IMAGE_FILE" "$_OMR_IMAGE"; then
+			rm -f "$_OMR_IMAGE_FILE"
+			aba_abort "Failed to save $_OMR_VENDOR image to $_OMR_IMAGE_FILE." \
+				"Check available disk space."
+		fi
+	fi
 fi
 
 aba_progress "DONE|reg_download"
@@ -79,6 +117,7 @@ reg_mark_installing "$_OMR_VENDOR"
 if [ -f "$reg_root/auth/admin-password" ]; then
 	aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
 	if ! ./"$_OMR_BIN" install \
+		$_OMR_LOG_FLAG \
 		-data-dir "$reg_root" \
 		-hostname "$reg_host" \
 		-port "$reg_port" \
@@ -90,6 +129,7 @@ if [ -f "$reg_root/auth/admin-password" ]; then
 else
 	aba_info "Running: $_OMR_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
 	if ! echo "$reg_pw" | ./"$_OMR_BIN" install \
+		$_OMR_LOG_FLAG \
 		-data-dir "$reg_root" \
 		-hostname "$reg_host" \
 		-port "$reg_port" \
