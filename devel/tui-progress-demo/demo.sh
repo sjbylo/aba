@@ -169,9 +169,11 @@ _parse_event() {
 			# This happens when Make runs a script before its plan target fires.
 			# In that case, _status[] is already set but _text[] is empty.
 			# We add to _order and set _text, but keep the existing status.
+			# Strip trailing weight from "text|weight" → keep only "text".
+			local _plan_text="${arg1%|*}"
 			if [ -z "${_text[$id]:-}" ]; then
 				_order+=("$id")
-				_text[$id]="$arg1"
+				_text[$id]="$_plan_text"
 				# Only set initial N/A status if no START/DONE has arrived yet.
 				# Use if/then — NOT "[ ] && cmd" which returns 1 under set -e.
 				if [ -z "${_status[$id]:-}" ]; then
@@ -318,19 +320,34 @@ handle_prompt() {
 # ============================================================
 
 show_output() {
-	clear
-	printf '\033[1;33m'
-	echo "═══════════════════════════════════════════════════════"
-	echo "  ABA Live Output         (press any key to return)"
-	echo "═══════════════════════════════════════════════════════"
-	printf '\033[0m\n'
-	cat "$output_log" 2>/dev/null
-	tail -n 0 -f "$output_log" 2>/dev/null &
-	tail_pid=$!
-	read -rsn1 || true
-	kill "$tail_pid" 2>/dev/null || true
-	wait "$tail_pid" 2>/dev/null || true
-	tail_pid=""
+	if [ "$_done" -eq 1 ]; then
+		# Post-completion: scrollable pager with ANSI color support.
+		if [ ! -s "$output_log" ]; then
+			dialog --title " Output " --msgbox "\n  No output was captured.\n" 7 40 || true
+			return
+		fi
+		# Append a navigation hint once so the user knows how to scroll/quit.
+		if [ -z "${_less_hint_added:-}" ]; then
+			printf '\n\n\033[0;30;43m ↑/↓/PgUp/PgDn to scroll.  Press Q to quit. \033[0m\n\n' >> "$output_log"
+			_less_hint_added=1
+		fi
+		less -rf +G "$output_log" 2>/dev/null || true
+	else
+		# Live: stream output with tail -f, press any key to return
+		clear
+		printf '\033[1;33m'
+		echo "═══════════════════════════════════════════════════════"
+		echo "  ABA Live Output         (press any key to return)"
+		echo "═══════════════════════════════════════════════════════"
+		printf '\033[0m\n'
+		cat "$output_log" 2>/dev/null
+		tail -n 0 -f "$output_log" 2>/dev/null &
+		tail_pid=$!
+		read -rsn1 || true
+		kill "$tail_pid" 2>/dev/null || true
+		wait "$tail_pid" 2>/dev/null || true
+		tail_pid=""
+	fi
 }
 
 # ============================================================
@@ -607,6 +624,7 @@ show_menu() {
 		"uninstall"     "Uninstall registry (all steps run)" \
 		"fresh-all"     "Sync (mirror not installed — installs first)" \
 		"fresh-bg"      "Sync fresh + background CLI download" \
+		"verbose"       "Install + verbose output (multi-page, tests less -r)" \
 		3>&1 1>&2 2>&3) || _choice="quit"
 	printf '%s' "$_choice"
 }
@@ -723,6 +741,14 @@ run_workflow() {
 			title="Sync Images to Mirror"
 			envs="FORCE_RPM_INSTALL=1 FORCE_CATALOG_DOWNLOAD=1 SKIP_OC_MIRROR=1 SIMULATE_BG_DOWNLOAD=1"
 			;;
+		verbose)
+			# Install with verbose output — produces several pages of output
+			# to demonstrate the post-completion less -r pager.
+			make_target="install"
+			wdir_mode="fresh"
+			title="Install Mirror (Verbose)"
+			envs="FORCE_RPM_INSTALL=1 SIMULATE_VERBOSE=1"
+			;;
 	esac
 
 	_setup_workdir "$wdir_mode"
@@ -832,7 +858,7 @@ run_workflow() {
 while true; do
 	choice=$(show_menu)
 	case "$choice" in
-		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|bundle|bundle-error|sync-crash|uninstall|fresh-all|fresh-bg)
+		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|bundle|bundle-error|sync-crash|uninstall|fresh-all|fresh-bg|verbose)
 			run_workflow "$choice" ;;
 		quit|"")
 			break ;;

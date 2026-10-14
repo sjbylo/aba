@@ -74,6 +74,27 @@ in the scripts, and TUI integration via `_exec_with_progress`.
 
 ---
 
+## TUI progress: use `less -r` to view output after task completion
+
+**Severity:** LOW
+**Status:** In Progress
+**Added:** 2026-10-14
+
+**Problem:** When a TUI progress workflow finishes (success or failure), the
+"View Output" button shows raw output with `cat` + tail streaming.  The user
+cannot scroll back through multi-page output — they see only the last
+screenful and must press a key to return.
+
+**Proposed fix:** After task completion, use `less -r` (ANSI-aware pager) instead
+of `cat`/`tail`.  This lets users scroll up/down through the full output with
+color preserved.  During live execution, keep the current `tail -f` streaming
+behavior (user presses any key to return to the progress dialog).
+
+**Demo:** The `devel/tui-progress-demo/` already implements this.  The "verbose"
+menu item produces multi-page output and opens `less -r` on completion.
+
+---
+
 ## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
 
 **Severity:** MEDIUM
