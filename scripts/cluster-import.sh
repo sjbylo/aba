@@ -159,6 +159,7 @@ echo "  image_source    = $_image_source"
 
 # --- Check for existing state ---
 _dir_name="${_name:-$_cluster_name}"
+_valid_cluster_name "$_dir_name" || exit 1
 _state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
 _cluster_fqdn="${_cluster_name}.${_base_domain}"
 
