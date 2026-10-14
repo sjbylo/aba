@@ -2,8 +2,41 @@
 
 Branch: `bm-auto-redfish`
 
-This document covers three levels of testing for the Redfish-based
-bare-metal BMC automation feature (PR #27).
+This document covers how to install ABA from this branch and test the
+Redfish-based bare-metal BMC automation feature (PR #27) at three
+levels — from zero-hardware stub tests to a full bare-metal install.
+
+---
+
+## Getting Started — Install ABA from this Branch
+
+### Prerequisites
+
+- RHEL 8, 9, or 10 (x86_64)
+- sudo access (passwordless recommended) or root
+- Internet access (for the initial setup; not needed for air-gapped testing)
+- A Red Hat pull secret at `~/.pull-secret.json`
+  ([download here](https://console.redhat.com/openshift/install/pull-secret))
+
+### Clone and install
+
+```bash
+git clone -b bm-auto-redfish https://github.com/sjbylo/aba.git
+cd aba
+./install
+```
+
+This installs the `aba` and `abatui` commands into your `$PATH` and
+sets up the `~/.aba/` state directory.  You can now run ABA from
+anywhere, but all commands below assume you are inside the `aba/`
+directory.
+
+### Quick smoke test
+
+```bash
+aba --version          # Should show the ABA version
+aba --help             # Overview of all commands
+```
 
 ---
 
@@ -11,11 +44,10 @@ bare-metal BMC automation feature (PR #27).
 
 These use a Redfish HTTP stub (`test/func/lib/bmc-redfish-stub.sh`,
 ~840 lines of canned JSON responses) to exercise all logic paths
-without contacting any BMC.  Run on any host with bash.
+without contacting any BMC.  No hardware or mirror registry needed —
+just bash on a RHEL box.
 
 ```bash
-git checkout bm-auto-redfish
-
 # BMC preflight — 17 paths (L1–L5 gates, MAC discovery scenarios)
 bash test/func/test-preflight-check-bm.sh
 
@@ -50,13 +82,18 @@ read-only Redfish GETs are performed.
 
 - A bare-metal server with a reachable BMC (iDRAC, iLO, iRMC, Supermicro, Lenovo, or any DSP0266 Redfish BMC)
 - BMC credentials (a user with at least read access to the Redfish tree)
-- A configured ABA mirror (`aba -d mirror install` + `aba -d mirror sync`, or an existing registry)
+- A configured ABA mirror registry — if you don't have one yet:
+
+```bash
+# Create and install a mirror registry (one-time setup)
+aba mirror                     # Creates the mirror/ directory and mirror.conf
+aba -d mirror install          # Installs the registry (Docker, Quay, or OMR)
+aba -d mirror sync             # Syncs OpenShift content to the registry
+```
 
 ### Steps
 
 ```bash
-git checkout bm-auto-redfish
-
 # 1. Set platform to bare-metal (global setting in aba.conf)
 aba --platform bm
 
@@ -87,7 +124,7 @@ Also fill in the cluster networking in `bmc-test/cluster.conf`
 `machine_network`, `dns1`).
 
 ```bash
-# 3. Run preflight only (does NOT boot or mount anything)
+# 4. Run preflight only (does NOT boot or mount anything)
 aba -d bmc-test preflight
 ```
 
