@@ -4108,10 +4108,10 @@ _isc_operator_list() {
 }
 
 # Usage: _isc_operator_count <isc-path>
-# Prints: integer count of operators (0 if none or file missing)
+# Prints: integer count of operators (0 if none, empty if file missing)
 _isc_operator_count() {
 	local _isc="${1:?Usage: _isc_operator_count <isc-path>}"
-	[ -f "$_isc" ] || { echo 0; return 0; }
+	[ -f "$_isc" ] || return 0
 	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
 		jq -r '[.mirror.operators[]?.packages[]?.name] | length' 2>/dev/null || echo 0
 }
