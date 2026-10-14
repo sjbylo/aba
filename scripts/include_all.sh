@@ -972,8 +972,13 @@ _valid_password() {
 	return 0
 }
 
-# Domain validation (alias for _valid_fqdn — same rules).
-_valid_domain() { _valid_fqdn "$1"; }
+# Domain validation — accepts single-label (lab, local) or multi-label (example.com).
+# For FQDN-only validation (e.g. reg_host), use _valid_fqdn() instead.
+_valid_domain() {
+	[[ -z "$1" ]] && return 1
+	# Each label: alphanumeric + hyphens, no leading/trailing hyphen, max 63 chars
+	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]
+}
 
 # Validate a registry vendor value.
 # Returns 0 if valid, 1 if invalid.

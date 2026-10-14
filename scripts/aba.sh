@@ -826,10 +826,8 @@ for i in imgs:
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
-		domain=""
-		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
-		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
+		domain="$2"
+		_valid_domain "$domain" || aba_abort "domain format incorrect [$domain] — must be a valid domain (e.g. lab, example.com, lab.internal)"
 		replace-value-conf --lower -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
