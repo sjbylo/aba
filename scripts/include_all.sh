@@ -907,6 +907,72 @@ suggest_starting_ip() {
 	int_to_ip $(( net_int + offset ))
 }
 
+# Cross-validate networking fields against each other.
+# Checks: gateway in CIDR, starting_ip not network/broadcast, IP collisions.
+# Reads cluster.conf variables from the environment (already sourced by caller).
+# Returns 0 if consistent, 1 on error (all errors printed to stderr).
+_validate_network_consistency() {
+	local _ret=0
+	local _net_int=$(ip_to_int "$machine_network")
+	local _bcast=$(cidr_last_ip "$machine_network" "$prefix_length")
+	local _start_int=$(ip_to_int "$starting_ip")
+	local _total=$(( num_masters + num_workers ))
+
+	# 1. Starting IP must not be the network or broadcast address
+	if [ "$starting_ip" = "$machine_network" ]; then
+		echo_red "Error: starting_ip ($starting_ip) is the network address of $machine_network/$prefix_length" >&2
+		_ret=1
+	fi
+	if [ "$starting_ip" = "$_bcast" ]; then
+		echo_red "Error: starting_ip ($starting_ip) is the broadcast address of $machine_network/$prefix_length" >&2
+		_ret=1
+	fi
+
+	# 2. Gateway within CIDR
+	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null; then
+		if ! ip_in_cidr "$next_hop_address" "$machine_network" "$prefix_length"; then
+			echo_red "Error: next_hop_address ($next_hop_address) is outside the machine_network ($machine_network/$prefix_length)" >&2
+			_ret=1
+		fi
+	fi
+
+	# 3. Collision detection: build reserved IP list, check against node range
+	local -A _reserved=()
+	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null; then
+		_reserved["$next_hop_address"]="next_hop_address (gateway)"
+	fi
+	if (( num_masters > 1 )); then
+		[ -n "${api_vip:-}" ] && validate_ip "$api_vip" 2>/dev/null && _reserved["$api_vip"]="api_vip"
+		[ -n "${ingress_vip:-}" ] && validate_ip "$ingress_vip" 2>/dev/null && _reserved["$ingress_vip"]="ingress_vip"
+	fi
+
+	local _i _node_ip
+	for (( _i=0; _i<_total; _i++ )); do
+		_node_ip=$(int_to_ip $(( _start_int + _i )))
+		if [ -n "${_reserved[$_node_ip]:-}" ]; then
+			echo_red "Error: node IP $_node_ip (node $((_i + 1)) of $_total) collides with ${_reserved[$_node_ip]}" >&2
+			_ret=1
+		fi
+	done
+
+	# 4. VIPs must not fall within the node IP range
+	if (( num_masters > 1 && _total > 0 )); then
+		local _last_node_int=$(( _start_int + _total - 1 ))
+		for _vip_name in api_vip ingress_vip; do
+			local _vip_val="${!_vip_name:-}"
+			if [ -n "$_vip_val" ] && validate_ip "$_vip_val" 2>/dev/null; then
+				local _vip_int=$(ip_to_int "$_vip_val")
+				if (( _vip_int >= _start_int && _vip_int <= _last_node_int )); then
+					echo_red "Error: $_vip_name ($_vip_val) falls within the node IP range ($starting_ip - $(int_to_ip $_last_node_int))" >&2
+					_ret=1
+				fi
+			fi
+		done
+	fi
+
+	return $_ret
+}
+
 # Validate an IPv4 address: format + octet range (0-255).
 # Returns 0 if valid, 1 if invalid.
 _valid_ipv4() {
@@ -1467,6 +1533,12 @@ verify-cluster-conf() {
 	[ "$worker_mem" ] && ! echo $worker_mem | grep -q -E '^[1-9][0-9]*$' && { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_mem] (must be > 0)" >&2; ret=1; }
 
 	[ "$data_disk" ] && ! echo $data_disk | grep -q -E '^[0-9]+$' && { echo_red "Error: data_disk is invalid in cluster.conf: [$data_disk]" >&2; ret=1; }
+
+	# Cross-validate networking (only if individual fields are valid)
+	if [[ $ret -eq 0 ]] && validate_ip "$starting_ip" 2>/dev/null && \
+	   echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' 2>/dev/null; then
+		_validate_network_consistency || ret=1
+	fi
 
 	return $ret
 }
