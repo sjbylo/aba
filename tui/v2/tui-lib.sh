@@ -1108,7 +1108,7 @@ tui_cluster_menu_flags() {
 		_CLUSTER_HAS_ANY=true
 		if cluster_installed "$dir"; then
 			_CLUSTER_HAS_INSTALLED=true
-		else
+		elif [[ -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]]; then
 			_CLUSTER_HAS_INSTALLING=true
 		fi
 	done
