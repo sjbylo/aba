@@ -376,7 +376,9 @@ apply_custom_manifests() {
 				# Skip empty lines and comments
 				[[ -z "$_wait_line" || "$_wait_line" =~ ^[[:space:]]*# ]] && continue
 				aba_info "oc wait $_wait_line"
-				if ! eval oc wait $_wait_line; then
+				local _wait_args=()
+				read -ra _wait_args <<< "$_wait_line"
+				if ! oc wait "${_wait_args[@]}"; then
 					aba_warn "Wait gate failed: oc wait $_wait_line (continuing to next wave)"
 				fi
 			done < "$_wait_file"
