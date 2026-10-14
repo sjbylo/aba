@@ -795,9 +795,9 @@ mirror_save() {
 		return 1
 	}
 	local _cmd="aba --dir mirror save$(_tui_oc_mirror_retry_suffix)"
-	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_SAVE"
+	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache
 	local rc=$?
-	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SAVE" && rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache && rc=$?
 
 	if [[ "$_tmp_excl" == "true" ]]; then
 		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
