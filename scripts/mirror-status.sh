@@ -634,9 +634,9 @@ op)
 		fi
 	else
 		# Save/sync read from config + ISC
-		_ver_display="$_ver"
+		_ver_display="${_ver:-(not set)}"
 		if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ] && [ "$_excl_platform" != "true" ]; then
-			_ver_display="$_ver → $_upgrade_to"
+			_ver_display="${_ver:-(not set)} → $_upgrade_to"
 		fi
 		[ -n "$_chan" ] && _ver_display="$_ver_display ($_chan)"
 
