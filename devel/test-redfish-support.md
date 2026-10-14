@@ -282,6 +282,9 @@ This runs the complete pipeline:
 #### Post-install verification
 
 ```bash
+# Monitor the install progress (Ctrl-C to detach, re-run to resume)
+aba -d bmc-test mon
+
 # Check the BMC state files (one per node)
 cat bmc-test/.bmc-state.master0
 # Expected: last_step=session-logout, script_version=1.2.0
