@@ -2,39 +2,33 @@
 
 ### Added
 
-- **Network cross-validation** — `verify-config` now checks that the gateway is within the machine CIDR, detects IP collisions between nodes, and warns about VIP/node overlap.
-- **Shared validation functions** — Common domain and version regex patterns consolidated into reusable helpers, improving consistency across CLI, TUI, and config validation.
-- **TUI progress output viewer** — Post-completion output can be reviewed with a scrollable pager (less) from the progress dialog.
-- **Developer guide** — New `devel/README.md` documenting catalog refresh and operator sizing data generation procedures.
-- **Bundle vendor configurable** — `go.sh --vendor` flag selects the mirror registry vendor (omr, quay, docker) for bundle testing. Default changed from Quay to OMR v3. README template now shows which vendor was used.
+- **OMR registry support** — New mirror registry option using Red Hat's `mirror-registry` binary, alongside Docker and Quay.
+- **TUI progress dialog** — Mirror operations now show a live progress bar with step-by-step status instead of raw terminal output.
+- **Mirror stop/start** — `aba -d mirror stop` and `aba -d mirror start` for all registry vendors.
+- **Idempotent mirror install** — Interrupted installs can be safely resumed from any point.
+- **`older` version keyword** — Select the previous-minus-one OCP release in `aba.conf` or the TUI.
+- **Exclusion warnings** — Warns when configured operators or images are excluded from mirroring.
+- **Network cross-validation** — `verify-config` checks gateway is within machine CIDR and detects IP collisions.
 
 ### Changed
 
-- **Registry install is fully idempotent** — Removed the fast-path/skip-to-postcfg pattern from all six registry installers. Each step now runs normally and no-ops if already complete, making interrupted installs safely resumable from any point.
-- **Quay stop/start reliability** — Stop now waits up to 60 seconds for the port to close (was 2 seconds). Start waits up to 5 minutes for the Quay backend to initialize (was 2 minutes). Prevents the recurring race condition where restart fails because the port hasn't been released.
-- **Improved DNS warnings** — Replaced the confusing warn-then-success two-liner with a single actionable message suggesting `aba setup dns` or adding the cluster DNS server to `/etc/resolv.conf`.
-- **OMR install robustness** — Eliminated redundant `podman load` that could push the OMR health check past its timeout. Corrupt cached binaries are now detected and re-extracted automatically.
+- **OCP 5.x readiness** — Updated download URLs and channel handling for OCP 5.x releases.
+- **Uninstall preserves data** — `aba uninstall` keeps registry data by default; use `--delete-data` to remove it.
+- **Quay startup reliability** — Longer timeouts for stop (60s) and start (10 min) with visible progress spinner.
+- **TUI safety defaults** — All destructive dialogs (delete, clean, shutdown) now default to Cancel.
+- **NTP via native ABI config** — Uses `additionalNTPSources` in agent-config instead of writing chrony files directly.
 
 ### Fixed
 
-- **Docker registry install not idempotent** — If a Docker container existed but was stopped (e.g. from a failed install), re-running `install` aborted instead of recovering. Now removes the stale container and recreates it. Also added running-container skip to remote Docker install.
-- **`aba setup dns` crash on fresh systems** — Script crashed silently when `nmcli` returned no DNS entries due to `pipefail`. Also fixed all `tools/` scripts swallowing messages when run directly.
-- **`aba setup ntp` wrong firewall network** — Allow-network was derived from the wrong interface when `--bastion-ip` was specified.
-- **Single-label base domains rejected** — Domains like `lab` or `local` were incorrectly rejected by validation in CLI, TUI, and config checks.
-- **Whitespace trim stripped all chars** — TUI operator basket names could be silently corrupted when trimming trailing whitespace removed more than one character.
-- **`aba import` safety** — Reserved names (`.`, `..`, `/`, empty) are now rejected before `rm -rf`. Kubeconfig directory existence is checked before `cd`. Cluster name is validated. Stale `.available` marker no longer causes wrong image source auto-detection.
-- **Day-2 `eval` injection** — `.wait` gate files are now parsed with safe array expansion instead of `eval`.
-- **SIGINT in TUI progress** — Ctrl-C during a progress dialog no longer produces a false success exit code.
-- **Version dedup substring match** — Version 4.2 could incorrectly match 4.22 in the version list; now uses exact delimited matching.
-- **Platform read from wrong config** — TUI cluster menu read the platform from `aba.conf` instead of the cluster's own `cluster.conf`.
-- **Mirror status edge cases** — OCP version shows `(not set)` when empty instead of a blank. Operator count handles missing ISC file. Monitor Installation menu only appears for actual installs.
-- **Image ref validation** — All additional image references are validated before writing to `images.conf`, preventing later mirror failures from malformed refs.
-- **TCP probe port extraction** — Port was incorrectly parsed when the URL had no explicit port. DNS VIP checks now skip CNAME records. IPv4 addresses rejected as base domain. Leading-zero worker counts rejected.
-- **oc-mirror download for EC versions** — Engineering candidate builds that don't publish `oc-mirror` now fall back to the pinned stable channel instead of failing.
-- **KVM Platform Settings** — Now checks `~/.kvm.conf` before the template, preventing stale defaults.
-- **Bundle registry checks** — Made vendor-agnostic instead of assuming Quay, so Docker and OMR bundles work correctly.
-- **Quay start readiness IPv6** — `_reg_quay_ready()` used `localhost` which resolved to `::1`; pasta/rootless podman only forwards on IPv4, causing curl TLS failures (HTTP 000). Now uses `127.0.0.1` explicitly.
-- **Quay "already running" without backend** — `reg_start_vendor()` declared Quay running when the port was listening, but Quay's nginx opens the port immediately while the backend (quay-app + postgres) takes 2-4 minutes. Now verifies backend health before returning success.
+- **Proxy bootstrap failures** — Agent IPs and cluster networks now included in `no_proxy`.
+- **Docker registry resume** — Stopped containers from a failed install are now recovered instead of aborting.
+- **`aba setup dns` crash** — Fixed silent crash on fresh systems when `nmcli` returned no DNS entries.
+- **`aba setup ntp` wrong network** — Firewall allow-network was derived from the wrong interface.
+- **Single-label domains** — Domains like `lab` or `local` no longer rejected by validation.
+- **oc-mirror for EC builds** — Engineering candidate builds that don't publish `oc-mirror` now fall back to stable channel.
+- **Ctrl-C false success** — Install no longer reports success after Ctrl-C interruption.
+- **VIP auto-allocation** — Explicitly set VIPs are no longer overwritten.
+- **Security hardening** — Eval injection guard, temp directory permissions, and password masking in logs.
 
 ---
 
