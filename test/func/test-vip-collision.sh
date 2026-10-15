@@ -37,11 +37,24 @@ trap _cleanup EXIT
 _orig_verify_conf=$(grep '^verify_conf=' aba.conf 2>/dev/null | head -1 \
 	| sed 's/^verify_conf=//; s/[[:space:]].*//; s/#.*//')
 
+# Save the real dnsmasq marker so tests can toggle it without destroying content
+_dns_marker="/etc/dnsmasq.d/aba-upstream.conf"
+_dns_backup=""
+if sudo test -f "$_dns_marker"; then
+	_dns_backup=$(mktemp)
+	sudo cp -p "$_dns_marker" "$_dns_backup"
+fi
+
 _restore_verify_conf() {
 	local _val="${_orig_verify_conf:-all}"
 	replace-value-conf -n verify_conf -v "$_val" -f aba.conf 2>/dev/null || true
 }
-trap '_restore_verify_conf; _cleanup' EXIT
+_restore_dns_marker() {
+	if [ -n "$_dns_backup" ] && [ -f "$_dns_backup" ]; then
+		sudo cp -p "$_dns_backup" "$_dns_marker"
+	fi
+}
+trap '_restore_verify_conf; _restore_dns_marker; sudo rm -f "$_dns_backup" 2>/dev/null; _cleanup' EXIT
 
 # Skip DNS checks — we only want to test VIP validation logic
 replace-value-conf -n verify_conf -v conf -f aba.conf
@@ -278,12 +291,16 @@ _test_auto_alloc() {
 
 	[ -f mirror.conf ] || touch mirror.conf
 
-	# Simulate ABA-managed DNS marker if requested
+	# Toggle ABA-managed DNS marker for this test case
 	if [ "$aba_dns" = "1" ]; then
 		sudo mkdir -p /etc/dnsmasq.d
-		sudo touch /etc/dnsmasq.d/aba-upstream.conf
+		if [ -n "$_dns_backup" ] && [ -f "$_dns_backup" ]; then
+			sudo cp -p "$_dns_backup" "$_dns_marker"
+		else
+			sudo touch "$_dns_marker"
+		fi
 	else
-		sudo rm -f /etc/dnsmasq.d/aba-upstream.conf
+		sudo rm -f "$_dns_marker"
 	fi
 
 	local output="" rc=0
@@ -363,8 +380,8 @@ _test_auto_alloc "auto-alloc: abort when external DNS (no dnsmasq marker)" \
 # Use _test_vip for this since SNO skips VIP checks entirely
 # (already covered by existing tests above)
 
-# Restore dnsmasq marker if it existed before (bastion normally has it)
-sudo touch /etc/dnsmasq.d/aba-upstream.conf 2>/dev/null || true
+# Restore the real dnsmasq marker content (trap handler also restores on abnormal exit)
+_restore_dns_marker
 
 # -----------------------------------------------------------------------
 # Summary
