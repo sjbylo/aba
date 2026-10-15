@@ -13,21 +13,7 @@ reg_remote_pre_install "$_OMR_VENDOR"
 aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
-# Pre-install assertion: detect stale state.
-# Skip on resume — if the registry is responding, these are our resources.
-if ! probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
-	_stale=""
-	$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-	$_ssh "systemctl --user is-active quay.service &>/dev/null || sudo systemctl is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
-	$_ssh "test -f ~/.config/containers/systemd/quay.container 2>/dev/null || test -f /etc/containers/systemd/quay.container 2>/dev/null" && _stale+="  Leftover Quadlet file (quay.container)"$'\n'
-	if [ -n "$_stale" ]; then
-		aba_abort \
-			"Stale registry state detected on $reg_host before install:" \
-			"$_stale" \
-			"A previous install was not fully cleaned up." \
-			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
-	fi
-fi
+reg_pre_install_stale_check "$_OMR_VENDOR" "$_ssh"
 
 ask "Install $_OMR_VENDOR registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 

@@ -13,21 +13,7 @@ aba_progress "START|reg_env"
 
 reg_check_quay_resources "$_ssh"
 
-# Pre-install assertion: detect stale state from a previous install.
-# Skip on resume — if the registry is responding, these are our resources.
-if ! probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
-	_stale=""
-	$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-	$_ssh "podman secret ls --format '{{.Name}}' | grep -q redis_pass" && _stale+="  redis_pass podman secret exists"$'\n'
-	$_ssh "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" && _stale+="  Quay containers still present"$'\n'
-	if [ -n "$_stale" ]; then
-		aba_abort \
-			"Stale registry state detected on $reg_host before install:" \
-			"$_stale" \
-			"A previous install was not fully cleaned up." \
-			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
-	fi
-fi
+reg_pre_install_stale_check quay "$_ssh"
 
 ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 

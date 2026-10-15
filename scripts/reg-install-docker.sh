@@ -149,28 +149,15 @@ aba_progress "START|reg_postcfg"
 # can recover with 'aba verify' or 'aba uninstall' if networking fails.
 reg_post_install "$REGISTRY_CERTS_DIR/ca.crt" docker
 
-cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
-	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
-	Installed from: $(hostname -f):$PWD
-	Date: $(date '+%Y-%m-%d %H:%M:%S')
-
-	On host $(hostname -f):
-	To verify:    cd $PWD && aba verify
-	To uninstall: cd $PWD && aba uninstall
-BREADCRUMB
-
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
 
-# Verify connectivity after saving state.
-# Report diagnostic facts without guessing the cause — network setups vary widely
-# (NAT, VPN, multi-homed, hairpin). Aborting is correct because oc-mirror/sync need the FQDN.
-if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
-	-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+# Phase 1: Wait for TLS listener (no auth = no lockout risk)
+if ! try_cmd -n 10 -d 1 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
+	probe_host --any --quick "$reg_url/v2/" "registry readiness"; then
 	_local_ips=$(hostname -I 2>/dev/null | xargs)
 	_localhost_ok="no"
-	curl -k -fsSL --connect-timeout 10 "https://localhost:$reg_port/v2/" \
-		-u "$reg_user:$reg_pw" >/dev/null 2>&1 && _localhost_ok="yes"
+	probe_host --any --quick "https://localhost:$reg_port/v2/" "localhost" && _localhost_ok="yes"
 	_ip_is_local="no"
 	echo "$_local_ips" | grep -qw "${fqdn_ip:-}" 2>/dev/null && _ip_is_local="yes"
 
@@ -187,6 +174,14 @@ if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
 		"  - Firewall hairpin (sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT)" \
 		"  - Firewall blocking port $reg_port (sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD)" \
 		"" \
+		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+fi
+
+# Phase 2: Single auth check — NO retry to avoid brute-force lockout
+if ! reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
+	aba_abort \
+		"Registry is reachable but authentication failed on $reg_host:$reg_port." \
+		"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi
 

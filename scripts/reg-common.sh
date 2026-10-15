@@ -688,6 +688,14 @@ reg_post_install() {
 	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"
 	aba_success "Registry installed/configured successfully!"
 	aba_info "$vendor registry at $_where, root: $reg_root"
+
+	# Write breadcrumb to registry data directory
+	if [ "$via_ssh" ]; then
+		local _ssh_cmd="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
+		reg_write_breadcrumb "$_ssh_cmd"
+	else
+		reg_write_breadcrumb
+	fi
 }
 
 # --- reg_cleanup_backup -------------------------------------------------------
@@ -819,6 +827,12 @@ reg_stale_report() {
 				stale+="  Quay containers still present"$'\n'
 			_reg_probe_set "$ssh_cmd" "_o=\$(podman secret ls --format '{{.Name}}') || exit \$?; echo \"\$_o\" | grep -q redis_pass" "redis_pass secret" && \
 				stale+="  redis_pass podman secret still exists"$'\n'
+			# Ansible-deployed Quay may create systemd user services
+			rc=0
+			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay-app.service 2>/dev/null || true") || rc=$?
+			if [ "$rc" -ne 255 ] && [ "$rc" -ne 127 ]; then
+				echo "$state" | grep -qx "active" && stale+="  quay-app.service still active"$'\n'
+			fi
 			;;
 		docker)
 			if [ "${REG_DELETE_DATA:-}" ]; then
@@ -848,6 +862,8 @@ reg_stale_report() {
 				aba_abort "Registry probe failed (quay.service, rc=$rc)"
 			fi
 			echo "$state" | grep -qx "active" && stale+="  quay.service still active"$'\n'
+			_reg_host_run "$ssh_cmd" "test -f ~/.config/containers/systemd/quay.container 2>/dev/null || test -f /etc/containers/systemd/quay.container 2>/dev/null" 2>/dev/null && \
+				stale+="  Leftover Quadlet file (quay.container)"$'\n'
 			;;
 		*)
 			aba_abort "reg_stale_report: unknown vendor '$vendor'"
@@ -858,6 +874,61 @@ reg_stale_report() {
 	# via `&&`, which must not make this function (or its $() caller) fail under set -e.
 	printf '%s' "$stale"
 	return 0
+}
+
+# --- reg_pre_install_stale_check ----------------------------------------------
+# Detect stale state from a previous install that was not fully uninstalled.
+# Wraps reg_stale_report with the standard pre-install guard: if the registry
+# is already responding, skip the check (those are our resources from a resume).
+# For Docker, stopped containers are excluded (the install script handles them).
+# Usage: reg_pre_install_stale_check <vendor> [ssh_cmd]
+reg_pre_install_stale_check() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+
+	# Registry responding = our resources from a resume — skip
+	if probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+		return 0
+	fi
+
+	local _stale
+	_stale=$(reg_stale_report "$vendor" "$ssh_cmd")
+
+	# Docker: stopped containers are cleaned up during install (removed and
+	# recreated), so don't flag them as stale during pre-install.
+	if [ "$vendor" = "docker" ]; then
+		_stale=$(echo "$_stale" | grep -v "registry container still present" || true)
+	fi
+
+	if [ -n "$_stale" ]; then
+		local _where="${reg_host:-localhost}"
+		[ -z "$ssh_cmd" ] && _where="localhost"
+		aba_abort \
+			"Stale registry state detected on $_where before install:" \
+			"$_stale" \
+			"A previous install was not fully cleaned up." \
+			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+	fi
+}
+
+# --- reg_write_breadcrumb -----------------------------------------------------
+# Write INSTALLED_BY_ABA.md to the registry data directory.
+# Usage: reg_write_breadcrumb [ssh_cmd]
+reg_write_breadcrumb() {
+	local ssh_cmd="${1:-}"
+	local _text="Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
+Installed from: $(hostname -f):$PWD
+Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+On host $(hostname -f):
+To verify:    cd $PWD && aba verify
+To uninstall: cd $PWD && aba uninstall"
+
+	if [ -n "$ssh_cmd" ]; then
+		echo "$_text" | $ssh_cmd "cat > $reg_root/INSTALLED_BY_ABA.md"
+	else
+		echo "$_text" > "$reg_root/INSTALLED_BY_ABA.md"
+	fi
 }
 
 # --- reg_pre_uninstall ---------------------------------------------------------
@@ -993,6 +1064,11 @@ reg_omr_remove() {
 			./"$_bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
 		fi
 	fi
+
+	# Quadlet removal triggers async systemd processing — wait for the service
+	# to fully deactivate before checking for stale state.
+	try_cmd -n 10 -d 1 -m "Wait for quay.service to stop on $_where" -- \
+		_reg_host_run "$ssh_cmd" "! systemctl --user is-active quay.service 2>/dev/null && ! sudo systemctl is-active quay.service 2>/dev/null" >/dev/null 2>&1 || true
 
 	local _stale
 	_stale=$(reg_stale_report "$_OMR_VENDOR" "$ssh_cmd")
@@ -1130,7 +1206,11 @@ reg_finish_uninstall() {
 		aba_info "Saved the registry login in $reg_root/.aba-reuse-creds for the next install."
 	fi
 
-	rm -rf "${regcreds_dir:?}/"*
+	rm -rf "${regcreds_dir:?}"
+
+	# Remove the local regcreds symlink (now dangling) so reinstall can recreate it
+	[ -L "regcreds" ] && rm -f "regcreds"
+
 	aba_success "${vendor} registry ${msg}"
 }
 
@@ -1285,17 +1365,6 @@ reg_remote_post_install() {
 			"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 	fi
-
-	# Leave breadcrumb on remote
-	$_ssh "cat > $reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
-		Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
-		Installed from: $(hostname -f):$PWD
-		Date: $(date '+%Y-%m-%d %H:%M:%S')
-
-		On host $(hostname -f):
-		To verify:    cd $PWD && aba verify
-		To uninstall: cd $PWD && aba uninstall
-	BREADCRUMB
 }
 
 # --- reg_stop_vendor ----------------------------------------------------------
@@ -1361,10 +1430,9 @@ reg_start_vendor() {
 		# Quay: port opens immediately (nginx) but the backend may still be
 		# initializing.  Verify the health endpoint before declaring "running".
 		if [ "$vendor" = "quay" ] && ! _reg_quay_ready "$ssh_cmd" "$port"; then
-			aba_info "Registry on $_where has port $port listening but Quay backend is not ready — waiting ..."
-			if ! try_cmd -n 150 -d 2 -m "Quay backend readiness on $_where" -q -- \
+			if ! aba_wait_show "Waiting for Quay backend on $_where" 2 600 \
 				_reg_quay_ready "$ssh_cmd" "$port"; then
-				aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 300s"
+				aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 600s"
 			fi
 		fi
 		aba_info "Registry on $_where is already running (port $port listening)"
@@ -1389,19 +1457,18 @@ reg_start_vendor() {
 	esac
 
 	# Wait for port to come up (registry may need a moment)
-	if ! try_cmd -n 10 -d 1 -m "Wait for port $port on $_where" -q -- \
+	if ! aba_wait_show "Waiting for port $port on $_where" 1 15 \
 		_reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
-		aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 10s"
+		aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 15s"
 	fi
 
 	# Quay uses nginx in front of quay-app; the port opens immediately (nginx)
 	# but the backend needs time to initialize.  Wait for a non-502 response.
 	# Quay can take 2-4 minutes to fully start (database init, migrations).
 	if [ "$vendor" = "quay" ]; then
-		aba_info "Waiting for Quay backend to become ready (this can take 2-4 minutes) ..."
-		if ! try_cmd -n 150 -d 2 -m "Quay backend readiness on $_where" -q -- \
+		if ! aba_wait_show "Waiting for Quay backend on $_where" 2 600 \
 			_reg_quay_ready "$ssh_cmd" "$port"; then
-			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 300s"
+			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 600s"
 		fi
 	fi
 

@@ -157,16 +157,6 @@ aba_progress "START|reg_postcfg"
 
 reg_post_install "$reg_root/ssl.cert" "$_OMR_VENDOR"
 
-cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
-	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
-	Installed from: $(hostname -f):$PWD
-	Date: $(date '+%Y-%m-%d %H:%M:%S')
-
-	On host $(hostname -f):
-	To verify:    cd $PWD && aba verify
-	To uninstall: cd $PWD && aba uninstall
-BREADCRUMB
-
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"
 
