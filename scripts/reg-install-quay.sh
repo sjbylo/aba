@@ -104,22 +104,7 @@ if [ -z "$_quay_ssh_ok" ]; then
 	rm -f "$flag_file"
 fi
 
-# Pre-install assertion: detect stale state from a previous install that
-# was not fully uninstalled. Skip on resume — if the registry is responding,
-# these are our running resources, not orphans.
-if ! probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
-	_stale=""
-	ss -tlnp | grep -q ":${reg_port} " && _stale+="  Port $reg_port still listening"$'\n'
-	podman secret ls --format '{{.Name}}' | grep -q redis_pass && _stale+="  redis_pass podman secret exists"$'\n'
-	podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres' && _stale+="  Quay containers still present"$'\n'
-	if [ -n "$_stale" ]; then
-		aba_abort \
-			"Stale registry state detected on localhost before install:" \
-			"$_stale" \
-			"A previous install was not fully cleaned up." \
-			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
-	fi
-fi
+reg_pre_install_stale_check quay
 
 ask "Install Quay mirror registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
@@ -176,16 +161,6 @@ aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 
 reg_post_install "$reg_root/quay-rootCA/rootCA.pem" quay
-
-cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
-	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
-	Installed from: $(hostname -f):$PWD
-	Date: $(date '+%Y-%m-%d %H:%M:%S')
-
-	On host $(hostname -f):
-	To verify:    cd $PWD && aba verify
-	To uninstall: cd $PWD && aba uninstall
-BREADCRUMB
 
 aba_progress "DONE|reg_postcfg"
 reg_cleanup_backup
