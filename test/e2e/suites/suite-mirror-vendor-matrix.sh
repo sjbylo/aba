@@ -40,8 +40,9 @@ DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 
-# Small public image for push/check tests (no auth needed to pull from conN)
-_IMG_SRC="docker.io/library/busybox:latest"
+# Small public image for push/check tests (no auth needed to pull)
+# Use Red Hat registry — no rate limit (Docker Hub throttles unauthenticated pulls)
+_IMG_SRC="registry.access.redhat.com/ubi9/ubi-micro:latest"
 _IMG1="e2e-vendor-test/img1:v1"
 _IMG2="e2e-vendor-test/img2:v1"
 
