@@ -5498,4 +5498,3 @@ require_internet_and_pull_secret() {
 			"and save it to $pull_secret_file"
 	fi
 }
-
