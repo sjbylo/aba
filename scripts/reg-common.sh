@@ -735,7 +735,10 @@ _reg_port_closed() {
 }
 
 # --- _reg_quay_ready ----------------------------------------------------------
-# Returns 0 when Quay backend is ready (health endpoint returns non-502/503).
+# Returns 0 when Quay backend is serving requests (/v2/ returns 401 or 200).
+# The /health/instance endpoint is unreliable: it reports 503 when
+# registry_gunicorn is still initializing, even though the registry
+# is already functional and serving /v2/ requests.
 # Usage: _reg_quay_ready [<ssh_cmd>] <port>
 _reg_quay_ready() {
 	local ssh_cmd="$1"
@@ -743,8 +746,9 @@ _reg_quay_ready() {
 	local _code
 	# Use 127.0.0.1 instead of localhost: localhost may resolve to ::1 (IPv6)
 	# and pasta/rootless podman may only forward on IPv4, causing TLS failures.
-	_code=$(_reg_host_run "$ssh_cmd" "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:${port}/health/instance 2>/dev/null") || _code="000"
-	[ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]
+	_code=$(_reg_host_run "$ssh_cmd" "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:${port}/v2/ 2>/dev/null") || _code="000"
+	# 401 = auth required (registry up), 200 = open access (registry up)
+	[ "$_code" = "401" ] || [ "$_code" = "200" ]
 }
 
 # --- _reg_probe_set -----------------------------------------------------------
@@ -787,6 +791,8 @@ reg_rm_data_dir() {
 			quay)  $ssh_cmd "$SUDO rm -rf $dir" ;;
 			*)     $ssh_cmd "rm -rf $dir" ;;
 		esac
+		# Remove empty parent data_dir (never HOME)
+		$ssh_cmd "p=\$(dirname $dir); [ \"\$p\" != \"\$HOME\" ] && [ -d \"\$p\" ] && rmdir \"\$p\"" 2>/dev/null || true
 	else
 		[ -d "$dir" ] || return 0
 		aba_info "Removing registry data at $dir ..."
@@ -794,6 +800,12 @@ reg_rm_data_dir() {
 			quay)  $SUDO rm -rf "$dir" ;;
 			*)     rm -rf "$dir" ;;
 		esac
+		# Remove empty parent data_dir (never HOME)
+		local parent
+		parent=$(dirname "$dir")
+		if [ "$parent" != "$HOME" ] && [ -d "$parent" ]; then
+			rmdir "$parent" 2>/dev/null || true
+		fi
 	fi
 }
 
