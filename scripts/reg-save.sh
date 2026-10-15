@@ -180,6 +180,18 @@ fi
 
 aba_progress "DONE|sv_save"
 
+# Strip oc-mirror's working-dir/.history from the archive.
+# oc-mirror v2 bundles its working-dir (including .history) into the tar.
+# On the load (disconnected) side, the stale .history makes oc-mirror skip
+# populating the internal cache → "manifest unknown" for every image.
+for _tar in data/mirror_*.tar; do
+	[ -f "$_tar" ] || continue
+	if tar tf "$_tar" 2>/dev/null | grep -q '^working-dir/\.history'; then
+		tar --delete -f "$_tar" --wildcards 'working-dir/.history*' 2>/dev/null || true
+		aba_debug "Stripped stale .history from $(basename "$_tar")"
+	fi
+done
+
 # Wait for all background CLI downloads before packing aba-transfer.tar.
 # Downloads were kicked off in sv_tools (non-blocking run_once).
 # This is a visible background wait — if downloads are still running,
