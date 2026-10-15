@@ -16,7 +16,8 @@ aba_progress "START|reg_env"
 if ! probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
 	_stale=""
 	$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
-	$_ssh "podman ps -a --format '{{.Names}}' | grep -q -E '^registry(-${reg_port})?$'" && _stale+="  registry container still present"$'\n'
+	# Only flag a running container as stale — stopped containers are cleaned up during install
+	$_ssh "podman ps --format '{{.Names}}' | grep -q -E '^registry(-${reg_port})?$'" && _stale+="  registry container still running"$'\n'
 	if [ -n "$_stale" ]; then
 		aba_abort \
 			"Stale registry state detected on $reg_host before install:" \
@@ -98,40 +99,44 @@ else
 
 		htpasswd -Bbn '$reg_user' '$reg_pw' > '$REGISTRY_AUTH_DIR/htpasswd'
 
-		if podman ps -a --format '{{.Names}}' | grep -q '^registry-${reg_port}\$'; then
-			echo '[ABA] Error: Container registry-${reg_port} already exists. Clean up with: podman rm -f registry-${reg_port}' >&2
-			exit 1
-		fi
-		podman run -d \
-			-p ${reg_port}:5000 \
-			--restart=always --name registry-${reg_port} \
-			-v '${REGISTRY_DATA_DIR}:/var/lib/registry:Z' \
-			-v '${REGISTRY_CERTS_DIR}:/certs:Z' \
-			-v '${REGISTRY_AUTH_DIR}:/auth:Z' \
-			-e REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
-			-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
-			-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
-			-e REGISTRY_AUTH=htpasswd \
-			-e 'REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm' \
-			-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
-			docker.io/library/registry:latest
-
-		# Ensure podman containers with --restart=always survive VM reboot
-		if [ \"\$(id -u)\" -ne 0 ]; then
-			if command -v loginctl >/dev/null; then
-				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
-					echo 'Enabling loginctl linger for rootless podman restart persistence ...'
-					$SUDO loginctl enable-linger \"\$USER\"
-				fi
-			fi
-			if ! systemctl --user is-enabled podman-restart.service >/dev/null 2>&1; then
-				echo 'Enabling podman-restart service ...'
-				systemctl --user enable podman-restart.service
-			fi
+		if podman ps --format '{{.Names}}' | grep -q '^registry-${reg_port}\$'; then
+			echo '[ABA] Registry container registry-${reg_port} already running — skipping install' >&2
 		else
-			if ! systemctl is-enabled podman-restart.service >/dev/null 2>&1; then
-				echo 'Enabling podman-restart service ...'
-				systemctl enable podman-restart.service
+			if podman ps -a --format '{{.Names}}' | grep -q '^registry-${reg_port}\$'; then
+				echo '[ABA] Removing stale container registry-${reg_port} from a previous failed install ...' >&2
+				podman rm -f registry-${reg_port}
+			fi
+			podman run -d \
+				-p ${reg_port}:5000 \
+				--restart=always --name registry-${reg_port} \
+				-v '${REGISTRY_DATA_DIR}:/var/lib/registry:Z' \
+				-v '${REGISTRY_CERTS_DIR}:/certs:Z' \
+				-v '${REGISTRY_AUTH_DIR}:/auth:Z' \
+				-e REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+				-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
+				-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
+				-e REGISTRY_AUTH=htpasswd \
+				-e 'REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm' \
+				-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+				docker.io/library/registry:latest
+
+			# Ensure podman containers with --restart=always survive VM reboot
+			if [ \"\$(id -u)\" -ne 0 ]; then
+				if command -v loginctl >/dev/null; then
+					if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+						echo 'Enabling loginctl linger for rootless podman restart persistence ...'
+						$SUDO loginctl enable-linger \"\$USER\"
+					fi
+				fi
+				if ! systemctl --user is-enabled podman-restart.service >/dev/null 2>&1; then
+					echo 'Enabling podman-restart service ...'
+					systemctl --user enable podman-restart.service
+				fi
+			else
+				if ! systemctl is-enabled podman-restart.service >/dev/null 2>&1; then
+					echo 'Enabling podman-restart service ...'
+					systemctl enable podman-restart.service
+				fi
 			fi
 		fi
 	"; then

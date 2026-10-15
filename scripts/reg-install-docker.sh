@@ -89,10 +89,8 @@ if podman ps --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
 	aba_info "Registry container $REGISTRY_NAME already running — skipping install"
 else
 	if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
-		aba_abort "Container '$REGISTRY_NAME' already exists but is not running." \
-			"A previous install may have failed or was not fully uninstalled." \
-			"Clean up with: podman rm -f $REGISTRY_NAME" \
-			"Then retry: aba -d $(basename "$PWD") install"
+		aba_info "Removing stale container '$REGISTRY_NAME' from a previous failed install ..."
+		podman rm -f "$REGISTRY_NAME"
 	fi
 
 	# --- Start the registry container ---

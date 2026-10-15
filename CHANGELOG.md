@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- **Docker registry install not idempotent** — If a Docker container existed but was stopped (e.g. from a failed install), re-running `install` aborted instead of recovering. Now removes the stale container and recreates it. Also added running-container skip to remote Docker install.
 - **`aba setup dns` crash on fresh systems** — Script crashed silently when `nmcli` returned no DNS entries due to `pipefail`. Also fixed all `tools/` scripts swallowing messages when run directly.
 - **`aba setup ntp` wrong firewall network** — Allow-network was derived from the wrong interface when `--bastion-ip` was specified.
 - **Single-label base domains rejected** — Domains like `lab` or `local` were incorrectly rejected by validation in CLI, TUI, and config checks.
