@@ -3628,27 +3628,27 @@ Verified against dev branch source code. Do NOT re-report these unless the behav
 | #944 | "Target Version Set" dialog wrong shortcut keys — now shows (Y)/(S) |
 | #960 | `_require_podman` blocks DISCO-mode ISC viewing |
 | #961 | Podman preflight failure permanently cached |
-| #445 | Advanced menu Help mentions "E - Reset Execution Mode" |
-| #655 | Typo "Deleteing" in make-bundle.sh |
-| #659 | Typo "endpoiont" in verify-config.sh |
-| #702 | Typo "synchonized" in aba.sh |
-| #711 | Stray `set -x` in reg-load.sh |
-| #713 | Typo "hirerachy" in vmw-create.sh |
-| #734 | Typo "Signatires" in day2-config-osus.sh |
-| #736 | Typo "nuse" in configure-pxe.sh |
+| #445 | Advanced menu Help mentions "E - Reset Execution Mode" | ALREADY FIXED — no references remain |
+| #655 | Typo "Deleteing" in make-bundle.sh | ALREADY FIXED |
+| #659 | Typo "endpoiont" in verify-config.sh | ALREADY FIXED |
+| #702 | Typo "synchonized" in aba.sh | ALREADY FIXED |
+| #711 | Stray `set -x` in reg-load.sh | NOT A BUG — intentional debug flag `[ "$1" == "y" ] && set -x` |
+| #713 | Typo "hirerachy" in vmw-create.sh | ALREADY FIXED |
+| #734 | Typo "Signatires" in day2-config-osus.sh | ALREADY FIXED |
+| #736 | Typo "nuse" in configure-pxe.sh | ALREADY FIXED |
 | #900 | Welcome screen ASCII art broken |
 | #1163 | Mirror status values do not share a column |
-| #1164 | Offline CLI message spells CentOS as Centos |
-| #1165 | aba.conf operator-set example had a stray parenthesis |
-| #1166 | aba.conf told you to run aba catalog |
+| #1164 | Offline CLI message spells CentOS as Centos | ALREADY FIXED |
+| #1165 | aba.conf operator-set example had a stray parenthesis | ALREADY FIXED |
+| #1166 | aba.conf told you to run aba catalog | ALREADY FIXED |
 | #1161 | Back on the channel page ends the TUI |
 
 ### OPEN — HIGH / CRITICAL
 
 | Bug | Title | File | Notes |
 |-----|-------|------|-------|
-| #942 | SIGINT during install → TUI shows "Success" | tui-lib.sh:695 | `PIPESTATUS[0]=0`, no `.install-complete` check |
-| #950 | `aba import --force --name` can delete ABA dirs | cluster-import.sh:203 | No reserved-name validation on `rm -rf` |
+| #942 | SIGINT during install → TUI shows "Success" | tui-lib.sh:676 | FIXED — `_got_int` flag detects SIGINT, overrides false `PIPESTATUS[0]=0` to 130 |
+| #950 | `aba import --force --name` can delete ABA dirs | cluster-import.sh:162 | FIXED — added `_valid_cluster_name` check before `rm -rf` |
 | #959 | Operator Sets adds 0 operators to basket | tui-mirror.sh:1720-1737 | INCONCLUSIVE — code looks correct, TUI-verified once, needs re-test |
 
 ### OPEN — MEDIUM
@@ -3664,13 +3664,13 @@ Verified against dev branch source code. Do NOT re-report these unless the behav
 | #1195 | aba -d mirror version is not the ABA version | aba.sh | Disco |
 | #1194 | aba ocp-versions lists the local installer as an available version | aba.sh | Conno |
 | #1193 | aba ocp-versions labels the previous minor as Previous | aba.sh | Conno |
-| #1192 | aba setup and aba remove reject --yes | help-setup.txt | Disco |
-| #1191 | Import help says shell opens an oc shell | help-import.txt | Disco |
-| #1190 | aba import prints a shell error when the kubeconfig directory is missing | cluster-import.sh | Disco |
-| #1189 | Cluster step help does not list install | Makefile.cluster | Disco |
-| #1188 | Cluster help omits install from the --step values | help-cluster.txt | Disco |
-| #1187 | Mirror help says --data-dir replaces ~/quay-install | help-mirror.txt | Disco |
-| #1186 | Mirror help omits the quay-ng vendor | help-mirror.txt | Disco |
+| #1192 | aba setup and aba remove reject --yes | help-setup.txt | ALREADY FIXED — `--yes` documented for setup/remove |
+| #1191 | Import help says shell opens an oc shell | help-import.txt | ALREADY FIXED — now says "Print KUBECONFIG export command" |
+| #1190 | aba import prints a shell error when the kubeconfig directory is missing | cluster-import.sh:43 | FIXED — check directory exists before `cd` |
+| #1189 | Cluster step help does not list install | Makefile.cluster | ALREADY FIXED — `install` target has `## Install the cluster` |
+| #1188 | Cluster help omits install from the --step values | help-cluster.txt | ALREADY FIXED — `--step` shows `cluster.conf\|agentconf\|iso\|install\|mon` |
+| #1187 | Mirror help says --data-dir replaces ~/quay-install | help-mirror.txt | ALREADY FIXED — now says "Parent directory for registry data (default: ~)" |
+| #1186 | Mirror help omits the quay-ng vendor | help-mirror.txt | ALREADY FIXED — shows `auto\|quay\|docker\|omr` (quay-ng renamed to omr) |
 | #1185 | aba -d mirror help lists uninstall and not install | Makefile.mirror | Disco |
 | #1184 | aba -d mirror --help shows the top-level help | aba.sh | Disco |
 | #1183 | CLI help shows makefile notes as section titles | cli/Makefile | Disco |
@@ -3681,32 +3681,32 @@ Verified against dev branch source code. Do NOT re-report these unless the behav
 | #1178 | Mirror verify help points at the wrong credential directory | Makefile.mirror | Disco |
 | #1177 | aba mirror checks the OpenShift version before the mirror name | setup-mirror.sh | Disco, empty version |
 | #1176 | aba help says aba download downloads the CLI tools | Makefile | Disco |
-| #1175 | The operator-set list omits all | aba.sh | Disco |
-| #1174 | Image list calls every directory mirror/images.conf | include_all.sh | Disco, dir not named mirror |
+| #1175 | The operator-set list omits all | aba.sh | ALREADY FIXED — `show-op-sets` includes "all" as first entry |
+| #1174 | Image list calls every directory mirror/images.conf | include_all.sh | FIXED — uses `basename "$mirror_dir"` for source column |
 | #1173 | Image list shows a line that image remove cannot delete | aba.sh | Disco |
-| #1172 | aba image remove says 1 image(s) | aba.sh | Disco |
-| #1171 | aba image remove exits 0 when one of the names is missing | aba.sh | Disco, empty dir |
-| #1170 | aba image add keeps earlier images when a later one is rejected | aba.sh | Disco, empty dir |
-| #1169 | A rejected aba image add still creates images.conf | aba.sh | Disco, empty dir |
-| #1168 | Mirror status leaves the OCP line blank when no version is set | mirror-status.sh | Conno, empty version |
-| #1167 | Channel help says fast gives early access to new features | tui-direct.sh | Conno, channel Help |
-| #1162 | Status says OCP ? configured when no version is set | repo-status.sh | Conno and disco |
-| #1160 | Offline error indents later sites further than the first | include_all.sh | Disco, no bundle |
+| #1172 | aba image remove says 1 image(s) | aba.sh | ALREADY FIXED — conditional plural `(( _removed == 1 )) && echo image \|\| echo images` |
+| #1171 | aba image remove exits 0 when one of the names is missing | aba.sh | ALREADY FIXED — exits 1 when no images removed |
+| #1170 | aba image add keeps earlier images when a later one is rejected | aba.sh | FIXED — validate all images before any writes |
+| #1169 | A rejected aba image add still creates images.conf | aba.sh | FIXED — validate all images before touch/write |
+| #1168 | Mirror status leaves the OCP line blank when no version is set | mirror-status.sh | FIXED — shows "(not set)" when version empty |
+| #1167 | Channel help says fast gives early access to new features | tui-direct.sh | ALREADY FIXED |
+| #1162 | Status says OCP ? configured when no version is set | repo-status.sh | ALREADY FIXED |
+| #1160 | Offline error indents later sites further than the first | include_all.sh | FIXED — consistent `  ` indent on all error lines |
 | #1159 | Add Image deletes spaces before checking the reference | tui-mirror.sh | Pool 1, `not an image` |
-| #1158 | Worker count 08 is accepted after an octal error | tui-cluster.sh | Pool 2, standard type |
-| #1157 | Clear Selection says 1 operators | tui-mirror.sh | Pool 2, one operator |
-| #1156 | Payload summary says 1 operator(s) | tui-mirror.sh | Pool 2, one operator |
-| #1155 | A cluster name that starts with a digit gets no explanation | aba.sh | Pool 2, name 1ocp |
+| #1158 | Worker count 08 is accepted after an octal error | tui-cluster.sh:1090 | FIXED — reject leading zeros with `^(0|[1-9][0-9]*)$` |
+| #1157 | Clear Selection says 1 operators | tui-mirror.sh | ALREADY FIXED — conditional pluralization |
+| #1156 | Payload summary says 1 operator(s) | tui-mirror.sh | ALREADY FIXED — conditional pluralization |
+| #1155 | A cluster name that starts with a digit gets no explanation | aba.sh | ALREADY FIXED — error says "must be a DNS label... start with letter" |
 | #1153 | First Tab on the cluster wizard focuses Next | tui-cluster.sh | Pool 2, Next persists |
 | #1154 | Cluster wizard help omits the base domain | tui-cluster.sh | Pool 2 |
 | #1152 | Upgrade risk prompt shows only the risk id | tui-mirror.sh | Pool 2, 4.21.34 to 4.22.15 |
-| #1151 | Wizard accepts an IPv4 address as the base domain | tui-cluster.sh | Pool 2, 10.0.0.1 |
+| #1151 | Wizard accepts an IPv4 address as the base domain | tui-cluster.sh:1039 | FIXED — reject all-numeric dot-separated values as IP addresses |
 | #1150 | Advanced offers Refresh for a cluster that was never installed | tui-cluster.sh | Pool 1, draft ocp |
 | #1149 | images.conf editor accepts a short sha256 digest | tui-mirror.sh | Pool 1, sha256:abc |
 | #1148 | Long operator name runs into its title in search results | tui-mirror.sh | Pool 2, zero-trust |
 | #1147 | Operator set names are cut off in the checklist | tui-mirror.sh | Pool 2, width 70 |
 | #1146 | Reinstall confirms only the uninstall command | abatui2.sh | Pool 2 |
-| #1145 | Reserved cluster name is reported twice | aba.sh | Pool 2, name mirror |
+| #1145 | Reserved cluster name is reported twice | aba.sh | ALREADY FIXED — commit `4c16ce86` |
 | #1144 | Rejected manual version stays on the backtitle | tui-direct.sh | Pool 1, 4.20.40x |
 | #1143 | aba -d image add reports success when the write fails | aba.sh | Pool 1, relative -d |
 | #1142 | Day-2 offers shutdown and delete when nothing is installed | tui-cluster.sh | Pool 1, draft ocp |
@@ -3719,32 +3719,32 @@ Verified against dev branch source code. Do NOT re-report these unless the behav
 | #1135 | First Tab on the actions menu focuses Exit | abatui2.sh | Pool 2 |
 | #1133 | Actions menu covers the backtitle at 80×24 | tui-lib.sh dlg() | Pools 1 and 2 |
 | #1134 | Resize while the actions menu is open clips the text | abatui2.sh | Pool 1, after 80×24 → 130×45 |
-| #500 | DIRECT Help says "Monitor Cluster" as main step | tui-direct.sh:838 | It's in Advanced, not main menu |
-| #602 | Day-2 label says "after mirror load/sync" in DIRECT | tui-cluster.sh:2140 | Verified again 2026-10-04 on the sno3-ext day-2 menu |
+| #500 | DIRECT Help says "Monitor Cluster" as main step | tui-direct.sh:868 | FIXED — removed Monitor Cluster from main workflow list |
+| #602 | Day-2 label says "after mirror load/sync" in DIRECT | tui-cluster.sh:2202 | FIXED — conditional: omits "(after mirror load/sync)" in DIRECT mode |
 | #940 | Arrow key platform selection picks wrong item | tui-cluster.sh:2037 | Down+Enter selects KVM instead of VMware |
-| #946 | Upgrade version dedup uses substring match | tui-mirror.sh:745 | `4.14.1` matches inside `4.14.10` |
-| #947 | TCP probe fails when API URL has no port | tui-cluster.sh:2278 | `_api_port` becomes hostname |
+| #946 | Upgrade version dedup uses substring match | tui-mirror.sh:854 | FIXED — delimited exact match `|ver|` prevents `4.14.1` matching `4.14.10` |
+| #947 | TCP probe fails when API URL has no port | tui-cluster.sh:2356 | FIXED — check for `:` before splitting; default port 6443 |
 | #953 | `_our_host_short` collision across mirrors | day2.sh:384 | Only first DNS label extracted |
-| #956 | `excl_platform` not reset on crash during save | tui-mirror.sh:658-681 | No trap guard for cleanup |
-| #958 | Import sets `image_source=mirror` when direct | cluster-import.sh:131 | Falls back to mirror if `.available` exists |
+| #956 | `excl_platform` not reset on crash during save | tui-mirror.sh:781 | FIXED — EXIT trap guard restores excl_platform on crash |
+| #958 | Import sets `image_source=mirror` when direct | cluster-import.sh:129 | FIXED — removed `mirror/.available` fallback; only IDMS/ITMS/ICSP on cluster triggers mirror mode |
 | #962 | `oc apply` overwrites multi-mirror CAs on cert change | day2.sh:192 | Should use `oc patch` like `_cert_new_key` branch |
-| #963 | DNS VIP lookup can capture CNAME instead of IP | tui-cluster.sh:735 | `head -1` grabs CNAME before A record |
-| #964 | Startup message uses global platform, not cluster's | tui-cluster.sh:2685 | Reads `aba.conf` not `cluster.conf` |
-| #965 | `mirror_save` missing `_invalidate_mirror_cache` | tui-mirror.sh:674 | `mirror_sync` has it, `mirror_save` doesn't |
-| #966 | `eval oc wait` in day2.sh custom manifests | day2.sh:359 | Code injection risk from `.wait` files |
+| #963 | DNS VIP lookup can capture CNAME instead of IP | tui-cluster.sh:755 | FIXED — filter dig output with `grep -E '^[0-9]+\.'` to skip CNAMEs |
+| #964 | Startup message uses global platform, not cluster's | tui-cluster.sh:2773 | FIXED — reads platform from cluster's own cluster.conf |
+| #965 | `mirror_save` missing `_invalidate_mirror_cache` | tui-mirror.sh:798 | FIXED — added `_invalidate_mirror_cache` hook to save (matches sync) |
+| #966 | `eval oc wait` in day2.sh custom manifests | day2.sh:379 | FIXED — replaced `eval` with `read -ra` array expansion |
 
 ### OPEN — LOW
 
 | Bug | Title | File | Notes |
 |-----|-------|------|-------|
-| #935 | Broken error message URL in aba-get-version.sh | aba-get-version.sh:32 | Space in URL |
+| #935 | Broken error message URL in aba-get-version.sh | aba-get-version.sh:32 | FIXED — removed trailing `/.` from URL in error message |
 | #938 | Cluster dirs survive `aba reset --force` | Makefile:149 | May be by design |
 | #941 | Wizard title bar shows unconfirmed channel | tui-cluster.sh | Premature in-memory update |
 | #945 | Stale "(synced)"/"(saved)" after version change | abatui2.sh:551 | `last_action` not cleared |
 | #948 | Sync label shows "(synced)" after load in CONNO | abatui2.sh:553 | No `_mirror_last_action` check |
 | #949 | `ocp_channel` defaults to "fast" in upgrade flow | tui-mirror.sh:700 | Rest of ABA defaults "stable" |
-| #955 | Operator set marked added even with 0 ops found | tui-mirror.sh:1737 | `OP_SET_ADDED` set unconditionally |
-| #957 | DIRECT mode operator search doesn't persist basket | tui-direct.sh:742 | No `_persist_operator_basket` call |
+| #955 | Operator set marked added even with 0 ops found | tui-mirror.sh:1930 | REVERTED — sets are curated; 0 ops only when index not yet downloaded. Marking as added is correct. |
+| #957 | DIRECT mode operator search doesn't persist basket | tui-direct.sh:772 | FIXED — added `_persist_operator_basket` after `_operator_search` (wizard used by CONNO mode, not pure DIRECT) |
 | #657 | TUI Day-2 menu missing "Rescue" option | — | `aba rescue` CLI exists, no TUI entry |
 
 ### PARTIALLY ADDRESSED
@@ -3752,7 +3752,7 @@ Verified against dev branch source code. Do NOT re-report these unless the behav
 | Bug | Title | File | Notes |
 |-----|-------|------|-------|
 | #943 | Stale runner cache after `aba reset --force` | Makefile:161 | Cleanup exists but can race |
-| #954 | Whitespace trim only removes single char | tui-mirror.sh:1766,1813,1885 | 3 of 6 locations fixed, 3 remain |
+| #954 | Whitespace trim only removes single char | tui-mirror.sh:1966,2013 | FIXED — all 6 locations now use full trim pattern |
 
 ### DOCUMENTATION BUGS (README.md)
 
@@ -4611,8 +4611,8 @@ But `aba.sh` only handles `--reg-user` (line 771) — there is no `-u` short for
 
 **Severity:** Medium (wrong user guidance for SNO bare-metal installs)
 **Mode:** CONNO, DISCO, DIRECT (any mode, SNO + bare-metal)
-**File:** `tui/v2/tui-cluster.sh` line 1762
-**Status:** Open
+**File:** `tui/v2/tui-cluster.sh` line 1788
+**Status:** ALREADY FIXED — code now uses `$total_nodes` and shows "Boot your server" for SNO
 
 **Problem:** After ISO creation for an SNO bare-metal cluster, the boot guidance dialog uses `${cl_masters:-3}` to compute the node count, but `cl_masters` is never defined anywhere in the TUI code. The correct variables are `_nm` and `_nw`, which are set at lines 1627–1632 of the same function (`_cluster_execute`). The default of `3` always applies, so the dialog says "Boot all 3 servers at the same time" even for a single-node OpenShift cluster.
 
@@ -4643,8 +4643,8 @@ local _node_count=$total_nodes
 
 **Severity:** Low (cosmetic — grammar in review dialog)
 **Mode:** All modes (compact and standard cluster types)
-**File:** `tui/v2/tui-cluster.sh` line 1673
-**Status:** Open
+**File:** `tui/v2/tui-cluster.sh` line 1694
+**Status:** ALREADY FIXED — conditional pluralization for both master/masters and worker/workers
 
 **Problem:** The cluster install review page shows "3 master, 0 workers = 3 nodes" for compact clusters. The word "master" should be "masters" when the count is greater than 1. The word "workers" is hardcoded plural, which is wrong when `_nw=1` (standard cluster with exactly 1 worker → "1 workers" instead of "1 worker"). Both "master" and "workers" need conditional pluralization.
 
@@ -4685,7 +4685,7 @@ The simpler fix covers compact (3 masters, 0 workers) and standard (3 masters, N
 **Severity:** Low (dead code — no runtime impact, maintenance burden only)
 **Mode:** N/A
 **File:** `tui/v2/tui-lib.sh` lines 1183 and 1220
-**Status:** Open
+**Status:** ALREADY FIXED — both dead functions removed
 
 **Problem:** Two functions are defined but never called from anywhere in the codebase:
 1. `_tui_settings_menu_reg_vendor()` at line 1183 — a standalone menu-based vendor picker
@@ -5680,7 +5680,7 @@ Single quotes inside a double-quoted SSH string do not prevent shell expansion o
 **Severity:** Medium
 **Mode:** CONNO
 **File:** `tui/v2/tui-mirror.sh` `_mirror_op_confirm` (~line 556); `scripts/include_all.sh` `_isc_operator_count`
-**Status:** New
+**Status:** FIXED — `_isc_operator_count` returns empty (not 0) when ISC file missing. Commit `ccebfbb8`.
 **Steps to reproduce:**
 1. Fresh setup: install mirror, add cincinnati-operator via wizard (saved as `op_sets=custom-...` in `aba.conf`).
 2. Before the first sync (ISC file `mirror/data/imageset-config.yaml` does not yet exist), select Sync.
@@ -5696,7 +5696,7 @@ Single quotes inside a double-quoted SSH string do not prevent shell expansion o
 **Severity:** Medium
 **Mode:** ALL
 **File:** `tui/v2/tui-cluster.sh` `_configure_kvm_form` (~line 486)
-**Status:** New
+**Status:** FIXED — added `~/.kvm.conf` check matching VMware's pattern. Commit `8e073624`.
 **Steps to reproduce:**
 1. Have a `~/.kvm.conf` with real KVM configuration (e.g. LIBVIRT_URI, KVM_STORAGE_POOL).
 2. After `aba reset` (which removes `~/aba/kvm.conf`), open Advanced → Platform Settings → KVM.
@@ -5959,8 +5959,9 @@ All tested features worked correctly. Bug #1300 was the only verified bug, confi
 
 **Fix Suggestion:** Check `isc_exists` (already available from mirror-status.sh) before relying on `operator_count`. When ISC is missing, fall back to OP_BASKET count.
 
-### Bug #1302 — NEW, VERIFIED via TUI ✅
+### Bug #1302 — "Monitor Installation" appears when no install in progress
 **Severity:** Low (UX)
+**Status:** FIXED — `tui_cluster_menu_flags` now requires kubeconfig to set installing flag. Commit `aecceee1`.
 **Summary:** "Monitor Installation" menu item appears when no actual installation is in progress
 
 **Reproduction Steps:**
@@ -6189,6 +6190,24 @@ Updated Bug Summary:
 | 33 | Rerun Wizard | CONNO | Yes | TUI | 5,6 |
 | 34 | Operator Selection | CONNO | Yes | TUI | 4 |
 | 35 | Feedback | CONNO | Yes | TUI | 6 |
+
+### DRY: Inline regex replaced with shared validation functions
+
+**Files changed:** `scripts/include_all.sh`, `scripts/aba.sh`, `tui/v2/tui-cluster.sh`, `tui/v2/tui-direct.sh`, `tui/v2/tui-lib.sh`, `tui/v2/tui-mirror.sh`
+
+**What was done:**
+1. Widened `_is_version_string()` to accept any `-suffix.N` (not just `rc`/`ec`) — matches the inline regex
+2. Added `_is_minor_version()` for `X.Y` partial version checks
+3. Replaced 12 inline version regexes across 5 files with `_is_version_string()` / `_is_minor_version()` calls
+4. Replaced 1 inline hostname regex in `tui-lib.sh` `_valid_ip_or_host_list()` with `_valid_domain()` call
+5. Kept 1 inline regex in `aba.sh` line 147 — runs before `include_all.sh` is sourced, so the function isn't available
+
+**Replacements by file:**
+- `scripts/aba.sh`: 8 inline regexes → function calls (version + minor)
+- `tui/v2/tui-cluster.sh`: 2 inline regexes → `_is_version_string()`
+- `tui/v2/tui-direct.sh`: 4 inline regexes → `_is_version_string()` + `_is_minor_version()`
+- `tui/v2/tui-lib.sh`: 3 inline regexes → function calls (version + minor + domain)
+- `tui/v2/tui-mirror.sh`: 3 inline regexes → `_is_version_string()` + `_is_minor_version()`
 
 ### Final Bug Count
 
