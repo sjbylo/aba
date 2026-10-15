@@ -733,7 +733,9 @@ _reg_quay_ready() {
 	local ssh_cmd="$1"
 	local port="$2"
 	local _code
-	_code=$(_reg_host_run "$ssh_cmd" "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
+	# Use 127.0.0.1 instead of localhost: localhost may resolve to ::1 (IPv6)
+	# and pasta/rootless podman may only forward on IPv4, causing TLS failures.
+	_code=$(_reg_host_run "$ssh_cmd" "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:${port}/health/instance 2>/dev/null") || _code="000"
 	[ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]
 }
 
@@ -1356,6 +1358,15 @@ reg_start_vendor() {
 
 	# Already running?
 	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		# Quay: port opens immediately (nginx) but the backend may still be
+		# initializing.  Verify the health endpoint before declaring "running".
+		if [ "$vendor" = "quay" ] && ! _reg_quay_ready "$ssh_cmd" "$port"; then
+			aba_info "Registry on $_where has port $port listening but Quay backend is not ready — waiting ..."
+			if ! try_cmd -n 150 -d 2 -m "Quay backend readiness on $_where" -q -- \
+				_reg_quay_ready "$ssh_cmd" "$port"; then
+				aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 300s"
+			fi
+		fi
 		aba_info "Registry on $_where is already running (port $port listening)"
 		return 0
 	fi
