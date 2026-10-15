@@ -2587,3 +2587,19 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 
 **Workaround:** If the install fails with this timeout, the service is actually set up correctly. Run `systemctl --user start quay.service` manually, then re-run `aba -d mirror install` (ABA detects the running registry and registers it).
 
+---
+
+## Fully test `aba setup dns` and `aba setup ntp`
+
+**Severity:** MEDIUM — these commands modify system config and can break E2E infrastructure
+**Status:** TODO
+**Added:** 2026-10-15
+
+**Problem:** Running `setup-dns.sh` on the bastion overwrites `/etc/dnsmasq.d/aba-upstream.conf` with only the auto-detected upstream DNS server. In the lab environment, the E2E pool DNS records live on `10.0.1.8`, but `setup-dns.sh` detects `192.168.2.1` (the default gateway) as the upstream. This silently drops `10.0.1.8`, breaking name resolution for all pool hosts (`conN.example.com`, `disN.example.com`).
+
+**What's needed:**
+1. Func tests that verify `setup-dns.sh` and `remove-dns.sh` are idempotent and don't break existing DNS resolution.
+2. Tests that verify `setup-ntp.sh` and `remove-ntp.sh` similarly.
+3. Consider whether `setup-dns.sh` should preserve existing upstream servers when reconfiguring, rather than replacing them.
+4. E2E suites that call these commands should verify DNS still resolves pool hostnames after the call.
+
