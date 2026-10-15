@@ -30,7 +30,7 @@ fi
 # -----------------------------------------------------------------------------
 # Load bmc.conf and source adapter stack. Mode-0600 enforcement via normalize-bmc-conf.
 # -----------------------------------------------------------------------------
-source <(normalize-bmc-conf)
+normalize-bmc-conf >/dev/null
 source scripts/bmc-redfish.sh
 source scripts/bmc-adapter-generic.sh
 
