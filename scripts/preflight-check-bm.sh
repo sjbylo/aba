@@ -905,6 +905,18 @@ _bm_probe_l5_lenovo() {
 [ -f scripts/bmc-adapter-generic.sh ]  && source scripts/bmc-adapter-generic.sh
 [ -f scripts/bmc-mac-discovery.sh ]    && source scripts/bmc-mac-discovery.sh
 
+# _bm_discover_macs records its result with _bm_state_write_mac, which is
+# defined only in bmc-boot.sh, an executable the preflight never sources: every
+# discovery, and every mac_discovery_<node>=disabled, ended in
+# "_bm_state_write_mac: command not found" under the ERR trap. Load just that
+# function and what it uses from bmc-boot.sh, so the sidecar it writes stays the
+# one bmc-boot.sh reads.
+if ! declare -F _bm_state_write_mac >/dev/null && [ -f scripts/bmc-boot.sh ]; then
+	source <(sed -n -e '/^_BMC_BOOT_VERSION=/p' \
+		-e '/^_bm_bmc_conf_hash() {$/,/^}$/p' \
+		-e '/^_bm_state_write_mac() {$/,/^}$/p' scripts/bmc-boot.sh)
+fi
+
 # Discovery's Redfish calls go through _redfish_request, which needs a session
 # token, but the L1-L4 probes before it authenticate with Basic auth and never
 # open a session: every discovery failed with "MAC-08: discovery preflight
