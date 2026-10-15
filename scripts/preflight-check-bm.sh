@@ -1024,16 +1024,33 @@ _bm_discover_macs_session() {
 		return 1
 	fi
 
-	_bm_resolve_mac "$node" "$nic_lines"
-	rc=$?
-	case "$rc" in
-		0)  : ;;  # _BM_DISCOVERED_MAC + _BM_DISCOVERED_NIC_ID populated
-		4)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-04 emitted inside helper
-		5)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-05 emitted inside helper
-		*)  aba_warn "BMC: $node MAC-08: unexpected resolver rc=$rc"
-			_preflight_errors=$(( _preflight_errors + 1 ))
-			return 1 ;;
-	esac
+	if [ -n "$op_mac" ]; then
+		# mac_<node> is how MAC-05 asks the operator to pick one NIC out of
+		# several, so look it up among all reported NICs instead of first
+		# requiring a single link-up candidate. A miss leaves
+		# _BM_DISCOVERED_MAC empty and fails with MAC-03 in step 5.
+		_BM_DISCOVERED_MAC=""
+		_BM_DISCOVERED_NIC_ID=""
+		local op_nic_id op_nic_mac op_rest
+		while IFS='|' read -r op_nic_id op_nic_mac op_rest; do
+			if [ -n "$op_nic_mac" ] && [ "${op_nic_mac,,}" = "${op_mac,,}" ]; then
+				_BM_DISCOVERED_MAC="$op_nic_mac"
+				_BM_DISCOVERED_NIC_ID="$op_nic_id"
+				break
+			fi
+		done <<<"$nic_lines"
+	else
+		_bm_resolve_mac "$node" "$nic_lines"
+		rc=$?
+		case "$rc" in
+			0)  : ;;  # _BM_DISCOVERED_MAC + _BM_DISCOVERED_NIC_ID populated
+			4)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-04 emitted inside helper
+			5)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-05 emitted inside helper
+			*)  aba_warn "BMC: $node MAC-08: unexpected resolver rc=$rc"
+				_preflight_errors=$(( _preflight_errors + 1 ))
+				return 1 ;;
+		esac
+	fi
 
 	# Step 5: validate-or-populate (D-08, MAC-03).
 	if [ -n "$op_mac" ]; then
