@@ -38,7 +38,8 @@ _RUN_DIR="$_STAGING_DIR/run"
 # logs/ and config files are symlinked — they are data, not executable.
 #
 # When the user presses '0' (restart-suite), the restart handler below
-# re-copies staging → run/ so that any hot-deployed changes take effect.
+# refreshes staging from ~/aba/test/e2e/ (picking up auto-deployed changes),
+# then re-copies staging → run/ so the suite re-reads updated code.
 # See the '_rc eq 4' block near the end of this file.
 rm -rf "$_RUN_DIR"
 mkdir -p "$_RUN_DIR"
@@ -1048,9 +1049,13 @@ while true; do
 			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
 			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
-		# Re-copy staging → run/ so hot-deployed changes take effect on
-		# restart.  See the "Two-tier staging/run layout" comment at the
-		# top of this file for why run/ is a copy, not a symlink.
+		# Refresh harness staging from deployed ABA source so hot-deployed
+		# changes (git push → auto-deploy → ~/aba/) reach the execution copy.
+		cp -a "$_ABA_ROOT"/test/e2e/lib/*.sh "$_STAGING_DIR/lib/"
+		cp -a "$_ABA_ROOT"/test/e2e/suites/suite-*.sh "$_STAGING_DIR/suites/"
+		cp -a "$_ABA_ROOT"/test/e2e/scripts/*.sh "$_STAGING_DIR/scripts/"
+		# Re-copy staging → run/ so the suite re-reads updated code.
+		# See the "Two-tier staging/run layout" comment at the top.
 		cp -a "$_STAGING_DIR"/lib/* "$_RUN_DIR/lib/"
 		cp -a "$_STAGING_DIR"/suites/* "$_RUN_DIR/suites/"
 		cp -a "$_STAGING_DIR"/scripts/* "$_RUN_DIR/scripts/"
