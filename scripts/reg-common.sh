@@ -1024,6 +1024,165 @@ reg_docker_remove() {
 	fi
 }
 
+# --- reg_omr_install_or_recover -----------------------------------------------
+# Run mirror-registry install (fresh or reinstall-with-data), with a temporary
+# WORKAROUND for OMR's hardcoded 30s health-check timeout.
+#
+# Why: on timeout the Quadlet is often already written, but install exits
+# non-zero. A blind second 'install' then fails with "existing installation
+# found". Recovery: start quay.service + probe; if still down, uninstall the
+# service (keep data) and retry install once; probe again if that also times out.
+#
+# TEMPORARY — remove once OMR has a longer/configurable health timeout and we
+# have re-tested clean installs without this path. Tracked in BACKLOG.md:
+#   "OMR health check timeout too short" and
+#   "OMR install: remove ABA 30s health-timeout workaround".
+#
+# Requires globals: reg_root, reg_host, reg_port, reg_user, reg_pw, reg_url,
+#                   _OMR_LOG_FLAG, _OMR_VENDOR
+# Usage (local):  reg_omr_install_or_recover <bin> <image-archive>
+# Usage (remote): reg_omr_install_or_recover <bin> <image-archive> <ssh_cmd> <remote_dir>
+#   remote: bin is unused for exec; remote_dir must contain mirror-registry and
+#   the image archive basename.
+# Returns 0 if registry is up (install ok or recovered), 1 on hard failure.
+reg_omr_install_or_recover() {
+	local bin="$1"
+	local image_archive="$2"
+	local ssh_cmd="${3:-}"
+	local remote_dir="${4:-}"
+	local _log _rc=0 _where="localhost"
+
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+	_log=$(mktemp) || aba_abort "Failed to create temp file for $_OMR_VENDOR install log"
+
+	# --- inner: one install attempt (fresh vs reinstall by admin-password) ---
+	_reg_omr_do_install() {
+		if [ -n "$ssh_cmd" ]; then
+			local _rbin="$remote_dir/mirror-registry"
+			local _rimg="$remote_dir/$(basename "$image_archive")"
+			# shellcheck disable=SC2086
+			$ssh_cmd "
+				set -e
+				if [ -f $reg_root/auth/admin-password ]; then
+					echo '[ABA] Existing data detected — reinstalling (preserving data) ...'
+					$_rbin install $_OMR_LOG_FLAG -data-dir $reg_root -hostname $reg_host -port $reg_port -image-archive $_rimg
+				else
+					echo '$reg_pw' | $_rbin install $_OMR_LOG_FLAG -data-dir $reg_root -hostname $reg_host -port $reg_port -init-user $reg_user -init-password-stdin -image-archive $_rimg
+				fi
+			"
+		else
+			if [ -f "$reg_root/auth/admin-password" ]; then
+				aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
+				"$bin" install \
+					$_OMR_LOG_FLAG \
+					-data-dir "$reg_root" \
+					-hostname "$reg_host" \
+					-port "$reg_port" \
+					-image-archive "$image_archive"
+			else
+				aba_info "Running: $bin install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
+				echo "$reg_pw" | "$bin" install \
+					$_OMR_LOG_FLAG \
+					-data-dir "$reg_root" \
+					-hostname "$reg_host" \
+					-port "$reg_port" \
+					-init-user "$reg_user" \
+					-init-password-stdin \
+					-image-archive "$image_archive"
+			fi
+		fi
+	}
+
+	# --- inner: start quay + probe /v2/ ---
+	_reg_omr_try_start_and_probe() {
+		local _msg="$1"
+		aba_debug "OMR workaround: sleep 2s, then systemctl start quay.service on $_where"
+		sleep 2
+		_reg_host_run "$ssh_cmd" \
+			"systemctl --user start quay.service 2>/dev/null || systemctl start quay.service 2>/dev/null || true"
+		aba_debug "OMR workaround: probing $reg_url/v2/ (up to ~60s)"
+		if try_cmd -n 30 -d 2 -m "$_msg" -- \
+			probe_host --any --quick "$reg_url/v2/" "omr health-timeout recovery"; then
+			# Keep as warn so the workaround is visible in normal (non-debug) logs
+			aba_warn "$_OMR_VENDOR registry is up after ABA health-timeout WORKAROUND on $_where." \
+				"OMR's install timed out at 30s; ABA started quay.service and waited." \
+				"Temporary — see BACKLOG.md (remove once OMR health timeout is fixed)."
+			return 0
+		fi
+		aba_debug "OMR workaround: probe still failing after start+wait on $_where"
+		return 1
+	}
+
+	# --- inner: uninstall service only (keep data) so install can be retried ---
+	_reg_omr_uninstall_service_keep_data() {
+		aba_debug "OMR workaround: uninstall service (keep data) on $_where so install can retry"
+		if [ -n "$ssh_cmd" ]; then
+			# shellcheck disable=SC2086
+			$ssh_cmd "$remote_dir/mirror-registry uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve" || true
+		else
+			"$bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve || true
+		fi
+	}
+
+	set +e
+	_reg_omr_do_install >"$_log" 2>&1
+	_rc=$?
+	set -e
+	cat "$_log"
+
+	if [ "$_rc" -eq 0 ]; then
+		rm -f "$_log"
+		return 0
+	fi
+
+	# Only recover the known OMR 30s health-check failure mode
+	if ! grep -qE 'health check:.*(timeout|timed out)' "$_log"; then
+		aba_debug "OMR install failed (exit=$_rc) without health-check timeout — no workaround"
+		rm -f "$_log"
+		return "$_rc"
+	fi
+
+	# User-visible: ABA is forced to apply a temporary workaround
+	aba_warn "$_OMR_VENDOR install FAILED the hardcoded 30s health-check on $_where." \
+		"ABA is applying a TEMPORARY WORKAROUND (OMR often left the Quadlet installed)." \
+		"Step 1: start quay.service and wait for /v2/ — see BACKLOG.md."
+
+	if _reg_omr_try_start_and_probe "Wait for $_OMR_VENDOR after health-timeout on $_where"; then
+		rm -f "$_log"
+		return 0
+	fi
+
+	aba_warn "$_OMR_VENDOR still not responding after start+wait — WORKAROUND step 2:" \
+		"remove failed service (keeping data) and retry install once."
+	_reg_omr_uninstall_service_keep_data
+	sleep 2
+
+	set +e
+	_reg_omr_do_install >"$_log" 2>&1
+	_rc=$?
+	set -e
+	cat "$_log"
+
+	if [ "$_rc" -eq 0 ]; then
+		aba_warn "$_OMR_VENDOR install succeeded on retry after ABA health-timeout WORKAROUND." \
+			"Temporary — see BACKLOG.md (remove once OMR health timeout is fixed)."
+		rm -f "$_log"
+		return 0
+	fi
+
+	if grep -qE 'health check:.*(timeout|timed out)' "$_log"; then
+		aba_warn "Retry install also hit the 30s health-check timeout — WORKAROUND: start+wait again."
+		if _reg_omr_try_start_and_probe "Wait for $_OMR_VENDOR after install retry on $_where"; then
+			rm -f "$_log"
+			return 0
+		fi
+	fi
+
+	aba_debug "OMR health-timeout workaround exhausted on $_where"
+	rm -f "$_log"
+	return 1
+}
+
 # --- reg_omr_remove -------------------------------------------------------
 # Core omr uninstall: call the tool's own 'uninstall' command.
 # Same pattern as reg_quay_remove — use the tool, then verify clean.

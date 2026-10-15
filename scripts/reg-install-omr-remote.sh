@@ -70,41 +70,23 @@ else
 	# Mark state as "installing" so a retry can detect and recover from a partial install
 	reg_mark_installing "$_OMR_VENDOR"
 
-	# Install or reinstall on remote host via the tool's own 'install' command.
-	# Fresh install: pass -init-user/-init-password-stdin for admin setup.
-	# Reinstall (data preserved, service removed): omit init flags — the tool
-	# detects existing data, skips admin provisioning, creates Quadlet, starts service.
+	# Install via mirror-registry, with WORKAROUND for OMR's 30s health-check
+	# timeout (start service / keep-data retry). See reg_omr_install_or_recover()
+	# and BACKLOG.md — remove when upstream timeout is fixed and re-tested.
 	aba_info "Running $_OMR_VENDOR install on remote host ..."
-	if ! $_ssh "
-		set -e
-		if [ -f $reg_root/auth/admin-password ]; then
-			echo '[ABA] Existing data detected — reinstalling (preserving data) ...'
-			$remote_dir/mirror-registry install \
-				$_OMR_LOG_FLAG \
-				-data-dir $reg_root \
-				-hostname $reg_host \
-				-port $reg_port \
-				-image-archive $remote_dir/$_image_file
-		else
-			echo '$reg_pw' | $remote_dir/mirror-registry install \
-				$_OMR_LOG_FLAG \
-				-data-dir $reg_root \
-				-hostname $reg_host \
-				-port $reg_port \
-				-init-user $reg_user \
-				-init-password-stdin \
-				-image-archive $remote_dir/$_image_file
-		fi
-		# Enable linger so the user's systemd instance survives logout
+	if ! reg_omr_install_or_recover "./omr/mirror-registry" "$_image_file" "$_ssh" "$remote_dir"; then
+		aba_abort "$_OMR_VENDOR install failed on remote host $reg_host." \
+			"Check the output above for details."
+	fi
+
+	# Enable linger so the user's systemd instance survives logout
+	$_ssh "
 		if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
 			if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
 				$SUDO loginctl enable-linger \"\$USER\"
 			fi
 		fi
-	"; then
-		aba_abort "$_OMR_VENDOR install failed on remote host $reg_host." \
-			"Check the output above for details."
-	fi
+	" || true
 fi
 
 aba_progress "DONE|reg_install"

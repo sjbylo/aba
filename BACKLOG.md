@@ -2691,20 +2691,39 @@ _ensure_aba_conf_fresh() {
 ## OMR health check timeout too short (30s hardcoded)
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Planned (ABA workaround landed 2026-10-15 — still need upstream fix)
 **Added:** 2026-10-12
 
-**Problem:** The OMR (`mirror-registry`) binary has a hardcoded 30s health check timeout during `install`. On slower environments (e.g. AWS instances), the quay container takes longer than 30s to become healthy, causing the install to fail with `"install failed","err":"health check: timeout after 30s"`. The quadlet, systemd service, and linger are all set up correctly — starting the service manually afterwards works fine.
+**Problem:** The OMR (`mirror-registry`) binary has a hardcoded 30s health check timeout during `install`. On slower environments (e.g. AWS instances), the quay container takes longer than 30s to become healthy, causing the install to fail with `"install failed","err":"health check: timeout after 30s"`. The quadlet, systemd service, and linger are often set up correctly — starting the service manually afterwards works fine. Diagnostic lines like `Unit quay.service could not be found` in the install dump are misleading (OMR runs `systemctl status` without `--user`).
 
-**Root cause:** The Go source in the quay/quay repo (`mirror-registry` binary) hardcodes the health check timeout at 30 seconds. There is no `--timeout` CLI flag to override it.
+**Root cause:** The Go source in the quay/quay repo (`mirror-registry` binary) hardcodes the health check timeout at 30 seconds. There is no `--timeout` CLI flag to override it. On failure, OMR does not remove the Quadlet, so a blind second `install` hits "existing installation found".
 
-**Proposed fix:** Patch the OMR Go source to either:
+**Proposed fix (upstream):** Patch the OMR Go source to either:
 1. Increase the default health check timeout to 120s (matching ABA's own registry readiness timeout)
 2. Add a `-health-timeout` CLI flag so the caller can configure it
 
 Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the patch.
 
-**Workaround:** If the install fails with this timeout, the service is actually set up correctly. Run `systemctl --user start quay.service` manually, then re-run `aba -d mirror install` (ABA detects the running registry and registers it).
+**ABA workaround (temporary):** `reg_omr_install_or_recover()` in `scripts/reg-common.sh` (used by local + remote OMR install): on health-check timeout → start `quay.service` + probe; if still down → uninstall service (keep data) + retry install once. See also entry below to remove this after re-test.
+
+**Manual workaround:** `systemctl --user start quay.service`, then re-run `aba -d mirror install` (ABA skips install when `/v2/` is already up).
+
+---
+
+## OMR install: remove ABA 30s health-timeout workaround (after re-test)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** ABA carries a temporary recovery path (`reg_omr_install_or_recover`) around OMR's hardcoded 30s install health check. It should not live forever — it masks an upstream limitation and adds install complexity.
+
+**When to remove:**
+1. OMR image ships a longer or configurable health timeout, **and**
+2. Re-test locally + remote: fresh install, reinstall-with-preserved-data, and vendor-matrix / bundle OMR paths with the workaround deleted (or gated off)
+3. Confirm we no longer see `health check: timeout after 30s` / `timed out waiting for certificate` in normal lab runs
+
+**Where:** `scripts/reg-common.sh` (`reg_omr_install_or_recover`), callers in `scripts/reg-install-omr.sh` and `scripts/reg-install-omr-remote.sh`. Replace with a plain `mirror-registry install` again once upstream is fixed.
 
 ---
 
