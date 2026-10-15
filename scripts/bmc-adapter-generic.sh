@@ -291,7 +291,9 @@ bmc_wait_connected() {
 			return 1
 		fi
 		inserted=$(jq -r '.Inserted // false' "$_REDFISH_LAST_BODY")
-		connected=$(jq -r '.Connected // false' "$_REDFISH_LAST_BODY")
+		# Connected is not a DMTF VirtualMedia property; BMCs that omit it
+		# (Fujitsu iRMC S6) report the mount through Inserted alone.
+		connected=$(jq -r 'if has("Connected") then (.Connected // false) else (.Inserted // false) end' "$_REDFISH_LAST_BODY")
 		if [ "$inserted" = "true" ] && [ "$connected" = "true" ]; then
 			aba_debug "BMC: $node VirtualMedia Connected=true (after ${elapsed}s)"
 			return 0
