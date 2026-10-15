@@ -39,7 +39,7 @@ if [ -f bmc.conf ] && grep -qE '^[[:space:]]*bmc_host_' bmc.conf; then
 	# Populate mac_<node> + mac_discovery_<node> via normalize-bmc-conf so the
 	# helper's operator-mac branch can see them. include_all.sh already provided
 	# the normalize helper.
-	source <(normalize-bmc-conf)
+	normalize-bmc-conf >/dev/null
 fi
 
 yaml2json()

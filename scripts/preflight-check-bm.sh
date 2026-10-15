@@ -1050,9 +1050,9 @@ preflight_check_bm() {
 	fi
 
 	# Load bmc.conf: mode-0600 enforcement runs inside normalize-bmc-conf (aba_abort on failure).
-	# The eval inside normalize-bmc-conf populates the process env; the stdout (password-filtered)
-	# is sourced so export lines for non-password vars populate this subshell as well.
-	source <(normalize-bmc-conf)
+	# The eval inside normalize-bmc-conf populates the process env. Called directly, not via
+	# `source <(...)`: that would run the eval in a subshell and lose bmc_password_*.
+	normalize-bmc-conf >/dev/null
 
 	# Step 2: required-field + allowlist (collect-all, no short-circuit).
 	_bm_required_fields
