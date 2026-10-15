@@ -78,13 +78,24 @@ pool_dns_server() {
 }
 
 # Get a small /29 CIDR that contains the pool's SNO IP: pool_small_cidr [POOL_NUM]
-# /29 = 8 addresses, aligned to 8-byte boundary.  Used by tests to validate
-# CIDR handling with minimal address ranges.
+# /29 = 8 addresses.  The SNO IP is placed at offset +2 (a usable host),
+# so the CIDR network address is (sno_ip - 2).  This is NOT naturally
+# aligned to an 8-byte boundary, but that's fine — ABA validates the IP
+# against the CIDR, not the alignment.
 pool_small_cidr() {
 	local p="${1:-${POOL_NUM:-1}}"
 	local last_octet=$((p * 10 + 2))
-	local net_addr=$((last_octet / 8 * 8))
+	local net_addr=$((last_octet - 2))
 	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/29"
+}
+
+# Get a /30 CIDR that contains the pool's SNO IP: pool_tiny_cidr [POOL_NUM]
+# /30 = 4 addresses (network + 2 usable + broadcast).  SNO IP at offset +2.
+pool_tiny_cidr() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$((last_octet - 2))
+	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/30"
 }
 
 # Get the first usable IP (network + 1) from an arbitrary CIDR string.
