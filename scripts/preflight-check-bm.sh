@@ -905,7 +905,30 @@ _bm_probe_l5_lenovo() {
 [ -f scripts/bmc-adapter-generic.sh ]  && source scripts/bmc-adapter-generic.sh
 [ -f scripts/bmc-mac-discovery.sh ]    && source scripts/bmc-mac-discovery.sh
 
+# Discovery's Redfish calls go through _redfish_request, which needs a session
+# token, but the L1-L4 probes before it authenticate with Basic auth and never
+# open a session: every discovery failed with "MAC-08: discovery preflight
+# failed - HTTP 0 on /redfish/v1/Managers" (0: no request sent). Open a session
+# for discovery and close it again; with discovery disabled no Redfish call is
+# made, so no login.
 _bm_discover_macs() {
+	local node="$1"
+	local _disc_var="mac_discovery_${node}" _tok_var="SESSION_TOKEN_${node}"
+	local _rc=0 _own_session=0
+	if [ "${!_disc_var:-}" != "disabled" ] && [ -z "${!_tok_var:-}" ]; then
+		if ! bmc_session_login "$node"; then
+			aba_warn "BMC: $node MAC-08: discovery preflight failed - session login: $_REDFISH_LAST_REASON"
+			_preflight_errors=$(( _preflight_errors + 1 ))
+			return 1
+		fi
+		_own_session=1
+	fi
+	_bm_discover_macs_session "$node" || _rc=$?
+	[ "$_own_session" = 0 ] || bmc_session_logout "$node"
+	return "$_rc"
+}
+
+_bm_discover_macs_session() {
 	# Phase 10 MAC discovery (D-08 default; D-09 opt-out via mac_discovery_<node>=disabled).
 	# Returns 0 on success (sidecar updated or operator MAC validated); 1 on any
 	# MAC-* error (caller `continue`s the per-node loop). Bumps _preflight_errors
