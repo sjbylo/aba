@@ -298,7 +298,7 @@ special-resource-operator Special Resource Operator alpha
 stackgres-community StackGres stable
 stolostron-engine Stolostron Engine community-0.8
 stolostron Stolostron community-0.8
-strimzi-kafka-operator Strimzi stable
+strimzi-kafka-operator Strimzi strimzi-1.x
 susql-operator SusQL alpha
 syndesis Syndesis Operator latest
 t8c Turbonomic Platform Operator stable
