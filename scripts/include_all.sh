@@ -4297,20 +4297,6 @@ _run_oc_mirror_with_retry() {
 	local exit_history=""
 	aba_debug "Starting retry loop: try_tot=$try_tot"
 
-	# Strip stale .history from archive before load — oc-mirror v2 bundles its
-	# working-dir/.history into the tar, which makes the load side skip cache
-	# population → "manifest unknown" for every image.
-	if [ "$action" = "load" ]; then
-		local _strip_tar
-		for _strip_tar in data/mirror_*.tar; do
-			[ -f "$_strip_tar" ] || continue
-			if tar tf "$_strip_tar" 2>/dev/null | grep -q '^working-dir/\.history'; then
-				tar --delete -f "$_strip_tar" --wildcards 'working-dir/.history*' 2>/dev/null || true
-				aba_info "Stripped stale .history from $(basename "$_strip_tar")"
-			fi
-		done
-	fi
-
 	# Pre-check: warn if port 55000 is already occupied (stale oc-mirror local registry)
 	local _precheck_pid
 	_precheck_pid=$(lsof -ti :55000 2>/dev/null) || true
