@@ -104,36 +104,13 @@ else
 	# Mark state as "installing" so a retry can detect and recover from a partial install
 	reg_mark_installing "$_OMR_VENDOR"
 
-	# Install or reinstall via the tool's own 'install' command.
-	# Fresh install: pass -init-user/-init-password-stdin for admin setup.
-	# Reinstall (data preserved, service removed): omit init flags — the tool
-	# detects existing data, skips admin provisioning, creates Quadlet, starts service.
-	if [ -f "$reg_root/auth/admin-password" ]; then
-		aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
-		if ! ./"$_OMR_BIN" install \
-			$_OMR_LOG_FLAG \
-			-data-dir "$reg_root" \
-			-hostname "$reg_host" \
-			-port "$reg_port" \
-			-image-archive "$_OMR_IMAGE_FILE"; then
-			aba_abort \
-				"$_OMR_VENDOR reinstall failed." \
-				"Check the output above for errors."
-		fi
-	else
-		aba_info "Running: $_OMR_BIN install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
-		if ! echo "$reg_pw" | ./"$_OMR_BIN" install \
-			$_OMR_LOG_FLAG \
-			-data-dir "$reg_root" \
-			-hostname "$reg_host" \
-			-port "$reg_port" \
-			-init-user "$reg_user" \
-			-init-password-stdin \
-			-image-archive "$_OMR_IMAGE_FILE"; then
-			aba_abort \
-				"$_OMR_VENDOR install failed." \
-				"Check the output above for errors."
-		fi
+	# Install via mirror-registry, with WORKAROUND for OMR's 30s health-check
+	# timeout (start service / keep-data retry). See reg_omr_install_or_recover()
+	# and BACKLOG.md — remove when upstream timeout is fixed and re-tested.
+	if ! reg_omr_install_or_recover "./$_OMR_BIN" "$_OMR_IMAGE_FILE"; then
+		aba_abort \
+			"$_OMR_VENDOR install failed." \
+			"Check the output above for errors."
 	fi
 fi
 
