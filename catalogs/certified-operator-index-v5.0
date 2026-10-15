@@ -19,6 +19,7 @@ cte-k8s-operator Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K
 datadog-operator-certified Datadog Operator stable
 digitalai-deploy-operator Digital.ai Deploy stable-v24.3
 digitalai-release-operator Digital.ai Release stable-v24.3
+dxoperator-v2 DxOperator alpha
 dynatrace-operator Dynatrace Operator alpha
 eginnovations-operator eG Innovations Universal Agent Operator beta
 elasticsearch-eck-operator-certified Elasticsearch (ECK) Operator stable

@@ -9,7 +9,10 @@
 # =============================================================================
 
 # SSH options: suppress host-key noise, fail fast, non-interactive, keepalive.
-_E2E_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
+# ControlMaster reuses connections — cuts deploy from ~80 SSH handshakes to ~8.
+_E2E_SSH_CONTROL_DIR="/tmp/.e2e-ssh-$$"
+mkdir -p "$_E2E_SSH_CONTROL_DIR" 2>/dev/null
+_E2E_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ControlMaster=auto -o ControlPath=${_E2E_SSH_CONTROL_DIR}/%r@%h:%p -o ControlPersist=120"
 
 # Close pool-lock fds so child processes don't inherit (and hold) the flocks.
 # _LOCK_FDS is set by run.sh's _acquire_pool_locks(); empty when not running

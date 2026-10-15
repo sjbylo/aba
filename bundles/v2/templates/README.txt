@@ -3,6 +3,7 @@
    Created: <DATETIME>                                                
    Size:     <SIZE>
    ABA:      v<ABA_VERSION>
+   Registry: <VENDOR>
    Platform: x86_64
    http://github.com/sjbylo/aba                                       
 ╚══════════════════════════════════════════════════════════════════════╝
@@ -14,6 +15,7 @@
   - Mirror registry installers:
       mirror/mirror-registry.tar.gz  (Quay)
       mirror/docker-reg-image.tgz   (Docker)
+      mirror/omr-image.tgz          (OMR v3)
   - Supporting tools:
     - <SECONDARY_CLIS>
   - Operators included in this bundle (see list below)
@@ -21,7 +23,7 @@
 
 ─── TEST RESULTS ──────────────────────────────────────────────────────
 
-This install bundle has been tested.
+This install bundle has been tested with mirror registry: <VENDOR>
 
 <TEST_RESULTS>
 

@@ -482,9 +482,13 @@ _test_vmw_connection() {
 _configure_kvm_form() {
 	local conf_path="$ABA_ROOT/kvm.conf"
 
-	# Create from template if missing
+	# Populate from home cache or template if missing
 	if [[ ! -s "$conf_path" ]]; then
-		cp "$ABA_ROOT/templates/kvm.conf" "$conf_path"
+		if [[ -s "$HOME/.kvm.conf" ]]; then
+			cp "$HOME/.kvm.conf" "$conf_path"
+		else
+			cp "$ABA_ROOT/templates/kvm.conf" "$conf_path"
+		fi
 	fi
 
 	# Load current values
@@ -748,10 +752,10 @@ cluster_install_flow() {
 		# Smart guess VIPs from DNS (if base domain available)
 		if [[ -n "$cl_domain" ]]; then
 			local api_dns ingress_dns
-			api_dns=$(dig +short "api.${cl_name}.${cl_domain}" A 2>/dev/null | head -1)
+			api_dns=$(dig +short "api.${cl_name}.${cl_domain}" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
 			[[ -n "$api_dns" ]] && cl_api_vip="$api_dns"
-			ingress_dns=$(dig +short "*.apps.${cl_name}.${cl_domain}" A 2>/dev/null | head -1)
-			[[ -z "$ingress_dns" ]] && ingress_dns=$(dig +short "apps.${cl_name}.${cl_domain}" A 2>/dev/null | head -1)
+			ingress_dns=$(dig +short "*.apps.${cl_name}.${cl_domain}" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
+			[[ -z "$ingress_dns" ]] && ingress_dns=$(dig +short "apps.${cl_name}.${cl_domain}" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
 			[[ -n "$ingress_dns" ]] && cl_ingress_vip="$ingress_dns"
 		fi
 
@@ -1031,10 +1035,18 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				[[ $? -ne 0 ]] && break
 				local dom_input
 				dom_input=$(<"$_TUI_TMP")
-				if [[ -n "$dom_input" && ! "$dom_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
-					continue
+				if [[ -n "$dom_input" ]]; then
+					# Reject IPv4 addresses (all-numeric labels separated by dots)
+					if [[ "$dom_input" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid base domain: '$dom_input' looks like an IP address.\n\nThe base domain must be a DNS name (e.g. lab, example.com, lab.internal),\nnot an IP address." 0 0 || true
+						continue
+					fi
+					if ! _valid_domain "$dom_input"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid base domain.\n\nMust be a valid domain name (e.g. lab, example.com, lab.internal)." 0 0 || true
+						continue
+					fi
 				fi
 				[[ -n "$dom_input" ]] && cl_domain="${dom_input,,}"  # lowercase the domain
 				break
@@ -1083,9 +1095,9 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 					[[ $? -ne 0 ]] && break
 					local wrk_input
 					wrk_input=$(<"$_TUI_TMP")
-				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^[0-9]+$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
+				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^(0|[1-9][0-9]*)$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid worker count.\n\nMust be a positive number (e.g. 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+						"Invalid worker count.\n\nMust be a number without leading zeros (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
 					continue
 				fi
 					[[ -n "$wrk_input" ]] && cl_workers="$wrk_input"
@@ -2195,7 +2207,7 @@ cluster_day2_menu() {
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
 			"" "──── Configuration ────────────────" \
-			"R" "Configure OperatorHub (after mirror load/sync)" \
+			"R" "Configure OperatorHub$( [[ "$_TUI_MODE" != "DIRECT" ]] && echo ' (after mirror load/sync)')" \
 			"N" "Network Time Protocol" \
 			"O" "OpenShift Update Service (OSUS)" \
 			"V" "Virtualization Boot Sources" \
@@ -2341,8 +2353,12 @@ _day2_status() {
 	local _api_host _api_port _api_up=true
 	_api_host=$(KUBECONFIG="$kc" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null \
 		| sed 's|https\?://||; s|/.*||')
-	_api_port="${_api_host##*:}"                   # extract port (host:6443 → 6443)
-	_api_host="${_api_host%%:*}"                   # extract host (host:6443 → host)
+	if [[ "$_api_host" == *:* ]]; then
+		_api_port="${_api_host##*:}"               # extract port (host:6443 → 6443)
+		_api_host="${_api_host%%:*}"               # extract host (host:6443 → host)
+	else
+		_api_port="6443"                           # default API port
+	fi
 	if [[ -n "$_api_host" ]]; then
 		if ! timeout 3 bash -c "echo >/dev/tcp/$_api_host/${_api_port:-6443}" 2>/dev/null; then
 			_api_up=false
@@ -2679,7 +2695,7 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 			continue
 		elif [[ "$choice" == "M" ]]; then
 			:
-		elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+		elif _is_version_string "$choice"; then
 			# Confirm if conditional version selected
 			if [[ -n "${_cond_set[$choice]:-}" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "Conditional Version" \
@@ -2716,7 +2732,7 @@ Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
 			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
 			continue
 		fi
-		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+		if ! _is_version_string "$target_ver"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.15 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
@@ -2766,8 +2782,9 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
-	source <(normalize-aba-conf) 2>/dev/null || true
-	[[ "$platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
+	local _cl_platform=""
+	_cl_platform=$(awk -F= '/^platform=/{print $2}' "$ABA_ROOT/$SELECTED_CLUSTER/cluster.conf" 2>/dev/null)
+	[[ "$_cl_platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \

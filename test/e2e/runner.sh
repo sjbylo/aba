@@ -22,29 +22,42 @@ set -u
 _STAGING_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _RUN_DIR="$_STAGING_DIR/run"
 
-# DESIGN: Two-tier staging/run layout
+# DESIGN: Source + staging + run layout
 #
-#   ~/.e2e-harness/           (STAGING — updated by sync_harness / deploy)
-#   ~/.e2e-harness/run/       (EXECUTION — snapshot copied from staging)
+#   ~/aba/test/e2e/           (SOURCE — kept current by auto-deploy / git archive)
+#   ~/.e2e-harness/           (STAGING — harness config: runner.sh, config.env, pools.conf, logs/)
+#   ~/.e2e-harness/run/       (EXECUTION — snapshot for the running suite)
 #
-# sync_harness() (in lib/deploy.sh) pushes files to the STAGING dirs
-# (suites/, lib/, scripts/).  The runner copies staging → run/ here at
-# startup to create an execution-stable snapshot.  This ensures that a
-# hot-deploy (sync_harness during a running suite) does NOT corrupt the
-# running bash process by overwriting the script it is currently sourcing.
+# Test code (lib/, suites/, scripts/) is copied from the SOURCE directory
+# (~/aba/test/e2e/) into run/ at startup and on restart.  Auto-deploy keeps
+# the source current, so the runner always picks up the latest committed code.
 #
-# lib/, suites/, scripts/ are COPIED (not symlinked) — they contain
+# sync_harness() (in lib/deploy.sh) pushes harness config and a copy of test
+# code to STAGING.  The test code in staging serves as a fallback if ~/aba/
+# is not yet populated (e.g. first deploy before sync_source runs).
+#
+# lib/, suites/, scripts/ are COPIED (not symlinked) into run/ — they contain
 # executable code that must not change mid-execution.
 # logs/ and config files are symlinked — they are data, not executable.
-#
-# When the user presses '0' (restart-suite), the restart handler below
-# re-copies staging → run/ so that any hot-deployed changes take effect.
-# See the '_rc eq 4' block near the end of this file.
+_ABA_ROOT="$HOME/aba"
+export _ABA_ROOT
+_E2E_SOURCE="$_ABA_ROOT/test/e2e"
+
+# Prefer source (auto-deploy keeps it current); fall back to staging
+_e2e_test_source() {
+	if [ -d "$_E2E_SOURCE/lib" ] && [ -d "$_E2E_SOURCE/suites" ]; then
+		echo "$_E2E_SOURCE"
+	else
+		echo "$_STAGING_DIR"
+	fi
+}
+
+_src="$(_e2e_test_source)"
 rm -rf "$_RUN_DIR"
 mkdir -p "$_RUN_DIR"
-cp -a "$_STAGING_DIR"/lib "$_RUN_DIR/"
-cp -a "$_STAGING_DIR"/suites "$_RUN_DIR/"
-cp -a "$_STAGING_DIR"/scripts "$_RUN_DIR/"
+cp -a "$_src"/lib "$_RUN_DIR/"
+cp -a "$_src"/suites "$_RUN_DIR/"
+cp -a "$_src"/scripts "$_RUN_DIR/"
 [ -d "$_STAGING_DIR/bin" ] && cp -a "$_STAGING_DIR"/bin "$_RUN_DIR/"
 # logs/ stays in staging — shared across runs, never executed
 ln -sfn "$_STAGING_DIR/logs" "$_RUN_DIR/logs"
@@ -54,8 +67,6 @@ for _cf in config.env pools.conf; do
 done
 
 _RUNNER_DIR="$_RUN_DIR"
-_ABA_ROOT="$HOME/aba"
-export _ABA_ROOT
 
 source "$_RUNNER_DIR/lib/constants.sh"
 
@@ -1048,12 +1059,12 @@ while true; do
 			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
 			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
-		# Re-copy staging → run/ so hot-deployed changes take effect on
-		# restart.  See the "Two-tier staging/run layout" comment at the
-		# top of this file for why run/ is a copy, not a symlink.
-		cp -a "$_STAGING_DIR"/lib/* "$_RUN_DIR/lib/"
-		cp -a "$_STAGING_DIR"/suites/* "$_RUN_DIR/suites/"
-		cp -a "$_STAGING_DIR"/scripts/* "$_RUN_DIR/scripts/"
+		# Re-copy test code from source (~/aba/test/e2e/) into run/ so
+		# auto-deployed changes take effect on restart.
+		_src="$(_e2e_test_source)"
+		cp -a "$_src"/lib/* "$_RUN_DIR/lib/"
+		cp -a "$_src"/suites/* "$_RUN_DIR/suites/"
+		cp -a "$_src"/scripts/* "$_RUN_DIR/scripts/"
 		suite_file="$_RUNNER_DIR/suites/suite-${SUITE}.sh"
 
 		# Post-cleanup filesystem snapshot (debug: catch leftover files on restart)

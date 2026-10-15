@@ -779,8 +779,16 @@ mirror_save() {
 	_ensure_platform_for_upgrade
 
 	local _tmp_excl=false
+	_restore_excl_platform() {
+		if [[ "$_tmp_excl" == "true" ]]; then
+			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+			tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+			tui_log "Guard: restored excl_platform=false (trap)"
+		fi
+	}
 	if _offer_excl_platform_for_save; then
 		_tmp_excl=true
+		trap _restore_excl_platform EXIT
 		replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating imageset-config.yaml (operators only)..." 3 60
@@ -789,19 +797,19 @@ mirror_save() {
 
 	_mirror_op_confirm "$TUI2_LABEL_SAVE" save || {
 		if [[ "$_tmp_excl" == "true" ]]; then
-			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-			tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+			trap - EXIT
+			_restore_excl_platform
 		fi
 		return 1
 	}
 	local _cmd="aba --dir mirror save$(_tui_oc_mirror_retry_suffix)"
-	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_SAVE"
+	_exec_with_progress "$_cmd --yes" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache
 	local rc=$?
-	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SAVE" && rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache && rc=$?
 
 	if [[ "$_tmp_excl" == "true" ]]; then
-		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+		trap - EXIT
+		_restore_excl_platform
 		tui_log "Guard: restored excl_platform=false after save"
 	fi
 
@@ -851,7 +859,7 @@ mirror_prep_upgrade() {
 	# Check other channels for additional versions not on user's channel.
 	# _fb_items: array of "TAG|VERSION|CHANNEL" entries for fallback versions.
 	local _fb_items=() _shown_hint=false
-	local _all_seen="${_zstream}|${_next}|${_next1}|${_current_ver}"
+	local _all_seen="|${_zstream}|${_next}|${_next1}|${_current_ver}|"
 
 	_add_fallback_items() {
 		local _fb_ch="$1" _fb_tag_prefix="$2"
@@ -867,9 +875,9 @@ mirror_prep_upgrade() {
 			esac
 		done <<< "$_fb_targets"
 		# Add versions not already shown from the user's own channel
-		[[ -n "$_fb_n"  && "$_all_seen" != *"$_fb_n"*  ]] && _fb_items+=("${_fb_tag_prefix}n|$_fb_n|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_n}"
-		[[ -n "$_fb_z"  && "$_all_seen" != *"$_fb_z"*  ]] && _fb_items+=("${_fb_tag_prefix}z|$_fb_z|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_z}"
-		[[ -n "$_fb_n1" && "$_all_seen" != *"$_fb_n1"* ]] && _fb_items+=("${_fb_tag_prefix}1|$_fb_n1|$_fb_ch") && _all_seen="${_all_seen}|${_fb_n1}"
+		[[ -n "$_fb_n"  && "$_all_seen" != *"|$_fb_n|"*  ]] && _fb_items+=("${_fb_tag_prefix}n|$_fb_n|$_fb_ch")  && _all_seen="${_all_seen}${_fb_n}|"
+		[[ -n "$_fb_z"  && "$_all_seen" != *"|$_fb_z|"*  ]] && _fb_items+=("${_fb_tag_prefix}z|$_fb_z|$_fb_ch")  && _all_seen="${_all_seen}${_fb_z}|"
+		[[ -n "$_fb_n1" && "$_all_seen" != *"|$_fb_n1|"* ]] && _fb_items+=("${_fb_tag_prefix}1|$_fb_n1|$_fb_ch") && _all_seen="${_all_seen}${_fb_n1}|"
 	}
 
 	[[ "$_channel" != "fast"      ]] && _add_fallback_items "fast" "f"
@@ -1008,9 +1016,9 @@ change your channel when selected." 0 0
 					[[ $? -ne 0 ]] && { _target_ver=""; break; }
 					_target_ver=$(<"$_TUI_TMP")
 					_target_ver=$(echo "$_target_ver" | tr -d ' ')
-					if [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+					if _is_version_string "$_target_ver"; then
 						break
-					elif [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+					elif _is_minor_version "$_target_ver"; then
 						dlg --backtitle "$(ui_backtitle)" --infobox \
 							"Resolving $_target_ver to latest z-stream..." 0 0
 						local _resolved=""
@@ -1069,7 +1077,7 @@ change your channel when selected." 0 0
 			local _new_base
 			_new_base=$(<"$_TUI_TMP")
 			_new_base=$(echo "$_new_base" | tr -d ' ')
-			if [[ ! "$_new_base" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			if ! _is_version_string "$_new_base"; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format. Use x.y.z or x.y.z-rc.N" 0 0
 				continue
 			fi
@@ -1949,8 +1957,8 @@ _operator_search() {
 	local line op_name display_name state catalog_label
 	declare -A _seen_ops=()
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"              # trim leading whitespace
-		line="${line%%[[:space:]]}"              # trim trailing whitespace
+		line="${line#"${line%%[![:space:]]*}"}"  # trim all leading whitespace
+		line="${line%"${line##*[![:space:]]}"}"  # trim all trailing whitespace
 		[[ -z "$line" ]] && continue
 		# Multi-file grep prepends "filename:line" — extract catalog from the filename
 		catalog_label=""
@@ -1996,8 +2004,8 @@ _operator_search() {
 	# Build set of what user selected
 	declare -A _SEL=()
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"              # trim leading whitespace
-		line="${line%%[[:space:]]}"              # trim trailing whitespace
+		line="${line#"${line%%[![:space:]]*}"}"  # trim all leading whitespace
+		line="${line%"${line##*[![:space:]]}"}"  # trim all trailing whitespace
 		[[ -n "$line" ]] && _SEL["$line"]=1
 	done < "$_TUI_TMP"
 

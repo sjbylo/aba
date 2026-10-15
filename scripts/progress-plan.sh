@@ -33,9 +33,9 @@ case "$1" in
 		aba_progress "PLAN|rpms_ext|Install required packages|5"
 		aba_progress "PLAN|reg_config|Validate configuration|2"
 		aba_progress "PLAN|reg_env|Check environment|2"
-		aba_progress "PLAN|reg_firewall|Configure firewall|2"
 		aba_progress "PLAN|reg_download|Download registry software|10"
 		aba_progress "PLAN|reg_install|Install registry|15"
+		aba_progress "PLAN|reg_firewall|Configure firewall|2"
 		aba_progress "PLAN|reg_postcfg|Configure credentials|3"
 		aba_progress "PLAN|reg_verify|Verify connectivity|2"
 		;;
@@ -105,6 +105,7 @@ case "$1" in
 		aba_progress "PLAN|sv_save|Save images to disk|70"
 		aba_progress "PLAN|sv_cli_wait|Wait for CLI tools|5"
 		aba_progress "PLAN|sv_finalize|Pack transfer config|3"
+		aba_progress "PLAN|bnd_cli_wait|Verify CLI tools|3"
 		aba_progress "PLAN|bnd_pack|Pack bundle|10"
 		;;
 

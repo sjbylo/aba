@@ -33,6 +33,285 @@ Issues or Pull Requests.
 
 ---
 
+## oc-mirror v2 load: stale .history causes "manifest unknown" on retry
+
+**Severity:** HIGH
+**Status:** In Progress
+**Added:** 2026-10-15
+
+**Problem:** When `oc-mirror --v2 ... --from file://. docker://...` (diskToMirror/load)
+fails and ABA retries, every subsequent attempt fails with "manifest unknown" for all
+images (0/N mirrored).
+
+**Root cause:** oc-mirror creates `working-dir/.history` entries during the load to track
+processed images. Between retries, ABA kills the orphaned internal registry on port 55000
+(necessary to free the port). On retry, oc-mirror starts a fresh empty registry but reads
+the stale `.history` — thinks images are already cached, skips re-populating the registry,
+and every manifest lookup returns 404.
+
+**Fix applied:** Delete `data/working-dir/.history` between retries in
+`_run_oc_mirror_with_retry()` (scripts/include_all.sh), right after the port 55000
+cleanup. This forces oc-mirror to re-process all images against the fresh registry.
+No adverse side effects — the internal registry is empty anyway so there's nothing
+to resume from.
+
+**Verify:** The `create-bundle-to-disk` E2E suite exercises save→load with retries.
+Confirm the suite passes with the fix deployed. Also verify manually that a forced
+first-attempt failure (e.g. kill oc-mirror mid-load) recovers cleanly on retry.
+
+**Upstream:** Consider filing a bug with Red Hat — oc-mirror v2 should either not
+write `.history` during diskToMirror, or should clear it when it starts a fresh
+internal registry.
+
+---
+
+## Catalog extraction: content-driven try JSON then YAML (ignore extension)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** Operator catalog packages sometimes ship the wrong content for the
+file extension (e.g. JSON in `catalog.yaml` — serverless-operator). We only
+sniff JSON-in-`.yaml` via `head -c1 == '{'`. We do **not** handle the reverse
+(YAML content in a `.json` file). Extension-based dispatch remains fragile.
+
+**Proposed fix:** Ignore extension for the parse path. Add a helper that tries
+JSON extraction first, then YAML, and use it for every candidate file under
+each operator dir:
+
+```bash
+_extract_from_file() {
+	local dir="$1" f="$2"
+	_extract_from_json "$dir" "$f" && return 0
+	_extract_from_yaml "$f"
+}
+```
+
+Prefer known names first (`package.json`, `catalog.json`, `index.json`,
+`package.yaml`, then `*.json` / `*.yaml` / `*.yml`). Record skipped dirs when
+nothing extracts. Remove the `head -c1` special cases.
+
+Do **not** shell out to `file`/`type` (dependency + unreliable on short FBC
+blobs). Do **not** land this in a rush — needs a focused func test with both
+mislabel directions before merging.
+
+**Workaround:** Current `head -c1` fix on `dev`/`main` covers the known
+JSON-in-`.yaml` case (serverless-operator).
+
+---
+
+## Catalog / operator-index refresh must be best-effort (never abort ABA)
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** Refreshing operator catalog indexes (redhat / certified / community)
+is treated as a hard requirement. If extraction is incomplete (e.g. 150/151
+operators because one package ships JSON content in a `.yaml` file, or a
+transient pull/parse glitch), ABA aborts the whole workflow — `aba isconf`,
+bundle configure, TUI mirror setup, etc. Catalog indexes are a convenience for
+operator browsing and imageset generation; a missing or partial index should
+not block install, sync, save, or bundle builds.
+
+**Root cause:** `download-catalog-index.sh` (and callers via `catalogs-wait`)
+fails closed on incomplete extraction (`op_count != expected_count`) and
+surfaces that as a fatal Make/CLI error.
+
+**Proposed fix:** Make catalog refresh **best-effort only**:
+- Warn loudly on incomplete/failed extraction (which packages skipped, counts).
+- Keep any partial index that was produced (better than nothing).
+- Do **not** `aba_abort` / fail Make targets solely because an index is short.
+- Operator selection / ISC generation should degrade gracefully (warn if an
+  operator cannot be resolved from the index; allow retry / refresh later).
+
+**Workaround:** Re-run `./install` to clear the task cache; ensure the JSON-in-
+`.yaml` extractor fix is present; or use a branch that already has a complete
+shipped index under `catalogs/`.
+
+---
+
+## Suppress output for excluded image categories during sync/save
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** When operators, additional images, or release images are excluded
+(via `exclude` settings), `aba sync` / `aba save` still outputs messages about
+those categories — e.g. "All operator catalogs ready", "Additional images: 1",
+"Verifying release image availability". This is confusing because it implies
+work is being done for categories the user explicitly excluded.
+
+**Proposed fix:** Guard each category's output behind a check for its exclusion
+state. If operators are excluded, skip catalog fetching messages and "To add
+operators..." hints. If additional images are excluded, skip the count message.
+If release images are excluded, skip the release image verification message.
+The `[ABA] Excluded: ...` summary line at the end is sufficient.
+
+---
+
+## Cross-validate networking values (IPs, CIDRs, collisions)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-14
+
+**Problem:** The networking page (Cluster — Networking) validates each field
+individually (valid IP? valid CIDR?) but does not cross-validate fields against
+each other. A user can configure values that are individually valid but
+collectively broken — e.g. a gateway outside the machine network, a starting IP
+that collides with the DNS server, or node IPs that overlap the gateway.
+
+The core (`_valid_cluster_name` block in `include_all.sh`) already checks:
+- starting_ip is within machine_network CIDR ✅
+- all node IPs fit within machine_network CIDR ✅
+- api_vip / ingress_vip within machine_network CIDR ✅
+- api_vip ≠ ingress_vip ✅
+
+But these checks were **missing** (now implemented):
+1. **Gateway within CIDR** — next_hop_address must be inside machine_network
+2. **Starting IP ≠ network/broadcast** — starting_ip should not be the network
+   address or broadcast address of the CIDR
+3. **IP collision detection** — no two of {starting_ip..last_node_ip, gateway,
+   api_vip, ingress_vip} should overlap
+4. **VIPs outside node range** — api_vip and ingress_vip should not fall within
+   the starting_ip..starting_ip+N range
+
+**Proposed fix:** Create a shared function `_validate_network_consistency()` in
+`include_all.sh` that performs all cross-checks using the existing `ip_in_cidr`,
+`ip_to_int`, `int_to_ip`, and `cidr_last_ip` helpers. Returns 0 on success,
+prints all errors to stderr (so the user sees every problem, not just the first).
+
+```bash
+# include_all.sh
+_validate_network_consistency() {
+    local ret=0
+    local net_addr prefix_length
+    net_addr="${machine_network%/*}"    # already split by caller
+    # ... or accept args
+
+    # 1. Gateway within CIDR
+    if [ -n "${gateway:-}" ]; then
+        ip_in_cidr "$gateway" "$net_addr" "$prefix_length" || {
+            echo_red "Error: gateway ($gateway) is outside machine_network ($machine_network)" >&2
+            ret=1
+        }
+    fi
+
+    # 2. Starting IP is not network or broadcast address
+    local net_int=$(ip_to_int "$net_addr")
+    local bcast=$(cidr_last_ip "$net_addr" "$prefix_length")
+    if [ "$starting_ip" = "$net_addr" ] || [ "$starting_ip" = "$bcast" ]; then
+        echo_red "Error: starting_ip ($starting_ip) is the network or broadcast address" >&2
+        ret=1
+    fi
+
+    # 3. Collision detection: build list of reserved IPs, check node range
+    local -A reserved=()
+    [ -n "${gateway:-}" ]     && reserved["$gateway"]="gateway"
+    [ -n "${api_vip:-}" ]     && reserved["$api_vip"]="api_vip"
+    [ -n "${ingress_vip:-}" ] && reserved["$ingress_vip"]="ingress_vip"
+    # Check each node IP against reserved
+    local start_int=$(ip_to_int "$starting_ip")
+    local total=$(( num_masters + num_workers ))
+    for (( i=0; i<total; i++ )); do
+        local node_ip=$(int_to_ip $(( start_int + i )))
+        if [ -n "${reserved[$node_ip]:-}" ]; then
+            echo_red "Error: node IP $node_ip collides with ${reserved[$node_ip]}" >&2
+            ret=1
+        fi
+    done
+
+    return $ret
+}
+```
+
+Call this function:
+- In the **core** `normalize_cluster_conf` / validation block (where existing
+  `ip_in_cidr` checks already run)
+- In the **TUI** networking page, on "Next" — show a msgbox with all errors
+  before allowing the user to proceed
+
+**TUI integration sketch:**
+```bash
+# tui-cluster.sh — when user presses Next on networking page
+local _net_errors
+_net_errors=$(_validate_network_consistency 2>&1) || {
+    dlg --backtitle "$(ui_backtitle)" --title "Network Errors" \
+        --msgbox "$_net_errors" 0 0
+    continue
+}
+```
+
+**Workaround:** Currently, errors are caught later during `verify-config.sh`
+or at install time, but with less helpful messages.
+
+---
+
+## Review all aba_progress calls for correctness and completeness
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-13
+
+**Problem:** The TUI progress dialog relies on `aba_progress` calls in scripts
+to drive the weighted progress bar. If calls are missing, misordered, or have
+wrong weights, the progress bar stalls, jumps, or finishes early — confusing
+the user.
+
+**Proposed fix:** Audit every script that emits `aba_progress` (mirror install,
+save, sync, load, bundle) against its corresponding `_progress_plan-*` Makefile
+target. Verify that: (1) every step in the plan has a matching `aba_progress`
+call, (2) weights reflect actual wall-clock proportions, (3) no calls are
+missing for new code paths added since the initial implementation.
+
+---
+
+## Add TUI progress dialogs to remaining workflows
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-13
+
+**Problem:** The TUI progress dialog currently only covers mirror operations
+(install, save, sync, load, bundle). Other long-running workflows — cluster
+ISO generation, cluster installation, and potentially others — still show a
+blank or static screen while the user waits with no feedback.
+
+**Proposed fix:** Add `_progress_plan-*` Makefile targets and corresponding
+`aba_progress` calls to:
+- **ISO/image generation** (`generate-image.sh` / Makefile.cluster `iso` target)
+- **Cluster installation** (agent-based install monitoring)
+- **Any other workflows** that take more than ~30 seconds
+
+Each needs a progress plan with weighted steps, matching `aba_progress` emitters
+in the scripts, and TUI integration via `_exec_with_progress`.
+
+---
+
+## TUI progress: use `less -r` to view output after task completion
+
+**Severity:** LOW
+**Status:** Done
+**Added:** 2026-10-14
+
+**Problem:** When a TUI progress workflow finishes (success or failure), the
+"View Output" button shows raw output with `cat` + tail streaming.  The user
+cannot scroll back through multi-page output — they see only the last
+screenful and must press a key to return.
+
+**Proposed fix:** After task completion, use `less -r` (ANSI-aware pager) instead
+of `cat`/`tail`.  This lets users scroll up/down through the full output with
+color preserved.  During live execution, keep the current `tail -f` streaming
+behavior (user presses any key to return to the progress dialog).
+
+**Demo:** The `devel/tui-progress-demo/` already implements this.  The "verbose"
+menu item produces multi-page output and opens `less -r` on completion.
+
+---
+
 ## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
 
 **Severity:** MEDIUM
@@ -2412,18 +2691,107 @@ _ensure_aba_conf_fresh() {
 ## OMR health check timeout too short (30s hardcoded)
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Planned (ABA workaround landed 2026-10-15 — still need upstream fix)
 **Added:** 2026-10-12
 
-**Problem:** The OMR (`mirror-registry`) binary has a hardcoded 30s health check timeout during `install`. On slower environments (e.g. AWS instances), the quay container takes longer than 30s to become healthy, causing the install to fail with `"install failed","err":"health check: timeout after 30s"`. The quadlet, systemd service, and linger are all set up correctly — starting the service manually afterwards works fine.
+**Problem:** The OMR (`mirror-registry`) binary has a hardcoded 30s health check timeout during `install`. On slower environments (e.g. AWS instances), the quay container takes longer than 30s to become healthy, causing the install to fail with `"install failed","err":"health check: timeout after 30s"`. The quadlet, systemd service, and linger are often set up correctly — starting the service manually afterwards works fine. Diagnostic lines like `Unit quay.service could not be found` in the install dump are misleading (OMR runs `systemctl status` without `--user`).
 
-**Root cause:** The Go source in the quay/quay repo (`mirror-registry` binary) hardcodes the health check timeout at 30 seconds. There is no `--timeout` CLI flag to override it.
+**Root cause:** The Go source in the quay/quay repo (`mirror-registry` binary) hardcodes the health check timeout at 30 seconds. There is no `--timeout` CLI flag to override it. On failure, OMR does not remove the Quadlet, so a blind second `install` hits "existing installation found".
 
-**Proposed fix:** Patch the OMR Go source to either:
+**Proposed fix (upstream):** Patch the OMR Go source to either:
 1. Increase the default health check timeout to 120s (matching ABA's own registry readiness timeout)
 2. Add a `-health-timeout` CLI flag so the caller can configure it
 
 Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the patch.
 
-**Workaround:** If the install fails with this timeout, the service is actually set up correctly. Run `systemctl --user start quay.service` manually, then re-run `aba -d mirror install` (ABA detects the running registry and registers it).
+**ABA workaround (temporary):** `reg_omr_install_or_recover()` in `scripts/reg-common.sh` (used by local + remote OMR install): on health-check timeout → start `quay.service` + probe; if still down → uninstall service (keep data) + retry install once. See also entry below to remove this after re-test.
+
+**Manual workaround:** `systemctl --user start quay.service`, then re-run `aba -d mirror install` (ABA skips install when `/v2/` is already up).
+
+---
+
+## OMR install: remove ABA 30s health-timeout workaround (after re-test)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** ABA carries a temporary recovery path (`reg_omr_install_or_recover`) around OMR's hardcoded 30s install health check. It should not live forever — it masks an upstream limitation and adds install complexity.
+
+**When to remove:**
+1. OMR image ships a longer or configurable health timeout, **and**
+2. Re-test locally + remote: fresh install, reinstall-with-preserved-data, and vendor-matrix / bundle OMR paths with the workaround deleted (or gated off)
+3. Confirm we no longer see `health check: timeout after 30s` / `timed out waiting for certificate` in normal lab runs
+
+**Where:** `scripts/reg-common.sh` (`reg_omr_install_or_recover`), callers in `scripts/reg-install-omr.sh` and `scripts/reg-install-omr-remote.sh`. Replace with a plain `mirror-registry install` again once upstream is fixed.
+
+---
+
+## Fully test `aba setup dns` and `aba setup ntp`
+
+**Severity:** MEDIUM — these commands modify system config and can break E2E infrastructure
+**Status:** TODO
+**Added:** 2026-10-15
+
+**Problem:** Running `setup-dns.sh` on the bastion overwrites `/etc/dnsmasq.d/aba-upstream.conf` with only the auto-detected upstream DNS server. In the lab environment, the E2E pool DNS records live on `10.0.1.8`, but `setup-dns.sh` detects `192.168.2.1` (the default gateway) as the upstream. This silently drops `10.0.1.8`, breaking name resolution for all pool hosts (`conN.example.com`, `disN.example.com`).
+
+**What's needed:**
+1. Func tests that verify `setup-dns.sh` and `remove-dns.sh` are idempotent and don't break existing DNS resolution.
+2. Tests that verify `setup-ntp.sh` and `remove-ntp.sh` similarly.
+3. Consider whether `setup-dns.sh` should preserve existing upstream servers when reconfiguring, rather than replacing them.
+4. E2E suites that call these commands should verify DNS still resolves pool hostnames after the call.
+
+---
+
+## Simplify bare-metal `aba install` into a single continuous process
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** Installing a bare-metal cluster with `aba -d <cluster> install` currently requires the user to run the command **three separate times**. The Makefile splits the workflow into three phases with hard stops between them:
+
+1. First run: generates agent config YAML, then **stops** and asks the user to review/edit MAC addresses or other settings in the agent-config.yaml file.
+2. Second run: creates the ISO file, then **stops** and tells the user to boot their servers with the ISO.
+3. Third run: monitors the installation until completion.
+
+This "make dance" is confusing and error-prone — users must remember to re-run `aba install` at each pause.
+
+**Proposed fix:** Collapse the three Makefile phases into a single continuous process using interactive `ask` prompts:
+
+1. Generate agent-config.yaml as today.
+2. **Prompt 1:** "If you need to modify the agent config file (e.g. MAC addresses), do so now, then press Enter to continue."
+3. Build the ISO.
+4. **Prompt 2:** "The ISO has been created at `<path>`. Boot your servers with this ISO, then press Enter to monitor the installation."
+5. Monitor the installation to completion.
+
+This keeps the same user checkpoints but removes the need to re-run the command. The Makefile would have a single target that calls a script handling all phases sequentially with `ask` pauses in between.
+
+**Notes:**
+- The TUI already handles this more smoothly; this improvement is for the CLI/Makefile path.
+- The `ask` function already exists in ABA and supports "press Enter to continue" style prompts.
+- Must still work correctly if the process is interrupted (Ctrl-C) at any phase — re-running should resume from the right point.
+
+---
+
+## Quay uninstall leaves stale systemd service and quadlet file
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** After `aba -d mirror uninstall` of a Quay registry (local or remote), the `quay.service` systemd user unit and the `~/.config/containers/systemd/quay.container` quadlet file may be left behind. The uninstall reports success because `reg_stale_report quay` does not check for `quay.service` — it only checks containers, port, and `redis_pass` secret. A subsequent install of a different vendor (e.g. OMR) detects the stale state and aborts.
+
+**Root cause:** Two issues:
+1. Red Hat's `mirror-registry uninstall` Ansible playbook does not always clean up the systemd service or quadlet file.
+2. `reg_stale_report quay` (in `reg-common.sh`) is missing the `quay.service` and quadlet file checks. The `omr` case already has these checks (lines 840-850), but the `quay` case does not.
+
+**Proposed fix:**
+1. Add `quay.service` (systemctl) and quadlet file (`quay.container`) checks to `reg_stale_report quay`, matching what the `omr` case already does. This ensures `reg_quay_remove` correctly detects the incomplete cleanup and reports the failure instead of falsely claiming success.
+2. Investigate why `mirror-registry uninstall` leaves the systemd service and quadlet file behind. This may be a bug in the `mirror-registry` Ansible playbook (upstream Red Hat issue) or a missing flag/option. ABA must NOT manually clean up after the vendor tool — if `mirror-registry uninstall` leaves stale state, the uninstall must report failure so the user can investigate.
+
+**Reproducer:**
+1. `aba -d mirror install` with `reg_vendor=quay` (remote)
+2. `aba -d mirror uninstall`
+3. Change `reg_vendor=omr` and `aba -d mirror install` → aborts with "quay.service still active".
 

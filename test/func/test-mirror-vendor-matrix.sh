@@ -27,7 +27,7 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/aba")" || exit 1
 # ---- Configuration ---------------------------------------------------------
 
 # Override via env or flags
-DIS_HOST="${DIS_HOST:-dis1.example.com}"
+DIS_HOST="${DIS_HOST:-disco.example.com}"
 CON_HOST="${CON_HOST:-$(hostname -f)}"
 SSH_CONF="${SSH_CONF:-$HOME/.aba/ssh.conf}"
 
@@ -309,6 +309,17 @@ _vm_test() {
 
 	run "Push test image 1" "$(_vm_push "$dn" "$_IMG1")"
 	run "Check image 1 exists" "$(_vm_check "$dn" "$_IMG1")"
+
+	# Phase 1b: stop → verify stopped → stop idempotent → start → verify
+	#           started → start idempotent → verify images survived
+	run "Stop registry" "aba -d $dn stop"
+	run "Assert unreachable after stop" "! curl -sk --connect-timeout 5 $url/v2/"
+	run "Stop again (idempotent)" "aba -d $dn stop"
+	run "Start registry" "aba -d $dn start"
+	run "Assert reachable after start" "curl -sk --connect-timeout 5 $url/v2/"
+	run "Start again (idempotent)" "aba -d $dn start"
+	run "Verify registry after stop/start" "aba -d $dn verify"
+	run "Assert image 1 survived stop/start" "$(_vm_check "$dn" "$_IMG1")"
 
 	# Phase 2: uninstall keeping data → assert port free, data preserved
 	run "Uninstall (keep data)" "aba -d $dn uninstall"
@@ -607,8 +618,8 @@ run "Push to registry 2" "$(_vm_push "$_CC_DN2" "sa-cc/only-in-2:v1")"
 run "Check image in registry 1" "$(_vm_check "$_CC_DN1" "sa-cc/only-in-1:v1")"
 run "Check image in registry 2" "$(_vm_check "$_CC_DN2" "sa-cc/only-in-2:v1")"
 
-run "Assert no cross-contamination (1→2)" "! $(_vm_check "$_CC_DN2" "sa-cc/only-in-1:v1")"
-run "Assert no cross-contamination (2→1)" "! $(_vm_check "$_CC_DN1" "sa-cc/only-in-2:v1")"
+run "Assert no cross-contamination (1→2)" "! ( $(_vm_check "$_CC_DN2" "sa-cc/only-in-1:v1") )"
+run "Assert no cross-contamination (2→1)" "! ( $(_vm_check "$_CC_DN1" "sa-cc/only-in-2:v1") )"
 
 run "Uninstall registry 1" "aba -d $_CC_DN1 uninstall --delete-data"
 run "Uninstall registry 2" "aba -d $_CC_DN2 uninstall --delete-data"

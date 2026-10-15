@@ -104,7 +104,7 @@ _valid_ip_or_host_list() {
 		[[ -z "$entry" ]] && continue
 		# Accept valid IPs or valid hostnames
 		if ! _valid_ip "$entry"; then
-			[[ "$entry" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || return 1
+			_valid_domain "$entry" || return 1
 		fi
 	done
 	return 0
@@ -673,7 +673,8 @@ _exec_in_tui() {
 	box_height=$((term_height - 2))
 	box_width=$((term_width - 2))
 
-	trap : INT
+	local _got_int=false
+	trap '_got_int=true' INT
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
 	# Unset KUBECONFIG so child resolves it from the cluster dir, not stale TUI state
 	{ echo "Executing: $cmd"; echo; KUBECONFIG= PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
@@ -683,6 +684,11 @@ _exec_in_tui() {
 	local exit_code=${PIPESTATUS[0]}
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
+
+	# SIGINT during pipeline can leave PIPESTATUS[0]=0 falsely (#942)
+	if $_got_int && [[ $exit_code -eq 0 ]]; then
+		exit_code=130
+	fi
 
 	# Run post-command hook unconditionally — mirror state is uncertain after
 	# any attempt (even failed ones), so always recheck.
@@ -1108,7 +1114,7 @@ tui_cluster_menu_flags() {
 		_CLUSTER_HAS_ANY=true
 		if cluster_installed "$dir"; then
 			_CLUSTER_HAS_INSTALLED=true
-		else
+		elif [[ -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]]; then
 			_CLUSTER_HAS_INSTALLING=true
 		fi
 	done
@@ -1497,13 +1503,13 @@ _resolve_minor_to_patch() {
 	local _channel="${2:-stable}"
 
 	# Already x.y.z or x.y.z-rc.N? Return as-is
-	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+	if _is_version_string "$_ver"; then
 		echo "$_ver"
 		return 0
 	fi
 
 	# x.y format — resolve to latest z (include_all expects channel then minor)
-	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+	if _is_minor_version "$_ver"; then
 		local _resolved
 		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null) || true
 		if [[ -n "$_resolved" ]]; then

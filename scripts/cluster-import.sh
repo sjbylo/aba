@@ -40,7 +40,9 @@ done
 [ -z "$_kubeconfig" ] && aba_abort "Missing required --kubeconfig flag. Use: aba import --kubeconfig <path>"
 
 # Resolve relative paths
-_kubeconfig=$(cd "$(dirname "$_kubeconfig")" && echo "$PWD/$(basename "$_kubeconfig")")
+_kc_dir=$(dirname "$_kubeconfig")
+[ -d "$_kc_dir" ] || aba_abort "Kubeconfig directory not found: $_kc_dir"
+_kubeconfig=$(cd "$_kc_dir" && echo "$PWD/$(basename "$_kubeconfig")")
 [ -f "$_kubeconfig" ] || aba_abort "Kubeconfig not found: $_kubeconfig"
 
 export KUBECONFIG="$_kubeconfig"
@@ -128,8 +130,6 @@ if [ -z "$_image_source" ]; then
 
 	if [ "$(( _has_idms + _has_itms + _has_icsp ))" -gt 0 ]; then
 		_image_source="mirror"
-	elif [ -f mirror/.available ]; then
-		_image_source="mirror"
 	else
 		_proxy_http=$(oc get proxy/cluster -o jsonpath='{.spec.httpProxy}' 2>/dev/null) || true
 		if [ -n "$_proxy_http" ]; then
@@ -159,6 +159,7 @@ echo "  image_source    = $_image_source"
 
 # --- Check for existing state ---
 _dir_name="${_name:-$_cluster_name}"
+_valid_cluster_name "$_dir_name" || exit 1
 _state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
 _cluster_fqdn="${_cluster_name}.${_base_domain}"
 

@@ -157,9 +157,9 @@ trap cleanup EXIT
 cp sno/cluster.conf "$TMPDIR_TEST/"
 cp sno/agent-config.yaml "$TMPDIR_TEST/"
 ln -sf "$(pwd)/aba.conf" "$TMPDIR_TEST/aba.conf"
-ln -sf "$(pwd)/scripts" "$TMPDIR_TEST/scripts"
+ln -sfn "$(pwd)/scripts" "$TMPDIR_TEST/scripts"
 ln -sf "$(pwd)/templates" "$TMPDIR_TEST/templates"
-ln -sf "$(pwd)/cli" "$TMPDIR_TEST/cli"
+ln -sfn "$(pwd)/cli" "$TMPDIR_TEST/cli"
 ln -sf "$(pwd)/Makefile" "$TMPDIR_TEST/Makefile"
 
 out=$(aba --dir "$TMPDIR_TEST" ls 2>&1 || true)

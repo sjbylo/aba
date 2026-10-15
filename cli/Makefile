@@ -366,23 +366,29 @@ $(openshift_install_file):
 # oc-mirror must be well-tested before adoption.
 #
 # Logic:
-#   - EC (engineering candidate): use the dev-preview path for that version
-#     (EC builds bundle oc-mirror with unreleased features for that release)
+#   - EC (engineering candidate): probe the dev-preview path for that version.
+#     If oc-mirror is published there, use it (the user likely wants the matching
+#     version for OCP 5.x etc.). If not (e.g. 4.23.0-ec.1), fall back to the pin.
 #   - All other versions (RC, GA, ...): use the pinned channel below.
-#     As of Oct 2026, only EC and stable-4.x carry oc-mirror.
-#     RC and candidate channels do NOT include it.
-#     When Red Hat publishes oc-mirror under stable-5.x, re-add the ocp_major
-#     branch here (see git log for the removed ifeq block).
-#   - No version set: fall back to the pinned channel (safe default)
+#     RC and candidate channels do NOT include oc-mirror.
+#     When Red Hat publishes oc-mirror under stable-5.x, update the pin.
+#   - No version set: fall back to the pinned channel (safe default).
 oc_mirror_pin = stable-4.22
+oc_mirror_pinned_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)
 ifneq ($(ocp_version),)
   ifneq ($(findstring -ec.,$(ocp_version)),)
-    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp-dev-preview/$(ocp_version)
+    _ec_mirror_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp-dev-preview/$(ocp_version)
+    _ec_mirror_exists := $(shell curl -sfI --connect-timeout 5 "$(_ec_mirror_url)/oc-mirror.rhel9.tar.gz" >/dev/null 2>&1 && echo yes)
+    ifeq ($(_ec_mirror_exists),yes)
+      oc_mirror_base_url = $(_ec_mirror_url)
+    else
+      oc_mirror_base_url = $(oc_mirror_pinned_url)
+    endif
   else
-    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)
+    oc_mirror_base_url = $(oc_mirror_pinned_url)
   endif
 else
-  oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)
+  oc_mirror_base_url = $(oc_mirror_pinned_url)
 endif
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 

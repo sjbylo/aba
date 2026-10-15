@@ -321,28 +321,28 @@ e2e_run "Clean sno cluster directory" "if [ -d $SNO ]; then aba --dir $SNO reset
 
 # CIDR variation tests (ported from old test1 lines 353-360)
 e2e_run "Test /29 small CIDR (cluster.conf)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step cluster.conf"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_small_cidr_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step cluster.conf"
 e2e_run "Verify /29 CIDR in cluster.conf" \
     "grep 'machine_network=.*/' $SNO/cluster.conf"
 e2e_run "Test /29 small CIDR (ISO creation)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_small_cidr_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step iso"
 e2e_run "Clean for /30 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /30 CIDR (cluster.conf)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_sno_ip)/30' --step cluster.conf"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_tiny_cidr_ip) --machine-network '$(pool_tiny_cidr)' --gateway $(cidr_gateway "$(pool_tiny_cidr)") --step cluster.conf"
 e2e_run "Verify /30 CIDR in cluster.conf" \
     "grep 'machine_network=.*/30' $SNO/cluster.conf"
 e2e_run "Clean for /20 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /20 large CIDR (cluster.conf + ISO)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.0.0/20' --step iso"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.0.0/20' --gateway $(cidr_gateway "10.0.0.0/20") --step iso"
 e2e_run "Verify /20 CIDR in cluster.conf" \
     "grep 'machine_network=10.0.0.0/20' $SNO/cluster.conf"
 
 e2e_run "Clean and recreate with pool CIDR for install" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network) --gateway $(pool_gateway)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_wait_cluster_available $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"

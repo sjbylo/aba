@@ -49,6 +49,15 @@ pool_machine_network() {
     echo "${POOL_MACHINE_NETWORK:-10.0.0.0/20}"
 }
 
+# Get the default gateway for the pool machine network (first usable IP).
+# E.g. 10.0.0.0/20 → 10.0.0.1.  The IP need not actually exist — cluster
+# nodes just need a syntactically valid gateway within the CIDR.
+pool_gateway() {
+    local _mn
+    _mn="$(pool_machine_network "$@")"
+    echo "${POOL_GATEWAY:-$(echo "$_mn" | sed 's|\.[0-9]*/.*|.1|')}"
+}
+
 # Get the connected bastion's lab IP (ens192): pool_con_ip [POOL_NUM]
 # This is the .x0 address in the pool's decade: 10.0.2.(N*10)
 pool_con_ip() {
@@ -68,14 +77,53 @@ pool_dns_server() {
     pool_con_ip "$@"
 }
 
-# Get a small /29 CIDR that contains the pool's SNO IP: pool_small_cidr [POOL_NUM]
-# /29 = 8 addresses, aligned to 8-byte boundary.  Used by tests to validate
-# CIDR handling with minimal address ranges.
+# Get a small /29 CIDR for the pool: pool_small_cidr [POOL_NUM]
+# /29 = 8 addresses.  Uses the properly aligned /29 block that contains
+# the pool's SNO IP.  Pair with pool_small_cidr_ip() for starting_ip
+# (pool_sno_ip may land on the network address for some pools).
 pool_small_cidr() {
 	local p="${1:-${POOL_NUM:-1}}"
 	local last_octet=$((p * 10 + 2))
-	local net_addr=$((last_octet / 8 * 8))
+	local net_addr=$(( (last_octet / 8) * 8 ))
 	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/29"
+}
+
+# Get a valid starting IP inside the pool's /29 CIDR: pool_small_cidr_ip [POOL_NUM]
+pool_small_cidr_ip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$(( (last_octet / 8) * 8 ))
+	echo "${POOL_SUBNET:-10.0.2}.$(( net_addr + 2 ))"
+}
+
+# Get a /30 CIDR for the pool: pool_tiny_cidr [POOL_NUM]
+# /30 = 4 addresses (network + 2 usable + broadcast).
+# Aligned to /30 boundary containing the SNO IP.
+pool_tiny_cidr() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$(( (last_octet / 4) * 4 ))
+	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/30"
+}
+
+# Get a valid starting IP inside the pool's /30 CIDR: pool_tiny_cidr_ip [POOL_NUM]
+pool_tiny_cidr_ip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$(( (last_octet / 4) * 4 ))
+	echo "${POOL_SUBNET:-10.0.2}.$(( net_addr + 1 ))"
+}
+
+# Get the first usable IP (network + 1) from an arbitrary CIDR string.
+# E.g. 10.0.2.40/29 → 10.0.2.41, 10.0.2.42/30 → 10.0.2.41, 10.0.0.0/20 → 10.0.0.1
+cidr_gateway() {
+	local ip="${1%/*}" prefix="${1#*/}"
+	local a b c d
+	IFS=. read -r a b c d <<< "$ip"
+	local ip_int=$(( (a << 24) + (b << 16) + (c << 8) + d ))
+	local mask=$(( 0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF ))
+	local gw=$(( (ip_int & mask) + 1 ))
+	printf "%d.%d.%d.%d\n" $(( (gw >> 24) & 255 )) $(( (gw >> 16) & 255 )) $(( (gw >> 8) & 255 )) $(( gw & 255 ))
 }
 
 # Convenience aliases -- all cluster types share the same IPs.

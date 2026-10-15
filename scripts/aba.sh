@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.4.0
+ABA_VERSION=1.4.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20261013222907
+ABA_BUILD=20261016044340
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -493,11 +493,8 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		case "$_img_action" in
 			add)
 				[ $# -eq 0 ] && aba_abort "Usage: aba image add <image:tag> [<image:tag> ...]"
-				touch "$_img_file"
-				_added=0
+				# Validate all images before creating/modifying files (#1169, #1170)
 				for _img in "$@"; do
-					# Basic syntax: registry/repo (with optional tag or 64-hex sha256 digest)
-					# e.g. quay.io/ns/img:tag, registry.redhat.io/ubi9/ubi@sha256:<64 hex digits>
 					if ! echo "$_img" | grep -qE '^[a-zA-Z0-9][-a-zA-Z0-9.]*(/[-a-zA-Z0-9._]+)+(:[a-zA-Z0-9][-a-zA-Z0-9._]*|@sha256:[0-9a-fA-F]{64})?$'; then
 						aba_abort "Invalid image reference: $_img" \
 							"Expected format: registry/repo/image:tag  or  registry/repo/image@sha256:digest" \
@@ -506,6 +503,10 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 							"  quay.io/openshift/hello-openshift:1.2.0" \
 							"  registry.redhat.io/rhel9/support-tools@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 					fi
+				done
+				touch "$_img_file"
+				_added=0
+				for _img in "$@"; do
 					# Skip if already present (exact match)
 					if grep -qxF "$_img" "$_img_file" 2>/dev/null; then
 						aba_info "Image already in $_img_file: $_img"
@@ -610,7 +611,7 @@ for i in imgs:
 		ver=$arg
 		# Reject obvious format errors immediately (before any network lookups)
 		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p", "older", "o"
-		if ! [[ "$arg" =~ ^[0-9]+\.[0-9]+(\.[0-9]+(-[a-z]+\.[0-9]+)?)?$ ]] && \
+		if ! _is_version_string "$arg" && ! _is_minor_version "$arg" && \
 		   ! [[ "$arg" =~ ^(latest|l|previous|p|older|o)$ ]]; then
 			aba_abort "incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
 		fi
@@ -632,10 +633,10 @@ for i in imgs:
 		esac
 
 		# Expand ver to latest, if it's just a point version (x.y)
-		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && { ver=$(fetch_latest_z_version "$ocp_channel" "$ver") || true; }
+		_is_minor_version "$ver" && { ver=$(fetch_latest_z_version "$ocp_channel" "$ver") || true; }
 
-		# Extract version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
-		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
+		# Validate version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
+		_is_version_string "$ver" || ver=""
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		if [ ! "$ver" ]; then
@@ -702,10 +703,10 @@ for i in imgs:
 				tgt_ver=$(fetch_older_version "$chan") || true
 			;;
 		esac
-		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
-		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
+		_is_minor_version "$tgt_ver" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
+		_is_version_string "$tgt_ver" || tgt_ver=""
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
-		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		_is_version_string "$tgt_ver" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
 		_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
 		replace-value-conf -n ocp_upgrade_to -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
@@ -825,10 +826,8 @@ for i in imgs:
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
-		domain=""
-		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
-		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
+		domain="$2"
+		_valid_domain "$domain" || aba_abort "domain format incorrect [$domain] — must be a valid domain (e.g. lab, example.com, lab.internal)"
 		replace-value-conf --lower -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
@@ -1216,7 +1215,7 @@ for i in imgs:
 	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
 	elif [ "$1" = "--to" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[[ "$2" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]] || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
+		_is_version_string "$2" || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
 		upgrade_to="$2"
 		shift 2
 	elif [ "$1" = "--dry-run" ]; then
@@ -2011,7 +2010,7 @@ fi
 		# Exit loop if release version exists
 		if [ "$target_ver" ]; then
 			aba_debug "Validating user input: target_ver=[$target_ver]"
-			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$"; then
+			if _is_version_string "$target_ver"; then
 				# Validate version against Cincinnati graph (includes pre-release on candidate channel)
 				minor=$(_ver_minor "$target_ver")
 				aba_debug "Detected x.y.z format, extracting minor: $minor"
@@ -2075,7 +2074,7 @@ fi
 		[ "$target_ver" = "o" -a "$channel_ver_older" ] && target_ver=$channel_ver_older && aba_debug "User selected older: $channel_ver_older"
 
 		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OpenShift
-		if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
+		if _is_minor_version "$target_ver"; then
 			aba_debug "Detected x.y format, resolving to latest z-stream: $target_ver"
 			resolved_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver") || true
 			if [ -n "$resolved_ver" ]; then
