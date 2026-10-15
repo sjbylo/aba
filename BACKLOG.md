@@ -33,6 +33,38 @@ Issues or Pull Requests.
 
 ---
 
+## oc-mirror v2 load: stale .history causes "manifest unknown" on retry
+
+**Severity:** HIGH
+**Status:** In Progress
+**Added:** 2026-10-15
+
+**Problem:** When `oc-mirror --v2 ... --from file://. docker://...` (diskToMirror/load)
+fails and ABA retries, every subsequent attempt fails with "manifest unknown" for all
+images (0/N mirrored).
+
+**Root cause:** oc-mirror creates `working-dir/.history` entries during the load to track
+processed images. Between retries, ABA kills the orphaned internal registry on port 55000
+(necessary to free the port). On retry, oc-mirror starts a fresh empty registry but reads
+the stale `.history` — thinks images are already cached, skips re-populating the registry,
+and every manifest lookup returns 404.
+
+**Fix applied:** Delete `data/working-dir/.history` between retries in
+`_run_oc_mirror_with_retry()` (scripts/include_all.sh), right after the port 55000
+cleanup. This forces oc-mirror to re-process all images against the fresh registry.
+No adverse side effects — the internal registry is empty anyway so there's nothing
+to resume from.
+
+**Verify:** The `create-bundle-to-disk` E2E suite exercises save→load with retries.
+Confirm the suite passes with the fix deployed. Also verify manually that a forced
+first-attempt failure (e.g. kill oc-mirror mid-load) recovers cleanly on retry.
+
+**Upstream:** Consider filing a bug with Red Hat — oc-mirror v2 should either not
+write `.history` during diskToMirror, or should clear it when it starts a fresh
+internal registry.
+
+---
+
 ## Catalog extraction: content-driven try JSON then YAML (ignore extension)
 
 **Severity:** MEDIUM
