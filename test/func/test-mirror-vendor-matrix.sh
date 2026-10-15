@@ -310,6 +310,17 @@ _vm_test() {
 	run "Push test image 1" "$(_vm_push "$dn" "$_IMG1")"
 	run "Check image 1 exists" "$(_vm_check "$dn" "$_IMG1")"
 
+	# Phase 1b: stop → verify stopped → stop idempotent → start → verify
+	#           started → start idempotent → verify images survived
+	run "Stop registry" "aba -d $dn stop"
+	run "Assert unreachable after stop" "! curl -sk --connect-timeout 5 $url/v2/"
+	run "Stop again (idempotent)" "aba -d $dn stop"
+	run "Start registry" "aba -d $dn start"
+	run "Assert reachable after start" "curl -sk --connect-timeout 5 $url/v2/"
+	run "Start again (idempotent)" "aba -d $dn start"
+	run "Verify registry after stop/start" "aba -d $dn verify"
+	run "Assert image 1 survived stop/start" "$(_vm_check "$dn" "$_IMG1")"
+
 	# Phase 2: uninstall keeping data → assert port free, data preserved
 	run "Uninstall (keep data)" "aba -d $dn uninstall"
 	run "Assert port free after uninstall" "! curl -sk --connect-timeout 5 $url/v2/"
