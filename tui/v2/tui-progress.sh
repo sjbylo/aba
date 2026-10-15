@@ -251,7 +251,7 @@ _tp_draw() {
 	local _height=$(( ${#_tp_order[@]} + 10 ))
 	[ "$_height" -lt 18 ] && _height=18
 
-	_tp_dlg --title " $_title " \
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " $_title " \
 		--mixedgauge "$_subtitle" \
 		$_height 56 "$pct" \
 		"${args[@]}" < /dev/null 2>/dev/null || true
@@ -346,7 +346,7 @@ _tp_handle_prompt() {
 	local _default_flag=""
 	[ "$_default" = "n" ] && _default_flag="--defaultno"
 
-	_tp_dlg --title " ABA " --yes-label "Yes" --no-label "No" $_default_flag \
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " ABA " --yes-label "Yes" --no-label "No" $_default_flag \
 		--yesno "\n$_prompt" 0 0 || rc=$?
 	case "$rc" in
 		0) printf 'y\r' > "$_tp_input_fifo" ;;
@@ -363,7 +363,7 @@ _tp_show_output() {
 	if [ "$_tp_done" -eq 1 ]; then
 		# Post-completion: scrollable pager with ANSI color support.
 		if [ ! -s "$_tp_output_log" ]; then
-			_tp_dlg --title " Output " --msgbox "\n  No output was captured.\n" 7 40 || true
+			_tp_dlg --backtitle "$(ui_backtitle)" --title " Output " --msgbox "\n  No output was captured.\n" 7 40 || true
 			return
 		fi
 		# Append a navigation hint once so the user knows how to scroll/quit.
@@ -442,7 +442,7 @@ _tp_show_error() {
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
 	while true; do
 		_btn_rc=0
-		_tp_dlg --title " ${_title}: Error " \
+		_tp_dlg --backtitle "$(ui_backtitle)" --title " ${_title}: Error " \
 			--ok-label "View Output" \
 			--extra-button --extra-label "Retry" \
 			--cancel-label "OK" \
@@ -459,12 +459,12 @@ _tp_show_error() {
 _tp_show_abort() {
 	local _title="${1:-ABA}"
 	local _why="${_tp_abort:-Aborted.}"
-	_tp_dlg --title " ${_title}: Aborted " --msgbox "\n  $_why\n" 8 60 || true
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " ${_title}: Aborted " --msgbox "\n  $_why\n" 8 60 || true
 }
 
 _tp_show_stopped() {
 	local _title="${1:-ABA}"
-	_tp_dlg --title " ${_title}: Stopped " \
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " ${_title}: Stopped " \
 		--msgbox "\n  Stopped before all steps finished.\n" 8 56 || true
 }
 
@@ -502,7 +502,7 @@ _tp_show_success() {
 	local _default_btn=""
 	while true; do
 		local _rc=0
-		_tp_dlg --colors $_default_btn \
+		_tp_dlg --backtitle "$(ui_backtitle)" --colors $_default_btn \
 			--title " $_title " \
 			--yes-label "Done" --no-label "Output" \
 			--yesno "$_body" \
@@ -572,7 +572,7 @@ _exec_with_progress() {
 	_tp_script_pid=$!
 
 	# Show immediate feedback while waiting for the command to emit PLAN events
-	_tp_dlg --title " $title " --infobox "\n  One moment please ..." 5 30 2>/dev/null || true
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " $title " --infobox "\n  One moment please ..." 5 30 2>/dev/null || true
 
 	# Wait for PLAN events before first draw (10s timeout — aba.sh startup takes ~4s)
 	local _wait=100
