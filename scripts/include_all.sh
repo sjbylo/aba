@@ -4365,6 +4365,13 @@ _run_oc_mirror_with_retry() {
 				kill $_stale_pids 2>/dev/null || true
 				sleep 1
 			fi
+			# Remove stale .history so oc-mirror re-processes all images from
+			# scratch against the fresh (empty) internal registry.  Without this,
+			# oc-mirror skips images it already recorded → "manifest unknown".
+			if [ -d data/working-dir/.history ]; then
+				aba_debug "Removing stale data/working-dir/.history before retry"
+				rm -rf data/working-dir/.history
+			fi
 			aba_warn "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
