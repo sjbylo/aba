@@ -27,7 +27,7 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/aba")" || exit 1
 # ---- Configuration ---------------------------------------------------------
 
 # Override via env or flags
-DIS_HOST="${DIS_HOST:-dis1.example.com}"
+DIS_HOST="${DIS_HOST:-disco.example.com}"
 CON_HOST="${CON_HOST:-$(hostname -f)}"
 SSH_CONF="${SSH_CONF:-$HOME/.aba/ssh.conf}"
 
