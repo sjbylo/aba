@@ -46,6 +46,7 @@ flow-cni-operator nutanix-flow-cni alpha
 fujitsu-enterprise-postgres-operator Fujitsu Enterprise Postgres Operator stable
 function-mesh Function Mesh Operator alpha
 gitlab-operator-kubernetes GitLab stable
+gitlab-runner-operator GitLab Runner stable
 google-cloud-cluster-services-for-openshift-telemetry Cluster Services for OpenShift Telemetry stable
 gpu-operator-certified NVIDIA GPU Operator v26.7
 habana-ai-operator Intel Gaudi Base Operator stable

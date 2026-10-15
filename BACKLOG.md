@@ -33,6 +33,73 @@ Issues or Pull Requests.
 
 ---
 
+## Catalog extraction: content-driven try JSON then YAML (ignore extension)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** Operator catalog packages sometimes ship the wrong content for the
+file extension (e.g. JSON in `catalog.yaml` — serverless-operator). We only
+sniff JSON-in-`.yaml` via `head -c1 == '{'`. We do **not** handle the reverse
+(YAML content in a `.json` file). Extension-based dispatch remains fragile.
+
+**Proposed fix:** Ignore extension for the parse path. Add a helper that tries
+JSON extraction first, then YAML, and use it for every candidate file under
+each operator dir:
+
+```bash
+_extract_from_file() {
+	local dir="$1" f="$2"
+	_extract_from_json "$dir" "$f" && return 0
+	_extract_from_yaml "$f"
+}
+```
+
+Prefer known names first (`package.json`, `catalog.json`, `index.json`,
+`package.yaml`, then `*.json` / `*.yaml` / `*.yml`). Record skipped dirs when
+nothing extracts. Remove the `head -c1` special cases.
+
+Do **not** shell out to `file`/`type` (dependency + unreliable on short FBC
+blobs). Do **not** land this in a rush — needs a focused func test with both
+mislabel directions before merging.
+
+**Workaround:** Current `head -c1` fix on `dev`/`main` covers the known
+JSON-in-`.yaml` case (serverless-operator).
+
+---
+
+## Catalog / operator-index refresh must be best-effort (never abort ABA)
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** Refreshing operator catalog indexes (redhat / certified / community)
+is treated as a hard requirement. If extraction is incomplete (e.g. 150/151
+operators because one package ships JSON content in a `.yaml` file, or a
+transient pull/parse glitch), ABA aborts the whole workflow — `aba isconf`,
+bundle configure, TUI mirror setup, etc. Catalog indexes are a convenience for
+operator browsing and imageset generation; a missing or partial index should
+not block install, sync, save, or bundle builds.
+
+**Root cause:** `download-catalog-index.sh` (and callers via `catalogs-wait`)
+fails closed on incomplete extraction (`op_count != expected_count`) and
+surfaces that as a fatal Make/CLI error.
+
+**Proposed fix:** Make catalog refresh **best-effort only**:
+- Warn loudly on incomplete/failed extraction (which packages skipped, counts).
+- Keep any partial index that was produced (better than nothing).
+- Do **not** `aba_abort` / fail Make targets solely because an index is short.
+- Operator selection / ISC generation should degrade gracefully (warn if an
+  operator cannot be resolved from the index; allow retry / refresh later).
+
+**Workaround:** Re-run `./install` to clear the task cache; ensure the JSON-in-
+`.yaml` extractor fix is present; or use a branch that already has a complete
+shipped index under `catalogs/`.
+
+---
+
 ## Suppress output for excluded image categories during sync/save
 
 **Severity:** LOW
