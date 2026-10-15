@@ -1,5 +1,37 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.0...HEAD)
 
+### Added
+
+- **Network cross-validation** — `verify-config` now checks that the gateway is within the machine CIDR, detects IP collisions between nodes, and warns about VIP/node overlap.
+- **Shared validation functions** — Common domain and version regex patterns consolidated into reusable helpers, improving consistency across CLI, TUI, and config validation.
+- **TUI progress output viewer** — Post-completion output can be reviewed with a scrollable pager (less) from the progress dialog.
+- **Developer guide** — New `devel/README.md` documenting catalog refresh and operator sizing data generation procedures.
+
+### Changed
+
+- **Registry install is fully idempotent** — Removed the fast-path/skip-to-postcfg pattern from all six registry installers. Each step now runs normally and no-ops if already complete, making interrupted installs safely resumable from any point.
+- **Quay stop/start reliability** — Stop now waits up to 60 seconds for the port to close (was 2 seconds). Start waits up to 5 minutes for the Quay backend to initialize (was 2 minutes). Prevents the recurring race condition where restart fails because the port hasn't been released.
+- **Improved DNS warnings** — Replaced the confusing warn-then-success two-liner with a single actionable message suggesting `aba setup dns` or adding the cluster DNS server to `/etc/resolv.conf`.
+- **OMR install robustness** — Eliminated redundant `podman load` that could push the OMR health check past its timeout. Corrupt cached binaries are now detected and re-extracted automatically.
+
+### Fixed
+
+- **`aba setup dns` crash on fresh systems** — Script crashed silently when `nmcli` returned no DNS entries due to `pipefail`. Also fixed all `tools/` scripts swallowing messages when run directly.
+- **`aba setup ntp` wrong firewall network** — Allow-network was derived from the wrong interface when `--bastion-ip` was specified.
+- **Single-label base domains rejected** — Domains like `lab` or `local` were incorrectly rejected by validation in CLI, TUI, and config checks.
+- **Whitespace trim stripped all chars** — TUI operator basket names could be silently corrupted when trimming trailing whitespace removed more than one character.
+- **`aba import` safety** — Reserved names (`.`, `..`, `/`, empty) are now rejected before `rm -rf`. Kubeconfig directory existence is checked before `cd`. Cluster name is validated. Stale `.available` marker no longer causes wrong image source auto-detection.
+- **Day-2 `eval` injection** — `.wait` gate files are now parsed with safe array expansion instead of `eval`.
+- **SIGINT in TUI progress** — Ctrl-C during a progress dialog no longer produces a false success exit code.
+- **Version dedup substring match** — Version 4.2 could incorrectly match 4.22 in the version list; now uses exact delimited matching.
+- **Platform read from wrong config** — TUI cluster menu read the platform from `aba.conf` instead of the cluster's own `cluster.conf`.
+- **Mirror status edge cases** — OCP version shows `(not set)` when empty instead of a blank. Operator count handles missing ISC file. Monitor Installation menu only appears for actual installs.
+- **Image ref validation** — All additional image references are validated before writing to `images.conf`, preventing later mirror failures from malformed refs.
+- **TCP probe port extraction** — Port was incorrectly parsed when the URL had no explicit port. DNS VIP checks now skip CNAME records. IPv4 addresses rejected as base domain. Leading-zero worker counts rejected.
+- **oc-mirror download for EC versions** — Engineering candidate builds that don't publish `oc-mirror` now fall back to the pinned stable channel instead of failing.
+- **KVM Platform Settings** — Now checks `~/.kvm.conf` before the template, preventing stale defaults.
+- **Bundle registry checks** — Made vendor-agnostic instead of assuming Quay, so Docker and OMR bundles work correctly.
+
 ---
 
 ## [1.4.0](https://github.com/sjbylo/aba/releases/tag/v1.4.0) - 2026-10-13
