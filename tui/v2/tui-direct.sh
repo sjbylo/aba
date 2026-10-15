@@ -485,7 +485,7 @@ _direct_version() {
 			ocp_version=$(<"$_TUI_TMP")
 			ocp_version="${ocp_version##[[:space:]]}"    # trim leading whitespace
 			ocp_version="${ocp_version%%[[:space:]]}"    # trim trailing whitespace
-			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			if _is_version_string "$ocp_version"; then
 				if ! verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Version $ocp_version not found in the $ocp_channel channel.\n\nCheck the version number and try again." 0 0
@@ -494,7 +494,7 @@ _direct_version() {
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
 				return
-			elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+			elif _is_minor_version "$ocp_version"; then
 				# x.y format — resolve to latest z-stream
 				local _input_minor="$ocp_version"
 				tui_log "Resolving $ocp_version to latest z-stream"
@@ -585,14 +585,14 @@ _direct_version() {
 						ocp_version=$(<"$_TUI_TMP")
 						ocp_version="${ocp_version##[[:space:]]}"  # trim leading whitespace
 						ocp_version="${ocp_version%%[[:space:]]}"  # trim trailing whitespace
-						if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+						if _is_version_string "$ocp_version"; then
 							if ! verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
 								dlg --backtitle "$(ui_backtitle)" --msgbox \
 									"Version $ocp_version not found in the $ocp_channel channel.\n\nCheck the version number and try again." 0 0
 								continue
 							fi
 							break
-						elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+						elif _is_minor_version "$ocp_version"; then
 							# x.y format — resolve to latest z-stream
 							local _input_minor="$ocp_version"
 							tui_log "Resolving $ocp_version to latest z-stream"
@@ -769,7 +769,7 @@ _direct_operators() {
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
 			1) mirror_select_operators ;;
-			2) _operator_search "$(_ver_minor "$ocp_version")" ;;
+			2) _operator_search "$(_ver_minor "$ocp_version")"; _persist_operator_basket ;;
 			esac
 			DIALOG_RC="next"
 			;;
@@ -865,8 +865,7 @@ without a mirror registry.
 
 Workflow:
   1. Install Cluster — configure, review, and provision OpenShift
-  2. Monitor Cluster — track install progress until completion
-  3. Day-2 — post-install config (resources, NTP, update service, etc.)
+  2. Day-2 — post-install config (resources, NTP, update service, etc.)
 
 Other:
   • Rerun Wizard — re-run the initial setup wizard

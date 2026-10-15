@@ -423,6 +423,7 @@ e2e_run "Reconfigure aba.conf for VMware" "
     aba --noask --platform vmw --channel fast --version \$older \
         --base-domain $(pool_domain) \
         --machine-network $(pool_machine_network) \
+        --gateway $(pool_gateway) \
         --ntp $NTP_IP
 "
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"

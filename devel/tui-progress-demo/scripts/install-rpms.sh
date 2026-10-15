@@ -14,7 +14,17 @@ mode="${1:-external}"
 if [ -n "${FORCE_RPM_INSTALL:-}" ]; then
 	aba_progress "START|$plan_id"
 	printf '\033[1;34m[ABA]\033[0m Installing required packages (%s) ...\n' "$mode"
-	sleep 1.5
+	if [ -n "${SIMULATE_VERBOSE:-}" ]; then
+		# Verbose RPM install output — helps produce multi-page output
+		local_pkgs=(podman skopeo jq openssl bash-completion bind-utils nmstate)
+		for pkg in "${local_pkgs[@]}"; do
+			printf '  Installing \033[36m%s\033[0m ...\n' "$pkg"
+			sleep 0.05
+			printf '  \033[32m✓\033[0m %s installed\n' "$pkg"
+		done
+	else
+		sleep 1.5
+	fi
 	printf '\033[1;32m[ABA]\033[0m Packages installed.\n'
 	aba_progress "DONE|$plan_id"
 else

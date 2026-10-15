@@ -382,6 +382,9 @@ e2e_run "Verify mirror creds are gone" "
     echo 'Confirmed: no mirror creds in pull secret'
 "
 
+e2e_run "Fix gateway for imported cluster (bastion gateway differs from cluster network)" \
+    "sed -i 's/^next_hop_address=.*/next_hop_address=$(pool_gateway)/' $IMPORT_DIR/cluster.conf"
+
 e2e_run "Run day2 on imported cluster (must inject creds)" \
     "aba --dir $IMPORT_DIR day2"
 
@@ -455,6 +458,9 @@ e2e_poll 600 20 "Wait for cluster to stabilize after configmap change" \
 # Run day2 -- multi-mirror detection should:
 # 1. Patch our CA key into registry-config (preserving the other key)
 # 2. Suffix all our CatalogSource names with our hostname
+e2e_run "Fix gateway for imported cluster (bastion gateway differs from cluster network)" \
+    "sed -i 's/^next_hop_address=.*/next_hop_address=$(pool_gateway)/' $IMPORT_MM/cluster.conf"
+
 e2e_run "Run day2 (multi-mirror scenario)" \
     "aba --dir $IMPORT_MM day2"
 

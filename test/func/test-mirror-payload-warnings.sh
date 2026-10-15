@@ -25,10 +25,10 @@ cp mirror/mirror.conf "$_tmp/mirror/mirror.conf" 2>/dev/null || \
 	echo "# minimal" > "$_tmp/mirror/mirror.conf"
 
 # Symlinks that .init creates (mirror-status.sh sources scripts/include_all.sh from CWD)
-ln -sf "$_repo/scripts" "$_tmp/scripts"
-ln -sf "$_repo/cli" "$_tmp/cli"
-ln -sf "$_repo/scripts" "$_tmp/mirror/scripts"
-ln -sf "$_repo/cli" "$_tmp/mirror/cli"
+ln -sfn "$_repo/scripts" "$_tmp/scripts"
+ln -sfn "$_repo/cli" "$_tmp/cli"
+ln -sfn "$_repo/scripts" "$_tmp/mirror/scripts"
+ln -sfn "$_repo/cli" "$_tmp/mirror/cli"
 ln -sf ../aba.conf "$_tmp/mirror/aba.conf"
 ln -sfn . "$_tmp/mirror/mirror"
 

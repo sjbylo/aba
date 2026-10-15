@@ -18,11 +18,6 @@ fi
 
 install_rpms $(cat templates/rpms-external.txt) || exit 1
 
-yaml2json()
-{
-	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
-}
-
 source <(normalize-aba-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 # mirror.conf is optional — the version comparison only needs aba.conf values

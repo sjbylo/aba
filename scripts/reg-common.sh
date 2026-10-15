@@ -26,10 +26,6 @@
 if [ "${_REG_COMMON_LOADED:-}" ]; then return 0; fi
 _REG_COMMON_LOADED=1
 
-# Return code from reg_detect_existing() meaning "previous install was
-# interrupted but the service is healthy — skip to post-install".
-readonly REG_RC_COMPLETING=90
-
 # Enable INFO messages when called from make (unless parent set --quiet)
 if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
 
@@ -151,7 +147,7 @@ reg_check_fqdn() {
 # --- reg_mark_installing ------------------------------------------------------
 # Write a minimal state.sh with reg_status=installing BEFORE the vendor install.
 # This lets reg_detect_existing() recognize a retry of a failed install and
-# either complete it (if the service came up) or retry from scratch.
+# distinguish it from an unknown external registry.
 reg_mark_installing() {
 	local vendor="$1"
 	mkdir -p "$regcreds_dir"
@@ -180,9 +176,9 @@ reg_mark_installing() {
 # matching reg_host).  There is no "reinstall" -- user must uninstall first.
 #
 # If state.sh has reg_status=installing (previous install failed midway),
-# check if the service actually came up.  If healthy, complete the install
-# by returning REG_RC_COMPLETING that callers use to skip straight
-# to reg_post_install.  If not healthy, remove the partial state and retry.
+# check if the service actually came up.  If healthy, return 0 and let the
+# caller's idempotent flow handle resume.  If not healthy, remove the
+# partial state and retry from scratch.
 reg_detect_existing() {
 	if [ -s "$regcreds_dir/state.sh" ]; then
 		local _reg_status=""
@@ -192,8 +188,8 @@ reg_detect_existing() {
 			# Previous install attempt was interrupted — check if the service came up
 			if probe_host --any "$reg_url/v2/" "registry from previous install" 2>/dev/null; then
 				aba_info "Previous install was interrupted but registry is healthy at $reg_host:$reg_port"
-				aba_info "Completing installation ..."
-				return $REG_RC_COMPLETING
+				aba_info "Resuming installation ..."
+				return 0
 			else
 				aba_info "Previous install was interrupted and registry is not running — retrying ..."
 				rm -f "$regcreds_dir/state.sh"
@@ -692,6 +688,14 @@ reg_post_install() {
 	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"
 	aba_success "Registry installed/configured successfully!"
 	aba_info "$vendor registry at $_where, root: $reg_root"
+
+	# Write breadcrumb to registry data directory
+	if [ "$via_ssh" ]; then
+		local _ssh_cmd="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
+		reg_write_breadcrumb "$_ssh_cmd"
+	else
+		reg_write_breadcrumb
+	fi
 }
 
 # --- reg_cleanup_backup -------------------------------------------------------
@@ -719,6 +723,32 @@ _reg_host_run() {
 	else
 		bash -c "$cmd"
 	fi
+}
+
+# --- _reg_port_closed ---------------------------------------------------------
+# Returns 0 if the port is NOT listening (closed). For use with try_cmd.
+# Usage: _reg_port_closed [<ssh_cmd>] <port>
+_reg_port_closed() {
+	local ssh_cmd="$1"
+	local port="$2"
+	! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"
+}
+
+# --- _reg_quay_ready ----------------------------------------------------------
+# Returns 0 when Quay backend is serving requests (/v2/ returns 401 or 200).
+# The /health/instance endpoint is unreliable: it reports 503 when
+# registry_gunicorn is still initializing, even though the registry
+# is already functional and serving /v2/ requests.
+# Usage: _reg_quay_ready [<ssh_cmd>] <port>
+_reg_quay_ready() {
+	local ssh_cmd="$1"
+	local port="$2"
+	local _code
+	# Use 127.0.0.1 instead of localhost: localhost may resolve to ::1 (IPv6)
+	# and pasta/rootless podman may only forward on IPv4, causing TLS failures.
+	_code=$(_reg_host_run "$ssh_cmd" "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:${port}/v2/ 2>/dev/null") || _code="000"
+	# 401 = auth required (registry up), 200 = open access (registry up)
+	[ "$_code" = "401" ] || [ "$_code" = "200" ]
 }
 
 # --- _reg_probe_set -----------------------------------------------------------
@@ -761,6 +791,8 @@ reg_rm_data_dir() {
 			quay)  $ssh_cmd "$SUDO rm -rf $dir" ;;
 			*)     $ssh_cmd "rm -rf $dir" ;;
 		esac
+		# Remove empty parent data_dir (never HOME)
+		$ssh_cmd "p=\$(dirname $dir); [ \"\$p\" != \"\$HOME\" ] && [ -d \"\$p\" ] && rmdir \"\$p\"" 2>/dev/null || true
 	else
 		[ -d "$dir" ] || return 0
 		aba_info "Removing registry data at $dir ..."
@@ -768,6 +800,12 @@ reg_rm_data_dir() {
 			quay)  $SUDO rm -rf "$dir" ;;
 			*)     rm -rf "$dir" ;;
 		esac
+		# Remove empty parent data_dir (never HOME)
+		local parent
+		parent=$(dirname "$dir")
+		if [ "$parent" != "$HOME" ] && [ -d "$parent" ]; then
+			rmdir "$parent" 2>/dev/null || true
+		fi
 	fi
 }
 
@@ -801,6 +839,12 @@ reg_stale_report() {
 				stale+="  Quay containers still present"$'\n'
 			_reg_probe_set "$ssh_cmd" "_o=\$(podman secret ls --format '{{.Name}}') || exit \$?; echo \"\$_o\" | grep -q redis_pass" "redis_pass secret" && \
 				stale+="  redis_pass podman secret still exists"$'\n'
+			# Ansible-deployed Quay may create systemd user services
+			rc=0
+			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay-app.service 2>/dev/null || true") || rc=$?
+			if [ "$rc" -ne 255 ] && [ "$rc" -ne 127 ]; then
+				echo "$state" | grep -qx "active" && stale+="  quay-app.service still active"$'\n'
+			fi
 			;;
 		docker)
 			if [ "${REG_DELETE_DATA:-}" ]; then
@@ -830,6 +874,8 @@ reg_stale_report() {
 				aba_abort "Registry probe failed (quay.service, rc=$rc)"
 			fi
 			echo "$state" | grep -qx "active" && stale+="  quay.service still active"$'\n'
+			_reg_host_run "$ssh_cmd" "test -f ~/.config/containers/systemd/quay.container 2>/dev/null || test -f /etc/containers/systemd/quay.container 2>/dev/null" 2>/dev/null && \
+				stale+="  Leftover Quadlet file (quay.container)"$'\n'
 			;;
 		*)
 			aba_abort "reg_stale_report: unknown vendor '$vendor'"
@@ -840,6 +886,61 @@ reg_stale_report() {
 	# via `&&`, which must not make this function (or its $() caller) fail under set -e.
 	printf '%s' "$stale"
 	return 0
+}
+
+# --- reg_pre_install_stale_check ----------------------------------------------
+# Detect stale state from a previous install that was not fully uninstalled.
+# Wraps reg_stale_report with the standard pre-install guard: if the registry
+# is already responding, skip the check (those are our resources from a resume).
+# For Docker, stopped containers are excluded (the install script handles them).
+# Usage: reg_pre_install_stale_check <vendor> [ssh_cmd]
+reg_pre_install_stale_check() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+
+	# Registry responding = our resources from a resume — skip
+	if probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+		return 0
+	fi
+
+	local _stale
+	_stale=$(reg_stale_report "$vendor" "$ssh_cmd")
+
+	# Docker: stopped containers are cleaned up during install (removed and
+	# recreated), so don't flag them as stale during pre-install.
+	if [ "$vendor" = "docker" ]; then
+		_stale=$(echo "$_stale" | grep -v "registry container still present" || true)
+	fi
+
+	if [ -n "$_stale" ]; then
+		local _where="${reg_host:-localhost}"
+		[ -z "$ssh_cmd" ] && _where="localhost"
+		aba_abort \
+			"Stale registry state detected on $_where before install:" \
+			"$_stale" \
+			"A previous install was not fully cleaned up." \
+			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+	fi
+}
+
+# --- reg_write_breadcrumb -----------------------------------------------------
+# Write INSTALLED_BY_ABA.md to the registry data directory.
+# Usage: reg_write_breadcrumb [ssh_cmd]
+reg_write_breadcrumb() {
+	local ssh_cmd="${1:-}"
+	local _text="Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
+Installed from: $(hostname -f):$PWD
+Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+On host $(hostname -f):
+To verify:    cd $PWD && aba verify
+To uninstall: cd $PWD && aba uninstall"
+
+	if [ -n "$ssh_cmd" ]; then
+		echo "$_text" | $ssh_cmd "cat > $reg_root/INSTALLED_BY_ABA.md"
+	else
+		echo "$_text" > "$reg_root/INSTALLED_BY_ABA.md"
+	fi
 }
 
 # --- reg_pre_uninstall ---------------------------------------------------------
@@ -923,6 +1024,165 @@ reg_docker_remove() {
 	fi
 }
 
+# --- reg_omr_install_or_recover -----------------------------------------------
+# Run mirror-registry install (fresh or reinstall-with-data), with a temporary
+# WORKAROUND for OMR's hardcoded 30s health-check timeout.
+#
+# Why: on timeout the Quadlet is often already written, but install exits
+# non-zero. A blind second 'install' then fails with "existing installation
+# found". Recovery: start quay.service + probe; if still down, uninstall the
+# service (keep data) and retry install once; probe again if that also times out.
+#
+# TEMPORARY — remove once OMR has a longer/configurable health timeout and we
+# have re-tested clean installs without this path. Tracked in BACKLOG.md:
+#   "OMR health check timeout too short" and
+#   "OMR install: remove ABA 30s health-timeout workaround".
+#
+# Requires globals: reg_root, reg_host, reg_port, reg_user, reg_pw, reg_url,
+#                   _OMR_LOG_FLAG, _OMR_VENDOR
+# Usage (local):  reg_omr_install_or_recover <bin> <image-archive>
+# Usage (remote): reg_omr_install_or_recover <bin> <image-archive> <ssh_cmd> <remote_dir>
+#   remote: bin is unused for exec; remote_dir must contain mirror-registry and
+#   the image archive basename.
+# Returns 0 if registry is up (install ok or recovered), 1 on hard failure.
+reg_omr_install_or_recover() {
+	local bin="$1"
+	local image_archive="$2"
+	local ssh_cmd="${3:-}"
+	local remote_dir="${4:-}"
+	local _log _rc=0 _where="localhost"
+
+	[ -n "$ssh_cmd" ] && _where="$reg_host"
+	_log=$(mktemp) || aba_abort "Failed to create temp file for $_OMR_VENDOR install log"
+
+	# --- inner: one install attempt (fresh vs reinstall by admin-password) ---
+	_reg_omr_do_install() {
+		if [ -n "$ssh_cmd" ]; then
+			local _rbin="$remote_dir/mirror-registry"
+			local _rimg="$remote_dir/$(basename "$image_archive")"
+			# shellcheck disable=SC2086
+			$ssh_cmd "
+				set -e
+				if [ -f $reg_root/auth/admin-password ]; then
+					echo '[ABA] Existing data detected — reinstalling (preserving data) ...'
+					$_rbin install $_OMR_LOG_FLAG -data-dir $reg_root -hostname $reg_host -port $reg_port -image-archive $_rimg
+				else
+					echo '$reg_pw' | $_rbin install $_OMR_LOG_FLAG -data-dir $reg_root -hostname $reg_host -port $reg_port -init-user $reg_user -init-password-stdin -image-archive $_rimg
+				fi
+			"
+		else
+			if [ -f "$reg_root/auth/admin-password" ]; then
+				aba_info "Existing data detected at $reg_root — reinstalling (preserving data) ..."
+				"$bin" install \
+					$_OMR_LOG_FLAG \
+					-data-dir "$reg_root" \
+					-hostname "$reg_host" \
+					-port "$reg_port" \
+					-image-archive "$image_archive"
+			else
+				aba_info "Running: $bin install -data-dir $reg_root -hostname $reg_host -port $reg_port ..."
+				echo "$reg_pw" | "$bin" install \
+					$_OMR_LOG_FLAG \
+					-data-dir "$reg_root" \
+					-hostname "$reg_host" \
+					-port "$reg_port" \
+					-init-user "$reg_user" \
+					-init-password-stdin \
+					-image-archive "$image_archive"
+			fi
+		fi
+	}
+
+	# --- inner: start quay + probe /v2/ ---
+	_reg_omr_try_start_and_probe() {
+		local _msg="$1"
+		aba_debug "OMR workaround: sleep 2s, then systemctl start quay.service on $_where"
+		sleep 2
+		_reg_host_run "$ssh_cmd" \
+			"systemctl --user start quay.service 2>/dev/null || systemctl start quay.service 2>/dev/null || true"
+		aba_debug "OMR workaround: probing $reg_url/v2/ (up to ~60s)"
+		if try_cmd -n 30 -d 2 -m "$_msg" -- \
+			probe_host --any --quick "$reg_url/v2/" "omr health-timeout recovery"; then
+			# Keep as warn so the workaround is visible in normal (non-debug) logs
+			aba_warn "$_OMR_VENDOR registry is up after ABA health-timeout WORKAROUND on $_where." \
+				"OMR's install timed out at 30s; ABA started quay.service and waited." \
+				"Temporary — see BACKLOG.md (remove once OMR health timeout is fixed)."
+			return 0
+		fi
+		aba_debug "OMR workaround: probe still failing after start+wait on $_where"
+		return 1
+	}
+
+	# --- inner: uninstall service only (keep data) so install can be retried ---
+	_reg_omr_uninstall_service_keep_data() {
+		aba_debug "OMR workaround: uninstall service (keep data) on $_where so install can retry"
+		if [ -n "$ssh_cmd" ]; then
+			# shellcheck disable=SC2086
+			$ssh_cmd "$remote_dir/mirror-registry uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve" || true
+		else
+			"$bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve || true
+		fi
+	}
+
+	set +e
+	_reg_omr_do_install >"$_log" 2>&1
+	_rc=$?
+	set -e
+	cat "$_log"
+
+	if [ "$_rc" -eq 0 ]; then
+		rm -f "$_log"
+		return 0
+	fi
+
+	# Only recover the known OMR 30s health-check failure mode
+	if ! grep -qE 'health check:.*(timeout|timed out)' "$_log"; then
+		aba_debug "OMR install failed (exit=$_rc) without health-check timeout — no workaround"
+		rm -f "$_log"
+		return "$_rc"
+	fi
+
+	# User-visible: ABA is forced to apply a temporary workaround
+	aba_warn "$_OMR_VENDOR install FAILED the hardcoded 30s health-check on $_where." \
+		"ABA is applying a TEMPORARY WORKAROUND (OMR often left the Quadlet installed)." \
+		"Step 1: start quay.service and wait for /v2/ — see BACKLOG.md."
+
+	if _reg_omr_try_start_and_probe "Wait for $_OMR_VENDOR after health-timeout on $_where"; then
+		rm -f "$_log"
+		return 0
+	fi
+
+	aba_warn "$_OMR_VENDOR still not responding after start+wait — WORKAROUND step 2:" \
+		"remove failed service (keeping data) and retry install once."
+	_reg_omr_uninstall_service_keep_data
+	sleep 2
+
+	set +e
+	_reg_omr_do_install >"$_log" 2>&1
+	_rc=$?
+	set -e
+	cat "$_log"
+
+	if [ "$_rc" -eq 0 ]; then
+		aba_warn "$_OMR_VENDOR install succeeded on retry after ABA health-timeout WORKAROUND." \
+			"Temporary — see BACKLOG.md (remove once OMR health timeout is fixed)."
+		rm -f "$_log"
+		return 0
+	fi
+
+	if grep -qE 'health check:.*(timeout|timed out)' "$_log"; then
+		aba_warn "Retry install also hit the 30s health-check timeout — WORKAROUND: start+wait again."
+		if _reg_omr_try_start_and_probe "Wait for $_OMR_VENDOR after install retry on $_where"; then
+			rm -f "$_log"
+			return 0
+		fi
+	fi
+
+	aba_debug "OMR health-timeout workaround exhausted on $_where"
+	rm -f "$_log"
+	return 1
+}
+
 # --- reg_omr_remove -------------------------------------------------------
 # Core omr uninstall: call the tool's own 'uninstall' command.
 # Same pattern as reg_quay_remove — use the tool, then verify clean.
@@ -956,9 +1216,9 @@ reg_omr_remove() {
 		local _remote_bin="$reg_root/../$_bin_dir/mirror-registry"
 		aba_info "Running: mirror-registry uninstall on $reg_host ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
+			$ssh_cmd "$_remote_bin uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
 		else
-			$ssh_cmd "$_remote_bin uninstall -data-dir $reg_root -auto-approve" || _uninst_rc=$?
+			$ssh_cmd "$_remote_bin uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve" || _uninst_rc=$?
 		fi
 	else
 		# Local
@@ -970,11 +1230,16 @@ reg_omr_remove() {
 
 		aba_info "Running: mirror-registry uninstall -data-dir $reg_root ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve -purge || _uninst_rc=$?
+			./"$_bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve -purge || _uninst_rc=$?
 		else
-			./"$_bin" uninstall -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
+			./"$_bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve || _uninst_rc=$?
 		fi
 	fi
+
+	# Quadlet removal triggers async systemd processing — wait for the service
+	# to fully deactivate before checking for stale state.
+	try_cmd -n 10 -d 1 -m "Wait for quay.service to stop on $_where" -- \
+		_reg_host_run "$ssh_cmd" "! systemctl --user is-active quay.service 2>/dev/null && ! sudo systemctl is-active quay.service 2>/dev/null" >/dev/null 2>&1 || true
 
 	local _stale
 	_stale=$(reg_stale_report "$_OMR_VENDOR" "$ssh_cmd")
@@ -1112,7 +1377,11 @@ reg_finish_uninstall() {
 		aba_info "Saved the registry login in $reg_root/.aba-reuse-creds for the next install."
 	fi
 
-	rm -rf "${regcreds_dir:?}/"*
+	rm -rf "${regcreds_dir:?}"
+
+	# Remove the local regcreds symlink (now dangling) so reinstall can recreate it
+	[ -L "regcreds" ] && rm -f "regcreds"
+
 	aba_success "${vendor} registry ${msg}"
 }
 
@@ -1171,16 +1440,10 @@ reg_remote_pre_install() {
 
 	reg_load_config
 	reg_detect_existing
-	_skip_to_post_install=$?
 
 	reg_check_fqdn
 	reg_setup_data_dir "$vendor"
 	reg_generate_password
-
-	# If previous install was interrupted but healthy, skip SSH checks
-	if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-		return $REG_RC_COMPLETING
-	fi
 
 	aba_info "Registry configured for *remote* install (reg_ssh_key is defined in mirror.conf)."
 	aba_info "Verifying SSH access to $reg_ssh_user@$reg_host ..."
@@ -1273,17 +1536,6 @@ reg_remote_post_install() {
 			"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 	fi
-
-	# Leave breadcrumb on remote
-	$_ssh "cat > $reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
-		Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
-		Installed from: $(hostname -f):$PWD
-		Date: $(date '+%Y-%m-%d %H:%M:%S')
-
-		On host $(hostname -f):
-		To verify:    cd $PWD && aba verify
-		To uninstall: cd $PWD && aba uninstall
-	BREADCRUMB
 }
 
 # --- reg_stop_vendor ----------------------------------------------------------
@@ -1324,9 +1576,9 @@ reg_stop_vendor() {
 	esac
 
 	# Verify stopped — pods may take a moment to release ports
-	sleep 2
-	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
-		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening"
+	if ! try_cmd -n 30 -d 2 -m "Wait for port $port to close on $_where" -q -- \
+		_reg_port_closed "$ssh_cmd" "$port"; then
+		aba_abort "Failed to stop $vendor registry on $_where — port $port still listening after 60s"
 	fi
 
 	aba_info "$vendor registry stopped on $_where"
@@ -1346,6 +1598,14 @@ reg_start_vendor() {
 
 	# Already running?
 	if _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		# Quay: port opens immediately (nginx) but the backend may still be
+		# initializing.  Verify the health endpoint before declaring "running".
+		if [ "$vendor" = "quay" ] && ! _reg_quay_ready "$ssh_cmd" "$port"; then
+			if ! aba_wait_show "Waiting for Quay backend on $_where" 2 600 \
+				_reg_quay_ready "$ssh_cmd" "$port"; then
+				aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 600s"
+			fi
+		fi
 		aba_info "Registry on $_where is already running (port $port listening)"
 		return 0
 	fi
@@ -1368,34 +1628,18 @@ reg_start_vendor() {
 	esac
 
 	# Wait for port to come up (registry may need a moment)
-	local _attempts=0
-	while ! _reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; do
-		_attempts=$(( _attempts + 1 ))
-		if [ "$_attempts" -ge 10 ]; then
-			aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 10s"
-		fi
-		sleep 1
-	done
+	if ! aba_wait_show "Waiting for port $port on $_where" 1 15 \
+		_reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 15s"
+	fi
 
 	# Quay uses nginx in front of quay-app; the port opens immediately (nginx)
 	# but the backend needs time to initialize.  Wait for a non-502 response.
+	# Quay can take 2-4 minutes to fully start (database init, migrations).
 	if [ "$vendor" = "quay" ]; then
-		local _ready=0
-		for (( _i=0; _i<60; _i++ )); do
-			local _code
-			if [ -n "$ssh_cmd" ]; then
-				_code=$($ssh_cmd "curl -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/health/instance 2>/dev/null") || _code="000"
-			else
-				_code=$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${port}/health/instance" 2>/dev/null) || _code="000"
-			fi
-			if [ "$_code" != "000" ] && [ "$_code" != "502" ] && [ "$_code" != "503" ]; then
-				_ready=1
-				break
-			fi
-			sleep 2
-		done
-		if [ "$_ready" -eq 0 ]; then
-			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 120s"
+		if ! aba_wait_show "Waiting for Quay backend on $_where" 2 600 \
+			_reg_quay_ready "$ssh_cmd" "$port"; then
+			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 600s"
 		fi
 	fi
 

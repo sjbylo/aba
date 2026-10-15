@@ -25,10 +25,10 @@ setup_mirror_dir() {
 	cp "$_repo/mirror/mirror.conf" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
 		echo "# minimal" > "$_tmp/mirror/mirror.conf"
 
-	ln -sf "$_repo/scripts" "$_tmp/scripts"
-	ln -sf "$_repo/cli" "$_tmp/cli"
-	ln -sf "$_repo/scripts" "$_tmp/mirror/scripts"
-	ln -sf "$_repo/cli" "$_tmp/mirror/cli"
+	ln -sfn "$_repo/scripts" "$_tmp/scripts"
+	ln -sfn "$_repo/cli" "$_tmp/cli"
+	ln -sfn "$_repo/scripts" "$_tmp/mirror/scripts"
+	ln -sfn "$_repo/cli" "$_tmp/mirror/cli"
 	ln -sf ../aba.conf "$_tmp/mirror/aba.conf"
 	ln -sfn . "$_tmp/mirror/mirror"
 	cp -a "$_repo/templates" "$_tmp/templates" 2>/dev/null || true
@@ -168,7 +168,7 @@ echo "--- upgrade_needs_platform ---"
 # No upgrade target → false
 setup_mirror_dir
 write_isc 0
-sed -i "s/^ocp_upgrade_to=.*/ocp_upgrade_to=/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
+sed -i "s/^#\{0,1\}ocp_upgrade_to=.*/ocp_upgrade_to=/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
 	echo "ocp_upgrade_to=" >> "$_tmp/mirror/mirror.conf"
 out=$(run_status)
 if [ "$(get_key "$out" upgrade_needs_platform)" = "false" ]; then
@@ -181,7 +181,7 @@ fi
 setup_mirror_dir
 write_isc 0
 sed -i "s/^excl_platform=.*/excl_platform=false/" "$_tmp/aba.conf"
-sed -i "s/^ocp_upgrade_to=.*/ocp_upgrade_to=4.22.1/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
+sed -i "s/^#\{0,1\}ocp_upgrade_to=.*/ocp_upgrade_to=4.22.1/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
 	echo "ocp_upgrade_to=4.22.1" >> "$_tmp/mirror/mirror.conf"
 out=$(run_status)
 if [ "$(get_key "$out" upgrade_needs_platform)" = "false" ]; then
@@ -194,7 +194,7 @@ fi
 setup_mirror_dir
 write_isc 0
 sed -i "s/^excl_platform=.*/excl_platform=true/" "$_tmp/aba.conf"
-sed -i "s/^ocp_upgrade_to=.*/ocp_upgrade_to=4.22.1/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
+sed -i "s/^#\{0,1\}ocp_upgrade_to=.*/ocp_upgrade_to=4.22.1/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
 	echo "ocp_upgrade_to=4.22.1" >> "$_tmp/mirror/mirror.conf"
 out=$(run_status)
 if [ "$(get_key "$out" upgrade_needs_platform)" = "true" ]; then
@@ -208,7 +208,7 @@ setup_mirror_dir
 write_isc 0
 sed -i "s/^excl_platform=.*/excl_platform=true/" "$_tmp/aba.conf"
 _cur_ver=$(grep "^ocp_version=" "$_tmp/aba.conf" | cut -d= -f2 | sed 's/[[:space:]]*#.*//')
-sed -i "s/^ocp_upgrade_to=.*/ocp_upgrade_to=$_cur_ver/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
+sed -i "s/^#\{0,1\}ocp_upgrade_to=.*/ocp_upgrade_to=$_cur_ver/" "$_tmp/mirror/mirror.conf" 2>/dev/null || \
 	echo "ocp_upgrade_to=$_cur_ver" >> "$_tmp/mirror/mirror.conf"
 out=$(run_status)
 if [ "$(get_key "$out" upgrade_needs_platform)" = "false" ]; then

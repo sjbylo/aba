@@ -11,20 +11,10 @@ aba_progress "DONE|reg_config"
 aba_progress "START|reg_env"
 
 reg_detect_existing
-_skip_to_post_install=$?
 
 reg_check_fqdn
 reg_setup_data_dir quay
 reg_generate_password
-
-if [ "$_skip_to_post_install" -eq "$REG_RC_COMPLETING" ]; then
-	# Previous install was interrupted but registry is healthy — skip to post_install
-	aba_progress "DONE|reg_env"
-	aba_progress "DONE|reg_firewall"
-	aba_progress "DONE|reg_download"
-	aba_progress "DONE|reg_install"
-	aba_progress "START|reg_postcfg"
-else
 
 reg_verify_localhost
 reg_check_quay_resources
@@ -114,31 +104,14 @@ if [ -z "$_quay_ssh_ok" ]; then
 	rm -f "$flag_file"
 fi
 
-# Pre-install assertion: detect stale state from a previous install that
-# was not fully uninstalled. Stale redis_pass secrets cause WRONGPASS on
-# the new install; stale containers hold ports and conflict with Ansible.
-_stale=""
-ss -tlnp | grep -q ":${reg_port} " && _stale+="  Port $reg_port still listening"$'\n'
-podman secret ls --format '{{.Name}}' | grep -q redis_pass && _stale+="  redis_pass podman secret exists"$'\n'
-podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres' && _stale+="  Quay containers still present"$'\n'
-if [ -n "$_stale" ]; then
-	aba_abort \
-		"Stale registry state detected on localhost before install:" \
-		"$_stale" \
-		"A previous install was not fully cleaned up." \
-		"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
-fi
+reg_pre_install_stale_check quay
 
 ask "Install Quay mirror registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
 aba_progress "DONE|reg_env"
-aba_progress "START|reg_firewall"
 
 aba_info "Installing Quay registry on localhost ..."
 
-reg_open_firewall
-
-aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_download"
 
 # Ensure the quay_installer SSH key exists (used internally by mirror-registry)
@@ -158,39 +131,38 @@ fi
 aba_progress "DONE|reg_download"
 aba_progress "START|reg_install"
 
-# Mark state as "installing" so a retry can detect and recover from a partial install
-reg_mark_installing quay
+# --- Skip install if registry already running (idempotent resume) ---
+if probe_host --any "$reg_url/v2/" "existing registry" 2>/dev/null; then
+	aba_info "Registry already running at $reg_host:$reg_port — skipping install"
+else
+	# Mark state as "installing" so a retry can detect and recover from a partial install
+	reg_mark_installing quay
 
-# mirror-registry hardcodes --name ansible_runner_instance without
-# --replace.  A prior interrupted run leaves it behind (--rm is
-# unreliable on signal kill), blocking all subsequent calls.
-podman rm -f ansible_runner_instance 2>/dev/null || true
+	# mirror-registry hardcodes --name ansible_runner_instance without
+	# --replace.  A prior interrupted run leaves it behind (--rm is
+	# unreliable on signal kill), blocking all subsequent calls.
+	podman rm -f ansible_runner_instance 2>/dev/null || true
 
-# $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
-# $reg_pw is quoted to preserve special characters (e.g. " ! @ #).
-# shellcheck disable=SC2086
-if ! ./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_hostport" $reg_root_opts --initPassword "$reg_pw"; then
-	aba_progress "FAIL|reg_install"
-	aba_abort "Quay mirror-registry install failed. Check the output above for details."
+	# $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
+	# $reg_pw is quoted to preserve special characters (e.g. " ! @ #).
+	# shellcheck disable=SC2086
+	if ! ./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_hostport" $reg_root_opts --initPassword "$reg_pw"; then
+		aba_progress "FAIL|reg_install"
+		aba_abort "Quay mirror-registry install failed. Check the output above for details."
+	fi
 fi
 
 aba_progress "DONE|reg_install"
-aba_progress "START|reg_postcfg"
+aba_progress "START|reg_firewall"
 
-fi  # end of skip_to_post_install guard
+reg_open_firewall
+
+aba_progress "DONE|reg_firewall"
+aba_progress "START|reg_postcfg"
 
 reg_post_install "$reg_root/quay-rootCA/rootCA.pem" quay
 
-cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
-	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
-	Installed from: $(hostname -f):$PWD
-	Date: $(date '+%Y-%m-%d %H:%M:%S')
-
-	On host $(hostname -f):
-	To verify:    cd $PWD && aba verify
-	To uninstall: cd $PWD && aba uninstall
-BREADCRUMB
-
 aba_progress "DONE|reg_postcfg"
 reg_cleanup_backup
+aba_progress "START|reg_verify"
 aba_progress "DONE|reg_verify"

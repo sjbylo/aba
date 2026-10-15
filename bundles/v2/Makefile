@@ -32,7 +32,7 @@ endif
 BUNDLE_NAME = $(VER)-$(NAME)
 M            = $(WORK_DIR)/$(BUNDLE_NAME)/build
 
-export VER NAME OP_SETS TESTS
+export VER NAME OP_SETS TESTS BUNDLE_VENDOR
 
 .PHONY: all clean cleanwork
 

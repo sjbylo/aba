@@ -1,13 +1,13 @@
 #!/bin/bash -e
-# Phase 08: Cleanup - uninstall Quay, go online, clean work dirs
+# Phase 08: Cleanup - uninstall mirror registry, go online, clean work dirs
 
 set -x
 
 source "$(cd "$(dirname "$0")/.." && pwd)/common.sh"
 
-echo_step "Remove Quay ..."
+echo_step "Remove mirror registry ..."
 
-# Uninstall Quay first (most likely step to fail)
+# Uninstall registry first (most likely step to fail)
 if [ -d "$WORK_TEST_INSTALL/aba" ]; then
 	cd "$WORK_TEST_INSTALL/aba"
 	./install

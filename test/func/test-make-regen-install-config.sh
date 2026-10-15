@@ -38,12 +38,19 @@ echo "=== Test: Make regenerates install-config.yaml on int_connection change ==
 echo
 
 # Skip network checks (DNS doesn't resolve for test cluster names)
-_orig_verify=$(grep '^verify_conf=' "$PWD/aba.conf" 2>/dev/null | cut -d= -f2)
-replace-value-conf -q -n verify_conf -v conf -f aba.conf
+_orig_verify=$(grep '^verify_conf=' "$PWD/aba.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//')
+replace-value-conf -q -n verify_conf -v "" -f aba.conf
 
 # Create a minimal cluster directory
 aba cluster --name "$CLUSTER_DIR" --type sno -Y 2>/dev/null || true
 cd "$CLUSTER_DIR"
+
+# Ensure network fields are consistent (cross-validation catches mismatches)
+replace-value-conf -q -n machine_network -v 10.0.1.0 -f cluster.conf
+replace-value-conf -q -n prefix_length -v 24 -f cluster.conf
+replace-value-conf -q -n next_hop_address -v 10.0.1.1 -f cluster.conf
+replace-value-conf -q -n starting_ip -v 10.0.1.10 -f cluster.conf
+replace-value-conf -q -n dns_servers -v 10.0.1.1 -f cluster.conf
 
 # Ensure we have a clean state
 rm -f install-config.yaml agent-config.yaml
