@@ -2603,3 +2603,57 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 3. Consider whether `setup-dns.sh` should preserve existing upstream servers when reconfiguring, rather than replacing them.
 4. E2E suites that call these commands should verify DNS still resolves pool hostnames after the call.
 
+---
+
+## Simplify bare-metal `aba install` into a single continuous process
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** Installing a bare-metal cluster with `aba -d <cluster> install` currently requires the user to run the command **three separate times**. The Makefile splits the workflow into three phases with hard stops between them:
+
+1. First run: generates agent config YAML, then **stops** and asks the user to review/edit MAC addresses or other settings in the agent-config.yaml file.
+2. Second run: creates the ISO file, then **stops** and tells the user to boot their servers with the ISO.
+3. Third run: monitors the installation until completion.
+
+This "make dance" is confusing and error-prone — users must remember to re-run `aba install` at each pause.
+
+**Proposed fix:** Collapse the three Makefile phases into a single continuous process using interactive `ask` prompts:
+
+1. Generate agent-config.yaml as today.
+2. **Prompt 1:** "If you need to modify the agent config file (e.g. MAC addresses), do so now, then press Enter to continue."
+3. Build the ISO.
+4. **Prompt 2:** "The ISO has been created at `<path>`. Boot your servers with this ISO, then press Enter to monitor the installation."
+5. Monitor the installation to completion.
+
+This keeps the same user checkpoints but removes the need to re-run the command. The Makefile would have a single target that calls a script handling all phases sequentially with `ask` pauses in between.
+
+**Notes:**
+- The TUI already handles this more smoothly; this improvement is for the CLI/Makefile path.
+- The `ask` function already exists in ABA and supports "press Enter to continue" style prompts.
+- Must still work correctly if the process is interrupted (Ctrl-C) at any phase — re-running should resume from the right point.
+
+---
+
+## Quay uninstall leaves stale systemd service and quadlet file
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** After `aba -d mirror uninstall` of a Quay registry (local or remote), the `quay.service` systemd user unit and the `~/.config/containers/systemd/quay.container` quadlet file may be left behind. The uninstall reports success because `reg_stale_report quay` does not check for `quay.service` — it only checks containers, port, and `redis_pass` secret. A subsequent install of a different vendor (e.g. OMR) detects the stale state and aborts.
+
+**Root cause:** Two issues:
+1. Red Hat's `mirror-registry uninstall` Ansible playbook does not always clean up the systemd service or quadlet file.
+2. `reg_stale_report quay` (in `reg-common.sh`) is missing the `quay.service` and quadlet file checks. The `omr` case already has these checks (lines 840-850), but the `quay` case does not.
+
+**Proposed fix:**
+1. Add `quay.service` (systemctl) and quadlet file (`quay.container`) checks to `reg_stale_report quay`, matching what the `omr` case already does. This ensures `reg_quay_remove` correctly detects the incomplete cleanup and reports the failure instead of falsely claiming success.
+2. Investigate why `mirror-registry uninstall` leaves the systemd service and quadlet file behind. This may be a bug in the `mirror-registry` Ansible playbook (upstream Red Hat issue) or a missing flag/option. ABA must NOT manually clean up after the vendor tool — if `mirror-registry uninstall` leaves stale state, the uninstall must report failure so the user can investigate.
+
+**Reproducer:**
+1. `aba -d mirror install` with `reg_vendor=quay` (remote)
+2. `aba -d mirror uninstall`
+3. Change `reg_vendor=omr` and `aba -d mirror install` → aborts with "quay.service still active".
+
