@@ -77,7 +77,7 @@ _bm_insert_media_body() {
 	# Vendor overlays (Supermicro X12 in Phase 8) may strip Inserted + WriteProtected.
 	local iso="$1" out="$2"
 	jq -n --arg url "$iso" \
-		'{Image:$url, Inserted:true, WriteProtected:true, TransferProtocolType:"HTTP"}' \
+		'{Image:$url, Inserted:true, WriteProtected:true, TransferProtocolType:(if ($url | startswith("https://")) then "HTTPS" else "HTTP" end)}' \
 		> "$out"
 }
 
@@ -291,7 +291,9 @@ bmc_wait_connected() {
 			return 1
 		fi
 		inserted=$(jq -r '.Inserted // false' "$_REDFISH_LAST_BODY")
-		connected=$(jq -r '.Connected // false' "$_REDFISH_LAST_BODY")
+		# Connected is not a DMTF VirtualMedia property; BMCs that omit it
+		# (Fujitsu iRMC S6) report the mount through Inserted alone.
+		connected=$(jq -r 'if has("Connected") then (.Connected // false) else (.Inserted // false) end' "$_REDFISH_LAST_BODY")
 		if [ "$inserted" = "true" ] && [ "$connected" = "true" ]; then
 			aba_debug "BMC: $node VirtualMedia Connected=true (after ${elapsed}s)"
 			return 0
@@ -423,7 +425,8 @@ bmc_wait_power_on() {
 }
 
 # -----------------------------------------------------------------------------
-# bmc_boot_override_disable - PATCH BootSourceOverrideEnabled=Disabled (BMC-06).
+# bmc_boot_override_disable - clear the boot override (BMC-06): PATCH
+# BootSourceOverrideEnabled=Disabled, or Target=None where Disabled is not allowed.
 # Minimal body only; used by scripts/bmc-unmount.sh after install completes.
 # -----------------------------------------------------------------------------
 
@@ -433,9 +436,28 @@ bmc_boot_override_disable() {
 	sys=$(_bm_system_id "$node")
 	local path="/redfish/v1/Systems/$sys"
 
+	# The install boot normally consumes the Once override, and some BMCs
+	# (Fujitsu iRMC S6) list only Once/Continuous as allowable and answer
+	# Disabled with HTTP 400. Skip an override that is no longer active, and
+	# clear it through Target=None where Disabled is not allowed.
+	local body='{"Boot":{"BootSourceOverrideEnabled":"Disabled"}}'
+	if _redfish_request "$node" GET "$path" && [ "${_REDFISH_LAST_CODE:0:1}" = "2" ]; then
+		local enabled target
+		enabled=$(jq -r '.Boot.BootSourceOverrideEnabled // "Disabled"' "$_REDFISH_LAST_BODY")
+		target=$(jq -r '.Boot.BootSourceOverrideTarget // "None"' "$_REDFISH_LAST_BODY")
+		if [ "$enabled" = "Disabled" ] || [ "$target" = "None" ]; then
+			aba_debug "BMC: $node boot override already inactive (Enabled=$enabled Target=$target)"
+			return 0
+		fi
+		if jq -e '.Boot["BootSourceOverrideEnabled@Redfish.AllowableValues"] | arrays | index("Disabled") == null' \
+			"$_REDFISH_LAST_BODY" >/dev/null; then
+			body='{"Boot":{"BootSourceOverrideTarget":"None"}}'
+		fi
+	fi
+
 	local body_tmp
 	body_tmp=$(mktemp /tmp/bmc_bso_disable_${node}.XXXXXX)
-	printf '%s' '{"Boot":{"BootSourceOverrideEnabled":"Disabled"}}' > "$body_tmp"
+	printf '%s' "$body" > "$body_tmp"
 	_redfish_request "$node" PATCH "$path" "$body_tmp"
 	rm -f "$body_tmp"
 

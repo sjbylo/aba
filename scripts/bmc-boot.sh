@@ -64,7 +64,7 @@ fi
 # After this line: bmc_host_*, bmc_user_*, bmc_password_*, bmc_type_*, bmc_insecure_*,
 # iso_url, bmc_iso_port, bmc_insert_wait_seconds are all available via bash indirection.
 # -----------------------------------------------------------------------------
-source <(normalize-bmc-conf)
+normalize-bmc-conf >/dev/null
 
 # -----------------------------------------------------------------------------
 # Source the Redfish wrapper + the generic adapter. Per-node iRMC overlay is
