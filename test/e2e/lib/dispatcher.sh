@@ -208,6 +208,8 @@ _auto_deploy_dev_branch() {
 
 	# Build the tarball once (committed code only — git archive, not disk).
 	# Uncommitted WIP is never pushed; use --dev for that.
+	# Files with uncommitted changes on bastion are EXCLUDED so that
+	# --dev deployed overrides are not clobbered by the committed version.
 	local _tar _manifest _paths=()
 	_tar=$(mktemp /tmp/aba-auto-deploy.XXXXXX.tar.gz)
 	_manifest="$_ABA_ROOT/test/e2e/.deploy-manifest"
@@ -220,10 +222,33 @@ _auto_deploy_dev_branch() {
 	else
 		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
 	fi
-	if ! git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
-		echo "    AUTO-DEPLOY: git archive failed -- skipping"
-		rm -f "$_tar"
-		return 0
+
+	# Collect files with uncommitted changes (modified or staged).
+	# These were likely --dev deployed and must not be overwritten.
+	local _dirty_files=()
+	while IFS= read -r _df; do
+		[ -n "$_df" ] && _dirty_files+=("$_df")
+	done < <(git -C "$_ABA_ROOT" diff --name-only HEAD 2>/dev/null)
+
+	if [ ${#_dirty_files[@]} -gt 0 ]; then
+		# Build uncompressed tarball, remove dirty files, then compress.
+		local _tar_raw
+		_tar_raw=$(mktemp /tmp/aba-auto-deploy.XXXXXX.tar)
+		if ! git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null > "$_tar_raw"; then
+			echo "    AUTO-DEPLOY: git archive failed -- skipping"
+			rm -f "$_tar_raw" "$_tar"
+			return 0
+		fi
+		tar --delete -f "$_tar_raw" "${_dirty_files[@]}" 2>/dev/null || true
+		gzip < "$_tar_raw" > "$_tar"
+		rm -f "$_tar_raw"
+		echo "    AUTO-DEPLOY: excluded ${#_dirty_files[@]} dirty file(s): ${_dirty_files[*]}"
+	else
+		if ! git -C "$_ABA_ROOT" archive HEAD -- "${_paths[@]}" 2>/dev/null | gzip > "$_tar"; then
+			echo "    AUTO-DEPLOY: git archive failed -- skipping"
+			rm -f "$_tar"
+			return 0
+		fi
 	fi
 
 	# Deploy to every pool that is behind HEAD
