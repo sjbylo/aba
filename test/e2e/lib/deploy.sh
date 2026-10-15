@@ -114,9 +114,11 @@ sync_harness() {
 		return 1
 	fi
 
-	# Clean stale regular-file *-summary.log and summary.log left by old rsync deploys.
-	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
-	_essh "$target" "cd ~/.e2e-harness/logs && for f in *-summary.log summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
+	# Clean stale regular-file summary.log left by old rsync deploys.
+	# suite_begin creates these as symlinks; a regular file blocks ln -sf and tail -F.
+	# Only target the short-name aliases — never the timestamped data files
+	# (e.g. suite-20261015-224619-summary.log) that the symlinks point to.
+	_essh "$target" "cd ~/.e2e-harness/logs && for f in summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
 
 	# Atomic replace of runner.sh (scp to tmp + mv) so a concurrent bash reading
 	# the old runner.sh never sees a truncated in-place write.
