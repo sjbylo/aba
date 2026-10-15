@@ -51,16 +51,22 @@ while [[ $# -gt 0 ]]; do
 			echo "*** FILTER: building only bundle type '$BUNDLE_NAME_FILTER' ***"
 			shift 2
 			;;
+		--vendor)
+			export BUNDLE_VENDOR="$2"
+			echo "*** VENDOR: using mirror registry vendor '$BUNDLE_VENDOR' ***"
+			shift 2
+			;;
 		-h|--help)
 			cat <<-EOF
-			Usage: $(basename "$0") [--dev] [--name <type>]
+			Usage: $(basename "$0") [--dev] [--name <type>] [--vendor <vendor>]
 
 			Build ABA install bundles for multiple OCP versions.
 
 			Options:
-			  --dev          Build from dev branch (NAS upload disabled)
-			  --name <type>  Build only the specified bundle type
-			  -h, --help     Show this help
+			  --dev              Build from dev branch (NAS upload disabled)
+			  --name <type>      Build only the specified bundle type
+			  --vendor <vendor>  Mirror registry vendor: omr (default), quay, docker
+			  -h, --help         Show this help
 
 			Bundle types:
 			  release   OCP release images only (no operators)
@@ -71,9 +77,10 @@ while [[ $# -gt 0 ]]; do
 			  ai        OCP + GPU + AI (RHOAI)
 
 			Examples:
-			  $(basename "$0")                  # build all bundles (production)
-			  $(basename "$0") --dev            # build all from dev branch
-			  $(basename "$0") --dev --name ai  # build only AI bundle from dev
+			  $(basename "$0")                        # build all bundles (production)
+			  $(basename "$0") --dev                  # build all from dev branch
+			  $(basename "$0") --dev --name ai        # build only AI bundle from dev
+			  $(basename "$0") --vendor quay           # build all using Quay registry
 			EOF
 			exit 0
 			;;
@@ -207,7 +214,7 @@ do
 			continue
 		fi
 
-		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\" TESTS=\"$tests\""
+		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\" TESTS=\"$tests\" BUNDLE_VENDOR=$BUNDLE_VENDOR"
 		sleep 1
 		if ! time make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests"; then
 			echo "##################################################" >&2

@@ -37,10 +37,18 @@ fi
 aba_ver=$(cat "$REPO_ROOT/VERSION" 2>/dev/null)
 [ -z "$aba_ver" ] && aba_ver="unknown"
 
+# Human-readable vendor name for README
+case "${BUNDLE_VENDOR:-omr}" in
+	omr)    vendor_display="OMR v3 (OpenShift Mirror Registry)" ;;
+	quay)   vendor_display="Quay" ;;
+	docker) vendor_display="Docker Distribution" ;;
+	*)      vendor_display="$BUNDLE_VENDOR" ;;
+esac
+
 op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
 [ ! "$op_list" ] && op_list="  - No Operators!"
 
-sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
+sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" -e "s/<VENDOR>/$vendor_display/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
 
 # Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
 test_body=$(grep -v '^## ' "$WORK_TEST_LOG")

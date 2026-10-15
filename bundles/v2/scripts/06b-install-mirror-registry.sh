@@ -21,7 +21,10 @@ aba
 aba --noask
 aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --gateway-ip 10.0.1.1
 
-echo_step "Install mirror registry ..."
+echo_step "Install mirror registry (vendor=$BUNDLE_VENDOR) ..."
+
+# Set the registry vendor in mirror.conf
+sed -i "s/^reg_vendor=.*/reg_vendor=$BUNDLE_VENDOR/" mirror/mirror.conf
 
 # If a previous run left any registry (Quay, Docker, or OMR), clean it up first
 if podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres|^registry(-[0-9]+)?$|^systemd-quay$'; then
