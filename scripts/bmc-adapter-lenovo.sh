@@ -34,7 +34,7 @@ _bm_insert_media_body() {
 	# PATCH semantics: send only Image + TransferProtocolType; Inserted and
 	# WriteProtected are managed by XCC and conflict if sent.
 	local iso="$1" out="$2"
-	jq -n --arg url "$iso" '{Image:$url, TransferProtocolType:"HTTP"}' > "$out"
+	jq -n --arg url "$iso" '{Image:$url, TransferProtocolType:(if ($url | startswith("https://")) then "HTTPS" else "HTTP" end)}' > "$out"
 }
 
 # MAC discovery: generic _bm_get_ethernetinterfaces is sufficient (XCC publishes standard EthernetInterfaces).

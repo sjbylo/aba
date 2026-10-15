@@ -77,7 +77,7 @@ _bm_insert_media_body() {
 	# Vendor overlays (Supermicro X12 in Phase 8) may strip Inserted + WriteProtected.
 	local iso="$1" out="$2"
 	jq -n --arg url "$iso" \
-		'{Image:$url, Inserted:true, WriteProtected:true, TransferProtocolType:"HTTP"}' \
+		'{Image:$url, Inserted:true, WriteProtected:true, TransferProtocolType:(if ($url | startswith("https://")) then "HTTPS" else "HTTP" end)}' \
 		> "$out"
 }
 

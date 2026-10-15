@@ -110,9 +110,12 @@ _bm_validate_iso_url() {
 	# PRE-05 four sub-checks on an operator-supplied iso_url. Any failure blocks install.
 	# Called once per preflight run (iso_url is cluster-level, not per-node).
 
-	# Sub-check 1: scheme must be exactly http://
-	if [[ "$iso_url" != http://* ]]; then
-		aba_warn "BMC: iso_url must use http:// scheme (https:// rejected in v1.1; opt-in deferred)"
+	# Sub-check 1: scheme must be http:// or https://. Some BMCs mount over
+	# HTTPS only (Fujitsu iRMC S6: NFS, CIFS or HTTPS); InsertMedia then sends
+	# TransferProtocolType HTTPS. The HEAD below verifies the server's
+	# certificate against this host's trust store.
+	if [[ "$iso_url" != http://* ]] && [[ "$iso_url" != https://* ]]; then
+		aba_warn "BMC: iso_url must use the http:// or https:// scheme"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -126,7 +129,7 @@ _bm_validate_iso_url() {
 
 	# Sub-check 3: hostname resolves OR is a literal IPv4/IPv6.
 	local rest hostport host
-	rest="${iso_url#http://}"
+	rest="${iso_url#*://}"
 	hostport="${rest%%/*}"
 	host="${hostport%%:*}"
 	if [[ "$host" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || [[ "$host" =~ ^\[.*\]$ ]]; then
