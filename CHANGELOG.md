@@ -6,6 +6,7 @@
 - **Shared validation functions** — Common domain and version regex patterns consolidated into reusable helpers, improving consistency across CLI, TUI, and config validation.
 - **TUI progress output viewer** — Post-completion output can be reviewed with a scrollable pager (less) from the progress dialog.
 - **Developer guide** — New `devel/README.md` documenting catalog refresh and operator sizing data generation procedures.
+- **Bundle vendor configurable** — `go.sh --vendor` flag selects the mirror registry vendor (omr, quay, docker) for bundle testing. Default changed from Quay to OMR v3. README template now shows which vendor was used.
 
 ### Changed
 
@@ -32,6 +33,8 @@
 - **oc-mirror download for EC versions** — Engineering candidate builds that don't publish `oc-mirror` now fall back to the pinned stable channel instead of failing.
 - **KVM Platform Settings** — Now checks `~/.kvm.conf` before the template, preventing stale defaults.
 - **Bundle registry checks** — Made vendor-agnostic instead of assuming Quay, so Docker and OMR bundles work correctly.
+- **Quay start readiness IPv6** — `_reg_quay_ready()` used `localhost` which resolved to `::1`; pasta/rootless podman only forwards on IPv4, causing curl TLS failures (HTTP 000). Now uses `127.0.0.1` explicitly.
+- **Quay "already running" without backend** — `reg_start_vendor()` declared Quay running when the port was listening, but Quay's nginx opens the port immediately while the backend (quay-app + postgres) takes 2-4 minutes. Now verifies backend health before returning success.
 
 ---
 
