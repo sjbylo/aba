@@ -1,18 +1,17 @@
 # ABA 1.4.1 Release Highlights
 
-Improved reliability for registry operations, better input validation, and fixes for edge-case crashes.
+Mirror lifecycle reliability, stale state detection, and UX improvements.
 
-- Registry stop/start is now reliable — stop waits for the port to close, start waits long enough for Quay to fully initialize, eliminating the recurring restart race condition
-- Interrupted registry installs can be safely resumed from any point — each step is idempotent
-- `aba setup dns` no longer crashes silently on systems with no existing DNS configuration
-- `aba setup ntp` configures the firewall on the correct network when `--bastion-ip` is specified
-- Single-label base domains (e.g. `lab`, `local`) are now accepted in CLI, TUI, and config validation
-- Network configuration is cross-validated: gateway-in-CIDR, node IP collisions, and VIP overlap are caught before install
-- `aba import` rejects unsafe cluster names and validates the kubeconfig path before proceeding
-- Day-2 custom manifest `.wait` files are parsed safely (removed `eval`)
-- oc-mirror download now works for engineering candidate (EC) builds by falling back to a stable channel
-- OMR install is more robust — no redundant image load, automatic recovery from corrupt cached binaries
-- DNS warnings replaced with a single actionable message suggesting `aba setup dns` or how to configure `/etc/resolv.conf`
-- Image references are validated before writing to configuration, preventing later mirror failures
-- Ctrl-C during TUI progress dialogs no longer falsely reports success
-- Version matching uses exact comparison (4.2 no longer matches 4.22)
+- **Docker registry resume** — re-running install after a failure now recovers instead of aborting
+- **Stale registry detection** — install detects leftover state from a previous unclean uninstall and tells you how to fix it
+- **Registry start shows progress** — `aba start` now shows a live countdown instead of sitting silently (Quay can take up to 10 minutes)
+- **Uninstall cleans up fully** — state files and symlinks are removed, no empty leftover directories
+- **TUI progress shows title bar** — progress dialogs now display the standard header with host, mode, and version info
+- **`aba setup dns` crash fixed** — no longer crashes on systems with no existing DNS configuration
+- **`aba setup ntp` wrong network** — firewall rule now applied to the correct interface
+- **Single-label domains accepted** — domains like `lab` or `local` now work in CLI, TUI, and config
+- **oc-mirror for EC builds** — engineering candidate builds fall back to stable channel when `oc-mirror` is not published
+- **Ctrl-C no longer fakes success** — interrupted operations correctly report failure
+- **Proxy bootstrap failures fixed** — agent IPs and cluster networks now included in `no_proxy`
+- **Network cross-validation** — catches gateway-outside-CIDR, IP collisions, and VIP overlap before install
+- **Security hardening** — eval injection guard, temp directory permissions, password masking in logs

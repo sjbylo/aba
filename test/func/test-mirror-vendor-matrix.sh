@@ -618,8 +618,8 @@ run "Push to registry 2" "$(_vm_push "$_CC_DN2" "sa-cc/only-in-2:v1")"
 run "Check image in registry 1" "$(_vm_check "$_CC_DN1" "sa-cc/only-in-1:v1")"
 run "Check image in registry 2" "$(_vm_check "$_CC_DN2" "sa-cc/only-in-2:v1")"
 
-run "Assert no cross-contamination (1→2)" "! $(_vm_check "$_CC_DN2" "sa-cc/only-in-1:v1")"
-run "Assert no cross-contamination (2→1)" "! $(_vm_check "$_CC_DN1" "sa-cc/only-in-2:v1")"
+run "Assert no cross-contamination (1→2)" "! ( $(_vm_check "$_CC_DN2" "sa-cc/only-in-1:v1") )"
+run "Assert no cross-contamination (2→1)" "! ( $(_vm_check "$_CC_DN1" "sa-cc/only-in-2:v1") )"
 
 run "Uninstall registry 1" "aba -d $_CC_DN1 uninstall --delete-data"
 run "Uninstall registry 2" "aba -d $_CC_DN2 uninstall --delete-data"
