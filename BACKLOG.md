@@ -33,6 +33,26 @@ Issues or Pull Requests.
 
 ---
 
+## Suppress output for excluded image categories during sync/save
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-15
+
+**Problem:** When operators, additional images, or release images are excluded
+(via `exclude` settings), `aba sync` / `aba save` still outputs messages about
+those categories — e.g. "All operator catalogs ready", "Additional images: 1",
+"Verifying release image availability". This is confusing because it implies
+work is being done for categories the user explicitly excluded.
+
+**Proposed fix:** Guard each category's output behind a check for its exclusion
+state. If operators are excluded, skip catalog fetching messages and "To add
+operators..." hints. If additional images are excluded, skip the count message.
+If release images are excluded, skip the release image verification message.
+The `[ABA] Excluded: ...` summary line at the end is sufficient.
+
+---
+
 ## Cross-validate networking values (IPs, CIDRs, collisions)
 
 **Severity:** MEDIUM
