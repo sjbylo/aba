@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.1...HEAD)
+
+---
+
+## [1.4.1](https://github.com/sjbylo/aba/releases/tag/v1.4.1) - 2026-10-16
+
+Mirror lifecycle reliability, stale state detection, and UX improvements
+
 
 ### Added
 
