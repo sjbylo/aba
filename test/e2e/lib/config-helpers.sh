@@ -77,25 +77,41 @@ pool_dns_server() {
     pool_con_ip "$@"
 }
 
-# Get a small /29 CIDR that contains the pool's SNO IP: pool_small_cidr [POOL_NUM]
-# /29 = 8 addresses.  The SNO IP is placed at offset +2 (a usable host),
-# so the CIDR network address is (sno_ip - 2).  This is NOT naturally
-# aligned to an 8-byte boundary, but that's fine — ABA validates the IP
-# against the CIDR, not the alignment.
+# Get a small /29 CIDR for the pool: pool_small_cidr [POOL_NUM]
+# /29 = 8 addresses.  Uses the properly aligned /29 block that contains
+# the pool's SNO IP.  Pair with pool_small_cidr_ip() for starting_ip
+# (pool_sno_ip may land on the network address for some pools).
 pool_small_cidr() {
 	local p="${1:-${POOL_NUM:-1}}"
 	local last_octet=$((p * 10 + 2))
-	local net_addr=$((last_octet - 2))
+	local net_addr=$(( (last_octet / 8) * 8 ))
 	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/29"
 }
 
-# Get a /30 CIDR that contains the pool's SNO IP: pool_tiny_cidr [POOL_NUM]
-# /30 = 4 addresses (network + 2 usable + broadcast).  SNO IP at offset +2.
+# Get a valid starting IP inside the pool's /29 CIDR: pool_small_cidr_ip [POOL_NUM]
+pool_small_cidr_ip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$(( (last_octet / 8) * 8 ))
+	echo "${POOL_SUBNET:-10.0.2}.$(( net_addr + 2 ))"
+}
+
+# Get a /30 CIDR for the pool: pool_tiny_cidr [POOL_NUM]
+# /30 = 4 addresses (network + 2 usable + broadcast).
+# Aligned to /30 boundary containing the SNO IP.
 pool_tiny_cidr() {
 	local p="${1:-${POOL_NUM:-1}}"
 	local last_octet=$((p * 10 + 2))
-	local net_addr=$((last_octet - 2))
+	local net_addr=$(( (last_octet / 4) * 4 ))
 	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/30"
+}
+
+# Get a valid starting IP inside the pool's /30 CIDR: pool_tiny_cidr_ip [POOL_NUM]
+pool_tiny_cidr_ip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$(( (last_octet / 4) * 4 ))
+	echo "${POOL_SUBNET:-10.0.2}.$(( net_addr + 1 ))"
 }
 
 # Get the first usable IP (network + 1) from an arbitrary CIDR string.

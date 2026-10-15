@@ -321,15 +321,15 @@ e2e_run "Clean sno cluster directory" "if [ -d $SNO ]; then aba --dir $SNO reset
 
 # CIDR variation tests (ported from old test1 lines 353-360)
 e2e_run "Test /29 small CIDR (cluster.conf)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step cluster.conf"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_small_cidr_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step cluster.conf"
 e2e_run "Verify /29 CIDR in cluster.conf" \
     "grep 'machine_network=.*/' $SNO/cluster.conf"
 e2e_run "Test /29 small CIDR (ISO creation)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step iso"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_small_cidr_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step iso"
 e2e_run "Clean for /30 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /30 CIDR (cluster.conf)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_tiny_cidr)' --gateway $(cidr_gateway "$(pool_tiny_cidr)") --step cluster.conf"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_tiny_cidr_ip) --machine-network '$(pool_tiny_cidr)' --gateway $(cidr_gateway "$(pool_tiny_cidr)") --step cluster.conf"
 e2e_run "Verify /30 CIDR in cluster.conf" \
     "grep 'machine_network=.*/30' $SNO/cluster.conf"
 e2e_run "Clean for /20 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
