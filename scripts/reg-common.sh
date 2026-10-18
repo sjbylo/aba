@@ -1601,8 +1601,11 @@ reg_start_vendor() {
 		# Quay: port opens immediately (nginx) but the backend may still be
 		# initializing.  Verify the health endpoint before declaring "running".
 		if [ "$vendor" = "quay" ] && ! _reg_quay_ready "$ssh_cmd" "$port"; then
+			# printf '%q': aba_wait_show captures args via $* then eval —
+			# empty $ssh_cmd (local install) collapses, shifting $port
+			# into the ssh_cmd position.  '%q' preserves it as ''.
 			if ! aba_wait_show "Waiting for Quay backend on $_where" 2 600 \
-				_reg_quay_ready "$ssh_cmd" "$port"; then
+				"_reg_quay_ready $(printf '%q' "$ssh_cmd") $(printf '%q' "$port")"; then
 				aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 600s"
 			fi
 		fi
@@ -1629,7 +1632,7 @@ reg_start_vendor() {
 
 	# Wait for port to come up (registry may need a moment)
 	if ! aba_wait_show "Waiting for port $port on $_where" 1 15 \
-		_reg_host_run "$ssh_cmd" "ss -tlnp 2>/dev/null | grep -q ':${port} '"; then
+		"_reg_host_run $(printf '%q' "$ssh_cmd") $(printf '%q' "ss -tlnp 2>/dev/null | grep -q ':${port} '")"; then
 		aba_abort "Failed to start $vendor registry on $_where — port $port not listening after 15s"
 	fi
 
@@ -1638,7 +1641,7 @@ reg_start_vendor() {
 	# Quay can take 2-4 minutes to fully start (database init, migrations).
 	if [ "$vendor" = "quay" ]; then
 		if ! aba_wait_show "Waiting for Quay backend on $_where" 2 600 \
-			_reg_quay_ready "$ssh_cmd" "$port"; then
+			"_reg_quay_ready $(printf '%q' "$ssh_cmd") $(printf '%q' "$port")"; then
 			aba_abort "Failed to start $vendor registry on $_where — port $port listening but backend not ready after 600s"
 		fi
 	fi
