@@ -286,7 +286,7 @@ sync_extras() {
 	# VMs provisioned before new entries were added won't have them.
 	# Re-run _vm_setup_dnsmasq() (single source of truth) if stale.
 	if [ -n "$pool_num" ]; then
-		if ! _essh "$_root_target" "grep -q 'primed-sno' /etc/dnsmasq.d/e2e-pool.conf"; then
+		if ! _essh "$_root_target" "grep -q 'cidr-sno' /etc/dnsmasq.d/e2e-pool.conf"; then
 			if type _vm_setup_dnsmasq &>/dev/null; then
 				_vm_setup_dnsmasq "con${pool_num}" "${user}" "con${pool_num}"
 			else
