@@ -55,6 +55,7 @@ run_test() {
 # ─────────────────────────────────────────────────────────────────────────────
 unit_tests=(
 	# Architecture / lint
+	test/func/test-shipped-file-hygiene.sh
 	test/func/test-no-aba-root-in-registry-scripts.sh
 	test/func/test-aba-root-only-in-aba-sh.sh
 	test/func/test-symlinks-exist.sh
@@ -164,6 +165,11 @@ integration_tests=(
 	test/func/test-download-catalog-simple.sh
 	test/func/test-isc-generation.sh
 	test/func/test-show-ops.sh
+
+	# BMC (offline; uses test/func/lib/bmc-redfish-stub.sh)
+	test/func/test-preflight-check-bm.sh
+	test/func/test-bmc-mac-discovery.sh
+	test/func/test-bmc-boot.sh
 
 	# Bundle
 	test/func/test-bundle-tar-output.sh
