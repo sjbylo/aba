@@ -42,6 +42,16 @@ ports={{ ports }}				# Comma-separated interface names for machine network
 					# Multiple (bonded): ports=ens1f0,ens2f0,ens3f0,ens4f0
 vlan={{ vlan }}					# Optional VLAN tag (works with or without bonding)
 
+disk_hint={{ disk_hint }}			# Install disk hint for all nodes (path or criteria)
+					# Path: /dev/disk/by-id/wwn-0x5000...
+					# Criteria: path=/dev/sda,minSizeGigabytes=200
+					# Per-role: disk_hint_master= disk_hint_worker=
+					# Per-node: disk_hint_node_master1= disk_hint_node_worker2=
+
+bond_mode={{ bond_mode }}			# Bond mode when ports= creates a bond
+					# e.g. active-backup, 802.3ad, balance-xor
+					# Per-role: bond_mode_master= bond_mode_worker=
+
 ssh_key_file={{ ssh_key_file }}		# Path to SSH key (recommended)
 					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
 					# - Private key (~/.ssh/id_rsa) used for SSH node access

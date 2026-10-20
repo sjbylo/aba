@@ -42,6 +42,8 @@ Options:
         --num-masters <count>             # Set number of master/control-plane nodes (1 or 3)
         --vlan [<tag>]                    # Set VLAN tag or empty to clear
         --host-prefix <bits>              # Pod subnet prefix per node (default: 23)
+  Edit cluster.conf for: disk_hint (rootDeviceHints), bond_mode (NMState bond mode)
+  Supports global, per-role (_master/_worker), and per-node (_node_master1) overrides
         --master-prefix <name>            # Node name prefix for masters (default: master)
         --worker-prefix <name>            # Node name prefix for workers (default: worker)
         --ssh-key [<path>]                # Path to SSH public key or empty to clear

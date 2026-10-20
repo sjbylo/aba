@@ -39,8 +39,13 @@ hosts:
       - name: {{ port }}
         macAddress: "{{ arr_macs[hostcnt * ports_per_host + loop.index0 + mac_offset] }}"
     {%- endfor %}
-#    rootDeviceHints:
-#      deviceName: "/dev/sda"
+{%- set _hostname = cluster_name if (role == 'master' and num_workers == '0' and num_masters == '1') else (prefix ~ (loop.index | string)) %}
+{%- if disk_hints is defined and _hostname in disk_hints %}
+    rootDeviceHints:
+{%- for _hkey, _hval in disk_hints[_hostname].items() %}
+      {{ _hkey }}: {{ _hval }}
+{%- endfor %}
+{%- endif %}
     networkConfig:
       interfaces:
         - name: bond0.{{ vlan }}  
@@ -65,7 +70,7 @@ hosts:
           ipv6:
             enabled: false
           link-aggregation:
-            mode: active-backup   # mode=1 active-backup, mode=2 balance-xor or mode=4 802.3ad
+            mode: {{ bond_modes[_hostname] if (bond_modes is defined and _hostname in bond_modes) else 'active-backup' }}
             options:
               miimon: "150" 
             port:

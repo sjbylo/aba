@@ -829,6 +829,171 @@ image_source_is_mirror() {
 
 # Print the mirror directory name.  Only meaningful when image_source_is_mirror.
 
+# -----------------------------------------------------------------------------
+# disk_hint / bond_mode resolution helpers
+# -----------------------------------------------------------------------------
+
+# Resolve a setting using node > role > global precedence.
+# Usage: _resolve_node_setting <base> <hostname> <role>
+# Example: _resolve_node_setting disk_hint master1 master
+#   Checks: disk_hint_node_master1 > disk_hint_master > disk_hint
+# Returns the first non-empty value found, or empty string.
+_resolve_node_setting() {
+	local base="$1" hostname="$2" role="$3"
+	local varname val
+
+	# Node-specific: e.g. disk_hint_node_master1
+	varname="${base}_node_${hostname}"
+	val="${!varname:-}"
+	[ "$val" ] && { echo "$val"; return 0; }
+
+	# Role-level: e.g. disk_hint_master
+	varname="${base}_${role}"
+	val="${!varname:-}"
+	[ "$val" ] && { echo "$val"; return 0; }
+
+	# Global: e.g. disk_hint
+	val="${!base:-}"
+	[ "$val" ] && { echo "$val"; return 0; }
+
+	return 0
+}
+
+# Parse a disk_hint value into a JSON object for rootDeviceHints.
+# Path shorthand: /dev/sda → {"deviceName": "/dev/sda"}
+# Criteria: path=/dev/sda,minSizeGigabytes=200 → {"deviceName": "/dev/sda", "minSizeGigabytes": 200}
+# Prints JSON on stdout; returns non-zero with error on stderr on failure.
+_parse_disk_hint() {
+	local hint="$1"
+	local -a valid_keys=(deviceName minSizeGigabytes maxSizeGigabytes model vendor serialNumber wwn hctl rotational)
+	local -A seen
+	local json="{"
+	local first=true key val
+
+	[ -z "$hint" ] && return 1
+
+	# Path shorthand: value starts with / and contains no =
+	if [[ "$hint" == /* && "$hint" != *=* ]]; then
+		echo "{\"deviceName\": \"$hint\"}"
+		return 0
+	fi
+
+	# Check if the value looks like criteria (contains recognized key=)
+	# If it doesn't start with a recognized key=, treat as path shorthand
+	local first_key="${hint%%=*}"
+	local is_criteria=false
+	for k in "${valid_keys[@]}" path; do
+		if [ "$first_key" = "$k" ]; then
+			is_criteria=true
+			break
+		fi
+	done
+	if ! $is_criteria; then
+		# Not a recognized key= prefix, treat as deviceName path
+		echo "{\"deviceName\": \"$hint\"}"
+		return 0
+	fi
+
+	# Parse comma-separated key=value pairs
+	local IFS=','
+	local -a pairs
+	read -ra pairs <<< "$hint"
+	unset IFS
+
+	for pair in "${pairs[@]}"; do
+		key="${pair%%=*}"
+		val="${pair#*=}"
+
+		# Reject empty key or value
+		if [ -z "$key" ] || [ -z "$val" ]; then
+			echo "Error: empty key or value in disk_hint pair '$pair'" >&2
+			return 1
+		fi
+
+		# path is an alias for deviceName
+		if [ "$key" = "path" ]; then
+			if [ "${seen[deviceName]+set}" ]; then
+				echo "Error: both 'path' and 'deviceName' specified in disk_hint" >&2
+				return 1
+			fi
+			key="deviceName"
+		fi
+
+		# Validate key is recognized
+		local known=false
+		for k in "${valid_keys[@]}"; do
+			if [ "$key" = "$k" ]; then
+				known=true
+				break
+			fi
+		done
+		if ! $known; then
+			echo "Error: unknown disk_hint key '$key' (valid: ${valid_keys[*]})" >&2
+			return 1
+		fi
+
+		# Reject duplicate keys
+		if [ "${seen[$key]+set}" ]; then
+			echo "Error: duplicate disk_hint key '$key'" >&2
+			return 1
+		fi
+		seen[$key]=1
+
+		# Type validation
+		case "$key" in
+			minSizeGigabytes|maxSizeGigabytes)
+				if ! [[ "$val" =~ ^[1-9][0-9]*$ ]]; then
+					echo "Error: $key must be a positive integer, got '$val'" >&2
+					return 1
+				fi
+				;;
+			rotational)
+				if [[ "$val" != "true" && "$val" != "false" ]]; then
+					echo "Error: rotational must be true or false, got '$val'" >&2
+					return 1
+				fi
+				;;
+		esac
+
+		# Build JSON — integers and booleans unquoted, strings quoted
+		if ! $first; then
+			json+=", "
+		fi
+		first=false
+		case "$key" in
+			minSizeGigabytes|maxSizeGigabytes)
+				json+="\"$key\": $val"
+				;;
+			rotational)
+				json+="\"$key\": $val"
+				;;
+			*)
+				json+="\"$key\": \"$val\""
+				;;
+		esac
+	done
+
+	json+="}"
+	echo "$json"
+	return 0
+}
+
+# Validate a bond mode string against known NMState values.
+# Returns 0 if valid, 1 with error on stderr if not.
+_validate_bond_mode() {
+	local mode="$1"
+	local -a valid_modes=(balance-rr active-backup balance-xor broadcast 802.3ad balance-tlb balance-alb)
+
+	[ -z "$mode" ] && return 0
+
+	for m in "${valid_modes[@]}"; do
+		[ "$mode" = "$m" ] && return 0
+	done
+
+	echo "Error: invalid bond_mode '$mode' (valid: ${valid_modes[*]})" >&2
+	return 1
+}
+
 # openshift-install wait-for status.
 # 0: finished, caller continues.
 # 8: Ctrl-C. Exit quietly with 8 so Make does not stamp success.
