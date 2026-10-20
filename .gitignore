@@ -120,6 +120,7 @@ test/e2e/.pool-os/
 test/e2e/logs/
 e2e-parallel.log.*
 
+
 # -----------------------------------------------------------------------------
 # templates/ (generated operator sets)
 # -----------------------------------------------------------------------------
@@ -142,6 +143,9 @@ rpms/*.rpm
 # ai/ directory (session artifacts, never tracked)
 # -----------------------------------------------------------------------------
 ai/
+
+# Local planning directory - never ship to public repo
+.planning/
 
 # -----------------------------------------------------------------------------
 # Editor / IDE / tooling
