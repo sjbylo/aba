@@ -1,13 +1,13 @@
 # Testing the BMC/Redfish Bare-Metal Automation
 
-Branch: `bm-auto-redfish`
+Branch: `dev`
 
 This document covers how to install ABA from this branch and test the
 Redfish-based bare-metal BMC automation feature (PR #27) at three
 levels — from zero-hardware stub tests to a full bare-metal install.
 
-> **Feedback needed!** This feature is on a development branch and requires
-> community testing before it can be merged into ABA.  If you test against
+> **Feedback needed!** This feature requires community testing against
+> real BMC hardware.  If you test against
 > real BMC hardware (any vendor), please report your results — success or
 > failure — via [GitHub Issues](https://github.com/sjbylo/aba/issues).
 > Include your `bmc_type`, firmware version, and the preflight output.
@@ -44,7 +44,7 @@ For troubleshooting BMC issues, see
 ### Clone and install
 
 ```bash
-git clone -b bm-auto-redfish https://github.com/sjbylo/aba.git
+git clone -b dev https://github.com/sjbylo/aba.git
 cd aba
 ./install
 ```
@@ -383,9 +383,8 @@ admin notes, and the MAC discovery error table).
   target is not yet wired in.  The boot orchestrator works when called
   by the install flow, and `bmc-unmount.sh` is already hooked into
   `monitor-install.sh`.
-- **Version references**: Code comments and CHANGELOG entries reference
-  "v1.1" / "v1.2" — these need updating to match ABA's current
-  versioning before merging into `dev` (see TODO in `CHANGELOG.md`).
 - **E2E suites need real hardware**: `suite-bmc-preflight.sh` and
-  `suite-bmc-mac-discovery.sh` require a Fujitsu iRMC-bound pool node.
+  `suite-bmc-mac-discovery.sh` (in `test/e2e/suites/hardware/`) require
+  a Fujitsu iRMC-bound pool node with `BMC_*` variables in `pools.conf`.
+  They are excluded from regular `-a` runs.
   Other vendor E2E suites are planned for a future release.
