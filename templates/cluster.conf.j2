@@ -42,13 +42,18 @@ ports={{ ports }}				# Comma-separated interface names for machine network
 					# Multiple (bonded): ports=ens1f0,ens2f0,ens3f0,ens4f0
 vlan={{ vlan }}					# Optional VLAN tag (works with or without bonding)
 
-disk_hint={{ disk_hint }}			# Install disk hint for all nodes (path or criteria)
+######################################################################################################
+# Advanced options (optional — most users can leave these empty)
+
+disk_hint={{ disk_hint }}			# Optional: tell the installer which disk to use
+					# Leave empty to use the default disk (most common)
 					# Path: /dev/disk/by-id/wwn-0x5000...
 					# Criteria: path=/dev/sda,minSizeGigabytes=200
 					# Per-role: disk_hint_master= disk_hint_worker=
 					# Per-node: disk_hint_node_master1= disk_hint_node_worker2=
 
-bond_mode={{ bond_mode }}			# Bond mode when ports= creates a bond
+bond_mode={{ bond_mode }}			# Optional: bond mode when ports= creates a bond
+					# Leave empty for default (active-backup)
 					# e.g. active-backup, 802.3ad, balance-xor
 					# Per-role: bond_mode_master= bond_mode_worker=
 
