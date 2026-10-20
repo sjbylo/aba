@@ -36,8 +36,13 @@ hosts:
     interfaces:
       - name: {{ arr_ports[0] }}
         macAddress: "{{ arr_macs[hostcnt + mac_offset] }}"
-#    rootDeviceHints:
-#      deviceName: "/dev/sda"
+{%- set _hostname = cluster_name if (role == 'master' and num_workers | int == 0 and num_masters | int == 1) else (prefix ~ (loop.index | string)) %}
+{%- if disk_hints is defined and _hostname in disk_hints %}
+    rootDeviceHints:
+{%- for _hkey, _hval in disk_hints[_hostname].items() %}
+      {{ _hkey }}: {{ _hval }}
+{%- endfor %}
+{%- endif %}
     networkConfig:
       interfaces:
         - name: {{ arr_ports[0] }}

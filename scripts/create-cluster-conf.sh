@@ -125,6 +125,8 @@ fi
 [ ! "$image_source" ]		&& export image_source=mirror
 [ ! "$ports" ]			&& export ports=ens160
 [ ! "$vlan" ]			&& export vlan=
+[ ! "$disk_hint" ]		&& export disk_hint=
+[ ! "$bond_mode" ]		&& export bond_mode=
 [ ! "$master_cpu_count" ]	&& export master_cpu_count=10
 [ ! "$master_mem" ]		&& export master_mem=20
 [ ! "$worker_cpu_count" ]	&& export worker_cpu_count=5
