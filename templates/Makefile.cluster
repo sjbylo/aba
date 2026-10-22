@@ -38,7 +38,7 @@ else
 		ifeq ($(wildcard .bm-nextstep),)
 			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso .bm-nextstep
 		else
-			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso    .auto-agent-up     mon
+			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso    .bm-bmc-boot-done .auto-agent-up     mon
 		endif
 	endif
 endif
@@ -187,6 +187,21 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	_nm=$$(grep '^num_masters=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	_nw=$$(grep '^num_workers=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	_total=$$(( $${_nm:-1} + $${_nw:-0} )); \
+	_bmc_nodes=$$([ -f bmc.conf ] && grep -cE '^[[:space:]]*bmc_host_' bmc.conf || true); \
+	if [ "$${_bmc_nodes:-0}" -gt 0 ]; then \
+		echo; \
+		echo "Next steps:"; \
+		echo; \
+		echo "  bmc.conf lists $$_bmc_nodes node(s): ABA boots them from the ISO via their BMCs (Redfish)."; \
+		echo; \
+		echo "1 Serve the ISO over HTTP, reachable from the BMCs, until the installation completes:"; \
+		echo "    $(CURDIR)/iso-agent-based/agent.$(arch).iso"; \
+		echo "  and set iso_url=<its URL> in bmc.conf."; \
+		echo "2 Run: 'aba -d $$_cluster_dir install'. It mounts the ISO on every node, boots it,"; \
+		echo "  then monitors installation progress."; \
+		echo; \
+		exit 0; \
+	fi; \
 	echo; \
 	echo "Next steps:"; \
 	echo; \
@@ -220,6 +235,22 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	echo
 	@touch .bm-nextstep
 	@exit 0
+
+# Bare metal: mount the ISO on each node in bmc.conf via its BMC (Redfish) and
+# boot it, before waiting for the agent. bmc-boot.sh writes this stamp itself,
+# also when bmc.conf lists no nodes (manual boot), and not when a node fails.
+# Its fallback HTTP server stops when it exits, while the nodes still need the
+# ISO, so an iso_url of a server that keeps serving it is required: in bmc.conf,
+# set once the ISO is built (preflight HEADs it), or in the environment.
+.bm-bmc-boot-done: iso-agent-based/agent.$(arch).iso
+	@if [ -z "$${iso_url:-}" ] && [ -f bmc.conf ] && grep -qE '^[[:space:]]*bmc_host_' bmc.conf \
+	   && ! grep -qE '^[[:space:]]*iso_url=[^[:space:]#]' bmc.conf; then \
+		echo "[ABA] Error: bmc.conf lists BMC nodes but sets no iso_url=." >&2; \
+		echo "[ABA]        Serve $(CURDIR)/iso-agent-based/agent.$(arch).iso over HTTP, reachable" >&2; \
+		echo "[ABA]        from the BMCs, until the installation completes, and set iso_url=<its URL>." >&2; \
+		exit 1; \
+	fi
+	$(SCRIPTS)/bmc-boot.sh
 
 .autopoweroff: iso-agent-based/agent.$(arch).iso
 	$(SCRIPTS)/$(HV_PREFIX)-kill.sh || true
