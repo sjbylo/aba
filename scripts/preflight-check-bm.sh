@@ -110,9 +110,12 @@ _bm_validate_iso_url() {
 	# PRE-05 four sub-checks on an operator-supplied iso_url. Any failure blocks install.
 	# Called once per preflight run (iso_url is cluster-level, not per-node).
 
-	# Sub-check 1: scheme must be exactly http://
-	if [[ "$iso_url" != http://* ]]; then
-		aba_warn "BMC: iso_url must use http:// scheme (https:// rejected in v1.1; opt-in deferred)"
+	# Sub-check 1: scheme must be http:// or https://. Some BMCs mount over
+	# HTTPS only (Fujitsu iRMC S6: NFS, CIFS or HTTPS); InsertMedia then sends
+	# TransferProtocolType HTTPS. The HEAD below verifies the server's
+	# certificate against this host's trust store.
+	if [[ "$iso_url" != http://* ]] && [[ "$iso_url" != https://* ]]; then
+		aba_warn "BMC: iso_url must use the http:// or https:// scheme"
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
@@ -126,7 +129,7 @@ _bm_validate_iso_url() {
 
 	# Sub-check 3: hostname resolves OR is a literal IPv4/IPv6.
 	local rest hostport host
-	rest="${iso_url#http://}"
+	rest="${iso_url#*://}"
 	hostport="${rest%%/*}"
 	host="${hostport%%:*}"
 	if [[ "$host" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || [[ "$host" =~ ^\[.*\]$ ]]; then
@@ -905,7 +908,42 @@ _bm_probe_l5_lenovo() {
 [ -f scripts/bmc-adapter-generic.sh ]  && source scripts/bmc-adapter-generic.sh
 [ -f scripts/bmc-mac-discovery.sh ]    && source scripts/bmc-mac-discovery.sh
 
+# _bm_discover_macs records its result with _bm_state_write_mac, which is
+# defined only in bmc-boot.sh, an executable the preflight never sources: every
+# discovery, and every mac_discovery_<node>=disabled, ended in
+# "_bm_state_write_mac: command not found" under the ERR trap. Load just that
+# function and what it uses from bmc-boot.sh, so the sidecar it writes stays the
+# one bmc-boot.sh reads.
+if ! declare -F _bm_state_write_mac >/dev/null && [ -f scripts/bmc-boot.sh ]; then
+	source <(sed -n -e '/^_BMC_BOOT_VERSION=/p' \
+		-e '/^_bm_bmc_conf_hash() {$/,/^}$/p' \
+		-e '/^_bm_state_write_mac() {$/,/^}$/p' scripts/bmc-boot.sh)
+fi
+
+# Discovery's Redfish calls go through _redfish_request, which needs a session
+# token, but the L1-L4 probes before it authenticate with Basic auth and never
+# open a session: every discovery failed with "MAC-08: discovery preflight
+# failed - HTTP 0 on /redfish/v1/Managers" (0: no request sent). Open a session
+# for discovery and close it again; with discovery disabled no Redfish call is
+# made, so no login.
 _bm_discover_macs() {
+	local node="$1"
+	local _disc_var="mac_discovery_${node}" _tok_var="SESSION_TOKEN_${node}"
+	local _rc=0 _own_session=0
+	if [ "${!_disc_var:-}" != "disabled" ] && [ -z "${!_tok_var:-}" ]; then
+		if ! bmc_session_login "$node"; then
+			aba_warn "BMC: $node MAC-08: discovery preflight failed - session login: $_REDFISH_LAST_REASON"
+			_preflight_errors=$(( _preflight_errors + 1 ))
+			return 1
+		fi
+		_own_session=1
+	fi
+	_bm_discover_macs_session "$node" || _rc=$?
+	[ "$_own_session" = 0 ] || bmc_session_logout "$node"
+	return "$_rc"
+}
+
+_bm_discover_macs_session() {
 	# Phase 10 MAC discovery (D-08 default; D-09 opt-out via mac_discovery_<node>=disabled).
 	# Returns 0 on success (sidecar updated or operator MAC validated); 1 on any
 	# MAC-* error (caller `continue`s the per-node loop). Bumps _preflight_errors
@@ -989,16 +1027,33 @@ _bm_discover_macs() {
 		return 1
 	fi
 
-	_bm_resolve_mac "$node" "$nic_lines"
-	rc=$?
-	case "$rc" in
-		0)  : ;;  # _BM_DISCOVERED_MAC + _BM_DISCOVERED_NIC_ID populated
-		4)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-04 emitted inside helper
-		5)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-05 emitted inside helper
-		*)  aba_warn "BMC: $node MAC-08: unexpected resolver rc=$rc"
-			_preflight_errors=$(( _preflight_errors + 1 ))
-			return 1 ;;
-	esac
+	if [ -n "$op_mac" ]; then
+		# mac_<node> is how MAC-05 asks the operator to pick one NIC out of
+		# several, so look it up among all reported NICs instead of first
+		# requiring a single link-up candidate. A miss leaves
+		# _BM_DISCOVERED_MAC empty and fails with MAC-03 in step 5.
+		_BM_DISCOVERED_MAC=""
+		_BM_DISCOVERED_NIC_ID=""
+		local op_nic_id op_nic_mac op_rest
+		while IFS='|' read -r op_nic_id op_nic_mac op_rest; do
+			if [ -n "$op_nic_mac" ] && [ "${op_nic_mac,,}" = "${op_mac,,}" ]; then
+				_BM_DISCOVERED_MAC="$op_nic_mac"
+				_BM_DISCOVERED_NIC_ID="$op_nic_id"
+				break
+			fi
+		done <<<"$nic_lines"
+	else
+		_bm_resolve_mac "$node" "$nic_lines"
+		rc=$?
+		case "$rc" in
+			0)  : ;;  # _BM_DISCOVERED_MAC + _BM_DISCOVERED_NIC_ID populated
+			4)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-04 emitted inside helper
+			5)  _preflight_errors=$(( _preflight_errors + 1 )); return 1 ;;  # MAC-05 emitted inside helper
+			*)  aba_warn "BMC: $node MAC-08: unexpected resolver rc=$rc"
+				_preflight_errors=$(( _preflight_errors + 1 ))
+				return 1 ;;
+		esac
+	fi
 
 	# Step 5: validate-or-populate (D-08, MAC-03).
 	if [ -n "$op_mac" ]; then
@@ -1050,9 +1105,9 @@ preflight_check_bm() {
 	fi
 
 	# Load bmc.conf: mode-0600 enforcement runs inside normalize-bmc-conf (aba_abort on failure).
-	# The eval inside normalize-bmc-conf populates the process env; the stdout (password-filtered)
-	# is sourced so export lines for non-password vars populate this subshell as well.
-	source <(normalize-bmc-conf)
+	# The eval inside normalize-bmc-conf populates the process env. Called directly, not via
+	# `source <(...)`: that would run the eval in a subshell and lose bmc_password_*.
+	normalize-bmc-conf >/dev/null
 
 	# Step 2: required-field + allowlist (collect-all, no short-circuit).
 	_bm_required_fields

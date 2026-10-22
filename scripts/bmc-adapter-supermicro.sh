@@ -27,7 +27,7 @@
 _bm_insert_media_body() {
 	# Strip Inserted + WriteProtected (X12 rejects them per Bugzilla 1986238).
 	local iso="$1" out="$2"
-	jq -n --arg url "$iso" '{Image:$url, TransferProtocolType:"HTTP"}' > "$out"
+	jq -n --arg url "$iso" '{Image:$url, TransferProtocolType:(if ($url | startswith("https://")) then "HTTPS" else "HTTP" end)}' > "$out"
 }
 
 _bm_boot_patch_body() {
