@@ -53,3 +53,17 @@ run.sh reschedule -s mirror-vendor-matrix
 This prepends the suite to the inject queue. The dispatcher picks it up as the next suite when a pool becomes free. Already-running suites are unaffected.
 
 Use this when a specific suite needs to run sooner (e.g. re-testing a previous failure, verifying a targeted fix).
+
+## Removing suites from a running daemon requires a restart
+
+The daemon loads its suite list into memory at startup. **Deleting suite files from pools does NOT remove suites from the daemon's queue.** The daemon will keep dispatching them (and they'll fail with exit=99 if the file is gone).
+
+To remove suites from the rotation:
+
+1. `run.sh kill` — kill the daemon
+2. Remove any unwanted suite files from `~/.e2e-harness/suites/` on all pools
+3. `run.sh run -a -p 1-4 --dev --loop --fresh -y` — restart; `-a` re-discovers suites from the workspace
+
+### Hardware suites (`suites/hardware/`)
+
+Suites in `test/e2e/suites/hardware/` (e.g. `bmc-preflight`, `bmc-mac-discovery`) are **not** discovered by `-a` — the glob `suites/suite-*.sh` only matches top-level files. They require real BMC/IPMI hardware and must **never** be copied flat into `~/.e2e-harness/suites/` on the pools, or they'll be picked up by the dispatcher and fail.
