@@ -2208,7 +2208,7 @@ cluster_day2_menu() {
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
 			"" "──── Configuration ────────────────" \
 			"R" "Configure OperatorHub$( [[ "$_TUI_MODE" != "DIRECT" ]] && echo ' (after mirror load/sync)')" \
-			"N" "Network Time Protocol" \
+			"N" "Network Time Protocol (NTP)" \
 			"O" "OpenShift Update Service (OSUS)" \
 			"V" "Virtualization Boot Sources" \
 			"" "──── Status ───────────────────────" \
