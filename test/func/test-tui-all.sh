@@ -8,7 +8,7 @@
 #
 # Environment variables:
 #   TUI_TEST_HOST     - Target host (default: conno.example.com)
-#   TUI_CLUSTER_NAME  - Cluster name for install/day2/upgrade tests (default: tuitest)
+#   TUI_CLUSTER_NAME  - Cluster name for install/day2/upgrade tests (default: sno)
 #   TUI_SKIP_DELETE   - Set to 1 to skip cluster deletion
 #
 # Pipeline order:
@@ -42,7 +42,7 @@ for arg in "$@"; do
 	esac
 done
 
-export TUI_CLUSTER_NAME="${TUI_CLUSTER_NAME:-tuitest}"
+export TUI_CLUSTER_NAME="${TUI_CLUSTER_NAME:-sno}"
 [[ "$_NO_DELETE" == "true" ]] && export TUI_SKIP_DELETE=1
 
 _total_pass=0
