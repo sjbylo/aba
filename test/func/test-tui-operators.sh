@@ -239,16 +239,18 @@ echo ""
 echo "--- 7. Additional Images ---"
 # Navigate to the Mirror Payload menu from wherever we are
 _goto_payload_menu() {
-	# If already at payload level (has "Additional Images" and "Select Operators")
-	if tui_capture | grep -q "Additional Images"; then
+	# If already at payload level (has both "Select Operators" AND "Additional Images")
+	local _s
+	_s=$(tui_capture)
+	if echo "$_s" | grep -qi "Select Operators" && echo "$_s" | grep -qi "Additional Images"; then
 		return 0
 	fi
-	# If at operator submenu, escape up
-	if tui_capture | grep -q "Select Operator Sets"; then
+	# If at a submenu, escape up
+	if echo "$_s" | grep -qi "Select Operator Sets\|List images\|Add image\|Recommended\|imageset-config"; then
 		tui_keys Escape; sleep 1
 	fi
 	# If at main menu
-	if ! tui_capture | grep -q "Actions"; then
+	if ! tui_capture | grep -qi "Actions"; then
 		tui_back_to "Actions" 5
 	fi
 	tui_select_item "Mirror Payload"
