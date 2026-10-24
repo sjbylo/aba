@@ -153,6 +153,100 @@ $CLI tui_keys Enter  # dismiss help
 $CLI tui_stop
 ```
 
+## Clean-slate testing (bootstrap from scratch)
+
+The AI can run the full TUI test suite even on a freshly installed ABA with
+no config files — by reading reference credential files and entering all
+values through the TUI.
+
+### Reference credential files
+
+These files live on each test host. They are placed there once by the user
+and contain the real credentials for the test environment. **Never commit
+these files or their contents to the repo.**
+
+| File | Host | Contents |
+|------|------|----------|
+| `~/.vmware.conf.test` | conno, disco | vCenter/ESXi credentials (GOVC_URL, GOVC_USERNAME, GOVC_PASSWORD, GOVC_DATASTORE, GOVC_NETWORK, GOVC_DATACENTER, GOVC_CLUSTER, VC_FOLDER) |
+| `~/.pull-secret.json.test` | conno, disco | Red Hat pull secret JSON (from console.redhat.com) |
+| `~/.kvm.conf.test` | conno, disco | KVM/libvirt config (LIBVIRT_URI, KVM_STORAGE_POOL, KVM_NETWORK) — if KVM testing is needed |
+
+### Full clean-slate wipe
+
+Before a from-scratch bootstrap, wipe everything on the test host:
+
+```bash
+_host="${TUI_TEST_HOST:-conno.example.com}"
+ssh -F ~/.aba/ssh.conf "$_host" "
+  # Back up real credentials (safety — never lose passwords)
+  cp ~/.vmware.conf ~/.vmware.conf.bak 2>/dev/null
+  cp ~/.pull-secret.json ~/.pull-secret.json.bak 2>/dev/null
+
+  # Stop and remove mirror containers
+  podman stop --all 2>/dev/null
+  podman rm --all --force 2>/dev/null
+
+  # Remove mirror data
+  sudo rm -rf /opt/quay 2>/dev/null
+  rm -rf ~/quay-install 2>/dev/null
+
+  # Remove ABA installation and state
+  rm -rf ~/aba
+  rm -rf ~/.aba
+
+  # Remove config files (NOT the .test or .bak copies)
+  rm -f ~/.vmware.conf ~/.pull-secret.json
+"
+```
+
+After this, only `~/.vmware.conf.test`, `~/.pull-secret.json.test`, and
+`.bak` backups remain. The host is ready for a fresh `git clone` + `./install`.
+
+### Bootstrap flow (TUI only — no CLI shortcuts)
+
+When configs are missing, the AI reads values from the `.test` files and
+enters them through the TUI:
+
+1. **Fresh install** — clone and install ABA:
+   ```bash
+   ssh -F ~/.aba/ssh.conf "$_host" "
+     git clone -b dev https://github.com/sjbylo/aba.git ~/aba
+     cd ~/aba && ./install
+   "
+   ```
+2. **Read** `~/.vmware.conf.test` via SSH — extract GOVC_URL, GOVC_PASSWORD, etc.
+3. **Read** `~/.pull-secret.json.test` via SSH — note the path
+4. **Launch** TUI → at the pull-secret gate, enter the `.test` file path
+   through the TUI input dialog
+5. **Setup wizard** → channel, version, platform — enter values through
+   each wizard page
+6. **Platform config** → if TUI shows "Platform not configured", navigate to
+   Settings → Platform and enter vCenter values from the `.test` file
+7. **Mirror install** → navigate to Install Mirror → configure → install
+8. **Mirror sync** → navigate to Sync → confirm → wait for completion
+9. **Cluster install** → navigate to Install Cluster → wizard pages → enter
+   values → install
+10. **Day-2, Upgrade, Lifecycle** → test all remaining workflows
+
+Every step above IS a test — the AI verifies the TUI handles each
+workflow correctly while bootstrapping the environment.
+
+### Key rules
+
+- **TUI only**: Enter all values through TUI dialogs. Do not use `aba` CLI
+  or copy config files directly — this is a TUI test skill.
+- **Never commit credentials**: The `.test` files and their contents must
+  never appear in git, commits, SKILL files, or chat output.
+- **Read, don't display**: When reading `.test` files, extract the values
+  into variables. Do not echo passwords to the terminal or chat.
+- **Restore after testing**: If `.bak` files exist, restore them when done:
+  ```bash
+  ssh -F ~/.aba/ssh.conf "$_host" "
+    mv ~/.vmware.conf.bak ~/.vmware.conf 2>/dev/null
+    mv ~/.pull-secret.json.bak ~/.pull-secret.json 2>/dev/null
+  "
+  ```
+
 ## Environment variables
 
 | Variable | Default | Purpose |
