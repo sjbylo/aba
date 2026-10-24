@@ -64,7 +64,7 @@ require an installed mirror and cluster:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `TUI_TEST_HOST` | `conno.example.com` | Target host for tests |
-| `TUI_CLUSTER_NAME` | `tuitest` | Cluster name for destructive tests |
+| `TUI_CLUSTER_NAME` | `sno` | Cluster name for destructive tests (must have DNS) |
 | `TUI_SKIP_DELETE` | (unset) | Set to `1` to keep cluster after lifecycle test |
 
 ### Test library

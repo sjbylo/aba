@@ -4,14 +4,28 @@
 # DESTRUCTIVE: creates VMs and installs a real cluster.
 # Prereqs: mirror installed + synced, vmware.conf, pull-secret.
 #
-# Uses cluster name "tuitest" to avoid clobbering existing "sno" cluster.
-# Set TUI_CLUSTER_NAME to override.
+# Uses cluster name "sno" by default (must have DNS A records).
+# Set TUI_CLUSTER_NAME to override (valid: sno, compact2, standard, ocp).
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
-_CLUSTER="${TUI_CLUSTER_NAME:-tuitest}"
+_CLUSTER="${TUI_CLUSTER_NAME:-sno}"
 _ssh_cfg="$HOME/.aba/ssh.conf"
+
+# Look up the DNS-registered API IP for this cluster name.
+# The starting_ip MUST match the DNS A record for api.<name>.<domain>.
+_dns_server="10.0.1.8"
+_domain="example.com"
+_api_ip=$(dig +short "api.${_CLUSTER}.${_domain}" "@${_dns_server}" 2>/dev/null | head -1)
+if [[ -z "$_api_ip" ]]; then
+	echo "  ERROR: No DNS A record for api.${_CLUSTER}.${_domain} on ${_dns_server}"
+	echo "  Valid cluster names with DNS: sno, compact2, standard, ocp"
+	exit 1
+fi
+# Derive machine network from the API IP (assumes /20 on 10.0.x.x)
+_machine_network="10.0.0.0/20"
+_gateway="10.0.0.1"
 
 echo "=== TUI Cluster Workflow Test ==="
 echo "  Host: $_TUI_HOST"
@@ -110,7 +124,34 @@ tui_assert_contains "Machine network\|machine network\|CIDR" "Network help conte
 tui_screenshot "cl-02b-network-help"
 tui_keys Enter; sleep 1
 
-# Accept network defaults — advance to page 3
+# Set correct machine network to match DNS records
+echo "  Setting machine network=$_machine_network, starting IP=$_api_ip, gateway=$_gateway"
+tui_select_item "Machine" 2>/dev/null || true
+sleep 1
+tui_keys C-u; sleep 0.3
+$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
+sleep 0.3
+tui_keys Tab Enter; sleep 1
+
+# Set starting IP
+tui_select_item "Starting" 2>/dev/null || true
+sleep 1
+tui_keys C-u; sleep 0.3
+$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
+sleep 0.3
+tui_keys Tab Enter; sleep 1
+
+# Set gateway
+tui_select_item "Gateway" 2>/dev/null || true
+sleep 1
+tui_keys C-u; sleep 0.3
+$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
+sleep 0.3
+tui_keys Tab Enter; sleep 1
+
+tui_screenshot "cl-02c-network-updated"
+
+# Advance to page 3
 tui_press_button "Next" 2>/dev/null || tui_keys Enter
 sleep 2
 
