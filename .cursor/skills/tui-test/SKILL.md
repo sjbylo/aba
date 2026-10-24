@@ -258,11 +258,35 @@ workflow correctly while bootstrapping the environment.
   "
   ```
 
+## Valid cluster names (DNS pre-configured)
+
+Cluster install requires DNS `A` records for `api.<name>.example.com` and
+`*.apps.<name>.example.com` on the lab DNS server (10.0.1.8). Only these
+names have records:
+
+| Name | api IP | *.apps IP | Type |
+|------|--------|-----------|------|
+| `sno` | 10.0.1.201 | 10.0.1.201 | SNO |
+| `compact2` | 10.0.1.212 | 10.0.1.222 | Compact |
+| `standard` | 10.0.1.217 | 10.0.1.227 | Standard |
+| `ocp` | 10.0.1.100 | 10.0.1.100 | SNO |
+
+**Do NOT use arbitrary names** like `tuitest` — install will fail with
+"DNS record does not resolve". Use one of the names above or add DNS
+records first.
+
+When running `test-tui-all.sh`, set the cluster name:
+
+```bash
+TUI_CLUSTER_NAME=sno test/func/test-tui-all.sh
+```
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `TUI_TEST_HOST` | `conno.example.com` | Target host |
+| `TUI_CLUSTER_NAME` | `tuitest` | Cluster name — **override with a valid name** (see above) |
 | `TUI_TEST_SESSION` | `tui-test` | tmux session name |
 
 For DISCO mode testing on the disco host:
