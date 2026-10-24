@@ -189,7 +189,7 @@ tui_screenshot "cl-06-install-start"
 # c) Show a confirmation dialog
 
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "Terminal|Run in Terminal|Execution|execution"; then
+if echo "$_scr" | grep -qi "Terminal\|Run in Terminal\|Execution\|execution"; then
 	echo "  Execution mode dialog appeared"
 	# Select "Run in Terminal" for visible output
 	tui_keys Enter
@@ -208,6 +208,10 @@ while true; do
 	_elapsed=$(( $(date +%s) - _start_time ))
 	[[ $_elapsed -ge $_install_timeout ]] && break
 
+	if ! tui_session_alive; then
+		echo "  SESSION DEAD during cluster install"
+		break
+	fi
 	_scr=$(tui_capture)
 
 	# Take periodic screenshots (every 5 min)
@@ -217,14 +221,14 @@ while true; do
 	fi
 
 	# Check for completion
-	if echo "$_scr" | grep -qiE "install.complete\|Login to the cluster\|kubeadmin\|cluster is ready\|completed successfully"; then
+	if echo "$_scr" | grep -qi "install.complete\|Login to the cluster\|kubeadmin\|cluster is ready\|completed successfully"; then
 		echo "  ✓ PASS: Cluster install completed successfully (${_elapsed}s)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		break
 	fi
 
 	# Check for fatal error
-	if echo "$_scr" | grep -qiE "FAILED\|fatal\|timed out.*bootstrap"; then
+	if echo "$_scr" | grep -qi "FAILED\|fatal\|timed out.*bootstrap"; then
 		echo "  ✗ FAIL: Cluster install failed"
 		tui_screenshot "cl-06-install-fail"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -234,7 +238,7 @@ while true; do
 	# Check if we're back at main menu (install finished)
 	if echo "$_scr" | grep -q "Actions"; then
 		echo "  Returned to main menu — checking cluster state..."
-		_inst=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.install-complete 2>/dev/null && echo yes || echo no")
+		_inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 		if [[ "$_inst" == "yes" ]]; then
 			echo "  ✓ PASS: Cluster install completed (marker file exists, ${_elapsed}s)"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
@@ -254,7 +258,7 @@ tui_screenshot "cl-06-final"
 # ============================================================================
 echo ""
 echo "--- 7. Verify cluster state ---"
-_inst=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.install-complete 2>/dev/null && echo yes || echo no")
+_inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" == "yes" ]]; then
 	echo "  ✓ PASS: Cluster '$_CLUSTER' .install-complete exists"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
@@ -264,7 +268,7 @@ else
 fi
 
 # Verify cluster is reachable
-_kubeconfig=$($_TUI_SSH "ls ~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig 2>/dev/null && echo yes || echo no")
+_kubeconfig=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig && echo yes || echo no")
 if [[ "$_kubeconfig" == "yes" ]]; then
 	echo "  ✓ PASS: kubeconfig exists"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))

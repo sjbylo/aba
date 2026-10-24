@@ -16,6 +16,11 @@ _TUI_HEIGHT=45
 
 # --- Core helpers ---
 
+# Check if the tmux session is still alive
+tui_session_alive() {
+	$_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null
+}
+
 # Capture the current tmux pane content
 tui_capture() {
 	$_TUI_SSH "tmux capture-pane -t $_TUI_SESSION -p" 2>/dev/null
@@ -33,7 +38,11 @@ tui_wait_for() {
 	local timeout="${2:-10}"
 	local i
 	for (( i=0; i<timeout*2; i++ )); do
-		if tui_capture | grep -q "$pattern"; then
+		if ! tui_session_alive; then
+			echo "  SESSION DEAD waiting for: $pattern" >&2
+			return 1
+		fi
+		if tui_capture | grep -qi "$pattern"; then
 			return 0
 		fi
 		sleep 0.5
@@ -49,7 +58,10 @@ tui_wait_gone() {
 	local timeout="${2:-10}"
 	local i
 	for (( i=0; i<timeout*2; i++ )); do
-		if ! tui_capture | grep -q "$pattern"; then
+		if ! tui_session_alive; then
+			return 0
+		fi
+		if ! tui_capture | grep -qi "$pattern"; then
 			return 0
 		fi
 		sleep 0.5
@@ -154,7 +166,11 @@ tui_back_to() {
 	local max="${2:-5}"
 	local i
 	for (( i=0; i<max; i++ )); do
-		if tui_capture | grep -q "$pattern"; then
+		if ! tui_session_alive; then
+			echo "  WARNING: session dead while navigating back to '$pattern'" >&2
+			return 1
+		fi
+		if tui_capture | grep -qi "$pattern"; then
 			return 0
 		fi
 		tui_keys Escape
@@ -214,10 +230,11 @@ tui_clear_failed_tasks() {
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
+	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
 	tui_clear_failed_tasks
 	sleep 0.5
 	$_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT '$cmd'"
-	sleep 1
+	sleep 2
 }
 
 # Kill the TUI session
@@ -232,7 +249,7 @@ tui_stop() {
 tui_assert_contains() {
 	local pattern="$1"
 	local desc="$2"
-	if tui_capture | grep -q "$pattern"; then
+	if tui_capture | grep -qi "$pattern"; then
 		echo "  ✓ PASS: $desc"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		return 0
@@ -248,7 +265,7 @@ tui_assert_contains() {
 tui_assert_not_contains() {
 	local pattern="$1"
 	local desc="$2"
-	if ! tui_capture | grep -q "$pattern"; then
+	if ! tui_capture | grep -qi "$pattern"; then
 		echo "  ✓ PASS: $desc"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		return 0

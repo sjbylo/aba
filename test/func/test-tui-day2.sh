@@ -19,7 +19,7 @@ echo "  Code deployed"
 echo ""
 
 # Verify cluster exists and is installed
-_inst=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.install-complete 2>/dev/null && echo yes || echo no")
+_inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" != "yes" ]]; then
 	echo "  SKIP: Cluster '$_CLUSTER' not installed — skipping Day-2 tests"
 	echo ""
@@ -71,7 +71,7 @@ sleep 5
 tui_screenshot "d2-02-status"
 
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "AVAILABLE\|Ready\|node\|operator\|select.*cluster"; then
+if echo "$_scr" | grep -qi "AVAILABLE\|Ready\|node\|operator\|select.*cluster"; then
 	echo "  ✓ PASS: Cluster status displayed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
@@ -89,123 +89,108 @@ fi
 # Return to Day-2 menu
 tui_back_to "Day-2\|Cluster Management" 5
 
+# Helper: run a Day-2 action via the progress dialog.
+# Selects the menu item, handles cluster selection if shown,
+# waits for the progress dialog to finish, presses Done.
+_day2_run_action() {
+	local item_label="$1"
+	local action_name="$2"
+	local timeout="${3:-600}"
+
+	tui_select_item "$item_label"
+	sleep 3
+	tui_screenshot "d2-${action_name}-start"
+
+	_scr=$(tui_capture)
+
+	# Handle cluster selection dialog (shown when multiple clusters exist)
+	if echo "$_scr" | grep -qi "select.*cluster"; then
+		echo "  (cluster selection dialog — selecting default)"
+		tui_keys Enter; sleep 2
+		_scr=$(tui_capture)
+	fi
+
+	# Detect progress dialog (title contains "Day-2:" or step statuses)
+	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|day2\|Day-2:"; then
+		echo "  ✓ PASS: $action_name progress dialog appeared"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+
+		# Wait for all steps to complete (look for Done button or completion text)
+		# IMPORTANT: do NOT match "Day-2" — the progress dialog title contains it
+		echo "  Waiting for $action_name to complete (up to ${timeout}s)..."
+		local _timed_out=0
+		for (( _i=0; _i<timeout; _i+=5 )); do
+			if ! tui_session_alive; then
+				echo "  SESSION DEAD during $action_name"
+				break
+			fi
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qi "All steps completed"; then
+				break
+			fi
+			if echo "$_scr" | grep -qi "FAILED"; then
+				echo "  $action_name had failures"
+				break
+			fi
+			sleep 5
+			(( _i % 60 == 0 && _i > 0 )) && echo "  ... still running (${_i}s)"
+		done
+		if (( _i >= timeout )); then
+			echo "  TIMEOUT: $action_name did not complete in ${timeout}s"
+			_timed_out=1
+		fi
+		tui_screenshot "d2-${action_name}-result"
+
+		# Return to Day-2 menu
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Done"; then
+			tui_press_button "Done"
+			sleep 2
+		elif (( _timed_out )); then
+			# Operation still running — quit via Q/ESC
+			tui_keys q; sleep 2
+			_scr=$(tui_capture)
+			# Confirm quit if asked
+			if echo "$_scr" | grep -qi "confirm\|sure\|abort"; then
+				tui_keys Enter; sleep 2
+			fi
+		fi
+	else
+		echo "  ~ NOTE: $action_name screen unclear"
+		tui_screenshot "d2-${action_name}-unclear"
+	fi
+
+	# Ensure we're back at the Day-2 menu before the next action
+	sleep 1
+	_scr=$(tui_capture)
+	if ! echo "$_scr" | grep -qi "OperatorHub\|NTP\|OSUS\|shutdown\|startup"; then
+		tui_back_to "Day-2\|Cluster Management\|Actions" 5
+		if tui_capture | grep -q "Actions"; then
+			tui_select_item "Day-2"; sleep 2
+		fi
+	fi
+}
+
 # ============================================================================
 # 3. Configure OperatorHub (Day-2 config)
 # ============================================================================
 echo ""
 echo "--- 3. Configure OperatorHub ---"
-tui_select_item "OperatorHub"
-sleep 3
-tui_screenshot "d2-03-operatorhub"
-
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "select.*cluster\|OperatorHub\|day2\|confirm\|Terminal"; then
-	echo "  ✓ PASS: OperatorHub dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-	# If cluster selection dialog, select our cluster
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter; sleep 2
-		_scr=$(tui_capture)
-	fi
-
-	# If execution mode dialog, select Terminal
-	if echo "$_scr" | grep -qiE "Terminal|Execution|execution"; then
-		tui_keys Enter; sleep 2
-	fi
-
-	# If confirmation dialog, confirm
-	if echo "$_scr" | grep -qiE "confirm\|proceed\|Continue"; then
-		tui_keys Enter
-	fi
-
-	# Wait for day2 to complete (usually quick, ~2-5 min)
-	echo "  Waiting for OperatorHub config..."
-	tui_wait_for "complete\|success\|error\|Actions\|Day-2" 600
-	tui_screenshot "d2-03b-operatorhub-result"
-else
-	echo "  ~ NOTE: OperatorHub screen unclear"
-fi
-
-tui_back_to "Day-2\|Cluster Management" 5
-# If we got pushed to main menu, re-enter Day-2
-if tui_capture | grep -q "Actions"; then
-	tui_select_item "Day-2"
-	sleep 2
-fi
+_day2_run_action "OperatorHub" "operatorhub" 1200
 
 # ============================================================================
 # 4. NTP Configuration
 # ============================================================================
 echo ""
 echo "--- 4. NTP Configuration ---"
-tui_select_item "NTP\|Network Time"
-sleep 3
-tui_screenshot "d2-04-ntp"
-
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "select.*cluster\|NTP\|ntp\|confirm\|Terminal"; then
-	echo "  ✓ PASS: NTP dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter; sleep 2
-		_scr=$(tui_capture)
-	fi
-
-	if echo "$_scr" | grep -qiE "Terminal|Execution"; then
-		tui_keys Enter; sleep 2
-	fi
-
-	if echo "$_scr" | grep -qiE "confirm\|proceed\|Continue"; then
-		tui_keys Enter
-	fi
-
-	echo "  Waiting for NTP config..."
-	tui_wait_for "complete\|success\|error\|Actions\|Day-2" 300
-	tui_screenshot "d2-04b-ntp-result"
-else
-	echo "  ~ NOTE: NTP screen unclear"
-fi
-
-tui_back_to "Day-2\|Cluster Management\|Actions" 5
+_day2_run_action "Network Time" "ntp" 300
 
 # ============================================================================
 # 5. OSUS (OpenShift Update Service)
 # ============================================================================
 echo ""
 echo "--- 5. OSUS ---"
-if tui_capture | grep -q "Actions"; then
-	tui_select_item "Day-2"; sleep 2
-fi
-tui_select_item "OSUS\|Update Service"
-sleep 3
-tui_screenshot "d2-05-osus"
-
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "select.*cluster\|OSUS\|Update Service\|confirm\|Terminal"; then
-	echo "  ✓ PASS: OSUS dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter; sleep 2
-		_scr=$(tui_capture)
-	fi
-
-	if echo "$_scr" | grep -qiE "Terminal|Execution"; then
-		tui_keys Enter; sleep 2
-	fi
-
-	if echo "$_scr" | grep -qiE "confirm\|proceed\|Continue"; then
-		tui_keys Enter
-	fi
-
-	echo "  Waiting for OSUS install..."
-	tui_wait_for "complete\|success\|error\|Actions\|Day-2" 600
-	tui_screenshot "d2-05b-osus-result"
-else
-	echo "  ~ NOTE: OSUS screen unclear"
-fi
+_day2_run_action "Update Service" "osus" 600
 
 tui_back_to "Actions" 5
 

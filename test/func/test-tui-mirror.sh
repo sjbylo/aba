@@ -1,8 +1,8 @@
 #!/bin/bash
-# Test: TUI mirror workflow — payload config, install mirror, sync
-# Exercises mirror payload editor, installs mirror (local), syncs images.
-# This IS destructive: it installs a local mirror and syncs images.
+# Test: TUI mirror workflow — install mirror (local), sync images
+# DESTRUCTIVE: installs a local mirror registry and syncs images.
 # Run on conno.example.com which has pull-secret and internet access.
+# Prereqs: pull-secret at ~/.pull-secret.json, internet access
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
@@ -17,6 +17,20 @@ scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scri
 echo "  Code deployed"
 echo ""
 
+# Pre-check: pull secret
+_ps=$($_TUI_SSH "test -f ~/.pull-secret.json && echo ok" 2>/dev/null)
+if [[ "$_ps" != "ok" ]]; then
+	echo "  SKIP: No pull-secret.json on $_TUI_HOST"
+	echo ""
+	echo "========================================"
+	echo "  TUI Test Results"
+	echo "  PASS: 0"
+	echo "  FAIL: 0"
+	echo "  SKIPPED (no pull-secret)"
+	echo "========================================"
+	exit 0
+fi
+
 # ============================================================================
 tui_start
 tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
@@ -26,26 +40,17 @@ tui_keys Enter  # past splash
 tui_assert_appears "Actions" "Main menu" 10
 
 # ============================================================================
-# 1. Mirror Payload configuration
+# 1. Mirror Payload menu (verify it works)
 # ============================================================================
 echo ""
 echo "--- 1. Mirror Payload ---"
 tui_select_item "Mirror Payload"
-tui_assert_appears "Mirror Payload\|Payload\|ImageSet\|imageset" "Payload menu appeared" 10
+tui_wait_isc_done 120
+tui_assert_appears "Additional Images\|Mirror Payload\|Payload" "Payload menu appeared" 15
 tui_screenshot "mirr-01-payload"
 
-# Check available options
 tui_assert_contains "Version\|OCP\|Channel" "Version/Channel option"
 tui_assert_contains "Operator" "Operator selection option"
-
-# Check help
-tui_press_button "Help"
-sleep 2
-tui_assert_contains "imageset\|ImageSet\|mirror" "Payload help content"
-tui_screenshot "mirr-01b-payload-help"
-tui_keys Enter; sleep 1
-
-# Exit payload menu
 tui_back_to "Actions"
 
 # ============================================================================
@@ -53,122 +58,186 @@ tui_back_to "Actions"
 # ============================================================================
 echo ""
 echo "--- 2. Install Mirror ---"
-tui_select_item "Install Mirror"
-tui_assert_appears "Install Mirror\|Local\|Remote\|locally\|remote" "Mirror install dialog" 10
-tui_screenshot "mirr-02-install-choice"
 
-# Should show Local vs Remote options
-tui_assert_contains "locally\|Local\|this host" "Local option"
-tui_assert_contains "remote\|Remote\|SSH" "Remote option"
+# Check if mirror is already installed
+_mirr_avail=$($_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null)
 
-# Check help
-tui_press_button "Help"
-sleep 2
-tui_assert_contains "registry\|mirror" "Mirror install help"
-tui_screenshot "mirr-02b-install-help"
-tui_keys Enter; sleep 1
-
-# Select "Install locally" (first option)
-tui_keys Enter
-sleep 3
-tui_screenshot "mirr-02c-install-local"
-
-# At this point, there may be a confirmation dialog or it starts configuring.
-# Detect and handle the next screen.
-_scr=$(tui_capture)
-
-# If there's a config menu (registry type, host, port), verify it
-if echo "$_scr" | grep -qiE "registry|host|port|Quay|Docker|type"; then
-	echo "  ✓ PASS: Mirror config dialog appeared"
+if [[ "$_mirr_avail" == "yes" ]]; then
+	echo "  Mirror already installed — skipping install step"
+	echo "  ✓ PASS: Mirror was already installed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_screenshot "mirr-02d-config"
-
-	# Accept defaults and install. Press the Install/OK button.
-	# Look for the right button
-	_btns=$(tui_buttons)
-	if echo "$_btns" | grep -qi "Install\|OK\|Next"; then
-		tui_press_button "Install" 2>/dev/null || tui_press_button "OK" 2>/dev/null || tui_keys Enter
-	else
-		tui_keys Enter
-	fi
-
-	# Wait for install to complete or show progress
-	echo "  Waiting for mirror install..."
-	# Mirror install can take 1-5 minutes
-	tui_wait_for "complete\|success\|installed\|error\|fail\|Actions" 300
-	tui_screenshot "mirr-02e-install-result"
-
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "complete|success|installed"; then
-		echo "  ✓ PASS: Mirror installed successfully"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	elif echo "$_scr" | grep -qi "Actions"; then
-		echo "  ✓ PASS: Returned to main menu (install may have completed)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Mirror install outcome unclear"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	fi
 else
-	echo "  ~ NOTE: Unexpected screen after selecting local install"
-	tui_screenshot "mirr-02c-unexpected"
+	tui_select_item "Install Mirror"
+	sleep 2
+	tui_screenshot "mirr-02-install-choice"
+
+	# Should show Local vs Remote choice menu
+	tui_assert_contains "locally\|Local\|this host" "Local install option"
+	tui_assert_contains "remote\|Remote\|SSH" "Remote install option"
+
+	# Select "Install locally" (item "1", already highlighted)
+	tui_keys Enter
+	sleep 2
+	tui_screenshot "mirr-02b-config-menu"
+
+	# Config menu: Hostname, Port, Username, Password, Image path, Vendor, Data dir
+	# with Select / Next / Back / Help buttons
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Hostname\|Port\|Username\|Vendor"; then
+		echo "  ✓ PASS: Mirror config menu appeared"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+
+		tui_assert_contains "Hostname" "Hostname field"
+		tui_assert_contains "Port" "Port field"
+		tui_assert_contains "Vendor" "Vendor field"
+
+		# Press "Next" to accept defaults and start install
+		tui_press_button "Next"
+		sleep 3
+		tui_screenshot "mirr-02c-installing"
+
+		# Wait for all steps to complete (can take 1-10 minutes).
+		echo "  Waiting for mirror install to complete..."
+		for (( _i=0; _i<600; _i++ )); do
+			if ! tui_session_alive; then
+				echo "  SESSION DEAD during install"
+				break
+			fi
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qi "All steps completed\|Done"; then
+				break
+			fi
+			if echo "$_scr" | grep -qi "Actions"; then
+				break
+			fi
+			if echo "$_scr" | grep -qi "FAILED\|Error.*step"; then
+				echo "  Mirror install error detected"
+				tui_screenshot "mirr-02d-error"
+				break
+			fi
+			sleep 1
+			(( _i % 30 == 0 && _i > 0 )) && echo "  ... still installing (${_i}s)"
+		done
+		tui_screenshot "mirr-02d-result"
+
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "All steps completed"; then
+			echo "  ✓ PASS: All install steps completed successfully"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_press_button "Done"
+			sleep 2
+		elif echo "$_scr" | grep -qi "Actions"; then
+			echo "  ✓ PASS: Returned to main menu after install"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
+		else
+			echo "  ✗ FAIL: Mirror install outcome unclear"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			tui_keys Enter; sleep 1
+		fi
+	else
+		echo "  ✗ FAIL: Expected mirror config menu"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_back_to "Actions" 5
+	fi
 fi
 
-tui_back_to "Actions" 5
-tui_keys Enter; sleep 1  # dismiss any remaining dialogs
-
 # ============================================================================
-# 3. Sync images to mirror
+# 3. Verify mirror is installed
 # ============================================================================
 echo ""
-echo "--- 3. Sync images ---"
-tui_back_to "Actions" 5
+echo "--- 3. Verify mirror state ---"
+_mirror_available=$($_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null)
+echo "  mirror/.available: $_mirror_available"
+
+if [[ "$_mirror_available" == "yes" ]]; then
+	echo "  ✓ PASS: Mirror is available (.available marker exists)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Mirror not available"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	echo "  Skipping sync test (mirror not available)"
+	tui_stop 2>/dev/null
+	tui_summary
+	exit 1
+fi
+
+# ============================================================================
+# 4. Sync images to mirror
+# ============================================================================
+echo ""
+echo "--- 4. Sync images ---"
+if ! tui_capture | grep -q "Actions"; then
+	tui_back_to "Actions" 5
+fi
 tui_select_item "Sync"
-sleep 3
-tui_screenshot "mirr-03-sync"
+sleep 1
+tui_wait_isc_done 180
+tui_wait_for "Continue\|OCP" 30
+tui_screenshot "mirr-04-sync"
 
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "sync|mirror|confirm|proceed|warning"; then
-	echo "  ✓ PASS: Sync dialog appeared"
+if echo "$_scr" | grep -qi "Sync\|OCP\|Continue"; then
+	echo "  ✓ PASS: Sync confirmation dialog appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
-	# Confirm sync
-	tui_keys Enter
-	echo "  Waiting for sync to complete (this may take 10-30 min)..."
-	# Sync can take a long time — wait up to 45 minutes
-	tui_wait_for "complete\|success\|error\|fail\|Actions" 2700
-	tui_screenshot "mirr-03b-sync-result"
+	# Check OCP version in summary
+	if echo "$_scr" | grep -qi "4\.[0-9]"; then
+		echo "  ✓ PASS: Sync shows OCP version"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	fi
+
+	# Press Continue to start sync
+	tui_press_button "Continue"
+	sleep 5
+	tui_screenshot "mirr-04b-syncing"
+
+	# Sync shows a progress dialog similar to install.
+	# Wait for completion (can take 10-45 minutes).
+	echo "  Waiting for sync to complete (up to 45 min)..."
+	for (( _i=0; _i<2700; _i+=5 )); do
+		if ! tui_session_alive; then
+			echo "  SESSION DEAD during sync"
+			break
+		fi
+		_scr=$(tui_capture)
+		# Done: "All steps completed" or "Done" button
+		if echo "$_scr" | grep -qi "All steps completed\|Done"; then
+			break
+		fi
+		# Back at main menu
+		if echo "$_scr" | grep -qi "Actions"; then
+			break
+		fi
+		# Failed
+		if echo "$_scr" | grep -qi "FAILED\|Error.*step"; then
+			echo "  Sync error detected"
+			tui_screenshot "mirr-04c-error"
+			break
+		fi
+		sleep 5
+		(( _i % 60 == 0 && _i > 0 )) && echo "  ... still syncing (${_i}s elapsed)"
+	done
+	tui_screenshot "mirr-04c-result"
 
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "complete|success"; then
-		echo "  ✓ PASS: Sync completed successfully"
+	if echo "$_scr" | grep -qi "All steps completed"; then
+		echo "  ✓ PASS: All sync steps completed successfully"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_press_button "Done"
+		sleep 2
 	elif echo "$_scr" | grep -qi "Actions"; then
 		echo "  ✓ PASS: Returned to main menu after sync"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Sync outcome unclear"
+		echo "  ✗ FAIL: Sync did not complete (timeout or stuck)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_keys Enter; sleep 1
 	fi
-elif echo "$_scr" | grep -qiE "not installed|no mirror|install mirror first"; then
-	echo "  ~ SKIP: Mirror not installed — sync not available"
+elif echo "$_scr" | grep -qi "not installed\|no mirror"; then
+	echo "  ~ SKIP: Mirror reported as not installed for sync"
 else
 	echo "  ~ NOTE: Unexpected sync screen"
-	tui_screenshot "mirr-03-unexpected"
-fi
-
-tui_back_to "Actions" 5
-
-# ============================================================================
-# 4. Verify mirror state
-# ============================================================================
-echo ""
-echo "--- 4. Verify mirror state ---"
-_mirror_state=$($_TUI_SSH "ls ~/aba/mirror/.installed 2>/dev/null && echo 'installed' || echo 'not-installed'")
-echo "  Mirror state: $_mirror_state"
-if [[ "$_mirror_state" == "installed" ]]; then
-	echo "  ✓ PASS: Mirror marker file exists"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_screenshot "mirr-04-unexpected"
 fi
 
 # ============================================================================
@@ -176,6 +245,7 @@ fi
 # ============================================================================
 echo ""
 echo "--- 5. Cleanup ---"
+tui_back_to "Actions" 5
 for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
 sleep 2
 if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then

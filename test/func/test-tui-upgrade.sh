@@ -20,7 +20,7 @@ echo "  Code deployed"
 echo ""
 
 # Verify cluster exists
-_inst=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.install-complete 2>/dev/null && echo yes || echo no")
+_inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" != "yes" ]]; then
 	echo "  SKIP: Cluster '$_CLUSTER' not installed — skipping upgrade test"
 	_TUI_PASS=0; _TUI_FAIL=0; tui_summary; exit 0
@@ -63,13 +63,13 @@ tui_wait_for "Current\|Upgrade\|version\|No available\|upgrade" 30
 tui_screenshot "up-02-versions"
 
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qiE "No available.*upgrade\|No.*versions"; then
+if echo "$_scr" | grep -qi "No available.*upgrade\|No.*versions"; then
 	echo "  ~ NOTE: No upgrade versions available"
 	echo "  This is expected if no newer version is synced to the mirror."
 	echo "  ✓ PASS: Upgrade dialog correctly reports no versions"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1  # dismiss dialog
-elif echo "$_scr" | grep -qiE "Current.*4\.\|z-stream\|minor"; then
+elif echo "$_scr" | grep -qi "Current.*4\.\|z-stream\|minor"; then
 	echo "  ✓ PASS: Upgrade version list displayed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
@@ -86,7 +86,7 @@ elif echo "$_scr" | grep -qiE "Current.*4\.\|z-stream\|minor"; then
 	fi
 
 	# Check for current version display
-	if echo "$_scr" | grep -qiE "Current.*[0-9]+\.[0-9]+\.[0-9]+"; then
+	if echo "$_scr" | grep -qi "Current.*[0-9]\+\.[0-9]\+\.[0-9]\+"; then
 		echo "  ✓ PASS: Current version displayed"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	fi
@@ -96,7 +96,7 @@ elif echo "$_scr" | grep -qiE "Current.*4\.\|z-stream\|minor"; then
 	_scr=$(tui_capture)
 
 	# Handle force option or confirmation
-	if echo "$_scr" | grep -qiE "confirm\|proceed\|force\|Start.*upgrade\|Upgrade.*to"; then
+	if echo "$_scr" | grep -qi "confirm\|proceed\|force\|Start.*upgrade\|Upgrade.*to"; then
 		echo "  Upgrade confirmation dialog"
 		tui_screenshot "up-02b-confirm"
 		tui_keys Enter; sleep 3
@@ -104,7 +104,7 @@ elif echo "$_scr" | grep -qiE "Current.*4\.\|z-stream\|minor"; then
 
 	# Handle execution mode
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "Terminal|Execution"; then
+	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
 		tui_keys Enter; sleep 2
 	fi
 
@@ -124,13 +124,13 @@ elif echo "$_scr" | grep -qiE "Current.*4\.\|z-stream\|minor"; then
 			_last_screenshot=$_elapsed
 		fi
 
-		if echo "$_scr" | grep -qiE "upgrade.*complete\|successfully\|new.*version"; then
+		if echo "$_scr" | grep -qi "upgrade.*complete\|successfully\|new.*version"; then
 			echo "  ✓ PASS: Upgrade completed (${_elapsed}s)"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 			break
 		fi
 
-		if echo "$_scr" | grep -qiE "FAILED\|error\|timed.out"; then
+		if echo "$_scr" | grep -qi "FAILED\|error\|timed.out"; then
 			echo "  ✗ FAIL: Upgrade failed"
 			tui_screenshot "up-fail"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -144,7 +144,7 @@ elif echo "$_scr" | grep -qiE "Current.*4\.\|z-stream\|minor"; then
 
 		sleep 30
 	done
-elif echo "$_scr" | grep -qiE "Upgrade Check Failed\|failed.*query"; then
+elif echo "$_scr" | grep -qi "Upgrade Check Failed\|failed.*query"; then
 	echo "  ~ NOTE: Upgrade check failed (cluster may not be reachable)"
 	tui_keys Enter; sleep 1
 else

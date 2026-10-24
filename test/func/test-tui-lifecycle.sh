@@ -22,7 +22,7 @@ scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scri
 echo "  Code deployed"
 echo ""
 
-_inst=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.install-complete 2>/dev/null && echo yes || echo no")
+_inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" != "yes" ]]; then
 	echo "  SKIP: Cluster '$_CLUSTER' not installed — skipping lifecycle test"
 	_TUI_PASS=0; _TUI_FAIL=0; tui_summary; exit 0
@@ -54,7 +54,7 @@ if echo "$_scr" | grep -qi "select.*cluster"; then
 	_scr=$(tui_capture)
 fi
 
-if echo "$_scr" | grep -qiE "confirm\|shutdown\|proceed\|sure"; then
+if echo "$_scr" | grep -qi "confirm\|shutdown\|proceed\|sure"; then
 	echo "  ✓ PASS: Shutdown confirmation dialog"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_screenshot "lc-01b-shutdown-confirm"
@@ -63,7 +63,7 @@ if echo "$_scr" | grep -qiE "confirm\|shutdown\|proceed\|sure"; then
 	tui_keys Enter; sleep 3
 
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "Terminal|Execution"; then
+	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
 		tui_keys Enter; sleep 2
 	fi
 
@@ -73,7 +73,7 @@ if echo "$_scr" | grep -qiE "confirm\|shutdown\|proceed\|sure"; then
 	tui_screenshot "lc-01c-shutdown-result"
 
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "complete\|success\|shut down"; then
+	if echo "$_scr" | grep -qi "complete\|success\|shut down"; then
 		echo "  ✓ PASS: Shutdown completed"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	elif echo "$_scr" | grep -qi "Actions\|Day-2"; then
@@ -91,7 +91,7 @@ fi
 echo ""
 echo "--- 2. Verify shutdown ---"
 sleep 5
-_shutdown_log=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.shutdown.log 2>/dev/null && echo yes || echo no")
+_shutdown_log=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.shutdown.log && echo yes || echo no")
 if [[ "$_shutdown_log" == "yes" ]]; then
 	echo "  ✓ PASS: Shutdown log exists"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
@@ -115,13 +115,13 @@ if echo "$_scr" | grep -qi "select.*cluster"; then
 	_scr=$(tui_capture)
 fi
 
-if echo "$_scr" | grep -qiE "confirm\|startup\|start\|proceed\|power"; then
+if echo "$_scr" | grep -qi "confirm\|startup\|start\|proceed\|power"; then
 	echo "  ✓ PASS: Startup dialog appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 3
 
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "Terminal|Execution"; then
+	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
 		tui_keys Enter; sleep 2
 	fi
 
@@ -173,13 +173,13 @@ else
 		_scr=$(tui_capture)
 	fi
 
-	if echo "$_scr" | grep -qiE "confirm\|clean\|remove\|sure"; then
+	if echo "$_scr" | grep -qi "confirm\|clean\|remove\|sure"; then
 		echo "  ✓ PASS: Clean confirmation dialog"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_keys Enter; sleep 3
 
 		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qiE "Terminal|Execution"; then
+		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
 			tui_keys Enter; sleep 2
 		fi
 
@@ -207,13 +207,13 @@ else
 		_scr=$(tui_capture)
 	fi
 
-	if echo "$_scr" | grep -qiE "confirm\|delete\|destroy\|sure\|remove"; then
+	if echo "$_scr" | grep -qi "confirm\|delete\|destroy\|sure\|remove"; then
 		echo "  ✓ PASS: Delete confirmation dialog"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_keys Enter; sleep 3
 
 		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qiE "Terminal|Execution"; then
+		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
 			tui_keys Enter; sleep 2
 		fi
 
@@ -224,7 +224,7 @@ else
 	fi
 
 	# Verify cluster is gone
-	_gone=$($_TUI_SSH "ls ~/aba/$_CLUSTER/.install-complete 2>/dev/null && echo no || echo yes")
+	_gone=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
 	if [[ "$_gone" == "yes" ]]; then
 		echo "  ✓ PASS: Cluster '$_CLUSTER' deleted (no .install-complete)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))

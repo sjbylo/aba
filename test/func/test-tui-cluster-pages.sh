@@ -290,19 +290,27 @@ if echo "$_scr" | grep -qi "VM Resources\|Interface\|Network\|Basics\|Cluster"; 
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 fi
 
-# Cancel out of the wizard entirely
-tui_keys Escape; sleep 1
-tui_keys Escape; sleep 1
-tui_keys Escape; sleep 1
-tui_keys Escape; sleep 1
-sleep 2
+# Cancel out of the wizard entirely — need enough Escapes for all wizard pages
+# plus any confirmation dialogs
+for _i in 1 2 3 4 5 6 7 8; do
+	tui_keys Escape; sleep 0.5
+	# Dismiss any "Cancel wizard?" confirmation
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Actions"; then
+		break
+	fi
+	if echo "$_scr" | grep -qi "cancel\|discard\|sure\|abort"; then
+		tui_keys Enter; sleep 0.5
+	fi
+done
+sleep 1
 
 # ============================================================================
 # 8. Verify we're back at main menu
 # ============================================================================
 echo ""
 echo "--- 8. Return to main menu ---"
-tui_back_to "Actions" 5
+tui_back_to "Actions" 10
 tui_assert_contains "Actions" "Back at main menu after wizard cancel"
 
 # ============================================================================
