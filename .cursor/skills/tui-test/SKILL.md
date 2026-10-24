@@ -182,9 +182,20 @@ ssh -F ~/.aba/ssh.conf "$_host" "
   cp ~/.vmware.conf ~/.vmware.conf.bak 2>/dev/null
   cp ~/.pull-secret.json ~/.pull-secret.json.bak 2>/dev/null
 
-  # Stop and remove mirror containers
+  # Stop and remove mirror containers and pods
   podman stop --all 2>/dev/null
   podman rm --all --force 2>/dev/null
+  podman pod rm --all --force 2>/dev/null
+  podman volume prune --force 2>/dev/null
+  podman secret rm --all 2>/dev/null
+
+  # Stop and remove systemd user units (Quay, registry)
+  systemctl --user stop quay-app quay-pod quay-redis quay 2>/dev/null
+  systemctl --user disable quay-app quay-pod quay-redis quay 2>/dev/null
+  systemctl --user reset-failed 2>/dev/null
+  rm -f ~/.config/systemd/user/quay-*.service 2>/dev/null
+  rm -f ~/.config/containers/systemd/quay.container 2>/dev/null
+  systemctl --user daemon-reload 2>/dev/null
 
   # Remove mirror data
   sudo rm -rf /opt/quay 2>/dev/null
