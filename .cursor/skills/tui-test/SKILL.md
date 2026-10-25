@@ -275,6 +275,35 @@ names have records:
 "DNS record does not resolve". Use one of the names above or add DNS
 records first.
 
+### Deleting test clusters before install
+
+The AI is allowed to delete these test clusters (VMs in vCenter) if they
+block a new install (e.g. IP conflict from arping pre-flight):
+
+- `sno`, `sno2`, `sno3`, `sno4`
+- `compact`, `compact2`
+- `standard`, `standard2`
+
+To delete a cluster VM before installing:
+
+```bash
+_host="${TUI_TEST_HOST:-conno.example.com}"
+ssh -F ~/.aba/ssh.conf "$_host" "
+  source ~/.vmware.conf 2>/dev/null
+  export GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_INSECURE GOVC_DATACENTER
+  govc vm.power -off /Datacenter/vm/<name>/<name> 2>/dev/null
+  govc vm.destroy /Datacenter/vm/<name>/<name> 2>/dev/null
+"
+```
+
+Also remove any leftover cluster directory on the test host:
+
+```bash
+ssh -F ~/.aba/ssh.conf "$_host" "rm -rf ~/aba/<name>"
+```
+
+**Never delete** `e2e-*` VMs (E2E pool VMs) or `con*`/`dis*` hosts.
+
 When running `test-tui-all.sh`, set the cluster name:
 
 ```bash
