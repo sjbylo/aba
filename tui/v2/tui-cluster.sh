@@ -364,7 +364,7 @@ _configure_vmw_form() {
 
 		case "$field" in
 			U)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "vCenter or ESXi hostname/IP:" 0 60 "$v_url" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "vCenter or ESXi hostname/IP:" 10 70 "$v_url" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_url=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_url" || continue
@@ -381,7 +381,7 @@ _configure_vmw_form() {
 				fi
 				;;
 			N)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Username:" 0 60 "$v_user" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Username:" 10 50 "$v_user" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_user" || continue
@@ -394,7 +394,7 @@ _configure_vmw_form() {
 				replace-value-conf -q -n GOVC_PASSWORD -v "'$v_pass'" -f "$conf_path"
 				;;
 			D)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Datastore name:" 0 60 "$v_datastore" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Datastore name:" 10 50 "$v_datastore" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_datastore=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_datastore" || continue
@@ -402,7 +402,7 @@ _configure_vmw_form() {
 				fi
 				;;
 			W)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Network (port group name):" 0 60 "$v_network" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Network (port group name):" 10 70 "$v_network" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_network=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_network" || continue
@@ -410,7 +410,7 @@ _configure_vmw_form() {
 				fi
 				;;
 			C)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Datacenter name:" 0 60 "$v_datacenter" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Datacenter name:" 10 50 "$v_datacenter" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_datacenter=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_datacenter" || continue
@@ -418,7 +418,7 @@ _configure_vmw_form() {
 				fi
 				;;
 			L)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Cluster name:" 0 60 "$v_cluster" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Cluster name:" 10 50 "$v_cluster" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_cluster=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_cluster" || continue
@@ -426,7 +426,7 @@ _configure_vmw_form() {
 				fi
 				;;
 			F)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "VM folder path (e.g. /Datacenter/vm):" 0 60 "$v_folder" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "VM folder path (e.g. /Datacenter/vm):" 10 70 "$v_folder" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_folder=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_folder" || continue
@@ -529,7 +529,7 @@ _configure_kvm_form() {
 
 		case "$field" in
 			U)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Libvirt connection URI\n(e.g. qemu+ssh://user@host/system):" 0 70 "$k_uri" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Libvirt connection URI\n(e.g. qemu+ssh://user@host/system):" 10 70 "$k_uri" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_uri=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_uri" || continue
@@ -537,7 +537,7 @@ _configure_kvm_form() {
 				fi
 				;;
 			S)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Storage pool path on KVM host:" 0 60 "$k_pool" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Storage pool path on KVM host:" 10 70 "$k_pool" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_pool=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_pool" || continue
@@ -545,7 +545,7 @@ _configure_kvm_form() {
 				fi
 				;;
 			N)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Bridge name on KVM host:" 0 60 "$k_network" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Bridge name on KVM host:" 10 50 "$k_network" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_network=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_network" || continue
@@ -553,7 +553,7 @@ _configure_kvm_form() {
 				fi
 				;;
 			B)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Boot firmware/order (e.g. uefi,hd,cdrom):" 0 60 "$k_boot" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Boot firmware/order (e.g. uefi,hd,cdrom):" 10 50 "$k_boot" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_boot=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_boot" || continue
@@ -561,7 +561,7 @@ _configure_kvm_form() {
 				fi
 				;;
 			G)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Graphics args (e.g. vnc,listen=0.0.0.0 --video virtio):" 0 70 "$k_graphics" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Graphics args (e.g. vnc,listen=0.0.0.0 --video virtio):" 10 70 "$k_graphics" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_graphics=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_graphics" || continue
@@ -1475,7 +1475,7 @@ ${_conn_help}
 			;;
 		K)
 			dlg --backtitle "$(ui_backtitle)" --title "SSH Key" \
-				--inputbox "Path to SSH private key:" 0 60 "$cl_ssh_key" \
+				--inputbox "Path to SSH private key:" 10 70 "$cl_ssh_key" \
 				2>"$_TUI_TMP"
 			if [[ $? -eq 0 ]]; then
 				local key_val=$(<"$_TUI_TMP")

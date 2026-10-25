@@ -307,7 +307,7 @@ _direct_pull_secret() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET_PATH" \
 			--ok-label "OK" \
 			--cancel-label "$TUI2_BTN_EXIT" \
-			--inputbox "$TUI2_MSG_PULL_SECRET_PATH_PROMPT" 0 60 "$ps_file" \
+			--inputbox "$TUI2_MSG_PULL_SECRET_PATH_PROMPT" 10 70 "$ps_file" \
 			2>"$_TUI_TMP"
 		rc=$?
 		if [[ $rc -ne 0 ]]; then
