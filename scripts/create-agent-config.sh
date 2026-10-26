@@ -179,6 +179,75 @@ aba_info "Adding DNS server(s): $arr_dns_servers"
 export arr_ntp_servers=$(echo $ntp_servers | tr "," " " | tr -s "[:space:]")
 [ "$arr_ntp_servers" ] && aba_info "Adding NTP server(s): $arr_ntp_servers"
 
+# --- Resolve disk_hint and bond_mode per node ---
+# Build JSON dicts keyed by hostname for the Jinja templates.
+_dh_json="{"
+_bm_json="{"
+_dh_first=true
+_bm_first=true
+_hint_errors=0
+
+for (( i=1; i<=num_nodes; i++ )); do
+	if [ "$i" -le "$num_masters" ]; then
+		_role=master
+		_hostname="${master_prefix}${i}"
+		# SNO: single node uses cluster_name as hostname
+		if [ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ]; then
+			_hostname="$cluster_name"
+		fi
+	else
+		_role=worker
+		_wi=$(( i - num_masters ))
+		_hostname="${worker_prefix}${_wi}"
+	fi
+
+	# Disk hint: full 3-level precedence (node > role > global)
+	_dh_val=$(_resolve_node_setting disk_hint "$_hostname" "$_role")
+	if [ "$_dh_val" ]; then
+		_dh_parsed=$(_parse_disk_hint "$_dh_val") || {
+			echo_red "Error: invalid disk_hint for $_hostname: $_dh_val" >&2
+			_hint_errors=$(( _hint_errors + 1 ))
+			continue
+		}
+		if ! $_dh_first; then _dh_json+=", "; fi
+		_dh_first=false
+		_dh_json+="\"$_hostname\": $_dh_parsed"
+	fi
+
+	# Bond mode: role + global only (per-node can be added later by
+	# switching to _resolve_node_setting here)
+	_bm_varname="bond_mode_${_role}"
+	_bm_val="${!_bm_varname:-}"
+	[ -z "$_bm_val" ] && _bm_val="${bond_mode:-}"
+	if [ "$_bm_val" ]; then
+		_validate_bond_mode "$_bm_val" || {
+			echo_red "Error: invalid bond_mode for $_hostname: $_bm_val" >&2
+			_hint_errors=$(( _hint_errors + 1 ))
+			continue
+		}
+		if ! $_bm_first; then _bm_json+=", "; fi
+		_bm_first=false
+		_bm_json+="\"$_hostname\": \"$_bm_val\""
+	fi
+done
+
+_dh_json+="}"
+_bm_json+="}"
+
+[ "$_hint_errors" -gt 0 ] && aba_abort "$_hint_errors disk_hint/bond_mode error(s) found. Fix cluster.conf and retry."
+
+# Bond mode only applies when there's a bond (multiple ports)
+if [ "$_bm_json" != "{}" ] && [ "$num_ports" -le 1 ]; then
+	aba_abort "bond_mode is set but ports= has only one interface. Bond mode requires multiple ports."
+fi
+
+# Export as json_ prefixed vars for scripts/j2
+export json_disk_hints="$_dh_json"
+export json_bond_modes="$_bm_json"
+
+[ "$_dh_json" != "{}" ] && aba_info "Disk hints: $json_disk_hints"
+[ "$_bm_json" != "{}" ] && aba_info "Bond modes: $json_bond_modes"
+
 # Use j2cli to render the templates
 echo
 aba_info Generating Agent-based configuration file: $PWD/agent-config.yaml 

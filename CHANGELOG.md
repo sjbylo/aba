@@ -1,4 +1,43 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.2...HEAD)
+
+---
+
+## [1.4.2](https://github.com/sjbylo/aba/releases/tag/v1.4.2) - 2026-10-26
+
+Bare-metal BMC automation, disk hints/bond configuration, and Redfish reliability fixes
+
+
+Bare-metal BMC automation, disk and bonding configuration, and Redfish reliability fixes
+
+### Added
+
+- **Bare-metal BMC automation via Redfish** — Optional install path that uploads the agent ISO to the server's BMC via Redfish VirtualMedia, sets one-shot boot, power-cycles the node, and ejects the media on completion. Vendor support: Fujitsu iRMC (fully tested), Dell iDRAC9, HPE iLO 5/6, Supermicro X12/X13, Lenovo XCC. Includes 5-level preflight probe, per-node state machine with resume, and session management. (Contributed by @mateuszslugocki, PR #27)
+- **BMC-driven MAC auto-discovery** — For nodes with `bmc_host_<node>` set, ABA queries the BMC's Redfish EthernetInterfaces collection during preflight and populates or validates `mac_<node>` automatically.
+- **BMC boot from install flow** — `bmc-boot.sh` is now called automatically during bare-metal installs when a `bmc.conf` is present, replacing the manual "boot your servers" step. (Contributed by @zetti12345, PR #45)
+- **`disk_hint` support** — New `cluster.conf` variable to specify the target install disk per node, per role, or globally. Supports by-path and by-size hints, resolved via node > role > global precedence.
+- **`bond_mode` support** — New `cluster.conf` variable to set the bonding mode per role or globally, rendered into agent install configs via Jinja templates.
+- **TUI functional test suite** — 359 assertions across 10 tests covering cluster creation, mirror workflows, and menu navigation.
+
+### Changed
+
+- **Day-2 menu label** — NTP entry now shows the abbreviation for clarity.
+- **Dialog sizing** — TUI dialog dimensions adjusted for better readability on various terminal sizes.
+
+### Fixed
+
+- **Underscored hostnames/domains rejected** — Hostnames like `my_vcenter.lab.com` and domains like `my_lab` (common in Windows/AD environments) were incorrectly rejected by validation. Also accepts single-character TLDs (e.g. internal zones `.i`, `.t`) and short hostnames (e.g. `vcenter`, `esxi1`) in the vCenter URL field.
+- **Quay start health-check hang on local installs** — Empty SSH command argument shifted the port into the wrong position, causing the health check to run `5333` as a command. The wait loop would hang for 10 minutes before aborting. Now preserves empty args correctly through the eval round-trip.
+- **BMC: boot override not cleared on some BMCs** — BMCs that reject `BootSourceOverrideEnabled: Disabled` (e.g. Fujitsu iRMC) are now handled with a fallback strategy. (Contributed by @zetti12345)
+- **BMC: media status check too strict** — BMCs that report `Inserted` instead of `Connected` for mounted virtual media are now accepted. (Contributed by @zetti12345)
+- **BMC: HTTPS ISO URLs rejected** — An `https://` ISO URL is now accepted and mounted over HTTPS. (Contributed by @zetti12345)
+- **BMC: wrong NIC selected on multi-NIC servers** — `mac_<node>` now correctly selects the specified NIC instead of defaulting to the first one. (Contributed by @zetti12345)
+- **BMC: MAC discovery not loaded in preflight** — `_bm_state_write_mac` was missing from the preflight, causing MAC auto-discovery to silently skip. (Contributed by @zetti12345)
+- **BMC: Redfish session not opened for MAC discovery** — Preflight MAC discovery now opens a proper Redfish session before querying EthernetInterfaces. (Contributed by @zetti12345)
+- **BMC: bmc.conf not loaded in caller's shell** — Configuration was loaded in a subshell, making variables invisible to the calling script. (Contributed by @zetti12345)
+
+### Community
+
+- Thanks to **@kahlai** for independently requesting bundle disk space estimation ([#46](https://github.com/sjbylo/aba/issues/46))
 
 ---
 
@@ -42,6 +81,10 @@ Mirror lifecycle reliability, stale state detection, and UX improvements
 - **Bundle registry checks** — Made vendor-agnostic instead of assuming Quay, so Docker and OMR bundles work correctly.
 - **Quay start readiness IPv6** — `_reg_quay_ready()` used `localhost` which resolved to `::1`; pasta/rootless podman only forwards on IPv4, causing curl TLS failures (HTTP 000). Now uses `127.0.0.1` explicitly.
 - **Quay "already running" without backend** — `reg_start_vendor()` declared Quay running when the port was listening, but Quay's nginx opens the port immediately while the backend (quay-app + postgres) takes 2-4 minutes. Now verifies backend health before returning success.
+
+<!-- TODO: BMC PR (from PR #27) references "v1.1" and "v1.2" throughout code
+     comments, Troubleshooting.md, and CHANGELOG entries below. Update these
+     version references to match ABA's actual versioning before merging into dev. -->
 
 ---
 
@@ -932,6 +975,38 @@ Major new TUI v2, vSphere preflight, improved upgrade workflow, and reliability 
 
 - **Mateusz Slugocki** (@mateuszslugocki) — vSphere preflight validation: 42 commits implementing multi-layer connectivity, authentication, resource existence, and privilege verification checks with comprehensive E2E test coverage.
 - **Kamil Blaz** (@KamilBlaz) — Mermaid workflow diagram (#29), VM provider refactor with explicit KVM/vSphere contract.
+
+### Added (Phase 10: MAC Auto-Discovery + Real-Hardware Vendor Validation)
+
+- BMC-driven MAC auto-discovery: for nodes with `bmc_host_<node>` set,
+  aba queries the BMC's Redfish EthernetInterfaces collection during
+  preflight and populates or validates `mac_<node>`. See
+  Troubleshooting.md "MAC discovery" subsection for the operator runbook,
+  the MAC-* error reference (MAC-03 through MAC-09), and the per-vendor
+  validation status.
+- New optional bmc.conf field: `mac_discovery_<node>=disabled` to opt
+  out per-node (see templates/bmc.conf for usage).
+- Real-HW E2E suite: test/e2e/suites/suite-bmc-mac-discovery.sh
+  (iRMC-only in v1.1; stretch vendors deferred to v1.2).
+
+### Behavior change (Phase 10)
+
+An existing bmc.conf with operator-set `mac_<node>` values is now
+validated against the BMC's EthernetInterfaces report on every preflight
+run. A previously-working install can hard-fail at preflight with MAC-03
+if the operator's MAC is on a NIC the BMC reports as LinkDown or
+InterfaceEnabled=false. Remediation: cable the NIC, enable it in BMC
+firmware, update `mac_<node>` to the currently-active NIC's MAC, or set
+`mac_discovery_<node>=disabled` in bmc.conf to skip discovery for that
+node.
+
+### Deferred to v1.2 (Phase 10)
+
+Real-hardware E2E validation for MAC discovery on Dell iDRAC, HPE iLO,
+Supermicro X12/X13, and Lenovo XCC. The MAC discovery code path runs
+against any DSP0266-compliant Redfish BMC and is exercised by mocked
+tests (test/func/test-bmc-mac-discovery.sh) for all stretch vendors;
+only iRMC has a passing real-HW gate in v1.1.
 
 ---
 

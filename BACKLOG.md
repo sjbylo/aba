@@ -2795,3 +2795,31 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 2. `aba -d mirror uninstall`
 3. Change `reg_vendor=omr` and `aba -d mirror install` → aborts with "quay.service still active".
 
+---
+
+## Should `platform` be overridable per cluster in cluster.conf?
+
+**Severity:** LOW — design question
+**Status:** Discussion
+**Added:** 2026-10-14
+
+**Problem:** `--platform bm` (or `vmw`/`kvm`) sets `platform=` in `aba.conf` (global), not per-cluster. This means all clusters share the same platform. But a user might want to run both VMware and bare-metal clusters from the same ABA checkout — e.g. a VMware SNO for dev and a bare-metal standard cluster for production.
+
+**Question:** Should `platform` be overridable in `cluster.conf`? If so, how would it interact with the global `aba.conf` value (default vs override)? Would mirror operations (which don't depend on platform) still read from `aba.conf`? The CLI download logic (`cli/Makefile`) uses `platform` to decide whether to download `govc` — would a per-cluster override affect that?
+
+**Impact:** Currently low — most users target a single platform per environment. But as ABA supports more platforms, this could become a real limitation.
+
+---
+
+## Should `reg_host` derive its domain from the global `domain`?
+
+**Severity:** LOW — design question
+**Status:** Discussion
+**Added:** 2026-10-14
+
+**Problem:** `reg_host` in `mirror.conf` is set to a full FQDN (e.g. `registry.example.com`). If the user changes `domain` in `aba.conf` (e.g. from `example.com` to `lab.local`), `reg_host` in `mirror.conf` still has the old domain baked in. This can cause silent mismatches.
+
+**Question:** Should `mirror.conf` store only the hostname part (e.g. `reg_hostname=registry`) and derive the FQDN as `${reg_hostname}.${domain}` at runtime from the global `domain` in `aba.conf`? This would keep the domain consistent across all configs. But it would break the use case where the registry intentionally lives in a different domain than the clusters (e.g. registry in the corporate domain, clusters in a lab domain).
+
+**Alternative:** Keep `reg_host` as a full FQDN but add a validation check that warns if its domain suffix doesn't match `domain` from `aba.conf`.
+

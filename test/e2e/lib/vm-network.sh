@@ -333,6 +333,8 @@ address=/api.$(pool_cluster_name vmw-preflight-pos ${pool_num}).${domain}/${node
 address=/.apps.$(pool_cluster_name vmw-preflight-pos ${pool_num}).${domain}/${node_ip}
 address=/api.$(pool_cluster_name vmw-preflight-neg ${pool_num}).${domain}/${node_ip}
 address=/.apps.$(pool_cluster_name vmw-preflight-neg ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name cidr-sno ${pool_num}).${domain}/$(pool_small_cidr_ip ${pool_num})
+address=/.apps.$(pool_cluster_name cidr-sno ${pool_num}).${domain}/$(pool_small_cidr_ip ${pool_num})
 address=/registry.${domain}/${POOL_SUBNET:-10.0.2}.$((pool_num * 10))
 DNSEOF
 

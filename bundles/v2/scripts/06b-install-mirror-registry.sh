@@ -23,9 +23,6 @@ aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --gateway-ip 10.0.1.1
 
 echo_step "Install mirror registry (vendor=$BUNDLE_VENDOR) ..."
 
-# Set the registry vendor in mirror.conf
-sed -i "s/^reg_vendor=.*/reg_vendor=$BUNDLE_VENDOR/" mirror/mirror.conf
-
 # If a previous run left any registry (Quay, Docker, or OMR), clean it up first
 if podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres|^registry(-[0-9]+)?$|^systemd-quay$'; then
 	echo_step "Found existing registry from a previous run, uninstalling first ..."
@@ -44,7 +41,8 @@ echo -n "Pausing: "
 read -t 60 yn || true
 
 # Pasta hairpin route is now handled by int_down() in test/lib.sh
-aba -d mirror install -H $TEST_HOST
+# --vendor creates mirror.conf if needed (bundle tar excludes it)
+aba -d mirror install --vendor $BUNDLE_VENDOR -H $TEST_HOST
 
 # Verify registry is actually working after install
 echo_step "Verifying registry is accessible ..."

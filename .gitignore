@@ -120,6 +120,7 @@ test/e2e/.pool-os/
 test/e2e/logs/
 e2e-parallel.log.*
 
+
 # -----------------------------------------------------------------------------
 # templates/ (generated operator sets)
 # -----------------------------------------------------------------------------
@@ -143,16 +144,15 @@ rpms/*.rpm
 # -----------------------------------------------------------------------------
 ai/
 
+# Local planning directory - never ship to public repo
+.planning/
+
 # -----------------------------------------------------------------------------
 # Editor / IDE / tooling
 # -----------------------------------------------------------------------------
 .vscode*
-#.cursor/
-.planning/
-.cursorignore
-# Ignore Cursor Plan Mode drafts and local temp states
-.cursor/plans/
-.cursor/skills/
+# Cursor IDE config — local workspace AI rules, skills, hooks, environment
+.cursor/
 
 # -----------------------------------------------------------------------------
 # General patterns

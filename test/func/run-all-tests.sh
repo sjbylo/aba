@@ -55,6 +55,7 @@ run_test() {
 # ─────────────────────────────────────────────────────────────────────────────
 unit_tests=(
 	# Architecture / lint
+	test/func/test-shipped-file-hygiene.sh
 	test/func/test-no-aba-root-in-registry-scripts.sh
 	test/func/test-aba-root-only-in-aba-sh.sh
 	test/func/test-symlinks-exist.sh
@@ -93,6 +94,7 @@ unit_tests=(
 	test/func/test-vip-dig-line.sh
 	test/func/test-cluster-config-counts.sh
 	test/func/test-vlan-bond-prefix.sh
+	test/func/test-disk-hint-bond-mode.sh
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
 	test/func/test-install-stamp.sh
@@ -158,12 +160,16 @@ integration_tests=(
 	test/func/test-registry-download-per-vendor.sh
 
 	# Catalog / ISC
-	test/func/test-catalog-helpers.sh
 	test/func/test-catalog-canary.sh
 	test/func/test-catalog-temp-cleanup.sh
 	test/func/test-download-catalog-simple.sh
 	test/func/test-isc-generation.sh
 	test/func/test-show-ops.sh
+
+	# BMC (offline; uses test/func/lib/bmc-redfish-stub.sh)
+	test/func/test-preflight-check-bm.sh
+	test/func/test-bmc-mac-discovery.sh
+	test/func/test-bmc-boot.sh
 
 	# Bundle
 	test/func/test-bundle-tar-output.sh
@@ -190,6 +196,7 @@ env_tests=(
 	test/func/test-infra-auto.sh           # Needs root/sudo, dnsmasq, chrony
 	test/func/test-linuxone.sh             # Must run on s390x LinuxONE host
 	test/func/test-mirror-stop-start.sh    # Needs running mirror registry
+	test/func/test-catalog-helpers.sh      # Downloads real catalogs from registry.redhat.io
 )
 
 passed=0

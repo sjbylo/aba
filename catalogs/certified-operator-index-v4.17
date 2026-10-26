@@ -80,7 +80,6 @@ hnas-csi-operator Hitachi NAS CSI Driver Operator stable
 hpe-csi-operator HPE CSI Operator for OpenShift stable
 hpe-ezmeral-csi-operator HPE Ezmeral Data Fabric CSI Operator for Kubernetes stable
 hpe-filex-csi-operator HPE GreenLake File Storage CSI Operator beta
-hspc-operator Hitachi Storage Plug-in for Containers stable
 hulft HULFT10 for Container Platform stable
 iax-webhook-router ITRS Analytics Webhook Router stable
 ibm-application-gateway-operator IBM Application Gateway Operator stable

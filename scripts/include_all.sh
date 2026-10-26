@@ -829,6 +829,171 @@ image_source_is_mirror() {
 
 # Print the mirror directory name.  Only meaningful when image_source_is_mirror.
 
+# -----------------------------------------------------------------------------
+# disk_hint / bond_mode resolution helpers
+# -----------------------------------------------------------------------------
+
+# Resolve a setting using node > role > global precedence.
+# Usage: _resolve_node_setting <base> <hostname> <role>
+# Example: _resolve_node_setting disk_hint master1 master
+#   Checks: disk_hint_node_master1 > disk_hint_master > disk_hint
+# Returns the first non-empty value found, or empty string.
+_resolve_node_setting() {
+	local base="$1" hostname="$2" role="$3"
+	local varname val
+
+	# Node-specific: e.g. disk_hint_node_master1
+	varname="${base}_node_${hostname}"
+	val="${!varname:-}"
+	[ "$val" ] && { echo "$val"; return 0; }
+
+	# Role-level: e.g. disk_hint_master
+	varname="${base}_${role}"
+	val="${!varname:-}"
+	[ "$val" ] && { echo "$val"; return 0; }
+
+	# Global: e.g. disk_hint
+	val="${!base:-}"
+	[ "$val" ] && { echo "$val"; return 0; }
+
+	return 0
+}
+
+# Parse a disk_hint value into a JSON object for rootDeviceHints.
+# Path shorthand: /dev/sda → {"deviceName": "/dev/sda"}
+# Criteria: path=/dev/sda,minSizeGigabytes=200 → {"deviceName": "/dev/sda", "minSizeGigabytes": 200}
+# Prints JSON on stdout; returns non-zero with error on stderr on failure.
+_parse_disk_hint() {
+	local hint="$1"
+	local -a valid_keys=(deviceName minSizeGigabytes maxSizeGigabytes model vendor serialNumber wwn hctl rotational)
+	local -A seen
+	local json="{"
+	local first=true key val
+
+	[ -z "$hint" ] && return 1
+
+	# Path shorthand: value starts with / and contains no =
+	if [[ "$hint" == /* && "$hint" != *=* ]]; then
+		echo "{\"deviceName\": \"$hint\"}"
+		return 0
+	fi
+
+	# Check if the value looks like criteria (contains recognized key=)
+	# If it doesn't start with a recognized key=, treat as path shorthand
+	local first_key="${hint%%=*}"
+	local is_criteria=false
+	for k in "${valid_keys[@]}" path; do
+		if [ "$first_key" = "$k" ]; then
+			is_criteria=true
+			break
+		fi
+	done
+	if ! $is_criteria; then
+		# Not a recognized key= prefix, treat as deviceName path
+		echo "{\"deviceName\": \"$hint\"}"
+		return 0
+	fi
+
+	# Parse comma-separated key=value pairs
+	local IFS=','
+	local -a pairs
+	read -ra pairs <<< "$hint"
+	unset IFS
+
+	for pair in "${pairs[@]}"; do
+		key="${pair%%=*}"
+		val="${pair#*=}"
+
+		# Reject empty key or value
+		if [ -z "$key" ] || [ -z "$val" ]; then
+			echo "Error: empty key or value in disk_hint pair '$pair'" >&2
+			return 1
+		fi
+
+		# path is an alias for deviceName
+		if [ "$key" = "path" ]; then
+			if [ "${seen[deviceName]+set}" ]; then
+				echo "Error: both 'path' and 'deviceName' specified in disk_hint" >&2
+				return 1
+			fi
+			key="deviceName"
+		fi
+
+		# Validate key is recognized
+		local known=false
+		for k in "${valid_keys[@]}"; do
+			if [ "$key" = "$k" ]; then
+				known=true
+				break
+			fi
+		done
+		if ! $known; then
+			echo "Error: unknown disk_hint key '$key' (valid: ${valid_keys[*]})" >&2
+			return 1
+		fi
+
+		# Reject duplicate keys
+		if [ "${seen[$key]+set}" ]; then
+			echo "Error: duplicate disk_hint key '$key'" >&2
+			return 1
+		fi
+		seen[$key]=1
+
+		# Type validation
+		case "$key" in
+			minSizeGigabytes|maxSizeGigabytes)
+				if ! [[ "$val" =~ ^[1-9][0-9]*$ ]]; then
+					echo "Error: $key must be a positive integer, got '$val'" >&2
+					return 1
+				fi
+				;;
+			rotational)
+				if [[ "$val" != "true" && "$val" != "false" ]]; then
+					echo "Error: rotational must be true or false, got '$val'" >&2
+					return 1
+				fi
+				;;
+		esac
+
+		# Build JSON — integers and booleans unquoted, strings quoted
+		if ! $first; then
+			json+=", "
+		fi
+		first=false
+		case "$key" in
+			minSizeGigabytes|maxSizeGigabytes)
+				json+="\"$key\": $val"
+				;;
+			rotational)
+				json+="\"$key\": $val"
+				;;
+			*)
+				json+="\"$key\": \"$val\""
+				;;
+		esac
+	done
+
+	json+="}"
+	echo "$json"
+	return 0
+}
+
+# Validate a bond mode string against known NMState values.
+# Returns 0 if valid, 1 with error on stderr if not.
+_validate_bond_mode() {
+	local mode="$1"
+	local -a valid_modes=(balance-rr active-backup balance-xor broadcast 802.3ad balance-tlb balance-alb)
+
+	[ -z "$mode" ] && return 0
+
+	for m in "${valid_modes[@]}"; do
+		[ "$mode" = "$m" ] && return 0
+	done
+
+	echo "Error: invalid bond_mode '$mode' (valid: ${valid_modes[*]})" >&2
+	return 1
+}
+
 # openshift-install wait-for status.
 # 0: finished, caller continues.
 # 8: Ctrl-C. Exit quietly with 8 so Make does not stamp success.
@@ -996,11 +1161,12 @@ _valid_abs_path() {
 }
 
 # Validate a fully qualified domain name (at least 2 labels, dot-separated).
-# Each label: start/end with alphanumeric, hyphens allowed inside. TLD ≥ 2 alpha chars.
-# Used for: reg_host, domain, base_domain.
+# Each label: start/end with alphanumeric or underscore, hyphens allowed inside.
+# Underscores accepted (common in Windows/AD environments). TLD ≥ 1 alpha char.
+# Used for: reg_host.
 # Returns 0 if valid, 1 if invalid.
 _valid_fqdn() {
-	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]
+	[[ "$1" =~ ^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?)*\.[a-zA-Z]+$ ]]
 }
 
 # Validate a registry password.
@@ -1038,12 +1204,13 @@ _valid_password() {
 	return 0
 }
 
-# Domain validation — accepts single-label (lab, local) or multi-label (example.com).
+# Domain validation — accepts single-label (lab, local, my_lab) or multi-label (example.com).
+# Underscores accepted (common in Windows/AD environments).
 # For FQDN-only validation (e.g. reg_host), use _valid_fqdn() instead.
 _valid_domain() {
 	[[ -z "$1" ]] && return 1
-	# Each label: alphanumeric + hyphens, no leading/trailing hyphen, max 63 chars
-	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]
+	# Each label: alphanumeric + hyphens + underscores, no leading/trailing hyphen, max 63 chars
+	[[ "$1" =~ ^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*$ ]]
 }
 
 # Validate a registry vendor value.
@@ -1603,6 +1770,99 @@ resolve-default-resource-pool() {
 	else
 		echo "/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources"
 	fi
+}
+
+normalize-bmc-conf()
+{
+	# Normalize/sanitize bmc.conf. Single entry point for BMC config reads.
+	# Mirrors normalize-vmware-conf shape (see above). Adds mode-0600 enforcement
+	# and bmc_password_* filtering on the echoed stdout so downstream consumers
+	# (.bk backups, aba show config, aba_debug env snapshots) never see plaintext.
+	#
+	# NOTE: do NOT pipe through `awk '{print $1}'` - bmc_password_* values
+	# containing spaces would be truncated (same precedent as GOVC_PASSWORD above).
+
+	# INT-03 silent-skip: absent file -> return 0, no output, no env change.
+	[ -f bmc.conf ] || return 0
+
+	# Mode-0600 enforcement BEFORE eval (defense against file-poison if perms drift).
+	# Accept only modes whose last two digits are "00" (600, 400, 500, 700) so that
+	# group/world read/write/exec is rejected. GNU stat -c '%a' emits octal (no BSD target).
+	local mode
+	mode=$(stat -c '%a' bmc.conf)
+	case "$mode" in
+		*00) : ;;
+		*)   aba_abort "bmc.conf must be mode 0600 (found: $mode - run: chmod 600 bmc.conf)" ;;
+	esac
+
+	# Strip comments, trim whitespace, prepend 'export '. Mirror of normalize-vmware-conf.
+	local vars
+	vars=$(cat bmc.conf | \
+		sed -E \
+			-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" | \
+		sed -e "s/^/export /g")
+
+	# eval populates the process env so _bm_build_auth can read bmc_password_<node>
+	# via ${!varname} indirection in preflight-check-bm.sh.
+	eval "$vars"
+
+	# D-11 / Phase 10: validate mac_discovery_<node> allowlist. Only "disabled"
+	# or unset is accepted in v1.1; any other value calls aba_abort. Kept inline
+	# (not extracted to a helper) to preserve the single-grep-point pattern.
+	local _mdv _mdval
+	for _mdv in $(compgen -v mac_discovery_ 2>/dev/null); do
+		_mdval="${!_mdv}"
+		case "$_mdval" in
+			disabled|'') : ;;
+			*)
+				aba_abort "BMC: $_mdv='$_mdval' must be 'disabled' or unset (only allowed value in v1.1 per D-09)"
+				;;
+		esac
+	done
+
+	# D-09 advisory cross-field check: warn (do NOT abort) when discovery is opted
+	# out but no operator mac_<node> is set in this env. The hard-fail with MAC-09
+	# lands in preflight-check-bm.sh (Plan 10-02) where the full cluster context
+	# (including cluster.conf mac_master*/mac_worker* values) is available.
+	# Hard-aborting here would regress D-16 (v1.1-compatible bmc.conf with no
+	# mac_discovery_* still works) because normalize-bmc-conf is called from
+	# multiple sites before cluster.conf is loaded.
+	local _mdnode _macvar
+	for _mdv in $(compgen -v mac_discovery_ 2>/dev/null); do
+		[ "${!_mdv}" = "disabled" ] || continue
+		_mdnode="${_mdv#mac_discovery_}"
+		_macvar="mac_${_mdnode}"
+		if [ -z "${!_macvar:-}" ]; then
+			aba_warn "BMC: mac_discovery_${_mdnode}=disabled but mac_${_mdnode} not set in bmc.conf - cluster.conf must provide mac_master*/mac_worker* (final check in preflight)"
+		fi
+	done
+
+	# Filter bmc_password_* from echoed stdout. Consumers of this output never see plaintext.
+	echo "$vars" | grep -v '^export bmc_password_'
+}
+
+bmc_redact_env()
+{
+	# D-07 chokepoint: emit 'export <var>=<val>' lines for every BMC config env var
+	# EXCEPT bmc_password_*. Used by any consumer that needs a BMC env snapshot
+	# (aba show config, .bk backup, aba_debug env dump). One place filters passwords.
+	#
+	# compgen -v lists ALL shell variable names starting with the given prefix (bash 4.0+).
+	# We also emit iso_url (cluster-level, no suffix). bmc_password_* is filtered explicitly.
+	# Single-quote wrapping protects values with spaces; internal single quotes are rare
+	# in hostnames/usernames but the caller is responsible for sanitizing exotic values.
+
+	local var
+	for var in $(compgen -v bmc_) iso_url; do
+		# Skip unset iso_url (compgen already filters unset bmc_* since they wouldn't exist).
+		[ "$var" = "iso_url" ] && [ -z "${iso_url+x}" ] && continue
+		case "$var" in
+			bmc_password_*) continue ;;
+		esac
+		printf "export %s='%s'\n" "$var" "${!var}"
+	done
 }
 
 normalize-kvm-conf()

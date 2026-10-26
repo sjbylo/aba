@@ -320,24 +320,50 @@ test_begin "SNO: bootstrap after save/load"
 e2e_run "Clean sno cluster directory" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 # CIDR variation tests (ported from old test1 lines 353-360)
+# /29 test uses a dedicated cluster name (e2e-cidr-snoN) with matching DNS in
+# e2e-pool.conf, so the full pipeline — including DNS validation — is exercised.
+# No --starting-ip: ABA auto-generates via suggest_starting_ip() within the CIDR.
+CIDR_SNO=$(pool_cluster_name cidr-sno)
 e2e_run "Test /29 small CIDR (cluster.conf)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_small_cidr_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step cluster.conf"
-e2e_run "Verify /29 CIDR in cluster.conf" \
-    "grep 'machine_network=.*/' $SNO/cluster.conf"
+    "aba cluster -n $CIDR_SNO -t sno --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step cluster.conf"
+e2e_run "Verify /29 machine_network" \
+    "grep '^machine_network=$(pool_small_cidr)' $CIDR_SNO/cluster.conf"
+e2e_run "Verify /29 gateway" \
+    "grep '^next_hop_address=$(cidr_gateway "$(pool_small_cidr)")' $CIDR_SNO/cluster.conf"
+e2e_run "Verify /29 starting_ip auto-generated within CIDR" "
+    source scripts/include_all.sh
+    _cidr='$(pool_small_cidr)'
+    _net=\${_cidr%/*}
+    _pfx=\${_cidr#*/}
+    _ip=\$(grep '^starting_ip=' $CIDR_SNO/cluster.conf | cut -d= -f2 | awk '{print \$1}')
+    [ -n \"\$_ip\" ] || { echo 'FAIL: starting_ip empty'; exit 1; }
+    ip_in_cidr \"\$_ip\" \"\$_net\" \"\$_pfx\" || { echo \"FAIL: \$_ip not in \$_cidr\"; exit 1; }
+    [ \"\$_ip\" != \"\$_net\" ] || { echo \"FAIL: \$_ip is the network address\"; exit 1; }
+    echo \"OK: starting_ip=\$_ip within \$_cidr\"
+"
 e2e_run "Test /29 small CIDR (ISO creation)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_small_cidr_ip) --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step iso"
+    "aba cluster -n $CIDR_SNO -t sno --machine-network '$(pool_small_cidr)' --gateway $(cidr_gateway "$(pool_small_cidr)") --step iso"
+e2e_run "Clean /29 CIDR cluster" "if [ -d $CIDR_SNO ]; then rm -rf $CIDR_SNO; fi"
 e2e_run "Clean for /30 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /30 CIDR (cluster.conf)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_tiny_cidr_ip) --machine-network '$(pool_tiny_cidr)' --gateway $(cidr_gateway "$(pool_tiny_cidr)") --step cluster.conf"
-e2e_run "Verify /30 CIDR in cluster.conf" \
-    "grep 'machine_network=.*/30' $SNO/cluster.conf"
+e2e_run "Verify /30 machine_network" \
+    "grep '^machine_network=$(pool_tiny_cidr)' $SNO/cluster.conf"
+e2e_run "Verify /30 starting_ip" \
+    "grep '^starting_ip=$(pool_tiny_cidr_ip)' $SNO/cluster.conf"
+e2e_run "Verify /30 gateway" \
+    "grep '^next_hop_address=$(cidr_gateway "$(pool_tiny_cidr)")' $SNO/cluster.conf"
 e2e_run "Clean for /20 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /20 large CIDR (cluster.conf + ISO)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.0.0/20' --gateway $(cidr_gateway "10.0.0.0/20") --step iso"
-e2e_run "Verify /20 CIDR in cluster.conf" \
-    "grep 'machine_network=10.0.0.0/20' $SNO/cluster.conf"
+e2e_run "Verify /20 machine_network" \
+    "grep '^machine_network=10.0.0.0/20' $SNO/cluster.conf"
+e2e_run "Verify /20 starting_ip" \
+    "grep '^starting_ip=$(pool_sno_ip)' $SNO/cluster.conf"
+e2e_run "Verify /20 gateway" \
+    "grep '^next_hop_address=$(cidr_gateway "10.0.0.0/20")' $SNO/cluster.conf"
 
 e2e_run "Clean and recreate with pool CIDR for install" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"

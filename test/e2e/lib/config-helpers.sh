@@ -88,12 +88,14 @@ pool_small_cidr() {
 	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/29"
 }
 
-# Get a valid starting IP inside the pool's /29 CIDR: pool_small_cidr_ip [POOL_NUM]
+# Get the IP that ABA's suggest_starting_ip() will auto-generate for the pool's /29 CIDR.
+# For /29 (6 usable hosts): offset = floor(6 * 3/4) = 4, so IP = net_addr + 4.
+# Must match ABA's suggest_starting_ip() logic in include_all.sh.
 pool_small_cidr_ip() {
 	local p="${1:-${POOL_NUM:-1}}"
 	local last_octet=$((p * 10 + 2))
 	local net_addr=$(( (last_octet / 8) * 8 ))
-	echo "${POOL_SUBNET:-10.0.2}.$(( net_addr + 2 ))"
+	echo "${POOL_SUBNET:-10.0.2}.$(( net_addr + 4 ))"
 }
 
 # Get a /30 CIDR for the pool: pool_tiny_cidr [POOL_NUM]

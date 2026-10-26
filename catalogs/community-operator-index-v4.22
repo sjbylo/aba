@@ -146,6 +146,7 @@ fqdn-egress-operator FQDN Egress Operator stable
 frappe-operator Frappe Operator alpha
 github-arc-operator github-arc-operator alpha
 gitlab-operator-kubernetes GitLab stable
+gitlab-runner-operator GitLab Runner stable
 gitops-primer gitops-primer alpha
 gitwebhook-operator GitWebhook operator alpha
 global-load-balancer-operator Global Load Balancer Operator alpha
@@ -189,7 +190,6 @@ korrel8r Korrel8r stable
 krkn-operator-acm Krkn Operator ACM stable-acm
 krkn-operator Krkn Operator stable-ocp
 kuadrant-operator Kuadrant Operator stable
-kubecost Kubecost alpha
 kube-green kube-green alpha
 kubeheal-operator KubeHeal AIOps Self-Healing Platform alpha
 kubernaut-operator Kubernaut Operator candidate-v1
@@ -241,6 +241,7 @@ openebs OpenEBS alpha
 openshift-integration-operator OpenShift Integration Operator candidate-v0
 openshift-node-upgrade-mutex-operator OpenShift Node Upgrade Mutex Operator alpha
 openshift-qiskit-operator QiskitPlayground alpha
+openstack-lightspeed-operator OpenStack Lightspeed (Community) alpha
 opentelemetry-operator Community OpenTelemetry Operator alpha
 paperclip-operator Paperclip Operator stable
 patch-operator Patch Operator alpha

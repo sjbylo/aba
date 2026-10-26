@@ -213,9 +213,9 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 		case "$field" in
 			H)
 				if [[ "$_variant" == "remote" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --inputbox "Remote registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
+					dlg --backtitle "$(ui_backtitle)" --inputbox "Remote registry hostname (FQDN):" 10 70 "$m_host" 2>"$_TUI_TMP"
 				else
-					dlg --backtitle "$(ui_backtitle)" --inputbox "Registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
+					dlg --backtitle "$(ui_backtitle)" --inputbox "Registry hostname (FQDN):" 10 70 "$m_host" 2>"$_TUI_TMP"
 				fi
 				if [[ $? -eq 0 ]]; then
 					m_host=$(<"$_TUI_TMP")
@@ -262,7 +262,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				;;
 			I)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 10 70 "$m_path" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_path=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_path" || continue
@@ -289,9 +289,9 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				;;
 			D)
 				if [[ "$_variant" == "remote" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory on remote host:" 0 60 "$m_datadir" 2>"$_TUI_TMP"
+					dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory on remote host:" 10 70 "$m_datadir" 2>"$_TUI_TMP"
 				else
-					dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory (absolute path):" 0 60 "$m_datadir" 2>"$_TUI_TMP"
+					dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory (absolute path):" 10 70 "$m_datadir" 2>"$_TUI_TMP"
 				fi
 				if [[ $? -eq 0 ]]; then
 					m_datadir=$(<"$_TUI_TMP")
@@ -342,7 +342,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				if [[ "$_variant" != "remote" ]]; then
 					continue
 				fi
-				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH private key path:" 0 60 "$m_ssh_key" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH private key path:" 10 70 "$m_ssh_key" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_ssh_key=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_ssh_key" || continue
