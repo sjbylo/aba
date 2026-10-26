@@ -27,6 +27,10 @@ Bare-metal BMC automation, disk and bonding configuration, and Redfish reliabili
 - **BMC: Redfish session not opened for MAC discovery** — Preflight MAC discovery now opens a proper Redfish session before querying EthernetInterfaces. (Contributed by @zetti12345)
 - **BMC: bmc.conf not loaded in caller's shell** — Configuration was loaded in a subshell, making variables invisible to the calling script. (Contributed by @zetti12345)
 
+### Community
+
+- Thanks to **@kahlai** for independently requesting bundle disk space estimation ([#46](https://github.com/sjbylo/aba/issues/46)) — this feature shipped in v1.4.0.
+
 ---
 
 ## [1.4.1](https://github.com/sjbylo/aba/releases/tag/v1.4.1) - 2026-10-16
