@@ -29,7 +29,7 @@ Bare-metal BMC automation, disk and bonding configuration, and Redfish reliabili
 
 ### Community
 
-- Thanks to **@kahlai** for independently requesting bundle disk space estimation ([#46](https://github.com/sjbylo/aba/issues/46)) — this feature shipped in v1.4.0.
+- Thanks to **@kahlai** for independently requesting bundle disk space estimation ([#46](https://github.com/sjbylo/aba/issues/46))
 
 ---
 
