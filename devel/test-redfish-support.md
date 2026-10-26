@@ -6,12 +6,10 @@ This document covers how to install ABA from this branch and test the
 Redfish-based bare-metal BMC automation feature (PR #27) at three
 levels — from zero-hardware stub tests to a full bare-metal install.
 
-> **Feedback needed!** This feature requires community testing against
-> real BMC hardware.  If you test against
-> real BMC hardware (any vendor), please report your results — success or
-> failure — via [GitHub Issues](https://github.com/sjbylo/aba/issues).
+> **Feedback welcome!** Only Fujitsu iRMC has been validated on real hardware so far.
+> If you test against other BMC hardware (Dell iDRAC, HPE iLO, Supermicro, Lenovo, or generic Redfish),
+> please report your results — success or failure — via [GitHub Issues](https://github.com/sjbylo/aba/issues).
 > Include your `bmc_type`, firmware version, and the preflight output.
-> Your feedback directly determines when this feature ships.
 
 ---
 
@@ -370,14 +368,15 @@ admin notes, and the MAC discovery error table).
 
 ---
 
-## Known Limitations (this branch)
+## Known Limitations
 
-- **MAC discovery does not auto-populate `agent-config.yaml`**: The
-  BMC preflight discovers NICs and reports their MACs, but does not
-  write them into `agent-config.yaml`.  The user must copy the correct
-  MACs into `macs.conf` and regenerate the agent config (see
-  "Using Discovered MACs" above).  Auto-population is not feasible
-  because the BMC cannot determine which NIC is on the cluster network.
+- **Ambiguous NICs require manual MAC selection**: When a server has
+  multiple active NICs, the BMC cannot determine which one is on the
+  cluster network.  In this case preflight reports MAC-05 (ambiguous)
+  and the user must set `mac_<node>` in `bmc.conf` to disambiguate.
+  Single-NIC servers are resolved automatically — the discovered MAC
+  flows into `agent-config.yaml` via `cluster-config.sh` without any
+  manual step.
 - **Makefile integration incomplete**: `bmc-boot.sh` documents a
   `.bm-bmc-boot-done` stamp target in `Makefile.cluster`, but that
   target is not yet wired in.  The boot orchestrator works when called
