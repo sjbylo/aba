@@ -151,12 +151,8 @@ ai/
 # Editor / IDE / tooling
 # -----------------------------------------------------------------------------
 .vscode*
-#.cursor/
-.planning/
-.cursorignore
-# Ignore Cursor Plan Mode drafts and local temp states
-.cursor/plans/
-.cursor/skills/
+# Cursor IDE config — local workspace AI rules, skills, hooks, environment
+.cursor/
 
 # -----------------------------------------------------------------------------
 # General patterns
