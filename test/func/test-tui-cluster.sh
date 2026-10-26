@@ -32,6 +32,13 @@ echo "  Host: $_TUI_HOST"
 echo "  Cluster: $_CLUSTER"
 echo ""
 
+# Pre-test cleanup: destroy any leftover cluster VMs and state from prior runs
+if $_TUI_SSH "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
+	echo "  Cleaning up leftover '$_CLUSTER' cluster from prior run..."
+	$_TUI_SSH "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; rm -rf ~/aba/$_CLUSTER; true"
+	sleep 5
+fi
+
 scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
 scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
 echo "  Code deployed"
@@ -92,11 +99,19 @@ if echo "$_scr" | grep -qi "Cluster Name\|Enter.*name\|cluster name"; then
 	# Ctrl-U clears the input line, then type new name
 	tui_keys C-u
 	sleep 0.3
-	tui_keys "$_CLUSTER"
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
 	sleep 0.3
-	tui_keys Enter
-	sleep 1
+	tui_keys Tab Enter
+	sleep 2
 	echo "  Set cluster name to: $_CLUSTER"
+fi
+
+# Make sure we're back on the Basics menu (not stuck in an input dialog)
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Enter cluster name\|Use Tab to navigate"; then
+	echo "  Input dialog still open — pressing Tab Enter to dismiss"
+	tui_keys Tab Enter
+	sleep 2
 fi
 
 # Advance to page 2 (Next button)
@@ -261,8 +276,8 @@ while true; do
 		_last_screenshot=$_elapsed
 	fi
 
-	# Check for completion
-	if echo "$_scr" | grep -qi "install.complete\|Login to the cluster\|kubeadmin\|cluster is ready\|completed successfully"; then
+	# Check for actual install completion (not "ready for install" or command name)
+	if echo "$_scr" | grep -qi "Cluster is installed\|Install complete\|install completed.*marker\|Login to the console"; then
 		echo "  ✓ PASS: Cluster install completed successfully (${_elapsed}s)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		break
@@ -329,6 +344,10 @@ fi
 # ============================================================================
 echo ""
 echo "--- 8. Cleanup ---"
+# After install, TUI may show "Press R to retry, ENTER to return to menu..."
+# Send Enter first to dismiss any completion dialog, then navigate back
+tui_keys Enter; sleep 2
+tui_keys Escape; sleep 1
 tui_back_to "Actions" 5
 for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
 sleep 2
