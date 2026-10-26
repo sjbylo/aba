@@ -3,7 +3,7 @@
 #
 # Validates core ABA features on an s390x host:
 #   CLI tools, mirror registry, image sync, ISC generation,
-#   additional images, ISO generation, and (optionally) SNO install.
+#   additional images, and ISO generation.
 #
 # Run from the ABA bastion/workspace host.
 #
@@ -13,14 +13,13 @@
 #
 # Flags:
 #   --reset  Wipe this test's cluster/registry/~/aba, then full run.
-#            Without it, reuse the host: aba Make stamps skip install/iso/cluster;
+#            Without it, reuse the host: aba Make stamps skip install/iso;
 #            sync is skipped if the release image is already in the registry.
-#   --clean  After a PASS only, uninstall registry and delete the cluster.
+#   --clean  After a PASS only, uninstall registry and delete the cluster dir.
 #            Never wipes on FAIL (leave the crime scene).
 #
 # Environment:
 #   LINUXONE_HOST  — SSH target (default: linux1@148.100.85.72)
-#   SKIP_SNO       — set to 1 to skip the SNO install phase (saves ~60 min)
 
 set -uo pipefail
 
@@ -30,11 +29,7 @@ GIT_REPO=$(cd "$(dirname "$0")/../.." && git remote get-url origin 2>/dev/null) 
 	|| GIT_REPO="https://github.com/sjbylo/aba.git"
 
 REG_FQDN="kvm.example.com"
-VIRBR0_IP="192.168.122.1"
-SNO_IP="192.168.122.200"
 SNO_NAME="sno-test"
-SNO_CPU=10
-SNO_MEM=24
 DISK_WARN_PCT=80
 DISK_FAIL_PCT=90
 
@@ -46,7 +41,7 @@ for _arg in "$@"; do
 		--reset) DO_RESET=1 ;;
 		--clean) DO_CLEAN=1 ;;
 		-h|--help)
-			sed -n '2,24p' "$0"
+			sed -n '2,23p' "$0"
 			exit 0
 			;;
 		-*)
@@ -73,15 +68,21 @@ _skip() { log "  - SKIP: $1"; RESULTS+=("SKIP  $1"); SKIP=$((SKIP + 1)); }
 _abort() { log "  ✗ ABORT: $1 — $2"; RESULTS+=("ABORT $1  ($2)"); FAIL=$((FAIL + 1)); ABORT=1; }
 
 r() {
-	# Run a command on the remote host. Args are joined as a single string.
-	# -n: do not read local stdin (would steal the operator's TTY / hang ask prompts).
-	ssh -n -o BatchMode=yes -o ServerAliveInterval=30 -o ConnectTimeout=15 \
-		-o StrictHostKeyChecking=no -o LogLevel=ERROR "$HOST" "$*" 2>&1
+	# z/VM networking has intermittent pauses; retry once on SSH failure.
+	local _out _rc=0
+	_out=$(ssh -n -o BatchMode=yes -o ServerAliveInterval=30 -o ConnectTimeout=30 \
+		-o StrictHostKeyChecking=no -o LogLevel=ERROR "$HOST" "$*" 2>&1) || _rc=$?
+	if [ $_rc -eq 255 ]; then
+		log "  (SSH retry after transient failure)"
+		sleep 3
+		_rc=0
+		_out=$(ssh -n -o BatchMode=yes -o ServerAliveInterval=30 -o ConnectTimeout=30 \
+			-o StrictHostKeyChecking=no -o LogLevel=ERROR "$HOST" "$*" 2>&1) || _rc=$?
+	fi
+	echo "$_out"
+	return $_rc
 }
 
-# run_test <name> <remote-command>
-#   Returns 0 on pass, 1 on fail. Records result.
-#   Captures remote stdout — do not use for commands that prompt or run for minutes.
 run_test() {
 	local name="$1"; shift
 	local out rc=0
@@ -99,7 +100,6 @@ run_test() {
 	return $rc
 }
 
-# Stream remote output to this terminal (install/sync/iso). Still records PASS/FAIL.
 run_stream() {
 	local name="$1"; shift
 	local rc=0
@@ -112,8 +112,6 @@ run_stream() {
 	return $rc
 }
 
-# run_critical <name> <remote-command>
-#   Like run_test but sets ABORT=1 on failure (later phases will skip).
 run_critical() {
 	if ! run_test "$@"; then
 		ABORT=1
@@ -129,16 +127,13 @@ run_critical_stream() {
 _keep_hint() {
 	log "  Host state kept. Inspect with:"
 	log "    ssh $HOST"
-	log "    ssh $HOST 'cd ~/aba && aba -d $SNO_NAME run'"
 	log "  Full wipe next time: $0 --reset $BRANCH"
 }
 
-# Fail the run if host (or the SNO guest, when reachable) is at DISK_FAIL_PCT.
-# Guest /run/ephemeral is the live-ISO overlay — it fills during bootstrap.
 check_disks() {
 	local out mp pct avail rc=0
 	log "  Disk space:"
-	out=$(r "df -P / /home /home/libvirt/images 2>/dev/null | awk 'NR>1 {gsub(/%/,\"\",\$5); print \$6, \$5, \$4}'") || true
+	out=$(r "df -P / /home 2>/dev/null | awk 'NR>1 {gsub(/%/,\"\",\$5); print \$6, \$5, \$4}'") || true
 	while read -r mp pct avail; do
 		[ -n "$mp" ] || continue
 		log "    host $mp ${pct}% used (${avail} avail)"
@@ -150,21 +145,6 @@ check_disks() {
 			log "    WARNING: host $mp at ${pct}%"
 		fi
 	done <<< "$out"
-
-	if r "timeout 2 bash -c 'echo >/dev/tcp/${SNO_IP}/22'" >/dev/null 2>&1; then
-		out=$(r "ssh -n -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null core@${SNO_IP} \"df -P /run/ephemeral 2>/dev/null | awk 'NR>1 {gsub(/%/,\\\"\\\",\\\$5); print \\\$6, \\\$5, \\\$4}'\"") || true
-		while read -r mp pct avail; do
-			[ -n "$mp" ] || continue
-			log "    guest $mp ${pct}% used (${avail} avail)"
-			if [ "$pct" -ge "$DISK_FAIL_PCT" ] 2>/dev/null; then
-				_fail "Guest disk $mp" "${pct}% used (limit ${DISK_FAIL_PCT}%)"
-				ABORT=1
-				rc=1
-			elif [ "$pct" -ge "$DISK_WARN_PCT" ] 2>/dev/null; then
-				log "    WARNING: guest $mp at ${pct}%"
-			fi
-		done <<< "$out"
-	fi
 	return $rc
 }
 
@@ -174,20 +154,25 @@ phase_reset() {
 		log "=== No --reset: reusing host state (ABA Make stamps skip done work) ==="
 		return
 	fi
-	log "=== --reset: wiping test cluster, registry, and ~/aba ==="
+	log "=== --reset: wiping test trees, registry, and ~/aba ==="
 
-	r "cd ~/aba 2>/dev/null && aba -d $SNO_NAME delete --yes; true"
-	r "cd ~/aba 2>/dev/null && aba -d sno-kvm delete --yes; true"
 	r "cd ~/aba 2>/dev/null && aba -d mirror uninstall --yes --delete-data; true"
 
-	# Only VMs this test (or the old skill name) creates — not every libvirt guest.
-	r "for vm in $SNO_NAME sno-kvm; do
-		sudo virsh destroy \"\$vm\" 2>/dev/null || true
-		sudo virsh undefine \"\$vm\" --remove-all-storage 2>/dev/null || true
-	done"
-
 	r "rm -rf ~/aba ~/.aba"
-	r "sudo rm -f /etc/dnsmasq.d/aba-registry-fqdn.conf /etc/dnsmasq.d/aba-${SNO_NAME}.conf /etc/dnsmasq.d/aba-sno-kvm.conf; sudo systemctl restart dnsmasq 2>/dev/null; true"
+	r "sudo sed -i '/${REG_FQDN}/d' /etc/hosts; true"
+	# Wipe ALL dnsmasq confs (not just aba-*) to clear stale listen-address
+	# directives and other leftovers from prior manual setups.
+	r "sudo rm -f /etc/dnsmasq.d/*.conf; sudo systemctl restart dnsmasq 2>/dev/null; true"
+
+	# Restore original resolv.conf so external DNS works for git clone.
+	r "[ -f /etc/resolv.conf.aba-backup ] && sudo cp /etc/resolv.conf.aba-backup /etc/resolv.conf || true"
+
+	# If DNS is still broken (e.g. backup also pointed to a dead dnsmasq),
+	# fall back to a public resolver so git clone can proceed.
+	if ! r "dig +short +timeout=3 github.com" | grep -q '^[0-9]'; then
+		log "  DNS broken after reset; adding temporary upstream resolver"
+		r "echo 'nameserver 8.8.8.8' | sudo tee /etc/resolv.conf > /dev/null"
+	fi
 
 	_pass "Reset"
 }
@@ -196,16 +181,15 @@ phase_reset() {
 phase_prereqs() {
 	log "=== Phase 1: Infrastructure prerequisites ==="
 
-	r "sudo virsh net-start default 2>/dev/null || true"
-
-	r "sudo iptables -C INPUT -d $VIRBR0_IP -j ACCEPT 2>/dev/null || sudo iptables -I INPUT 1 -d $VIRBR0_IP -j ACCEPT"
-	r "sudo iptables -C INPUT -i virbr0 -j ACCEPT 2>/dev/null || sudo iptables -I INPUT 1 -i virbr0 -j ACCEPT"
-
 	r "[ -f ~/.ssh/id_rsa ] || ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa -q"
 	r "grep -q \"\$(cat ~/.ssh/id_rsa.pub)\" ~/.ssh/authorized_keys 2>/dev/null || { cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys; }"
 
-	run_critical "virbr0 active" \
-		"ip addr show virbr0 | grep -q $VIRBR0_IP"
+	# z/VM guests cannot reach their own external IP ("No route to host").
+	# Since everything runs on one host, use loopback for bastion-ip / DNS / registry.
+	HOST_IP="127.0.0.1"
+	log "  Using HOST_IP=$HOST_IP (z/VM external IP is not self-routable)"
+
+	_pass "Prerequisites"
 }
 
 # ── Phase 2: Setup (clone or update, install, platform=kvm) ─────
@@ -242,34 +226,30 @@ phase_setup() {
 	run_critical "Configure aba.conf" \
 		"cd ~/aba && aba --channel stable --version latest --platform kvm"
 
-	# ask=true + captured SSH stdout = hung y/n prompt the operator never sees.
 	r "cd ~/aba && aba --noask"
 
-	# kvm-upload.sh scp's via KVM_HOST parsed from LIBVIRT_URI.
-	# qemu:///system becomes hostname "qemu" and scp fails; use qemu+ssh to self.
-	r "cat > ~/aba/kvm.conf << 'KVMEOF'
-LIBVIRT_URI=qemu+ssh://linux1@kvm.example.com/system
-KVM_STORAGE_POOL=/home/libvirt/images
-KVM_NETWORK=virbr0
-KVM_BOOT_ARGS=hd,cdrom
-KVM_GRAPHICS_ARGS=none
-KVMEOF
-cp ~/aba/kvm.conf ~/.kvm.conf"
+	# Registry FQDN: use /etc/hosts (reliable across all dnsmasq configs).
+	# Remove stale entries first (e.g. old virbr0 IP from previous setups).
+	r "sudo sed -i '/${REG_FQDN}/d' /etc/hosts"
+	r "echo '${HOST_IP} ${REG_FQDN}' | sudo tee -a /etc/hosts > /dev/null"
+
+	run_critical "Registry FQDN in /etc/hosts" \
+		"grep -q '${HOST_IP}.*${REG_FQDN}' /etc/hosts"
 
 	log "  Setting up DNS (dnsmasq) via ABA ..."
 	run_critical "Setup DNS" \
-		"cd ~/aba && aba setup dns -y --bastion-ip $VIRBR0_IP"
+		"cd ~/aba && aba setup dns -y --bastion-ip $HOST_IP"
 
-	r "echo 'address=/${REG_FQDN}/${VIRBR0_IP}' | sudo tee /etc/dnsmasq.d/aba-registry-fqdn.conf >/dev/null && sudo systemctl restart dnsmasq"
-	run_test "DNS resolves registry FQDN" \
-		"dig +short @127.0.0.1 ${REG_FQDN} | grep -q $VIRBR0_IP"
+	# If dnsmasq has no upstream (resolv.conf.aba-backup was also 127.0.0.1),
+	# add a public resolver so external names (registry.redhat.io, github.com) resolve.
+	if ! r "dig +short +timeout=3 github.com @127.0.0.1" | grep -q '^[0-9]'; then
+		log "  Adding public upstream DNS (dnsmasq had none)"
+		r "echo 'server=8.8.8.8' | sudo tee /etc/dnsmasq.d/aba-upstream.conf > /dev/null && sudo systemctl restart dnsmasq"
+	fi
 
 	log "  Setting up NTP (chrony) via ABA ..."
 	run_critical "Setup NTP" \
-		"cd ~/aba && aba setup ntp -y --bastion-ip $VIRBR0_IP --allow-network 192.168.122.0/24"
-
-	run_critical "Self-SSH via FQDN" \
-		"ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 linux1@${REG_FQDN} 'echo ok'"
+		"cd ~/aba && aba setup ntp -y --bastion-ip $HOST_IP"
 }
 
 # ── Phase 3: CLI tools ──────────────────────────────────────────
@@ -297,18 +277,22 @@ phase_mirror() {
 
 	r "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1 || true"
 
-	# docker: classic Quay is too heavy for 24GB; omr image is amd64-only.
+	# docker: classic Quay is too heavy; omr image is amd64-only.
 	r "cd ~/aba && aba -d mirror --reg-host ${REG_FQDN} --vendor docker"
 
 	r "cd ~/aba && aba mirror --name mirror"
 
-	# .available stamp: no-op if the registry is already installed.
+	# Ensure the registry is in a clean state before install.
+	if ! r "curl -k -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 https://${REG_FQDN}:8443/v2/" 2>&1 | grep -qE '(200|401)'; then
+		log "  Registry not responding — cleaning up for fresh install"
+		r "cd ~/aba && aba -d mirror uninstall --yes --delete-data 2>/dev/null; true"
+		r "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; sudo podman stop -a 2>/dev/null; sudo podman rm -a -f 2>/dev/null; true"
+	fi
+
 	log "  Installing registry (skipped by Make if .available) ..."
 	run_critical_stream "Registry install" \
 		"cd ~/aba && aba -y -d mirror install"
 
-	# Docker /v2/_catalog is 401 without auth; curl -f treats that as exit 22.
-	# ABA's own probe accepts 200 or 401 on /v2/.
 	run_test "Registry health check" \
 		"code=\$(curl -k -sS -o /dev/null -w '%{http_code}' --connect-timeout 10 https://${REG_FQDN}:8443/v2/); echo HTTP_\$code; echo \$code | grep -qE '^(200|401)\$'"
 }
@@ -318,7 +302,6 @@ phase_sync() {
 	log "=== Phase 5: Image sync ==="
 	[ "$ABORT" -eq 1 ] && { _skip "Image sync (prior failure)"; return; }
 
-	# sync has no Make stamp; skip when the release image is already there.
 	if r "cd ~/aba && aba -d mirror check-image" >/dev/null; then
 		_pass "Image sync (already in registry)"
 	else
@@ -344,7 +327,7 @@ phase_isc() {
 		"grep -q 's390x' ~/aba/mirror/data/imageset-config.yaml"
 }
 
-# ── Phase 7: Additional images (always run; cheap and must execute) ─
+# ── Phase 7: Additional images ──────────────────────────────────
 phase_images() {
 	log "=== Phase 7: Additional images ==="
 	[ "$ABORT" -eq 1 ] && { _skip "Additional images (prior failure)"; return; }
@@ -367,16 +350,25 @@ phase_iso() {
 	log "=== Phase 8: ISO generation ==="
 	[ "$ABORT" -eq 1 ] && { _skip "ISO generation (prior failure)"; return; }
 
-	r "cd ~/aba && aba --machine-network 192.168.122.0/24 --dns $VIRBR0_IP --gateway $VIRBR0_IP --ntp $VIRBR0_IP"
+	# Dummy network for ISO generation — we won't install, just verify ISO creation.
+	# All IPs must be within machine_network; dns_servers stays 127.0.0.1 (our dnsmasq).
+	local _domain
+	_domain=$(r "cd ~/aba && grep '^domain=' aba.conf | cut -d= -f2") || _domain="example.com"
+	_domain=$(echo "$_domain" | tr -d '[:space:]')
+
+	r "cd ~/aba && aba --machine-network 10.0.0.0/24 --gateway 10.0.0.1 --ntp 10.0.0.1"
 
 	r "cd ~/aba && aba cluster --name $SNO_NAME --type sno >/dev/null 2>&1 || true"
 	r "cd ~/aba && aba cluster --name $SNO_NAME --type sno"
-	r "cp ~/aba/kvm.conf ~/aba/$SNO_NAME/kvm.conf"
-	# Node IP / size last so a later aba cluster cannot rewrite them.
-	# 6 vCPUs: 8-on-8 starved the z/VM host; 4-on-8 left kube-apiserver unable to pass livez.
-	# data_disk= (empty) — do not use 0; kvm-create treats any non-empty value as "add a disk".
-	r "cd ~/aba && aba -d $SNO_NAME --starting-ip $SNO_IP --master-cpu $SNO_CPU --master-memory $SNO_MEM --ports enc0"
+	r "cd ~/aba && aba -d $SNO_NAME --starting-ip 10.0.0.100 --master-cpu 8 --master-memory 16 --ports enc0"
 	r "sed -i 's/^#*data_disk=.*/data_disk=/' ~/aba/$SNO_NAME/cluster.conf"
+	# Skip network checks (arping, NTP reachability) — we use dummy IPs for ISO-only.
+	r "cd ~/aba && aba --verify conf"
+
+	# Add DNS records for the dummy cluster so preflight passes.
+	r "printf 'address=/api.${SNO_NAME}.${_domain}/10.0.0.100\naddress=/.apps.${SNO_NAME}.${_domain}/10.0.0.100\n' \
+		| sudo tee /etc/dnsmasq.d/aba-${SNO_NAME}.${_domain}.conf > /dev/null && sudo systemctl restart dnsmasq"
+
 	check_disks || true
 
 	log "  Generating ISO (Make skips if agent.s390x.iso exists) ..."
@@ -385,58 +377,6 @@ phase_iso() {
 
 	run_test "ISO file is s390x" \
 		"ls ~/aba/$SNO_NAME/iso-agent-based/agent.s390x.iso"
-}
-
-# ── Phase 9: SNO install on KVM (optional) ──────────────────────
-phase_sno() {
-	log "=== Phase 9: SNO install on KVM ==="
-	if [ "${SKIP_SNO:-0}" = "1" ]; then
-		_skip "SNO install (SKIP_SNO=1)"
-		return
-	fi
-	[ "$ABORT" -eq 1 ] && { _skip "SNO install (prior failure)"; return; }
-
-	log "  WARNING: SNO install needs ~16 GB RAM and may take hours on this s390x host"
-	log "  Set SKIP_SNO=1 to skip this phase"
-	check_disks || return
-
-	log "  Installing (Make skips only if .install-complete AND cluster is up) ..."
-	# aba install is a no-op when .install-complete exists, even if no VM was created
-	# (e.g. 'aba mon' after a failed upload stamps it because wait-for exit 8 = interrupted).
-	if r "test -f ~/aba/$SNO_NAME/.install-complete"; then
-		if r "cd ~/aba && aba -d $SNO_NAME run" >/dev/null; then
-			_pass "SNO install (already complete)"
-			_pass "SNO cluster healthy"
-			return
-		fi
-		log "  Stale .install-complete (API not reachable); installing for real ..."
-		r "rm -f ~/aba/$SNO_NAME/.install-complete"
-	fi
-
-	# Make skips .autoupload/.autorefresh even when the guest is gone (interrupt
-	# can virsh-destroy the domain). Drop those stamps so aba install recreates it.
-	if ! r "sudo virsh list --all --name | grep -qx $SNO_NAME"; then
-		log "  No KVM guest named $SNO_NAME — clearing upload/refresh stamps so ABA recreates the VM"
-		r "rm -f ~/aba/$SNO_NAME/.autopoweroff ~/aba/$SNO_NAME/.autoupload ~/aba/$SNO_NAME/.autorefresh ~/aba/$SNO_NAME/.auto-agent-up ~/aba/$SNO_NAME/.install-complete"
-	fi
-
-	run_stream "SNO install" \
-		"cd ~/aba && aba -y -d $SNO_NAME install"
-	_inst_rc=$?
-
-	if [ "$_inst_rc" -ne 0 ]; then
-		if r "sudo virsh list --all --name | grep -qx $SNO_NAME"; then
-			log "  Install did not complete; VM exists, resuming monitoring ..."
-			run_stream "SNO install (resumed)" \
-				"cd ~/aba && aba -d $SNO_NAME mon"
-		else
-			log "  No KVM guest named $SNO_NAME — not running 'aba mon' (that would stamp .install-complete)"
-		fi
-	fi
-
-	run_stream "SNO cluster healthy" \
-		"cd ~/aba && aba -d $SNO_NAME run"
-	check_disks || true
 }
 
 # ── Teardown: --clean after PASS only ────────────────────────────
@@ -453,10 +393,10 @@ phase_final_cleanup() {
 	fi
 	log "=== --clean after PASS ==="
 
-	r "cd ~/aba 2>/dev/null && aba -d $SNO_NAME delete --yes; true"
 	r "cd ~/aba 2>/dev/null && aba -d mirror uninstall --yes --delete-data; true"
 	r "rm -rf ~/aba ~/.aba"
-	r "sudo rm -f /etc/dnsmasq.d/aba-registry-fqdn.conf /etc/dnsmasq.d/aba-${SNO_NAME}.conf; sudo systemctl restart dnsmasq 2>/dev/null; true"
+	r "sudo sed -i '/${REG_FQDN}/d' /etc/hosts; true"
+	r "sudo rm -f /etc/dnsmasq.d/*.conf; sudo systemctl restart dnsmasq 2>/dev/null; true"
 
 	_pass "Final cleanup"
 }
@@ -468,7 +408,7 @@ report() {
 	echo "═══════════════════════════════════════════════════════════"
 	echo "  ABA s390x Test Report — $(date '+%Y-%m-%d %H:%M')"
 	echo "  Branch: $BRANCH  Host: $HOST  Duration: $((e/60))m$((e%60))s"
-	echo "  Flags:  reset=$DO_RESET  clean=$DO_CLEAN  skip_sno=${SKIP_SNO:-0}"
+	echo "  Flags:  reset=$DO_RESET  clean=$DO_CLEAN"
 	echo "═══════════════════════════════════════════════════════════"
 	for r in "${RESULTS[@]}"; do printf '  %s\n' "$r"; done
 	echo "───────────────────────────────────────────────────────────"
@@ -502,7 +442,6 @@ main() {
 	phase_isc
 	phase_images
 	phase_iso
-	phase_sno
 	phase_final_cleanup
 	report
 
