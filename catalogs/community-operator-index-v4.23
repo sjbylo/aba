@@ -170,7 +170,6 @@ kogito-operator Kogito 1.x
 kollect Kollect stable
 konveyor-operator Konveyor Operator alpha
 korrel8r Korrel8r stable
-kubecost Kubecost alpha
 kubernetes-imagepuller-operator Kubernetes Image Puller Operator stable
 l5-operator L5 Operator alpha
 lbconfig-operator External Load-Balancer Configuration Operator beta

@@ -195,7 +195,6 @@ krkn-operator Krkn Operator stable-ocp
 kruize-operator Kruize Operator alpha
 kuadrant-operator Kuadrant Operator stable
 kubebrowser KubeBrowser Operator alpha
-kubecost Kubecost alpha
 kube-green kube-green alpha
 kubernaut-operator Kubernaut Operator candidate-v1
 kubernetes-imagepuller-operator Kubernetes Image Puller Operator stable

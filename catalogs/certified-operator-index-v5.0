@@ -28,6 +28,7 @@ flow-cni-operator nutanix-flow-cni alpha
 fujitsu-enterprise-postgres-operator Fujitsu Enterprise Postgres Operator stable
 function-mesh Function Mesh Operator alpha
 habana-ai-operator Intel Gaudi Base Operator stable
+hammerspace-csi-operator Hammerspace CSI Operator stable
 hammu-platform Hammu Platform alpha
 harness-gitops-operator Harness GitOps Operator alpha
 hazelcast-platform-operator Hazelcast Platform Operator alpha

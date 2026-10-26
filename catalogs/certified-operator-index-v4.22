@@ -1,5 +1,6 @@
 abinitio-runtime-operator Co>Operating System Runtime Operator stable
 aci-containers-operator Cisco ACI Containers Operator stable
+aic-operator AIC Operator stable
 airlock-microgateway Airlock Microgateway 5.2
 alloydb-omni-operator-certified AlloyDB Omni Operator stable
 amd-gpu-operator amd-gpu-operator alpha
@@ -50,6 +51,7 @@ gitlab-runner-operator GitLab Runner stable
 google-cloud-cluster-services-for-openshift-telemetry Cluster Services for OpenShift Telemetry stable
 gpu-operator-certified NVIDIA GPU Operator v26.7
 habana-ai-operator Intel Gaudi Base Operator stable
+hammerspace-csi-operator Hammerspace CSI Operator stable
 hammu-platform Hammu Platform alpha
 harness-gitops-operator Harness GitOps Operator alpha
 hazelcast-platform-operator Hazelcast Platform Operator alpha
@@ -61,6 +63,7 @@ hpe-ezmeral-csi-operator HPE Ezmeral Data Fabric CSI Operator for Kubernetes sta
 hpeoneview-operator Hpeoneview Operator alpha
 hspc-operator Hitachi Storage Plug-in for Containers stable
 hulft HULFT10 for Container Platform stable
+human-voice-speaker-verification Human_Voice_Speaker_Verification beta
 ibm-application-gateway-operator IBM Application Gateway Operator stable
 ibm-app-mod-accelerator IBM Application Modernization Accelerator (AMA) v5.1
 ibm-block-csi-operator IBM block storage CSI driver operator stable
@@ -162,5 +165,5 @@ vfunction-server-operator vFunction Operator stable
 victoriametrics-operator VictoriaMetrics Operator beta
 wave Wave stable
 xspc-operator HPE XP Storage Plug-in for Containers stable
-zabbix-operator-certified Zabbix Operator lts
+zabbix-operator-certified Zabbix Operator stable-v7.0
 zk-operator ZooKeeper Operator stable

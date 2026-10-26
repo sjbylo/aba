@@ -1,5 +1,6 @@
 abinitio-runtime-operator Co>Operating System Runtime Operator stable
 aci-containers-operator Cisco ACI Containers Operator stable
+aic-operator AIC Operator stable
 airlock-microgateway Airlock Microgateway 5.2
 aiu-operator AIU Operator stable-v2.3
 alloydb-omni-operator-certified AlloyDB Omni Operator stable
@@ -181,5 +182,5 @@ victoriametrics-operator VictoriaMetrics Operator beta
 visionone-containersecurity TrendAI Vision One Container Security stable
 wave Wave stable
 xspc-operator HPE XP Storage Plug-in for Containers stable
-zabbix-operator-certified Zabbix Operator lts
+zabbix-operator-certified Zabbix Operator stable-v7.0
 zk-operator ZooKeeper Operator stable
