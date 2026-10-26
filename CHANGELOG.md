@@ -18,6 +18,7 @@ Bare-metal BMC automation, disk and bonding configuration, and Redfish reliabili
 
 ### Fixed
 
+- **Underscored hostnames/domains rejected** — Hostnames like `my_vcenter.lab.com` and domains like `my_lab` (common in Windows/AD environments) were incorrectly rejected by validation. Also accepts single-character TLDs (e.g. internal zones `.i`, `.t`) and short hostnames (e.g. `vcenter`, `esxi1`) in the vCenter URL field.
 - **Quay start health-check hang on local installs** — Empty SSH command argument shifted the port into the wrong position, causing the health check to run `5333` as a command. The wait loop would hang for 10 minutes before aborting. Now preserves empty args correctly through the eval round-trip.
 - **BMC: boot override not cleared on some BMCs** — BMCs that reject `BootSourceOverrideEnabled: Disabled` (e.g. Fujitsu iRMC) are now handled with a fallback strategy. (Contributed by @zetti12345)
 - **BMC: media status check too strict** — BMCs that report `Inserted` instead of `Connected` for mounted virtual media are now accepted. (Contributed by @zetti12345)
