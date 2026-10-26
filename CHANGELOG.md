@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.2...HEAD)
+
+---
+
+## [1.4.2](https://github.com/sjbylo/aba/releases/tag/v1.4.2) - 2026-10-26
+
+Bare-metal BMC automation, disk hints/bond configuration, and Redfish reliability fixes
+
 
 Bare-metal BMC automation, disk and bonding configuration, and Redfish reliability fixes
 
