@@ -192,7 +192,6 @@ krkn-operator-acm Krkn Operator ACM stable-acm
 krkn-operator Krkn Operator stable-ocp
 kruize-operator Kruize Operator alpha
 kuadrant-operator Kuadrant Operator stable
-kubecost Kubecost alpha
 kube-green kube-green alpha
 kubeheal-operator KubeHeal AIOps Self-Healing Platform alpha
 kubernaut-operator Kubernaut Operator candidate-v1
