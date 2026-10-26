@@ -523,8 +523,8 @@ GOVC_PASSWORD='hello world'" \
 _test_vmware "vmware: password with hash" \
 	"GOVC_URL=vcenter.example.com
 GOVC_USERNAME=admin@vsphere.local
-GOVC_PASSWORD='PQa5iSjbbq#bfE8!'" \
-	"GOVC_PASSWORD" "PQa5iSjbbq#bfE8!"
+GOVC_PASSWORD='F4ke#Pass!w0rD'" \
+	"GOVC_PASSWORD" "F4ke#Pass!w0rD"
 
 _test_vmware "vmware: password with trailing comment" \
 	"GOVC_URL=vcenter.example.com
