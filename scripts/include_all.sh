@@ -1161,11 +1161,12 @@ _valid_abs_path() {
 }
 
 # Validate a fully qualified domain name (at least 2 labels, dot-separated).
-# Each label: start/end with alphanumeric, hyphens allowed inside. TLD ≥ 2 alpha chars.
-# Used for: reg_host, domain, base_domain.
+# Each label: start/end with alphanumeric or underscore, hyphens allowed inside.
+# Underscores accepted (common in Windows/AD environments). TLD ≥ 1 alpha char.
+# Used for: reg_host.
 # Returns 0 if valid, 1 if invalid.
 _valid_fqdn() {
-	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]
+	[[ "$1" =~ ^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?)*\.[a-zA-Z]+$ ]]
 }
 
 # Validate a registry password.
@@ -1203,12 +1204,13 @@ _valid_password() {
 	return 0
 }
 
-# Domain validation — accepts single-label (lab, local) or multi-label (example.com).
+# Domain validation — accepts single-label (lab, local, my_lab) or multi-label (example.com).
+# Underscores accepted (common in Windows/AD environments).
 # For FQDN-only validation (e.g. reg_host), use _valid_fqdn() instead.
 _valid_domain() {
 	[[ -z "$1" ]] && return 1
-	# Each label: alphanumeric + hyphens, no leading/trailing hyphen, max 63 chars
-	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]
+	# Each label: alphanumeric + hyphens + underscores, no leading/trailing hyphen, max 63 chars
+	[[ "$1" =~ ^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*$ ]]
 }
 
 # Validate a registry vendor value.
