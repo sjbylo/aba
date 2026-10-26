@@ -12,6 +12,19 @@ If the user says "continue where I left off" or similar:
 - Check `git status` and `git diff --stat` for uncommitted changes
 - That's enough to resume
 
+## Notifications — always notify on important events
+
+Send a notification via `~/bin/notify.sh "<message>"` whenever an **important event** occurs:
+
+- Test suite finishes (pass/fail summary)
+- Long-running command completes or fails (mirror install, cluster install, sync, deploy)
+- Build or pre-commit checks finish
+- An error or unexpected failure that needs attention
+- Autonomous actions (unstick, fix, deploy, retry)
+- Any result the user is waiting on
+
+Do this **proactively** — don't wait to be asked. If in doubt, notify.
+
 ## Periodic task audit
 
 At the **end of every reply**:

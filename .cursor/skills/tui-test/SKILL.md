@@ -244,6 +244,11 @@ workflow correctly while bootstrapping the environment.
 
 ### Key rules
 
+- **Check progress every ≤10 minutes**: Never block/wait longer than 10
+  minutes without checking the TUI screen or test output. Long operations
+  (mirror install, image load, cluster install) can take 30-60 min — poll
+  them in ≤10 min intervals so you can detect stalls, dismiss unexpected
+  dialogs, and report progress to the user.
 - **TUI only**: Enter all values through TUI dialogs. Do not use `aba` CLI
   or copy config files directly — this is a TUI test skill.
 - **Never commit credentials**: The `.test` files and their contents must
@@ -284,23 +289,16 @@ block a new install (e.g. IP conflict from arping pre-flight):
 - `compact`, `compact2`
 - `standard`, `standard2`
 
-To delete a cluster VM before installing:
+To delete a cluster and its VMs before installing, use the ABA CLI:
 
 ```bash
 _host="${TUI_TEST_HOST:-conno.example.com}"
-ssh -F ~/.aba/ssh.conf "$_host" "
-  source ~/.vmware.conf 2>/dev/null
-  export GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_INSECURE GOVC_DATACENTER
-  govc vm.power -off /Datacenter/vm/<name>/<name> 2>/dev/null
-  govc vm.destroy /Datacenter/vm/<name>/<name> 2>/dev/null
-"
+ssh -F ~/.aba/ssh.conf "$_host" "cd ~/aba && aba -d <name> delete --yes 2>/dev/null; rm -rf ~/aba/<name>"
 ```
 
-Also remove any leftover cluster directory on the test host:
-
-```bash
-ssh -F ~/.aba/ssh.conf "$_host" "rm -rf ~/aba/<name>"
-```
+**Always use `aba -d <name> delete`** — never use `govc vm.power` / `govc vm.destroy`
+directly. The ABA CLI handles VM discovery, power-off, destruction, folder
+cleanup, and state file removal atomically.
 
 **Never delete** `e2e-*` VMs (E2E pool VMs) or `con*`/`dis*` hosts.
 
