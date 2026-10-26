@@ -1,5 +1,32 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.1...HEAD)
 
+Bare-metal BMC automation, disk and bonding configuration, and Redfish reliability fixes
+
+### Added
+
+- **Bare-metal BMC automation via Redfish** — Optional install path that uploads the agent ISO to the server's BMC via Redfish VirtualMedia, sets one-shot boot, power-cycles the node, and ejects the media on completion. Vendor support: Fujitsu iRMC (fully tested), Dell iDRAC9, HPE iLO 5/6, Supermicro X12/X13, Lenovo XCC. Includes 5-level preflight probe, per-node state machine with resume, and session management. (Contributed by @mateuszslugocki, PR #27)
+- **BMC-driven MAC auto-discovery** — For nodes with `bmc_host_<node>` set, ABA queries the BMC's Redfish EthernetInterfaces collection during preflight and populates or validates `mac_<node>` automatically.
+- **BMC boot from install flow** — `bmc-boot.sh` is now called automatically during bare-metal installs when a `bmc.conf` is present, replacing the manual "boot your servers" step. (Contributed by @zetti12345, PR #45)
+- **`disk_hint` support** — New `cluster.conf` variable to specify the target install disk per node, per role, or globally. Supports by-path and by-size hints, resolved via node > role > global precedence.
+- **`bond_mode` support** — New `cluster.conf` variable to set the bonding mode per role or globally, rendered into agent install configs via Jinja templates.
+- **TUI functional test suite** — 359 assertions across 10 tests covering cluster creation, mirror workflows, and menu navigation.
+
+### Changed
+
+- **Day-2 menu label** — NTP entry now shows the abbreviation for clarity.
+- **Dialog sizing** — TUI dialog dimensions adjusted for better readability on various terminal sizes.
+
+### Fixed
+
+- **Quay start health-check hang on local installs** — Empty SSH command argument shifted the port into the wrong position, causing the health check to run `5333` as a command. The wait loop would hang for 10 minutes before aborting. Now preserves empty args correctly through the eval round-trip.
+- **BMC: boot override not cleared on some BMCs** — BMCs that reject `BootSourceOverrideEnabled: Disabled` (e.g. Fujitsu iRMC) are now handled with a fallback strategy. (Contributed by @zetti12345)
+- **BMC: media status check too strict** — BMCs that report `Inserted` instead of `Connected` for mounted virtual media are now accepted. (Contributed by @zetti12345)
+- **BMC: HTTPS ISO URLs rejected** — An `https://` ISO URL is now accepted and mounted over HTTPS. (Contributed by @zetti12345)
+- **BMC: wrong NIC selected on multi-NIC servers** — `mac_<node>` now correctly selects the specified NIC instead of defaulting to the first one. (Contributed by @zetti12345)
+- **BMC: MAC discovery not loaded in preflight** — `_bm_state_write_mac` was missing from the preflight, causing MAC auto-discovery to silently skip. (Contributed by @zetti12345)
+- **BMC: Redfish session not opened for MAC discovery** — Preflight MAC discovery now opens a proper Redfish session before querying EthernetInterfaces. (Contributed by @zetti12345)
+- **BMC: bmc.conf not loaded in caller's shell** — Configuration was loaded in a subshell, making variables invisible to the calling script. (Contributed by @zetti12345)
+
 ---
 
 ## [1.4.1](https://github.com/sjbylo/aba/releases/tag/v1.4.1) - 2026-10-16
