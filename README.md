@@ -253,9 +253,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.1.tar.gz
-tar xzf v1.4.1.tar.gz
-cd aba-1.4.1
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.2.tar.gz
+tar xzf v1.4.2.tar.gz
+cd aba-1.4.2
 ./install
 aba
 ```
@@ -263,7 +263,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.4.1 https://github.com/sjbylo/aba.git
+git clone --branch v1.4.2 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -836,7 +836,7 @@ The ISO must be written as a raw disk image (byte-for-byte), not extracted or "b
 Use `aba write-usb` for guided USB writing, or `dd if=agent.x86_64.iso of=/dev/sdX bs=4M conv=fsync status=progress`.
 Most server management interfaces (iLO, iDRAC, BMC) can also mount the ISO as virtual media — no USB required.
 
-> **BMC automation (community testing):** ABA can automate ISO mounting and one-shot boot via Redfish VirtualMedia — no manual BMC interaction required. Supports Dell iDRAC, HPE iLO, Fujitsu iRMC, Supermicro, Lenovo, and generic Redfish BMCs. Real-hardware validation is needed before GA. See the [testing guide](https://github.com/sjbylo/aba/blob/dev/devel/test-redfish-support.md) for setup, testing instructions, and how to report results.
+> **BMC automation (beta):** ABA can automate ISO mounting and one-shot boot via Redfish VirtualMedia — no manual BMC interaction required. Supports Dell iDRAC, HPE iLO, Fujitsu iRMC, Supermicro, Lenovo, and generic Redfish BMCs. Only Fujitsu iRMC is validated on real hardware; other vendors are code-complete with full test coverage. See [devel/test-redfish-support.md](devel/test-redfish-support.md) for setup and testing details. Please [report results](https://github.com/sjbylo/aba/issues) for your hardware.
 
 > **USB boot note:** If booting from USB, prepare **one USB drive per server**. The Agent-based Installer waits until all hosts have registered, synced NTP, and passed validation before proceeding — you cannot boot servers sequentially with a single USB drive because removing the drive from one server to boot another will stall the installation.
 
