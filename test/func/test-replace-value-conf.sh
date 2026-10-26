@@ -600,7 +600,7 @@ _test_safe_char 'password with percent % (pre-quoted)' \
 	"reg_pw='old'" "reg_pw" 'pass%word'
 
 _test_safe_char "password with # is safe" \
-	"reg_pw='old'" "reg_pw" "PQa5iSjbbq#bfE8!"
+	"reg_pw='old'" "reg_pw" "F4ke#Pass!w0rD"
 
 _test_safe_char "password with ! is safe" \
 	"reg_pw='old'" "reg_pw" "p4ss!w0rd"
@@ -621,7 +621,7 @@ _test_safe_char "password with = is safe" \
 	"reg_pw='old'" "reg_pw" "p4ss=w0rd"
 
 _test_safe_char "GOVC_PASSWORD with # and !" \
-	"GOVC_PASSWORD='oldpass'" "GOVC_PASSWORD" "PQa5iSjbbq#bfE8!"
+	"GOVC_PASSWORD='oldpass'" "GOVC_PASSWORD" "F4ke#Pass!w0rD"
 
 # =========================================================================
 echo
