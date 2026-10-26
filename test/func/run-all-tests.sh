@@ -160,7 +160,6 @@ integration_tests=(
 	test/func/test-registry-download-per-vendor.sh
 
 	# Catalog / ISC
-	test/func/test-catalog-helpers.sh
 	test/func/test-catalog-canary.sh
 	test/func/test-catalog-temp-cleanup.sh
 	test/func/test-download-catalog-simple.sh
@@ -197,6 +196,7 @@ env_tests=(
 	test/func/test-infra-auto.sh           # Needs root/sudo, dnsmasq, chrony
 	test/func/test-linuxone.sh             # Must run on s390x LinuxONE host
 	test/func/test-mirror-stop-start.sh    # Needs running mirror registry
+	test/func/test-catalog-helpers.sh      # Downloads real catalogs from registry.redhat.io
 )
 
 passed=0
