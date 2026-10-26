@@ -372,9 +372,9 @@ _configure_vmw_form() {
 					local _url_host="${v_url#https://}"     # strip protocol prefix
 					_url_host="${_url_host%%/*}"        # strip path  (host:port/path → host:port)
 					_url_host="${_url_host%%:*}"        # strip port  (host:port → host)
-					if [[ -n "$_url_host" ]] && ! _valid_fqdn "$_url_host" && ! _valid_ip "$_url_host"; then
+					if [[ -n "$_url_host" ]] && ! _valid_fqdn "$_url_host" && ! _valid_ip "$_url_host" && ! _valid_domain "$_url_host"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid hostname/IP.\n\nExpected: FQDN or IP (e.g. vcenter.lab.com, 10.0.1.5)." 0 0
+							"Invalid hostname/IP.\n\nExpected: hostname, FQDN, or IP (e.g. vcenter, vcenter.lab.com, 10.0.1.5)." 0 0
 						continue
 					fi
 					replace-value-conf -q -n GOVC_URL -v "'$v_url'" -f "$conf_path"
