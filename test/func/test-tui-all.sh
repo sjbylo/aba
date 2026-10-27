@@ -22,12 +22,15 @@
 #   8.  cluster-pages  - cluster wizard page navigation (non-destructive)
 #   9.  day2-deep      - day-2 status, OSUS, upgrade picker, confirmations
 #  10.  disco-smoke    - DISCO mode on disco host (non-destructive)
+#  11.  operators-deep - operator set add/remove/search/clear permutations
+#  12.  settings-deep  - vendor/retry toggles, persistence, config file checks
+#  13.  progress-integ - progress dialog lifecycle, output view, error path
 #  --- destructive (full mode only) ---
-#  11.  mirror         - mirror install + sync (destructive, ~15 min)
-#  12.  cluster        - cluster wizard + install (destructive, ~45 min)
-#  13.  day2           - OperatorHub, NTP, OSUS (~10 min)
-#  14.  upgrade        - version selection + upgrade (~45 min)
-#  15.  lifecycle      - shutdown, startup, clean, delete (~30 min)
+#  14.  mirror         - mirror install + sync (destructive, ~15 min)
+#  15.  cluster        - cluster wizard + install (destructive, ~45 min)
+#  16.  day2           - OperatorHub, NTP, OSUS (~10 min)
+#  17.  upgrade        - version selection + upgrade (~45 min)
+#  18.  lifecycle      - shutdown, startup, clean, delete (~30 min)
 
 set -o pipefail
 
@@ -99,6 +102,13 @@ _run_test "Payload Deep" "test/func/test-tui-payload-deep.sh" || true
 _run_test "Cluster Pages" "test/func/test-tui-cluster-pages.sh" || true
 _run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 _run_test "DISCO Smoke" "test/func/test-tui-disco-smoke.sh" || true
+_run_test "Operators Deep" "test/func/test-tui-operators-deep.sh" || true
+_run_test "Settings Deep" "test/func/test-tui-settings-deep.sh" || true
+_run_test "Addl Images Deep" "test/func/test-tui-addl-images-deep.sh" || true
+_run_test "Platform Config" "test/func/test-tui-platform-config-deep.sh" || true
+_run_test "ISC Verify" "test/func/test-tui-isc-verify.sh" || true
+# Progress Integration uses raw tmux sessions (not the TUI); run last to avoid stale sessions
+_run_test "Progress Integration" "test/func/test-tui-progress-integration.sh" || true
 
 if [[ "$_QUICK" == "true" ]]; then
 	echo ""
