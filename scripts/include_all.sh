@@ -2697,7 +2697,7 @@ fetch_older_version() {
 verify_upgrade_path_exists() {
 	local current_ver="${1:-}"
 	local target_ver="${2:-}"
-	local channel="${3:-${ocp_channel:-fast}}"
+	local channel="${3:-${ocp_channel:-stable}}"
 	local shell_mode=""
 	[[ "${4:-}" == "--shell" ]] && shell_mode=1
 
@@ -2857,7 +2857,7 @@ print("REACHABLE=0 HOPS=0 TARGETS=%s" % ",".join(reachable))
 ############################################
 fetch_upgrade_targets() {
 	local current_ver="${1:-}"
-	local channel="${2:-${ocp_channel:-fast}}"
+	local channel="${2:-${ocp_channel:-stable}}"
 	local max_probe="${3:-3}"
 
 	[[ -z "$current_ver" ]] && return 0
@@ -2947,10 +2947,10 @@ fetch_upgrade_targets() {
 # calling fetch_upgrade_targets multiple times.
 # Args:
 #	$1 = current version (e.g. 4.20.30)
-#	$2 = user's channel (e.g. candidate) [optional, default: fast]
+#	$2 = user's channel (e.g. candidate) [optional, default: stable]
 ############################################
 fetch_all_upgrade_targets() {
-	local ver="${1:-}" channel="${2:-${ocp_channel:-fast}}"
+	local ver="${1:-}" channel="${2:-${ocp_channel:-stable}}"
 	[[ -n "$ver" ]] || return 0
 
 	local ch _seen_ch=" " _tmpdir _pids=() _chans=()
@@ -2981,10 +2981,10 @@ fetch_all_upgrade_targets() {
 # Called by aba_prefetch_catalogs() at startup and TUI fallback.
 # Args:
 #	$1 = current version [optional, default: $ocp_version]
-#	$2 = user's channel [optional, default: $ocp_channel or fast]
+#	$2 = user's channel [optional, default: $ocp_channel or stable]
 ############################################
 aba_upgrade_targets_start() {
-	local ver="${1:-${ocp_version:-}}" channel="${2:-${ocp_channel:-fast}}"
+	local ver="${1:-${ocp_version:-}}" channel="${2:-${ocp_channel:-stable}}"
 	[[ -n "$ver" ]] || return 0
 	run_once -i "aba:upgrade-targets:${ver}" -t "$(parse_duration "$ABA_CACHE_TTL")" -- \
 		bash -lc "source ./scripts/include_all.sh; fetch_all_upgrade_targets '$ver' '$channel'"
@@ -3077,7 +3077,7 @@ resolve_cluster_channel() {
 ############################################
 verify_release_version_exists() {
 	local ver="${1:-}"
-	local channel="${2:-${ocp_channel:-fast}}"
+	local channel="${2:-${ocp_channel:-stable}}"
 
 	[[ -z "$ver" ]] && return 1
 
@@ -3112,7 +3112,7 @@ compute_upgrade_path() {
 	[[ -z "$src" || -z "$dst" || "$src" == "$dst" ]] && return 1
 
 	local ch_base="${channel%%-*}"
-	[[ -z "$ch_base" ]] && ch_base="${ocp_channel:-fast}"
+	[[ -z "$ch_base" ]] && ch_base="${ocp_channel:-stable}"
 	local tgt_minor="${dst%.*}"
 	[[ "$dst" == *-* ]] && tgt_minor="${dst%%-*}" && tgt_minor="${tgt_minor%.*}"
 

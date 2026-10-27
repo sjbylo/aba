@@ -1943,6 +1943,9 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	source <(normalize-aba-conf) 2>/dev/null || true
+	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
+
 	local _del_msg _del_help
 	if [[ "${platform:-bm}" == "bm" ]]; then
 		_del_msg="Delete cluster '$cl_display'?\n\nThis removes cluster state files only.\nThe physical servers are left running — decommission them manually."
@@ -2782,9 +2785,9 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
-	local _cl_platform=""
-	_cl_platform=$(awk -F= '/^platform=/{print $2}' "$ABA_ROOT/$SELECTED_CLUSTER/cluster.conf" 2>/dev/null)
-	[[ "$_cl_platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
+	source <(normalize-aba-conf) 2>/dev/null || true
+	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
+	[[ "${platform:-bm}" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
