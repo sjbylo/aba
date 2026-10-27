@@ -335,23 +335,23 @@ Navigation:
 					cluster_day2_menu
 				fi
 				;;
-	"$TUI2_DISCO_TAG_SETTINGS")
-		_tui_settings_menu
-		;;
-	"$TUI2_DISCO_TAG_FEEDBACK")
-		_tui_feedback
-		;;
-	"$TUI2_DISCO_TAG_ADVANCED")
-		tui_advanced_menu
-		local _adv_rc=$?
-		[[ $_adv_rc -eq 2 ]] && return 2
-		[[ "$_TUI_MODE" != "DISCO" ]] && return 0
-		;;
+			"$TUI2_DISCO_TAG_SETTINGS")
+				_tui_settings_menu
+				;;
+			"$TUI2_DISCO_TAG_FEEDBACK")
+				_tui_feedback
+				;;
+			"$TUI2_DISCO_TAG_ADVANCED")
+				tui_advanced_menu
+				local _adv_rc=$?
+				[[ $_adv_rc -eq 2 ]] && return 2
+				[[ "$_TUI_MODE" != "DISCO" ]] && return 0
+				;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_payload_menu "true"
 				;;
-	esac
-done
+		esac
+	done
 }
 
 # =============================================================================

@@ -149,7 +149,8 @@ direct_wizard() {
 				"$ABA_ROOT/scripts/create-containers-auth.sh" >>"$_TUI_LOG_FILE" 2>&1 || true
 				local _ps_ver=""
 				if [[ -f "$ABA_ROOT/aba.conf" ]]; then
-					_ps_ver=$(source <(normalize-aba-conf 2>/dev/null) && echo "${ocp_version:-}")
+					source <(normalize-aba-conf) 2>/dev/null || true
+					_ps_ver="${ocp_version:-}"
 				fi
 				if [[ ! "$_ps_ver" == *.*.* ]]; then
 					# Wait for version fetch started at TUI boot (should be done by now)
