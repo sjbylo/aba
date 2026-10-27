@@ -73,17 +73,19 @@ tui_change_version() {
 			_direct_version
 			case "$DIALOG_RC" in
 				next)
+					# Confirm — title bar still shows old values
 					dlg --backtitle "$(ui_backtitle)" \
-						--title "Confirm Version Change" \
-						--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nApply this change?" \
+						--title "Confirm Version" \
+						--yesno "Channel: ${_PENDING_CH}\nVersion: ${_PENDING_VER}\n\nApply this change?" \
 						10 50 || { step="channel"; continue; }
 
+					ocp_channel="$_PENDING_CH"
+					ocp_version="$_PENDING_VER"
 					_direct_save_config
 
 					local _ver_short
 					_ver_short=$(_ver_minor "$ocp_version")
 					tui_log "Starting catalog downloads for OpenShift $_ver_short"
-					# Reset cached catalog tasks so we get fresh data for the new version
 					local _cat
 					for _cat in redhat-operator certified-operator community-operator; do
 						run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
@@ -94,11 +96,11 @@ tui_change_version() {
 					return 0
 					;;
 				back) step="channel" ;;
-				repeat) ;;
+				repeat) ;;  # Stay on version (Help, Manual cancel)
 				*) return 0 ;;
 			esac
 			;;
-		esac
+	esac
 	done
 }
 
@@ -188,29 +190,29 @@ direct_wizard() {
 			_direct_version
 			case "$DIALOG_RC" in
 				next)
+					# Confirm — title bar still shows old values
 					dlg --backtitle "$(ui_backtitle)" \
-						--title "Confirm Configuration" \
-						--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
+						--title "Confirm Version" \
+						--yesno "Channel: ${_PENDING_CH}\nVersion: ${_PENDING_VER}\n\nApply this change?" \
 						10 50 || { step="channel"; continue; }
 
+					ocp_channel="$_PENDING_CH"
+					ocp_version="$_PENDING_VER"
 					_ver_short=$(_ver_minor "$ocp_version")
-					# Save config early: catalog downloads need pull_secret_file from aba.conf
 					_direct_save_config
 					if [[ "$_TUI_MODE" != "DIRECT" ]]; then
 						tui_log "Starting catalog downloads for OpenShift $_ver_short"
-						# Reset cached catalog tasks so we get fresh data
 						local _cat
 						for _cat in redhat-operator certified-operator community-operator; do
 							run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
 						done
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
-						# Start registry downloads early (shared with aba.sh)
 						start_all_registry_downloads >>"$_TUI_LOG_FILE" 2>&1
 					fi
 					step="platform"
 					;;
 				back) step="channel" ;;
-				repeat) ;;
+				repeat) ;;  # Stay on version (Help, Manual cancel)
 				*) return 1 ;;
 			esac
 			;;
@@ -367,7 +369,7 @@ _direct_channel() {
 	tui_log "DIRECT wizard: channel"
 
 	local _default_tag=s
-	case "${ocp_channel:-stable}" in
+	case "${_PENDING_CH:-${ocp_channel:-stable}}" in
 	stable)    _default_tag=s ;;
 	fast)      _default_tag=f ;;
 	candidate) _default_tag=c ;;
@@ -400,22 +402,22 @@ _direct_channel() {
 			_ch_tag=$(<"$_TUI_TMP")
 			[[ -z "$_ch_tag" ]] && _ch_tag=s
 			case "$_ch_tag" in
-				s) ocp_channel="stable" ;;
-				f) ocp_channel="fast" ;;
-				c) ocp_channel="candidate" ;;
-				*) ocp_channel="stable" ;;
+				s) _PENDING_CH="stable" ;;
+				f) _PENDING_CH="fast" ;;
+				c) _PENDING_CH="candidate" ;;
+				*) _PENDING_CH="stable" ;;
 			esac
-			tui_log "Selected channel: $ocp_channel"
+			tui_log "Selected channel: $_PENDING_CH"
 			DIALOG_RC="next"
 
 			# Ensure version fetches are running (already started at TUI boot;
 			# run_once -i is non-blocking and skips if task already completed)
-			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $ocp_channel"
-			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $ocp_channel"
-			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $ocp_channel"
+			run_once -i "ocp:${_PENDING_CH}:latest_version" -- \
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_PENDING_CH"
+			run_once -i "ocp:${_PENDING_CH}:latest_version_previous" -- \
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_PENDING_CH"
+			run_once -i "ocp:${_PENDING_CH}:latest_version_older" -- \
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_PENDING_CH"
 			;;
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
@@ -438,32 +440,34 @@ _direct_version() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: version"
 
-	[[ -z "${ocp_channel:-}" ]] && ocp_channel="stable"
+	# Use the pending channel from _direct_channel() for lookups.
+	# ocp_channel is never modified — title bar stays at the old value.
+	local _ch="${_PENDING_CH:-${ocp_channel:-stable}}"
 
 	# Wait for version data if needed
 	local need_wait=0
-	run_once -p -i "ocp:${ocp_channel}:latest_version" || need_wait=1
-	run_once -p -i "ocp:${ocp_channel}:latest_version_previous" || need_wait=1
+	run_once -p -i "ocp:${_ch}:latest_version" || need_wait=1
+	run_once -p -i "ocp:${_ch}:latest_version_previous" || need_wait=1
 
 	if [[ $need_wait -eq 1 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"$(printf "$TUI2_MSG_VERSION_FETCHING" "$ocp_channel")" 0 0
+			"$(printf "$TUI2_MSG_VERSION_FETCHING" "$_ch")" 0 0
 		# Wait for background tasks started from channel step (or start them if not yet running)
-		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version" 2>/dev/null || \
-			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $ocp_channel"
-		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version_previous" 2>/dev/null || \
-			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $ocp_channel"
-		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version_older" 2>/dev/null || \
-			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $ocp_channel"
+		run_once -q -w -S -i "ocp:${_ch}:latest_version" 2>/dev/null || \
+			run_once -i "ocp:${_ch}:latest_version" -- \
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
+		run_once -q -w -S -i "ocp:${_ch}:latest_version_previous" 2>/dev/null || \
+			run_once -i "ocp:${_ch}:latest_version_previous" -- \
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
+		run_once -q -w -S -i "ocp:${_ch}:latest_version_older" 2>/dev/null || \
+			run_once -i "ocp:${_ch}:latest_version_older" -- \
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
 	fi
 
 	local latest previous older
-	latest=$(run_once -o -i "ocp:${ocp_channel}:latest_version" 2>/dev/null)
-	previous=$(run_once -o -i "ocp:${ocp_channel}:latest_version_previous" 2>/dev/null)
-	older=$(run_once -o -i "ocp:${ocp_channel}:latest_version_older" 2>/dev/null)
+	latest=$(run_once -o -i "ocp:${_ch}:latest_version" 2>/dev/null)
+	previous=$(run_once -o -i "ocp:${_ch}:latest_version_previous" 2>/dev/null)
+	older=$(run_once -o -i "ocp:${_ch}:latest_version_older" 2>/dev/null)
 
 	if [[ -z "$latest" ]]; then
 		# Fallback: use existing version from aba.conf or allow manual entry
@@ -471,9 +475,11 @@ _direct_version() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
 				"$(printf "$TUI2_MSG_VERSION_FETCH_FAIL" "$ocp_version")" 0 0
 			tui_log "Version fetch failed, using existing: $ocp_version"
+			_PENDING_VER="$ocp_version"
 			DIALOG_RC="next"
 			return
 		fi
+		local _ver=""
 		while :; do
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
 				--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "" \
@@ -483,34 +489,35 @@ _direct_version() {
 				DIALOG_RC="back"
 				return
 			fi
-			ocp_version=$(<"$_TUI_TMP")
-			ocp_version="${ocp_version##[[:space:]]}"    # trim leading whitespace
-			ocp_version="${ocp_version%%[[:space:]]}"    # trim trailing whitespace
-			if _is_version_string "$ocp_version"; then
-				if ! verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
+			_ver=$(<"$_TUI_TMP")
+			_ver="${_ver##[[:space:]]}"    # trim leading whitespace
+			_ver="${_ver%%[[:space:]]}"    # trim trailing whitespace
+			if _is_version_string "$_ver"; then
+				if ! verify_release_version_exists "$_ver" "$_ch" 2>/dev/null; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Version $ocp_version not found in the $ocp_channel channel.\n\nCheck the version number and try again." 0 0
+						"Version $_ver not found in the $_ch channel.\n\nCheck the version number and try again." 0 0
 					continue
 				fi
-				tui_log "Manual version entry: $ocp_version"
+				tui_log "Manual version entry: $_ver"
+				_PENDING_VER="$_ver"
 				DIALOG_RC="next"
 				return
-			elif _is_minor_version "$ocp_version"; then
-				# x.y format — resolve to latest z-stream
-				local _input_minor="$ocp_version"
-				tui_log "Resolving $ocp_version to latest z-stream"
+			elif _is_minor_version "$_ver"; then
+				local _input_minor="$_ver"
+				tui_log "Resolving $_ver to latest z-stream"
 				dlg --backtitle "$(ui_backtitle)" --infobox \
-					"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+					"Resolving $_ver to latest z-stream...\n\nPlease wait..." 0 0
 				local _resolved=""
-				if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
-					ocp_version="$_resolved"
-					tui_log "Resolved $_input_minor to $ocp_version"
+				if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$_ch"); then
+					_ver="$_resolved"
+					tui_log "Resolved $_input_minor to $_ver"
+					_PENDING_VER="$_ver"
 					DIALOG_RC="next"
 					return
 				fi
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
-				ocp_version=""
+					"Version not found: $_input_minor\nChannel: $_ch\n\nNo releases found for this minor version." 0 0
+				_ver=""
 			else
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
@@ -525,7 +532,7 @@ _direct_version() {
 	   [[ "$ocp_version" != "$latest" ]] &&
 	   [[ "$ocp_version" != "${previous:-}" ]] &&
 	   [[ "$ocp_version" != "${older:-}" ]] &&
-	   verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
+	   verify_release_version_exists "$ocp_version" "$_ch" 2>/dev/null; then
 		_has_current=true
 	fi
 
@@ -560,54 +567,53 @@ _direct_version() {
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
-		--menu "$(printf "$TUI2_MSG_VERSION_MENU" "$ocp_channel")" 0 0 0 \
+		--menu "$(printf "$TUI2_MSG_VERSION_MENU" "$_ch")" 0 0 0 \
 		"${items[@]}" \
 		2>"$_TUI_TMP"
 	local rc=$?
 
 	case "$rc" in
 		0)
-			local choice
+			local choice _ver="${ocp_version:-}"
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
-				c) ;;
-				l) ocp_version="$latest" ;;
-				p) ocp_version="$previous" ;;
-				o) ocp_version="$older" ;;
+				c) ;;  # keep current
+				l) _ver="$latest" ;;
+				p) _ver="$previous" ;;
+				o) _ver="$older" ;;
 				m)
 					while :; do
 						dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
-							--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${ocp_version:-$latest}" \
+							--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${_ver:-$latest}" \
 							2>"$_TUI_TMP"
 						if [[ $? -ne 0 ]]; then
 							DIALOG_RC="repeat"
 							return
 						fi
-						ocp_version=$(<"$_TUI_TMP")
-						ocp_version="${ocp_version##[[:space:]]}"  # trim leading whitespace
-						ocp_version="${ocp_version%%[[:space:]]}"  # trim trailing whitespace
-						if _is_version_string "$ocp_version"; then
-							if ! verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
+						_ver=$(<"$_TUI_TMP")
+						_ver="${_ver##[[:space:]]}"  # trim leading whitespace
+						_ver="${_ver%%[[:space:]]}"  # trim trailing whitespace
+						if _is_version_string "$_ver"; then
+							if ! verify_release_version_exists "$_ver" "$_ch" 2>/dev/null; then
 								dlg --backtitle "$(ui_backtitle)" --msgbox \
-									"Version $ocp_version not found in the $ocp_channel channel.\n\nCheck the version number and try again." 0 0
+									"Version $_ver not found in the $_ch channel.\n\nCheck the version number and try again." 0 0
 								continue
 							fi
 							break
-						elif _is_minor_version "$ocp_version"; then
-							# x.y format — resolve to latest z-stream
-							local _input_minor="$ocp_version"
-							tui_log "Resolving $ocp_version to latest z-stream"
+						elif _is_minor_version "$_ver"; then
+							local _input_minor="$_ver"
+							tui_log "Resolving $_ver to latest z-stream"
 							dlg --backtitle "$(ui_backtitle)" --infobox \
-								"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+								"Resolving $_ver to latest z-stream...\n\nPlease wait..." 0 0
 							local _resolved=""
-							if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
-								ocp_version="$_resolved"
-								tui_log "Resolved $_input_minor to $ocp_version"
+							if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$_ch"); then
+								_ver="$_resolved"
+								tui_log "Resolved $_input_minor to $_ver"
 								break
 							fi
 							dlg --backtitle "$(ui_backtitle)" --msgbox \
-								"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
-							ocp_version=""
+								"Version not found: $_input_minor\nChannel: $_ch\n\nNo releases found for this minor version." 0 0
+							_ver=""
 						else
 							dlg --backtitle "$(ui_backtitle)" --msgbox \
 								"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
@@ -615,7 +621,8 @@ _direct_version() {
 					done
 					;;
 			esac
-			tui_log "Selected version: $ocp_version"
+			_PENDING_VER="$_ver"
+			tui_log "Selected version: $_PENDING_VER (pending confirm)"
 			DIALOG_RC="next"
 			;;
 		2)

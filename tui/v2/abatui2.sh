@@ -571,29 +571,37 @@ _conno_main() {
 		# Refresh mirror labels from cached state (non-blocking).
 		# "(synced)" follows last_action, not the release-image probe: an
 		# operators-only sync (excl_platform=true) is still a successful sync.
+		# Version is included so stale labels are self-evident after a
+		# version change (Bug #945).
+		local _mirror_ver="" _last_act=""
+		if mirror_available; then
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			_mirror_ver="${mirror_ocp_version:-}"
+			_last_act="${last_action:-}"
+		fi
 		if mirror_available && _mirror_has_release_image; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
 			if [[ "$sync_avail" == "true" ]]; then
-				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+				sync_label="$TUI2_LABEL_SYNC \Z2(synced${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		elif mirror_available && [[ "$_TUI_REG_STATE" == "stopped" ]]; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_STOPPED"
-			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
-				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			if [[ "$sync_avail" == "true" && "$_last_act" == "sync" ]]; then
+				sync_label="$TUI2_LABEL_SYNC \Z2(synced${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		elif mirror_available; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
-			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
-				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			if [[ "$sync_avail" == "true" && "$_last_act" == "sync" ]]; then
+				sync_label="$TUI2_LABEL_SYNC \Z2(synced${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		fi
 
 		# Save status: tar archives exist in mirror/data/
 		if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
-			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
+			save_label="$TUI2_LABEL_SAVE \Z2(saved${_mirror_ver:+ $_mirror_ver})\Zn"
 		fi
 
 		# Cluster flags (instant — marker file checks only)

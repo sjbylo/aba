@@ -176,7 +176,11 @@ disco_main() {
 		# "(loaded)" follows last_action, not the release-image probe: an
 		# operators-only archive (excl_platform=true) is a successful load
 		# even when the registry has no release image.
+		# Version is included so stale labels are self-evident after a
+		# version change (Bug #945).
 		if mirror_available; then
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			local _mirror_ver="${mirror_ocp_version:-}"
 			if _mirror_has_release_image; then
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
 			elif [[ "$_TUI_REG_STATE" == "stopped" ]]; then
@@ -185,10 +189,8 @@ disco_main() {
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_NOT_VERIFIED"
 			fi
 			reg_avail=false
-			local _last_action=""
-			_last_action="$(_mirror_last_action)"
-			if _mirror_has_release_image || [[ "$_last_action" == "load" ]]; then
-				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
+			if _mirror_has_release_image || [[ "${last_action:-}" == "load" ]]; then
+				load_label="$TUI2_LABEL_LOAD \Z2(loaded${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		else
 			load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
