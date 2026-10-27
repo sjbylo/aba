@@ -2123,9 +2123,8 @@ R - Clean ABA: Removes configuration and state files so you can\n\
 				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir mirror start" "Start Mirror Registry" _invalidate_mirror_cache
 				;;
 			"U")
-				local _unreg_host
-				_unreg_host=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_host")
-				[[ -z "$_unreg_host" ]] && _unreg_host="localhost"
+				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+				local _unreg_host="${reg_host:-localhost}"
 				local _delete_data=""
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
 					--ok-label "Uninstall" --cancel-label "$TUI2_BTN_CANCEL" \
@@ -2472,8 +2471,9 @@ _day2_ssh() {
 	cd "$ABA_ROOT/$SELECTED_CLUSTER"
 
 	# Read SSH key and rendezvous IP from cluster config
-	local _ssh_key _ssh_ip
-	_ssh_key=$(source <(normalize-cluster-conf) && echo "$ssh_key_file")
+	source <(normalize-cluster-conf) 2>/dev/null || true
+	local _ssh_key="${ssh_key_file:-~/.ssh/id_rsa}"
+	local _ssh_ip
 	_ssh_ip=$(cat iso-agent-based/rendezvousIP 2>/dev/null)
 
 	if [[ -z "$_ssh_ip" ]]; then

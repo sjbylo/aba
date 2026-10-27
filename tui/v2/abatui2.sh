@@ -897,7 +897,8 @@ done
 
 # --- First-run: let the user verify/change the auto-detected base domain ---
 if [[ "$_TUI_FIRST_RUN" ]]; then
-	_cur_domain=$(source <(normalize-aba-conf) && echo "$domain")
+	source <(normalize-aba-conf) 2>/dev/null || true
+	_cur_domain="${domain:-}"
 	_user_domain=""
 	if dlg --backtitle "$(ui_backtitle)" --title "Base Domain" \
 		--inputbox "\nDetected base domain: ${_cur_domain:-example.com}\n\nThis domain is used for all cluster FQDNs,\ne.g. mycluster.${_cur_domain:-example.com}\n\nVerify and adjust if needed." \

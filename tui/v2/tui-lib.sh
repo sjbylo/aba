@@ -744,7 +744,10 @@ _exec_in_terminal() {
 		return 1
 	fi
 
-	# When auto-answer is ON, append --yes (same as _exec_in_tui)
+	# Suppress aba's own interactive prompts: the TUI already provides its own
+	# confirmation dialogs before reaching this point, so the underlying aba
+	# command should not double-prompt.  ask=true in aba.conf means "interactive
+	# mode" — we override it here because the TUI handles user confirmation.
 	if [[ "$(_tui_abaconf_raw_ask)" == "true" ]]; then
 		[[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]] && cmd="$cmd --yes"
 	fi
@@ -816,8 +819,8 @@ mirror_available() {
 # chain from delaying PLAN events past the 5-second progress timeout.
 # Returns 0 on success, non-zero on failure or user cancel.
 _tui_install_mirror() {
-	local _vendor
-	_vendor=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) && echo "${reg_vendor:-auto}")
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+	local _vendor="${reg_vendor:-auto}"
 	local _label="Install ${_vendor} Mirror"
 	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
 	local rc=$?
@@ -1167,9 +1170,8 @@ _tui_abaconf_raw_ask() {
 		echo ""
 		return
 	fi
-	local _ask_val
-	_ask_val=$(source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null && echo "$ask")
-	echo "$_ask_val"
+	source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+	echo "${ask:-}"
 }
 
 
