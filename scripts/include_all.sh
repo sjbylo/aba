@@ -4230,6 +4230,71 @@ _catalog_versions_to_mirror() {
 	echo "${_versions[*]}"
 }
 
+# --- CatalogSource Naming Helpers (day2) ---
+# In upgrade mode the ISC holds the operator catalogs of two minors and oc-mirror
+# writes one CatalogSource file per catalog image, named by digest, not version.
+# These helpers give the catalogs of one family distinct names.
+
+# Print the OCP minor (e.g. 4.21) of an operator catalog image, or nothing if unknown.
+# Uses the image tag (:v4.21) or else the catalog label com.redhat.index.delivery.version,
+# which survives oc-mirror's catalog rebuild.
+# Usage: catalog_image_minor <image> [<authfile>] [<ca_file>]
+catalog_image_minor() {
+	local _image="$1" _authfile="${2:-}" _ca_file="${3:-}"
+	local _label="" _cert_dir=""
+	local _skopeo_args=()
+
+	if [[ "$_image" =~ :v([0-9]+\.[0-9]+)$ ]]; then
+		echo "${BASH_REMATCH[1]}"
+		return 0
+	fi
+
+	[ -s "$_authfile" ] && _skopeo_args+=(--authfile "$_authfile")
+	if [ -s "$_ca_file" ]; then
+		_cert_dir=$(mktemp -d)
+		cp "$_ca_file" "$_cert_dir/ca.crt"
+		_skopeo_args+=(--cert-dir "$_cert_dir")
+	fi
+
+	aba_debug "Running: skopeo inspect --format '{{index .Labels \"com.redhat.index.delivery.version\"}}' ${_skopeo_args[*]} docker://$_image"
+	_label=$(skopeo inspect --format '{{index .Labels "com.redhat.index.delivery.version"}}' "${_skopeo_args[@]}" "docker://$_image") || _label=""
+	[ "$_cert_dir" ] && rm -rf "$_cert_dir"
+
+	_label="${_label#v}"
+	[[ "$_label" =~ ^[0-9]+\.[0-9]+$ ]] && echo "$_label"
+	return 0
+}
+
+# Print the minor whose catalog keeps the standard CatalogSource name: the cluster's
+# minor if one of the catalogs matches it, else the lowest catalog minor.
+# Usage: catalog_source_preferred_minor <cluster_minor> <catalog_minor>...
+catalog_source_preferred_minor() {
+	local _cluster_minor="$1"; shift
+	local _m
+
+	for _m in "$@"; do
+		[ "$_m" ] && [ "$_m" = "$_cluster_minor" ] && { echo "$_m"; return 0; }
+	done
+	printf '%s\n' "$@" | sed '/^$/d' | sort -V | head -1
+}
+
+# Print the CatalogSource name for one catalog file.
+# A family with one catalog keeps the standard name (e.g. redhat-operators). With
+# catalogs of several minors, the preferred minor keeps it and the others get a
+# -v<major>-<minor> suffix, or -<file_id> when their minor is unknown.
+# Usage: catalog_source_name <standard_name> <catalog_minor> <preferred_minor> <family_count> <file_id>
+catalog_source_name() {
+	local _name="$1" _minor="$2" _preferred="$3" _count="$4" _file_id="$5"
+
+	if [ "$_count" -le 1 ] || { [ "$_minor" ] && [ "$_minor" = "$_preferred" ]; }; then
+		echo "$_name"
+	elif [ "$_minor" ]; then
+		echo "${_name}-v${_minor//./-}"
+	else
+		echo "${_name}-${_file_id}"
+	fi
+}
+
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)
@@ -4516,7 +4581,7 @@ _run_oc_mirror_with_retry() {
 		local _ocp_ver_major
 		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 		# For upgrades, the ISC may reference the TARGET version's catalog (e.g. v4.21)
-		# not the base version's (v4.20). Pin both.
+		# not the base version's (v4.20), or both with catalog_versions=all. Pin both.
 		local _upgrade_ver_major=""
 		if [ "${ocp_upgrade_to:-}" ]; then
 			_upgrade_ver_major=$(echo "$ocp_upgrade_to" | cut -d. -f1-2)

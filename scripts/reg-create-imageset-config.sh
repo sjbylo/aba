@@ -3,8 +3,9 @@
 # CALLED BY:   mirror/Makefile (data/imageset-config.yaml target)
 # CWD:         mirror/
 # REQUIRES:    aba.conf (ocp_version, ocp_channel, op_sets, ops),
-#              mirror.conf (optional ocp_upgrade_to, op_sets/ops overrides),
-#              .index/ catalogs (for operator channel resolution)
+#              mirror.conf (optional ocp_upgrade_to, catalog_versions, op_sets/ops overrides),
+#              .index/ catalogs (for operator channel resolution; with catalog_versions=all
+#              in cross-minor upgrade mode the indexes of both the source and target minor)
 # PRODUCES:    data/imageset-config.yaml, touches data/.created after generation
 # GUARDS:
 #   - Skips regeneration if ISC is strictly newer than data/.created (user/bundle ownership)
@@ -101,7 +102,7 @@ _resolve_operators_json() {
 
 	# Special "all" operator set — mirrors entire redhat catalog
 	if echo "$op_sets" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
-		aba_success "Adding all redhat-operator operators to your image-set config file!" >&2
+		aba_success "Adding all redhat-operator operators (catalog v$catalog_ver) to your image-set config file!" >&2
 		echo '[{"catalog":"registry.redhat.io/redhat/redhat-operator-index:v'"$catalog_ver"'","all":true,"packages":[]}]'
 		return 0
 	fi
@@ -179,7 +180,7 @@ _resolve_operators_json() {
 	local _src_parts=""
 	[ "$op_sets" ] && _src_parts="op_sets: $op_sets"
 	[ "$ops" ] && _src_parts="${_src_parts:+$_src_parts, }ops: $ops"
-	aba_info "Adding operators to the image-set config file [$_src_parts] ..." >&2
+	aba_info "Adding operators to the image-set config file [$_src_parts] (catalog v$catalog_ver) ..." >&2
 
 	# Process operator sets
 	for _set_name in $(echo "$op_sets" | tr "," " "); do
@@ -332,15 +333,33 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	# Resolve operators into JSON for the template
 	export json_operators_data='[]'
 	export has_operators=false
-	_op_catalog_ver="${tgt_major:-$ocp_ver_major}"
+	_op_catalog_vers="${tgt_major:-$ocp_ver_major}"
 	if [ "${excl_operators:-}" ]; then
 		aba_debug "Operators excluded (excl_operators=$excl_operators)"
 	elif [ "$ops" ] || [ "$op_sets" ]; then
-		# For cross-minor upgrades, use the target version's catalog
-		if [ "${tgt_major:-}" ] && [ "$tgt_major" != "$ocp_ver_major" ]; then
-			aba_debug "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major"
+		# For cross-minor upgrades, use the target version's catalog. catalog_versions=all
+		# also adds the source version's catalog, for a registry filled only from this
+		# archive: the cluster runs the source minor (and needs its catalogs) until upgraded.
+		if [ "${catalog_versions:-}" ] && [ "$catalog_versions" != "all" ]; then
+			aba_warn "Unknown value catalog_versions=$catalog_versions in mirror.conf, expected 'all'. Ignoring it."
 		fi
-		json_operators_data=$(_resolve_operators_json "$_op_catalog_ver")
+		if [ "${tgt_major:-}" ] && [ "$tgt_major" != "$ocp_ver_major" ]; then
+			if [ "${catalog_versions:-}" = "all" ]; then
+				_op_catalog_vers="$ocp_ver_major $tgt_major"
+				aba_debug "Upgrade mode (catalog_versions=all): adding operator catalog indexes v$ocp_ver_major (source) and v$tgt_major (target)"
+			else
+				aba_debug "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major"
+			fi
+		fi
+		json_operators_data=""
+		for _op_catalog_ver in $_op_catalog_vers; do
+			_op_json=$(_resolve_operators_json "$_op_catalog_ver")
+			# Concatenate the JSON arrays of catalog objects
+			_op_json="${_op_json#\[}"
+			_op_json="${_op_json%\]}"
+			[ "$_op_json" ] && json_operators_data="${json_operators_data:+$json_operators_data,}$_op_json"
+		done
+		json_operators_data="[$json_operators_data]"
 		has_operators=true
 	else
 		aba_info "No operators to add to the image-set config file since values ops or op_sets not defined in aba.conf or mirror.conf."

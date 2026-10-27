@@ -472,9 +472,15 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	# Also build an image list so we can skip duplicates later.
 	_multi_mirror=""
 	_existing_cs_images=""
+	_existing_cs=""
 	while IFS='|' read -r _cs_name _cs_image _cs_managed; do
 		[ -z "$_cs_image" ] && continue
-		_existing_cs_images="${_existing_cs_images}${_cs_image}"$'\n'
+		# A version-suffixed CatalogSource (e.g. redhat-operators-v4-21) does not count as
+		# serving its image: the standard name must still move to it when it becomes the
+		# only catalog of its family
+		[[ "$_cs_name" =~ ^(redhat|certified|community)-operators-v[0-9]+-[0-9]+(-.+)?$ ]] || \
+			_existing_cs_images="${_existing_cs_images}${_cs_image}"$'\n'
+		_existing_cs="${_existing_cs}${_cs_name}|${_cs_image}"$'\n'
 		_cs_host=$(echo "$_cs_image" | cut -d/ -f1)
 		if [ "$_cs_host" != "$_our_host" ] && [ "$_cs_managed" != "marketplace-operator" ]; then
 			_multi_mirror=1
@@ -482,6 +488,55 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		fi
 	done < <(oc get catalogsource -n "$ns" \
 		-o jsonpath='{range .items[*]}{.metadata.name}|{.spec.image}|{.metadata.annotations.operatorframework\.io/managed-by}{"\n"}{end}' 2>/dev/null || true)
+
+	# Fetch the catalog (index) names and adjust them to suit the standard names
+	_cs_standard_name() {
+		local _n
+		# Extract the base catalog name and normalize it
+		# Example filename: cs-redhat-operator-index.yaml
+		_n=${1#*cs-}            # remove everything up to 'cs-'
+		_n=${_n%-index*}        # remove everything from '-index' onward
+
+		# Normalize standard names
+		case "$_n" in
+			redhat-operator)	_n="redhat-operators" ;;
+			certified-operator)	_n="certified-operators" ;;
+			community-operator)	_n="community-operators" ;;
+		esac
+		echo "$_n"
+	}
+
+	# A bundle made in upgrade mode carries the catalogs of two OCP minors per family
+	# (e.g. redhat-operator-index v4.20 and v4.21). oc-mirror names their files by digest,
+	# so read each catalog's minor to give them distinct names. The catalog matching the
+	# cluster's minor keeps the standard name, so Subscriptions using it follow the cluster
+	# (and move to the new minor when day2 runs after the cluster upgrade).
+	declare -A _cs_family_count=() _cs_family_minors=() _cs_minor=() _cs_std_given=()
+	_cs_applied=()
+	_cluster_minor=""
+	for f in $cs_file_list; do
+		[ -s "$f" ] || continue
+		cs_name=$(_cs_standard_name "$f")
+		_cs_family_count[$cs_name]=$(( ${_cs_family_count[$cs_name]:-0} + 1 ))
+	done
+	for f in $cs_file_list; do
+		[ -s "$f" ] || continue
+		cs_name=$(_cs_standard_name "$f")
+		[ "${_cs_family_count[$cs_name]}" -gt 1 ] || continue
+		if [ ! "$_cluster_minor" ]; then
+			# Use history[Completed] not desired.version: desired flips as soon as an upgrade is requested
+			aba_debug "Running: oc get clusterversion version (completed history)"
+			_cluster_ver=$(oc get clusterversion version \
+				-o jsonpath='{.status.history[?(@.state=="Completed")].version}' 2>/dev/null \
+				| awk '{print $1}') || _cluster_ver=""
+			_cluster_minor=$(_ver_minor "${_cluster_ver:-$ocp_version}")
+		fi
+		_cs_file_image=$(awk '/image:/{print $2; exit}' "$f")
+		_cs_minor[$f]=$(catalog_image_minor "$_cs_file_image" "$regcreds_dir/pull-secret-mirror.json" "$regcreds_dir/rootCA.pem")
+		[ "${_cs_minor[$f]}" ] || aba_warn "Cannot read the OCP version of catalog image $_cs_file_image (is the mirror registry reachable?)" \
+			"Its CatalogSource gets a name derived from the file name: $f"
+		_cs_family_minors[$cs_name]+=" ${_cs_minor[$f]}"
+	done
 
 	for f in $cs_file_list
 	do
@@ -491,18 +546,7 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			continue
 		fi
 
-		# Fetch the catalog (index) names and adjust them to suit the standard names
-		# Extract the base catalog name and normalize it
-		# Example filename: cs-redhat-operator-index.yaml
-		cs_name=${f#*cs-}            # remove everything up to 'cs-'
-		cs_name=${cs_name%-index*}    # remove everything from '-index' onward
-
-		# Normalize standard names
-		case "$cs_name" in
-    			redhat-operator)	cs_name="redhat-operators" ;;
-    			certified-operator)	cs_name="certified-operators" ;;
-    			community-operator)	cs_name="community-operators" ;;
-		esac
+		cs_name=$(_cs_standard_name "$f")
 
 		if [ ! "$cs_name" ]; then
 			echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
@@ -510,18 +554,46 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			continue
 		fi
 
+		_cs_multi_version=""
+		if [ "${_cs_family_count[$cs_name]:-0}" -gt 1 ]; then
+			_cs_multi_version=1
+			# File id for catalogs of unknown minor, e.g. sha256-69ac9 from cs-redhat-operator-index-sha256-69ac9.yaml
+			_cs_file_id=$(basename "$f" .yaml)
+			_cs_file_id=${_cs_file_id##*-index}
+			_cs_file_id=${_cs_file_id#-}
+			# shellcheck disable=SC2086 # word-split the list of minors
+			_cs_preferred=$(catalog_source_preferred_minor "$_cluster_minor" ${_cs_family_minors[$cs_name]})
+			_cs_std="$cs_name"
+			cs_name=$(catalog_source_name "$cs_name" "${_cs_minor[$f]}" "$_cs_preferred" "${_cs_family_count[$cs_name]}" "${_cs_file_id:-index}")
+			# No catalog minor of this family could be read: the first catalog keeps the
+			# standard name, so Subscriptions using it still resolve
+			if [ ! "$_cs_preferred" ] && [ ! "${_cs_std_given[$_cs_std]:-}" ]; then
+				cs_name="$_cs_std"
+				_cs_std_given[$_cs_std]=1
+			fi
+		fi
+
 		if [ "$_multi_mirror" ]; then
-			cs_name="${cs_name}-${_our_host_short}"
+			# A catalog of several minors keeps an unsuffixed name it already has from this
+			# mirror, as it is always applied by name (no skip on an already served image)
+			if [ "$_cs_multi_version" ] && awk -F'|' -v n="$cs_name" -v h="$_our_host/" '$1 == n && index($2, h) == 1 {f = 1} END {exit !f}' <<< "$_existing_cs"; then
+				aba_debug "Keeping CatalogSource name $cs_name, it is already served from this mirror"
+			else
+				cs_name="${cs_name}-${_our_host_short}"
+			fi
 		fi
 
 		# Skip if an existing CatalogSource already serves the same image.
 		# This avoids duplicates when day2 runs again from the same mirror
 		# after multi-mirror suffixing was triggered by another mirror's CS.
+		# Catalogs of several minors are always applied by name: after a cluster
+		# upgrade the standard name must move to the catalog of the new minor.
 		_cs_file_image=$(awk '/image:/{print $2; exit}' "$f")
-		if [ "$_cs_file_image" ] && echo "$_existing_cs_images" | grep -qxF "$_cs_file_image"; then
+		if [ ! "$_cs_multi_version" ] && [ "$_cs_file_image" ] && echo "$_existing_cs_images" | grep -qxF "$_cs_file_image"; then
 			aba_info "CatalogSource image already served by an existing CatalogSource, skipping: $cs_name"
 			continue
 		fi
+		_cs_applied+=("$cs_name|$_cs_file_image")
 
 		aba_info Applying CatalogSource: $cs_name
 		aba_debug "Running: cat $f | sed ... | oc apply -f - (CatalogSource $cs_name)"
@@ -583,6 +655,32 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	done
 
 	[ "$cs_failed" = "1" ] && aba_progress "FAIL|catalogs" && aba_abort "One or more CatalogSources failed to become READY. Check the errors above."
+
+	# When the standard name moved to another minor's catalog (cluster upgraded, or only
+	# one catalog of the family is left), the old version-suffixed CatalogSource now serves
+	# the same image twice. Remove it, unless a Subscription still uses it.
+	if [ ${#_cs_applied[@]} -gt 0 ]; then
+		aba_debug "Running: oc get subscriptions.operators.coreos.com -A -o jsonpath='{range .items[*]}{.spec.source}{\"\\n\"}{end}'"
+		if ! _sub_sources=$(oc get subscriptions.operators.coreos.com -A -o jsonpath='{range .items[*]}{.spec.source}{"\n"}{end}'); then
+			aba_warn "Cannot list Subscriptions, not removing duplicate CatalogSources"
+		else
+			_applied_names=$(printf '%s\n' "${_cs_applied[@]}" | cut -d'|' -f1)
+			_applied_images=$(printf '%s\n' "${_cs_applied[@]}" | cut -d'|' -f2)
+			while IFS='|' read -r _cs_name _cs_image; do
+				[[ "$_cs_name" =~ ^(redhat|certified|community)-operators-v[0-9]+-[0-9]+(-${_our_host_short})?$ ]] || continue
+				echo "$_applied_names" | grep -qxF "$_cs_name" && continue
+				echo "$_applied_images" | grep -qxF "$_cs_image" || continue
+				if echo "$_sub_sources" | grep -qxF "$_cs_name"; then
+					aba_info "CatalogSource $_cs_name duplicates another CatalogSource but is used by a Subscription, keeping it"
+					continue
+				fi
+				aba_info "Deleting CatalogSource $_cs_name (its catalog is now served under another name)"
+				exec_cmd="oc delete catalogsource $_cs_name -n $ns"
+				aba_debug "Running: $exec_cmd"
+				$exec_cmd || aba_warn "Failed to delete CatalogSource $_cs_name, delete it manually if it is not needed"
+			done <<< "$_existing_cs"
+		fi
+	fi
 
 	aba_info "Showing status of all CatalogSource resources:"
 	exec_cmd="oc get CatalogSource -A"

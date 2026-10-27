@@ -109,6 +109,7 @@ generate_isc() {
 	if grep -q "^ocp_upgrade_to=" "$mirror_conf" 2>/dev/null; then
 		sed -i "s|^ocp_upgrade_to=.*|ocp_upgrade_to=|" "$mirror_conf"
 	fi
+	sed -i "s|^catalog_versions=.*|catalog_versions=|" "$mirror_conf"
 
 	for arg in "$@"; do
 		local key="${arg%%=*}"
@@ -116,7 +117,7 @@ generate_isc() {
 
 		# Mirror.conf keys go to mirror.conf, rest to aba.conf
 		case "$key" in
-			ocp_upgrade_to)
+			ocp_upgrade_to|catalog_versions)
 				if grep -q "^#*${key}=" "$mirror_conf" 2>/dev/null; then
 					sed -i "s|^#*${key}=.*|${key}=${val}|" "$mirror_conf"
 				else
@@ -303,6 +304,49 @@ assert_contains "Has shortestPath" "$_isc" "shortestPath: true"
 assert_contains "Channel is stable-${OCP_MAJOR}" "$_isc" "name: stable-${OCP_MAJOR}"
 
 [[ $VERBOSE -eq 1 ]] && echo "--- ISC ---" && cat "$_isc" && echo "---"
+
+# ============================================================================
+echo ""
+echo "=== Test 6b: Upgrade mode (cross minor), catalog_versions=all ==="
+# ============================================================================
+# By default only the target minor's catalogs are in the ISC. With
+# catalog_versions=all the source minor's catalogs are added too, for a
+# cluster installed on the source minor from the same archive.
+_x_src="4.21.17" _x_tgt="4.22.18"
+if [ -s "$MIRROR_DIR/.index/redhat-operator-index-v4.21" ] && [ -s "$MIRROR_DIR/.index/redhat-operator-index-v4.22" ]; then
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt"
+	assert_contains "Default: target minor redhat catalog" "$_isc" "redhat-operator-index:v4.22$"
+	assert_not_contains "Default: no source minor catalog" "$_isc" "redhat-operator-index:v4.21$"
+
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=all"
+	_x_ops=$(count_operators "$_isc")
+
+	assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
+	assert_contains "Channel is stable-4.22" "$_isc" "name: stable-4.22"
+	assert_contains "Has source minor redhat catalog" "$_isc" "redhat-operator-index:v4.21$"
+	assert_contains "Has target minor redhat catalog" "$_isc" "redhat-operator-index:v4.22$"
+	assert_eq "Two catalogs present" "2" "$(grep -c '^\s*- catalog:' "$_isc" || true)"
+
+	generate_isc "ocp_version=$_x_tgt" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+	_tgt_ops=$(count_operators "$_isc")
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+	_src_ops=$(count_operators "$_isc")
+	assert_eq "Operators of both minors included" "$(( _src_ops + _tgt_ops ))" "$_x_ops"
+
+	_x_cert=$(awk '{print $1}' "$MIRROR_DIR/.index/certified-operator-index-v4.21" | grep -m1 -xFf <(awk '{print $1}' "$MIRROR_DIR/.index/certified-operator-index-v4.22"))
+	_x_comm=$(awk '{print $1}' "$MIRROR_DIR/.index/community-operator-index-v4.21" | grep -m1 -xFf <(awk '{print $1}' "$MIRROR_DIR/.index/community-operator-index-v4.22"))
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=" "ops=web-terminal,${_x_cert},${_x_comm}" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=all"
+	assert_eq "Six catalogs present (3 per minor)" "6" "$(grep -c '^\s*- catalog:' "$_isc" || true)"
+
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=all" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=all"
+	assert_contains "op_sets=all: source minor catalog" "$_isc" "redhat-operator-index:v4.21$"
+	assert_contains "op_sets=all: target minor catalog" "$_isc" "redhat-operator-index:v4.22$"
+	assert_file_valid_yaml_operators "op_sets=all: exactly one operators key" "$_isc"
+
+	[[ $VERBOSE -eq 1 ]] && echo "--- ISC ---" && cat "$_isc" && echo "---"
+else
+	echo "  SKIP: needs v4.21 and v4.22 indexes in $MIRROR_DIR/.index/"
+fi
 
 # ============================================================================
 echo ""
