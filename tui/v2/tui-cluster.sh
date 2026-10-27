@@ -1680,9 +1680,6 @@ _cluster_execute() {
 		[[ -z "$_mirror_disp" || "$_mirror_disp" == ":" ]] && _mirror_disp="(local mirror)"
 	fi
 
-	# Operator count
-	local _op_count="${#OP_BASKET[@]}"
-
 	# Image source display (enrich with details)
 	local _conn_disp="$cl_connection"
 	if [[ -z "$_conn_disp" ]]; then
@@ -1747,9 +1744,6 @@ _cluster_execute() {
 		mac_cnt=$(echo "$cl_macs" | wc -l)
 		summary+="  MACs:         $mac_cnt addresses\n"
 	fi
-	summary+="\n"
-	summary+="  Operators:    $_op_count selected\n"
-
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INSTALL" \
 			--yes-label "$TUI2_BTN_INSTALL" \
