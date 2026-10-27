@@ -830,7 +830,7 @@ mirror_prep_upgrade() {
 	local _existing_target="${ocp_upgrade_to:-}"
 
 	# Fetch upgrade targets reachable from the current version
-	local _channel="${ocp_channel:-fast}"
+	local _channel="${ocp_channel:-stable}"
 	local _zstream="" _next="" _next1=""
 	local _task_id="aba:upgrade-targets:${_current_ver}"
 

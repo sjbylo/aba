@@ -561,6 +561,11 @@ _conno_main() {
 			fi
 			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
+			# Refresh registry vendor (may have changed during mirror install)
+			if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+				_TUI_REG_VENDOR="${reg_vendor:-auto}"
+			fi
 		fi
 
 		# Refresh mirror labels from cached state (non-blocking).
