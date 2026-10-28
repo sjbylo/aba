@@ -167,8 +167,10 @@ if grep -qiE "Day-2|Cluster Management" /tmp/_tui_day2_check.txt; then
 		echo "    [$key] $label"
 	done
 
+	sleep 1
 	tui_press_button "Help"
-	tui_assert_appears "Configuration" "Day-2 help appeared" 5
+	sleep 2
+	tui_assert_appears "Configuration" "Day-2 help appeared" 10
 	tui_assert_contains "OperatorHub" "Help mentions OperatorHub"
 	tui_assert_contains "NTP" "Help mentions NTP"
 	tui_assert_contains "OSUS" "Help mentions OSUS"

@@ -311,17 +311,20 @@ fi
 echo ""
 echo "--- 8. Day-2 Help ---"
 # Ensure we're in the Day-2 menu (may have fallen back to main menu)
+# Need extra wait — prior Escape may leave dialog mid-transition
+sleep 2
 if ! tui_capture | grep -qi "Day-2\|Cluster Management"; then
 	tui_back_to "Actions" 5
 	tui_select_item "Day-2"
-	tui_wait_for "Day-2\|Cluster Management" 10
 fi
+tui_wait_for "Day-2\|Cluster Management" 10
 
 tui_press_button "Help"
-sleep 2
+sleep 3
 tui_screenshot "d2d-08-help"
 
-tui_assert_contains "Configuration\|configuration" "Day-2 help has Configuration section"
+# Verify help actually appeared before asserting content
+tui_assert_appears "Configuration" "Day-2 help appeared" 10
 tui_assert_contains "Lifecycle\|lifecycle" "Day-2 help has Lifecycle section"
 tui_assert_contains "Cleanup\|cleanup\|Clean" "Day-2 help has Cleanup section"
 tui_assert_contains "Upgrade" "Day-2 help mentions upgrade"
