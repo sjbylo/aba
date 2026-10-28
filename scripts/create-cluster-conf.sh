@@ -171,6 +171,11 @@ if [ "$type" = "sno" ]; then
 	replace-value-conf -q -n ingress_vip -v "" -f cluster.conf
 fi
 
+# Append per-role overrides passed via CLI (not in the template, only when set)
+for _var in disk_hint_master disk_hint_worker bond_mode_master bond_mode_worker; do
+	[ -n "${!_var}" ] && replace-value-conf -q -n "$_var" -v "${!_var}" -f cluster.conf
+done
+
 edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift installation" #### don't want error here, just stop || exit 1
 
 exit 0

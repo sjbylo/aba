@@ -480,7 +480,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "image" ]; then
 		shift
 		_img_action="${1:-}"
-		[ -z "$_img_action" ] && aba_abort "Usage: aba image {add|remove|list} [<image:tag> ...]"
+		[ -z "$_img_action" ] && aba_abort "Usage: aba image {add|remove|list|set} [<image:tag> ...]"
 		shift
 
 		# Resolve which images.conf to edit
@@ -491,6 +491,50 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		fi
 
 		case "$_img_action" in
+			set)
+				_set_action="${1:-}"
+				[ -z "$_set_action" ] && aba_abort "Usage: aba image set {add|remove|list} [<set-name>]"
+				shift
+				cd "$ABA_ROOT"
+				case "$_set_action" in
+					add)
+						[ $# -eq 0 ] && aba_abort "Usage: aba image set add <set-name> [version]" \
+							"Available sets: ocp, virt, ai"
+						_set_name="$1"
+						_set_ver="${2:-}"
+						_count=$(image_set_add "$_set_name" "$_set_ver") || \
+							aba_abort "Failed to add image set '$_set_name'"
+						if [ "$_count" -eq 0 ] 2>/dev/null; then
+							aba_warn "Image set '$_set_name' has no images (published list is empty)"
+						else
+							aba_success "Image set '$_set_name' added ($_count images) to images.conf"
+						fi
+						;;
+					remove|rm)
+						[ $# -eq 0 ] && aba_abort "Usage: aba image set remove <set-name>"
+						_set_name="$1"
+						image_set_remove "$_set_name" || \
+							aba_abort "Image set '$_set_name' not found in images.conf"
+						aba_success "Image set '$_set_name' removed from images.conf"
+						;;
+					list|ls)
+						_output=$(image_set_list)
+						if [ -z "$_output" ]; then
+							echo "No image sets available."
+						else
+							printf '%-8s  %-35s  %-10s  %5s  %s\n' "SET" "DESCRIPTION" "STATUS" "IMAGES" "DETAIL"
+							printf '%-8s  %-35s  %-10s  %5s  %s\n' "---" "-----------" "------" "------" "------"
+							echo "$_output" | while IFS=$'\t' read -r name display status count detail; do
+								printf '%-8s  %-35s  %-10s  %5s  %s\n' "$name" "$display" "$status" "$count" "$detail"
+							done
+						fi
+						;;
+					*)
+						aba_abort "Unknown action '$_set_action'. Usage: aba image set {add|remove|list}"
+						;;
+				esac
+				exit 0
+				;;
 			add)
 				[ $# -eq 0 ] && aba_abort "Usage: aba image add <image:tag> [<image:tag> ...]"
 				# Validate all images before creating/modifying files (#1169, #1170)
@@ -563,7 +607,7 @@ for i in imgs:
 				exit 0
 				;;
 			*)
-				aba_abort "Unknown image action '$_img_action'. Usage: aba image {add|remove|list}"
+				aba_abort "Unknown image action '$_img_action'. Usage: aba image {add|remove|list|set}"
 				;;
 		esac
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
@@ -1045,6 +1089,27 @@ for i in imgs:
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		_valid_ipv4 "$2" || aba_abort "invalid starting IP [$2] — expected valid IPv4 (octets 0-255)"
 		_set_cluster_conf starting_ip "$2" "$1"
+		shift 2
+
+	elif [ "$1" = "--disk-hint" -o "$1" = "--disk-hint-master" -o "$1" = "--disk-hint-worker" ]; then
+		_flag="$1"
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $_flag"
+		_parse_disk_hint "$2" >/dev/null || aba_abort "invalid disk hint '$2' after option $_flag"
+		case "$_flag" in
+			--disk-hint)         _set_cluster_conf disk_hint "$2" "$_flag" ;;
+			--disk-hint-master)  _set_cluster_conf disk_hint_master "$2" "$_flag" ;;
+			--disk-hint-worker)  _set_cluster_conf disk_hint_worker "$2" "$_flag" ;;
+		esac
+		shift 2
+	elif [ "$1" = "--bond-mode" -o "$1" = "--bond-mode-master" -o "$1" = "--bond-mode-worker" ]; then
+		_flag="$1"
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $_flag"
+		_validate_bond_mode "$2" || aba_abort "invalid bond mode '$2' after option $_flag — valid: balance-rr active-backup balance-xor broadcast 802.3ad balance-tlb balance-alb"
+		case "$_flag" in
+			--bond-mode)         _set_cluster_conf bond_mode "$2" "$_flag" ;;
+			--bond-mode-master)  _set_cluster_conf bond_mode_master "$2" "$_flag" ;;
+			--bond-mode-worker)  _set_cluster_conf bond_mode_worker "$2" "$_flag" ;;
+		esac
 		shift 2
 
 	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then

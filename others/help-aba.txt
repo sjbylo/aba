@@ -38,6 +38,9 @@ Other commands:
   aba image add <image:tag> ...         # Add extra container images to mirror (stored in images.conf)
   aba image remove <image:tag>          # Remove an image from images.conf
   aba image list                        # List all additional images (from images.conf)
+  aba image set list                    # List available image sets (ocp, virt, ai) and their status
+  aba image set add <set> [version]     # Add a curated image set (e.g. aba image set add virt)
+  aba image set remove <set>            # Remove an image set from images.conf
   aba show-operators                    # List available operators (Red Hat catalog by default)
   aba show-operators --certified        # List certified operators (or --community/--all)
   aba show-operators --refresh          # Re-download catalogs if stale, then list

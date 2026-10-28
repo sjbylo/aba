@@ -49,13 +49,13 @@ disk_hint={{ disk_hint }}			# Optional: tell the installer which disk to use
 					# Leave empty to use the default disk (most common)
 					# Path: /dev/disk/by-id/wwn-0x5000...
 					# Criteria: path=/dev/sda,minSizeGigabytes=200
-					# Per-role: disk_hint_master= disk_hint_worker=
-					# Per-node: disk_hint_node_master1= disk_hint_node_worker2=
+					# Per-role: --disk-hint-master, --disk-hint-worker
+					# Per-node: edit directly, e.g. disk_hint_node_master1=/dev/nvme0n1
 
 bond_mode={{ bond_mode }}			# Optional: bond mode when ports= creates a bond
 					# Leave empty for default (active-backup)
 					# e.g. active-backup, 802.3ad, balance-xor
-					# Per-role: bond_mode_master= bond_mode_worker=
+					# Per-role: --bond-mode-master, --bond-mode-worker
 
 ssh_key_file={{ ssh_key_file }}		# Path to SSH key (recommended)
 					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
