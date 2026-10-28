@@ -2811,6 +2811,39 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 ---
 
+## Operator search should show all catalog matches (cross-catalog dedup)
+
+**Severity:** MEDIUM — UX limitation
+**Status:** Needs design
+**Added:** 2026-10-28
+
+**Problem:** When the user searches for an operator in the TUI (e.g. "healthcheck"), only one result is shown even when the same operator name exists in multiple catalogs (redhat and community). The `_operator_search()` function in `tui-mirror.sh` deduplicates by operator name (`_seen_ops[$op_name]`), so the first catalog match (redhat) wins and the community version is silently hidden.
+
+**Why it matters:** The user expects search to show all matches. The two versions are different operators with different maintainers and images (e.g. "Node Health Check Operator" vs "Node Health Check Operator - Community Edition").
+
+**Why it's not a simple fix:** The problem runs deeper than the search display:
+1. `OP_BASKET` is an associative array keyed by operator name only — no catalog info.
+2. `_persist_operator_basket()` writes operator names to `aba.conf` (via op_sets files) without catalog context.
+3. `_resolve_op()` in `reg-create-imageset-config.sh` independently looks up the catalog with redhat-first priority — so even if the user "selected" the community version, the ISC would place it under the redhat catalog.
+4. The `ops=` and `op_sets=` values in `aba.conf` are flat operator name lists.
+
+**To fix properly, all of these need catalog awareness:**
+- `OP_BASKET` → store `op_name:catalog` pairs (or a separate catalog map)
+- `aba.conf` serialization → encode catalog preference (e.g. `ops=node-healthcheck-operator@community`)
+- `_resolve_op()` → honor the stored catalog instead of doing its own lookup
+- Search display → show all matches with catalog labels
+- View basket → show which catalog each operator comes from
+
+**Current behavior is at least honest:** showing one result accurately reflects that only one version ends up in the ISC regardless of selection. Showing both without honoring the choice would be worse.
+
+**Design questions:**
+- What syntax for catalog-qualified operator names in `aba.conf`? (e.g. `@community` suffix, or separate config key)
+- Should the basket allow the same operator from multiple catalogs? (oc-mirror would mirror both)
+- How does this interact with operator sets (`templates/operator-set-*`) which are just name lists?
+- Should `_resolve_op()` keep its fallback priority when no catalog is specified (backward compat)?
+
+---
+
 ## Should `reg_host` derive its domain from the global `domain`?
 
 **Severity:** LOW — design question
