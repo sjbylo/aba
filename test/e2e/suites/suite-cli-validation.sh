@@ -42,6 +42,8 @@ plan_tests \
     "Bundle output collision" \
     "Debug mode on/off" \
     "images.conf: CLI and merge" \
+    "disk_hint and bond_mode CLI flags" \
+    "image set: CLI add/remove/list" \
     "ABA installer: git and curl"
 
 suite_begin "cli-validation"
@@ -284,6 +286,153 @@ e2e_run "ISC contains additionalImages from images.conf" \
 # --- Cleanup ---
 e2e_run -q "Remove test images.conf files" \
     "rm -f images.conf mirror/images.conf"
+
+test_end 0
+
+# ============================================================================
+# --disk-hint and --bond-mode CLI flags
+# ============================================================================
+test_begin "disk_hint and bond_mode CLI flags"
+
+# --- Global flags during cluster creation ---
+e2e_run -q "Cleanup: remove test cluster dirs" \
+    "rm -rf e2e-dh1 e2e-dh2 e2e-dh3"
+
+e2e_run "Create SNO with --disk-hint and --bond-mode" \
+    "aba cluster --name e2e-dh1 --type sno --starting-ip 10.0.0.100 --disk-hint /dev/sda --bond-mode active-backup --step cluster.conf"
+
+e2e_run "Verify global disk_hint written" \
+    "grep -q '^disk_hint=/dev/sda' e2e-dh1/cluster.conf"
+
+e2e_run "Verify global bond_mode written" \
+    "grep -q '^bond_mode=active-backup' e2e-dh1/cluster.conf"
+
+e2e_run "Verify no per-role clutter in clean create" \
+    "! grep -q '^disk_hint_master=' e2e-dh1/cluster.conf && ! grep -q '^bond_mode_master=' e2e-dh1/cluster.conf"
+
+# --- Per-role flags (append-on-demand) ---
+e2e_run "Create compact with per-role flags only" \
+    "aba cluster --name e2e-dh2 --type compact --starting-ip 10.0.0.100 --disk-hint-master /dev/nvme0n1 --disk-hint-worker /dev/sdb --bond-mode-master 802.3ad --bond-mode-worker balance-xor --step cluster.conf"
+
+e2e_run "Verify per-role disk_hint_master appended" \
+    "grep -q '^disk_hint_master=/dev/nvme0n1' e2e-dh2/cluster.conf"
+
+e2e_run "Verify per-role disk_hint_worker appended" \
+    "grep -q '^disk_hint_worker=/dev/sdb' e2e-dh2/cluster.conf"
+
+e2e_run "Verify per-role bond_mode_master appended" \
+    "grep -q '^bond_mode_master=802.3ad' e2e-dh2/cluster.conf"
+
+e2e_run "Verify per-role bond_mode_worker appended" \
+    "grep -q '^bond_mode_worker=balance-xor' e2e-dh2/cluster.conf"
+
+e2e_run "Verify global disk_hint stays empty when per-role only" \
+    "grep -qP '^disk_hint=(\t| |$)' e2e-dh2/cluster.conf"
+
+# --- Update existing cluster.conf ---
+e2e_run "Update existing cluster.conf with --disk-hint" \
+    "aba -d e2e-dh2 --disk-hint /dev/vda --validate"
+
+e2e_run "Verify updated disk_hint" \
+    "grep -q '^disk_hint=/dev/vda' e2e-dh2/cluster.conf"
+
+# --- Combined global + per-role ---
+e2e_run "Create standard with global + per-role" \
+    "aba cluster --name e2e-dh3 --type standard --starting-ip 10.0.0.100 --disk-hint /dev/sda --disk-hint-master /dev/nvme0n1 --bond-mode active-backup --bond-mode-worker balance-tlb --step cluster.conf"
+
+e2e_run "Verify combined: global disk_hint" \
+    "grep -q '^disk_hint=/dev/sda' e2e-dh3/cluster.conf"
+
+e2e_run "Verify combined: per-role disk_hint_master" \
+    "grep -q '^disk_hint_master=/dev/nvme0n1' e2e-dh3/cluster.conf"
+
+e2e_run "Verify combined: per-role bond_mode_worker" \
+    "grep -q '^bond_mode_worker=balance-tlb' e2e-dh3/cluster.conf"
+
+# --- Criteria-style disk hint ---
+e2e_run "Criteria-style disk_hint" \
+    "aba -d e2e-dh1 --disk-hint 'model=VBOX,minSizeGigabytes=200' --validate"
+
+e2e_run "Verify criteria disk_hint written" \
+    "grep -q '^disk_hint=model=VBOX,minSizeGigabytes=200' e2e-dh1/cluster.conf"
+
+# --- Validation: invalid bond mode rejected ---
+e2e_run_must_fail "Reject invalid bond mode" \
+    "aba -d e2e-dh1 --bond-mode nonsense --validate"
+
+# --- Validation: missing argument rejected ---
+e2e_run_must_fail "Reject missing --disk-hint argument" \
+    "aba -d e2e-dh1 --disk-hint"
+
+e2e_run_must_fail "Reject missing --bond-mode argument" \
+    "aba -d e2e-dh1 --bond-mode"
+
+# --- Cleanup ---
+e2e_run -q "Cleanup test cluster dirs" \
+    "rm -rf e2e-dh1 e2e-dh2 e2e-dh3"
+
+test_end 0
+
+# ============================================================================
+# image set: CLI add/remove/list
+# ============================================================================
+test_begin "image set: CLI add/remove/list"
+
+# Save original images.conf
+e2e_run -q "Backup images.conf" \
+    "[ -f images.conf ] && cp images.conf images.conf.e2e-bak || true"
+
+# --- list ---
+e2e_run "image set list shows all 3 sets" \
+    "aba image set list | grep -q 'ocp' && aba image set list | grep -q 'virt' && aba image set list | grep -q 'ai'"
+
+# --- add virt ---
+e2e_run "image set add virt" \
+    "aba image set add virt 2>&1 | grep -qi 'added.*images'"
+
+e2e_run "Verify virt marker in images.conf" \
+    "grep -q '^# image-set: virt' images.conf"
+
+e2e_run "Verify virt contains expected image" \
+    "grep -q 'rhel-guest-image' images.conf"
+
+e2e_run "image set list shows virt as added" \
+    "aba image set list | grep 'virt' | grep -q 'added'"
+
+# --- re-add (replace, not duplicate) ---
+e2e_run "image set re-add virt replaces cleanly" \
+    "aba image set add virt"
+
+e2e_run "Only one virt marker block" \
+    "[ \$(grep -c '^# image-set: virt' images.conf) -eq 1 ]"
+
+# --- remove ---
+e2e_run "image set remove virt" \
+    "aba image set remove virt 2>&1 | grep -qi 'removed'"
+
+e2e_run "Verify virt marker gone" \
+    "! grep -q '^# image-set: virt' images.conf"
+
+# --- error cases ---
+e2e_run_must_fail "Reject image set add bogus" \
+    "aba image set add bogus"
+
+e2e_run_must_fail "Reject image set remove bogus" \
+    "aba image set remove bogus"
+
+e2e_run_must_fail "Reject image set with no action" \
+    "aba image set"
+
+e2e_run_must_fail "Reject image set add with no name" \
+    "aba image set add"
+
+# --- add ocp set ---
+e2e_run "image set add ocp" \
+    "aba image set add ocp 2>&1 | grep -qi 'added'"
+
+# --- Restore ---
+e2e_run -q "Restore images.conf" \
+    "if [ -f images.conf.e2e-bak ]; then mv images.conf.e2e-bak images.conf; else rm -f images.conf; fi"
 
 test_end 0
 
