@@ -287,7 +287,7 @@ e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Remove local $_DOCKER_MIRROR dir" "rm -rf $_DOCKER_MIRROR"
 
 e2e_run "Registry container gone after stateless uninstall" \
-	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
+	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep -E '^registry(-[0-9]+)?\$'"
 
 e2e_run "Data directory removed" \
 	"_essh $DIS_HOST 'test ! -d ~/docker-reg'"
@@ -300,7 +300,7 @@ e2e_run "Pre-clean: remove stale iptables rules for port $_DOCKER_NEG_PORT on di
 # If a registry container still exists here, the previous test (Test C: uninstall
 # with missing state) has a bug -- it should have cleaned it up.  Verify, don't sweep.
 e2e_run "Verify no stale registry container on disN before Test B" \
-	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
+	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep -E '^registry(-[0-9]+)?\$'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
 e2e_add_to_mirror_cleanup "$PWD/$_DOCKER_NEG_MIRROR"

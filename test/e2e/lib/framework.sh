@@ -859,7 +859,7 @@ e2e_assert_registry_removed() {
 	if echo "$_containers" | grep -qE 'quay-app|quay-redis|quay-postgres'; then
 		_stale+="  Quay containers still present on $_target"$'\n'
 	fi
-	if echo "$_containers" | grep -q '^registry$'; then
+	if echo "$_containers" | grep -qE '^registry(-[0-9]+)?$'; then
 		_stale+="  Docker registry container still present on $_target"$'\n'
 	fi
 
