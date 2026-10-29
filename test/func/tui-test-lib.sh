@@ -262,6 +262,122 @@ tui_wait_isc_done() {
 	return 1
 }
 
+# --- Internet / mode detection ---
+
+# Detected TUI mode: DISCO, CONNO, or DIRECT (set by tui_detect_mode)
+_TUI_DETECTED_MODE=""
+
+# Detect the TUI mode from the backtitle after startup.
+# Sets _TUI_DETECTED_MODE to DISCO, CONNO, or DIRECT.
+# Usage: tui_detect_mode  (call after splash screen is past)
+tui_detect_mode() {
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Fully Disconnected"; then
+		_TUI_DETECTED_MODE="DISCO"
+	elif echo "$_scr" | grep -qi "Fully Connected"; then
+		_TUI_DETECTED_MODE="DIRECT"
+	else
+		_TUI_DETECTED_MODE="CONNO"
+	fi
+	echo "  TUI mode detected: $_TUI_DETECTED_MODE"
+}
+
+# Check if the TUI is in disconnected mode.
+# Usage: if tui_is_disco; then ... fi
+tui_is_disco() {
+	[[ "$_TUI_DETECTED_MODE" == "DISCO" ]]
+}
+
+# Check if internet is available in the TUI (not DISCO).
+# Usage: if tui_has_internet; then ... fi
+tui_has_internet() {
+	[[ "$_TUI_DETECTED_MODE" != "DISCO" ]]
+}
+
+# Dismiss startup dialogs that appear before the main menu.
+# Handles: splash screen, "Internet Access Required" error, "Bundle on
+# connected host" mode selection, bundle info/payload summary.
+# Returns 0 when the main menu (Actions) is reached, 1 on timeout.
+# Usage: tui_dismiss_startup [timeout_seconds]
+tui_dismiss_startup() {
+	local timeout="${1:-60}"
+	local i _scr
+
+	for (( i=0; i<timeout*2; i++ )); do
+		if ! tui_session_alive; then
+			echo "  SESSION DEAD during startup" >&2
+			return 1
+		fi
+		_scr=$(tui_capture)
+
+		# Main menu reached
+		if echo "$_scr" | grep -qi "Actions\|── Registry ──\|── Cluster ──\|── Mirror ──"; then
+			return 0
+		fi
+
+		# Splash screen — press Enter
+		if echo "$_scr" | grep -qi "OpenShift Installer\|Continue.*Exit\|ABA.*OpenShift"; then
+			tui_keys Enter
+			sleep 3
+			continue
+		fi
+
+		# "Internet Access Required" error — TUI will exit after dismiss
+		if echo "$_scr" | grep -qi "Internet Access Required\|Cannot access"; then
+			echo "  WARNING: Internet Access Required dialog appeared" >&2
+			tui_screenshot "startup-no-internet"
+			tui_keys Enter
+			sleep 2
+			return 1
+		fi
+
+		# "Bundle on connected host" — select Fully Disconnected (default)
+		if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
+			tui_keys Enter
+			sleep 3
+			continue
+		fi
+
+		# Bundle info / payload summary — dismiss
+		if echo "$_scr" | grep -qi "Install Bundle\|payload summary\|Disconnected.*payload"; then
+			tui_keys Enter
+			sleep 3
+			continue
+		fi
+
+		sleep 0.5
+	done
+	echo "  TIMEOUT: main menu not reached in ${timeout}s" >&2
+	tui_screenshot "startup-timeout"
+	return 1
+}
+
+# Skip a test (with PASS) when it requires internet but TUI is in DISCO mode.
+# Usage: tui_skip_if_disco "test description"  → returns 0 if skipped
+tui_skip_if_disco() {
+	local desc="$1"
+	if tui_is_disco; then
+		echo "  ~ SKIP: $desc (DISCO mode — no internet)"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		return 0
+	fi
+	return 1
+}
+
+# Skip a test when internet is required but unavailable.
+# Checks _TUI_DETECTED_MODE; if DISCO, skips with message and increments PASS.
+# Usage: tui_require_internet "test description" || continue
+tui_require_internet() {
+	local desc="$1"
+	if tui_is_disco; then
+		echo "  ~ SKIP: $desc (requires internet, TUI is in DISCO mode)"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		return 1
+	fi
+	return 0
+}
+
 # --- Session management ---
 
 # Clear failed run_once tasks on the test host using ABA's native mechanism.
