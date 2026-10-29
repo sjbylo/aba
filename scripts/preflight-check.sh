@@ -45,8 +45,7 @@ preflight_check_dns() {
 		_preflight_errors=$((_preflight_errors + 1))
 		# Undo the warnings that were already counted, replace with single error
 		_preflight_warnings=$((_preflight_warnings - failed))
-		aba_warn "All $total DNS server(s) are unreachable!" \
-			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
+		aba_error "All $total DNS server(s) are unreachable!"
 	fi
 
 	# Verify cluster DNS can resolve the registry hostname (if mirror-based)
@@ -71,6 +70,30 @@ preflight_check_dns() {
 		if [ "$_resolved" = 0 ]; then
 			aba_warn "No cluster DNS server resolved registry '$_reg_host' from this host"
 			_preflight_warnings=$((_preflight_warnings + 1))
+			# Help the user understand the discrepancy: bastion may resolve
+			# the registry via its own DNS/hosts, but cluster nodes won't.
+			local _local_ip _bastion_ip
+			_local_ip=$(getent hosts "$_reg_host" 2>/dev/null | awk '{print $1}' | head -1) || true
+			_bastion_ip=$(hostname -I 2>/dev/null | awk '{print $1}') || true
+			if [ -n "$_local_ip" ] && [ -n "$_bastion_ip" ]; then
+				aba_info "'$_reg_host' resolves locally (-> $_bastion_ip) but not via cluster DNS ($(echo $servers | tr ' ' ','))"
+				if [ -f /etc/dnsmasq.d/aba-upstream.conf ]; then
+					# ABA auto-DNS is active — we know bastion runs dnsmasq
+					aba_info "ABA auto-DNS (dnsmasq) is active and resolves '$_reg_host' on this host"
+					aba_info "To use it, set dns_servers=$_bastion_ip in cluster.conf"
+					aba_info "If you intend to use $(echo $servers | tr ' ' ','), add a DNS record for '$_reg_host' there"
+				else
+					# No auto-DNS — probe whether bastion serves DNS
+					local _bastion_dns
+					_bastion_dns=$(dig +short +time=2 +tries=1 "@$_bastion_ip" "$_reg_host" 2>/dev/null \
+						| grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1) || true
+					if [ -n "$_bastion_dns" ]; then
+						aba_info "Bastion runs DNS and resolves '$_reg_host' — set dns_servers=$_bastion_ip in cluster.conf"
+					else
+						aba_info "Add a DNS record for '$_reg_host' to the cluster DNS server at $(echo $servers | tr ' ' ',')"
+					fi
+				fi
+			fi
 		fi
 	fi
 }
@@ -122,8 +145,7 @@ preflight_check_ntp() {
 	if [ $failed -eq $total ]; then
 		_preflight_errors=$((_preflight_errors + 1))
 		_preflight_warnings=$((_preflight_warnings - failed))
-		aba_warn "All $total NTP server(s) are unreachable!" \
-			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
+		aba_error "All $total NTP server(s) are unreachable!"
 	fi
 }
 
@@ -178,7 +200,7 @@ preflight_check_ip_conflicts() {
 			if [ -z "$iface" ]; then
 				aba_debug "Could not determine interface for $ip, falling back to ping"
 				if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
-					aba_warn "IP conflict: $ip is already in use!"
+					aba_error "IP conflict: $ip is already in use!"
 					_preflight_errors=$((_preflight_errors + 1))
 					conflicts=$((conflicts + 1))
 				else
@@ -190,7 +212,7 @@ preflight_check_ip_conflicts() {
 			aba_debug "Using interface $iface for arping $ip"
 			arping_err=$(arping -c 1 -w 2 -I "$iface" "$ip" 2>&1 >/dev/null) && arping_rc=0 || arping_rc=$?
 			if [ $arping_rc -eq 0 ]; then
-				aba_warn "IP conflict: $ip is already in use!"
+				aba_error "IP conflict: $ip is already in use!"
 				_preflight_errors=$((_preflight_errors + 1))
 				conflicts=$((conflicts + 1))
 			elif echo "$arping_err" | grep -qi "permission\|operation not permitted\|setuid\|socket\|invalid option\|device" 2>/dev/null; then
@@ -199,7 +221,7 @@ preflight_check_ip_conflicts() {
 				aba_warn "arping failed ($arping_err), falling back to ping"
 				ip_check_method="ping"
 				if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
-					aba_warn "IP conflict: $ip is already in use!"
+					aba_error "IP conflict: $ip is already in use!"
 					_preflight_errors=$((_preflight_errors + 1))
 					conflicts=$((conflicts + 1))
 				else
@@ -210,7 +232,7 @@ preflight_check_ip_conflicts() {
 			fi
 		else
 			if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
-				aba_warn "IP conflict: $ip is already in use!"
+				aba_error "IP conflict: $ip is already in use!"
 				_preflight_errors=$((_preflight_errors + 1))
 				conflicts=$((conflicts + 1))
 			else

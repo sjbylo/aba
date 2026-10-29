@@ -114,7 +114,11 @@ opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 aba_debug "Running openshift-install agent create image (opts=$opts)"
 echo_yellow "[ABA] Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "
-if ! $openshift_install_mirror agent create image --dir $ASSETS_DIR $opts; then
+# Serialize ISO generation via flock: openshift-install uses ~/.cache/agent/
+# with no internal locking, so parallel runs corrupt the shared cache.
+mkdir -p ~/.cache/agent
+if ! flock ~/.cache/agent/.aba-lock \
+	$openshift_install_mirror agent create image --dir $ASSETS_DIR $opts; then
 	aba_debug "openshift-install failed - removing incomplete ISO"
 	rm -f $ASSETS_DIR/agent.*.iso
 
