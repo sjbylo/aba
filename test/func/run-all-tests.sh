@@ -99,6 +99,7 @@ unit_tests=(
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
 	test/func/test-install-stamp.sh
+	test/func/test-install-guard-stale-vms.sh
 	test/func/test-oc-mirror-url.sh
 	test/func/test-container-auth-merge.sh
 	test/func/test-image-digest.sh
