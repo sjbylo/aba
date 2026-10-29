@@ -21,19 +21,30 @@ mkdir -p "$_TUI_RUN_DIR"
 
 # --- Core helpers ---
 
-# Check if the tmux session is still alive
+# Run an SSH command with retry.  On first failure, wait and retry once.
+# This prevents transient SSH drops from being misreported as "SESSION DEAD".
+# The tmux session runs on the remote host and survives SSH disconnects.
+_tui_ssh_retry() {
+	$_TUI_SSH "$@" 2>/dev/null && return 0
+	sleep 2
+	$_TUI_SSH "$@" 2>/dev/null
+}
+
+# Check if the tmux session is still alive on the remote host.
+# Retries once on SSH failure — a dropped SSH connection does NOT mean
+# the tmux session died; we just need to reconnect.
 tui_session_alive() {
-	$_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null
+	_tui_ssh_retry "tmux has-session -t $_TUI_SESSION 2>/dev/null"
 }
 
 # Capture the current tmux pane content
 tui_capture() {
-	$_TUI_SSH "tmux capture-pane -t $_TUI_SESSION -p" 2>/dev/null
+	_tui_ssh_retry "tmux capture-pane -t $_TUI_SESSION -p"
 }
 
 # Send keys to the tmux session
 tui_keys() {
-	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION $*" 2>/dev/null
+	_tui_ssh_retry "tmux send-keys -t $_TUI_SESSION $*"
 }
 
 # Wait for a pattern to appear on screen (polls every 0.5s)
@@ -45,8 +56,8 @@ tui_wait_for() {
 	local i
 	for (( i=0; i<timeout*2; i++ )); do
 		if ! tui_session_alive; then
-			echo "  SESSION DEAD waiting for: $pattern" >&2
-			tui_screenshot "DEAD-$(date +%H%M%S)"
+			echo "  TMUX SESSION GONE waiting for: $pattern (SSH or tmux exited)" >&2
+			tui_screenshot "GONE-$(date +%H%M%S)"
 			return 1
 		fi
 		if tui_capture | grep -qi "$pattern"; then
@@ -67,14 +78,15 @@ tui_confirm_yes() {
 	tui_keys Enter
 }
 
-# Dismiss post-command result screens (terminal, progress, or TUI mode).
+# Dismiss post-command result screens (terminal, progress, or confirm_and_execute).
 # Terminal mode: "Press ENTER to continue" or "Press R to retry, ENTER to return"
 # Progress mode: "All steps completed successfully" with Done button
+# confirm_and_execute: "Success" msgbox with OK button
 # Returns 0 if a prompt was found and dismissed, 1 otherwise.
 tui_dismiss_result() {
 	local _scr
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded"; then
+	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded\|Success"; then
 		tui_keys Enter
 		sleep 2
 		return 0
@@ -199,7 +211,7 @@ tui_back_to() {
 	local i
 	for (( i=0; i<max; i++ )); do
 		if ! tui_session_alive; then
-			echo "  WARNING: session dead while navigating back to '$pattern'" >&2
+			echo "  WARNING: tmux session gone while navigating back to '$pattern'" >&2
 			return 1
 		fi
 		if tui_capture | grep -qi "$pattern"; then
@@ -263,10 +275,13 @@ tui_clear_failed_tasks() {
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
-	$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; pkill -9 -f 'dialog --' 2>/dev/null; true"
-	sleep 1
-	# Verify no stale TUI left — kill again if needed
-	$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; true"
+	# Only kill stale processes if they exist
+	if $_TUI_SSH "pgrep -f abatui" >/dev/null 2>&1; then
+		$_TUI_SSH "pkill -9 -f abatui; pkill -9 -f 'dialog --'; true" 2>/dev/null
+		sleep 1
+		# Second kill in case of respawn
+		$_TUI_SSH "pgrep -f abatui >/dev/null 2>&1 && pkill -9 -f abatui; true" 2>/dev/null
+	fi
 	tui_clear_failed_tasks
 	sleep 0.5
 	$_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT '$cmd'"
