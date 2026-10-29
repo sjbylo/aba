@@ -144,7 +144,7 @@ aba -y -d "$MIRROR_NAME" install \
 
 if [ "$inst_rc" -eq 0 ] && [ -f "$MIRROR_DIR/.available" ]; then
 	_ok "docker install succeeded (.available set)"
-elif podman ps --format '{{.Names}}' | grep -q '^registry$' && [ -s "$REGCREDS_DIR/state.sh" ]; then
+elif podman ps --format '{{.Names}}' | grep -qE "^registry(-${PORT})?$" && [ -s "$REGCREDS_DIR/state.sh" ]; then
 	# Post-verify can fail on some hosts; runtime+state is enough for uninstall tests
 	touch "$MIRROR_DIR/.available"
 	_ok "docker install runtime up (make verify flaky; continuing)"
@@ -154,7 +154,7 @@ fi
 
 _assert ".available present after install" test -f "$MIRROR_DIR/.available"
 _assert "state.sh present after install" test -s "$REGCREDS_DIR/state.sh"
-_assert "registry container running" bash -c "podman ps --format '{{.Names}}' | grep -q '^registry$'"
+_assert "registry container running" bash -c "podman ps --format '{{.Names}}' | grep -qE '^registry(-${PORT})?$'"
 _assert "data dir exists" test -d "$DATA_DIR/docker-reg"
 
 REG_ROOT=$(grep '^reg_root=' "$REGCREDS_DIR/state.sh" 2>/dev/null | cut -d= -f2-)
@@ -170,7 +170,7 @@ fi
 
 _assert_not ".available removed after uninstall" test -f "$MIRROR_DIR/.available"
 _assert_not "state.sh cleared after uninstall" test -s "$REGCREDS_DIR/state.sh"
-_assert_not "registry container gone" bash -c "podman ps -a --format '{{.Names}}' | grep -q '^registry$'"
+_assert_not "registry container gone" bash -c "podman ps -a --format '{{.Names}}' | grep -qE '^registry(-${PORT})?$'"
 _assert_not "data dir removed (--delete-data)" test -d "$REG_ROOT"
 
 # =============================================================================
@@ -278,7 +278,7 @@ aba -y -d "$MIRROR_NAME" install \
 
 if [ "$inst_rc" -eq 0 ] && [ -f "$MIRROR_DIR/.available" ]; then
 	_ok "tilde install succeeded (.available set)"
-elif podman ps --format '{{.Names}}' | grep -q '^registry$' && [ -s "$REGCREDS_DIR/state.sh" ]; then
+elif podman ps --format '{{.Names}}' | grep -qE "^registry(-${PORT})?$" && [ -s "$REGCREDS_DIR/state.sh" ]; then
 	touch "$MIRROR_DIR/.available"
 	_ok "tilde install runtime up (make verify flaky; continuing)"
 else
@@ -313,7 +313,7 @@ aba -y -d "$MIRROR_NAME" install \
 	--reg-port "$PORT" \
 	--data-dir "~/$TILDE_SUBDIR" 2>&1 | tail -15 || inst_rc=$?
 
-if [ "$inst_rc" -eq 0 ] || podman ps --format '{{.Names}}' | grep -q '^registry$'; then
+if [ "$inst_rc" -eq 0 ] || podman ps --format '{{.Names}}' | grep -qE "^registry(-${PORT})?$"; then
 	[ ! -f "$MIRROR_DIR/.available" ] && touch "$MIRROR_DIR/.available"
 	_ok "fallback setup: docker installed"
 else
@@ -321,7 +321,7 @@ else
 fi
 
 _assert "data dir exists before fallback test" test -d "$TILDE_DATA_DIR/docker-reg"
-_assert "registry container running" bash -c "podman ps --format '{{.Names}}' | grep -q '^registry$'"
+_assert "registry container running" bash -c "podman ps --format '{{.Names}}' | grep -qE '^registry(-${PORT})?$'"
 
 echo "  Deleting state.sh to force fallback path ..."
 rm -rf "$REGCREDS_DIR"
@@ -335,7 +335,7 @@ else
 	_bad "fallback uninstall exit 0 (rc=$UNINST_RC)"
 fi
 
-_assert_not "container gone after fallback uninstall" bash -c "podman ps -a --format '{{.Names}}' | grep -q '^registry$'"
+_assert_not "container gone after fallback uninstall" bash -c "podman ps -a --format '{{.Names}}' | grep -qE '^registry(-${PORT})?$'"
 _assert_not "data dir removed after fallback --delete-data" test -d "$TILDE_DATA_DIR/docker-reg"
 rm -rf "$TILDE_DATA_DIR" 2>/dev/null || true
 rm -rf "$REGCREDS_DIR" 2>/dev/null || true
