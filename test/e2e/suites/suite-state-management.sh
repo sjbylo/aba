@@ -319,7 +319,9 @@ e2e_run "Verify remote tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify
 e2e_run "Uninstall remote tilde registry" \
 	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall --delete-data"
 e2e_run "Assert: remote tilde registry removed" "e2e_assert_registry_removed"
-e2e_run "Remote: cleanup $_TILDE_REMOTE_USER data dir" \
+e2e_run "Remote: --delete-data removed data dir on disN" \
+	"! _essh $_TILDE_REMOTE_USER@$DIS_HOST \"test -d ~/$_TILDE_REMOTE_SUBDIR/docker-reg\""
+e2e_run "Remote: cleanup $_TILDE_REMOTE_USER parent dir" \
 	"_essh $_TILDE_REMOTE_USER@$DIS_HOST \"rm -rf ~/$_TILDE_REMOTE_SUBDIR\""
 
 # --- Local install with data_dir=~/subdir ---
@@ -350,8 +352,10 @@ e2e_run "Verify local tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
 
 e2e_run "Uninstall local tilde registry" \
 	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall --delete-data"
+e2e_run "Local: --delete-data removed data dir" \
+	"test ! -d \$HOME/$_TILDE_LOCAL_SUBDIR/docker-reg"
 
-e2e_run "Local: cleanup data dir" "rm -rf ~/$_TILDE_LOCAL_SUBDIR"
+e2e_run "Local: cleanup parent dir" "rm -rf ~/$_TILDE_LOCAL_SUBDIR"
 e2e_run "Cleanup tilde mirror dir" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR"
 
