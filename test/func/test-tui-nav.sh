@@ -148,17 +148,5 @@ tui_screenshot "nav-05-relaunch"
 # ============================================================================
 echo ""
 echo "--- 6. Cleanup ---"
-tui_stop
-sleep 1
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	echo "$_strays" | sed 's/^/      /'
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
+tui_cleanup
 tui_summary

@@ -696,28 +696,11 @@ echo "  Phase 7: Cleanup"
 echo "================================================================"
 echo ""
 
-# Dismiss any dialog and return to menu
-tui_keys Enter; sleep 2
-tui_keys Escape; sleep 1
-tui_back_to "Registry\|Install\|Load\|Actions" 5
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_SSH_DISCO "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-
-_strays=$($_SSH_DISCO "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_SSH_DISCO "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
+# Dismiss any lingering dialog before cleanup
+tui_dismiss_result
+tui_cleanup
 
 # Clean up bundle on conno
 $_SSH_CONNO "rm -f $_BUNDLE_DEST 2>/dev/null" || true
 
-tui_stop 2>/dev/null
 tui_summary

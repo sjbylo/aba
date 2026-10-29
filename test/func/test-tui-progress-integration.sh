@@ -382,16 +382,18 @@ echo ""
 echo "--- Cleanup ---"
 $_TUI_SSH "rm -f /tmp/aba-progress-test.sh /tmp/aba-progress-test-fail.sh \
 	/tmp/aba-progress-test-slow.sh /tmp/aba-progress-wrapper.sh" 2>/dev/null
-$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
+# Kill tmux session first, then check for strays
+tui_stop
+sleep 2
 _strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui|progress-wrapper' | grep -v grep" 2>/dev/null || true)
 if [ -z "$_strays" ]; then
 	echo "  ✓ PASS: No stray processes"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ✗ FAIL: Stray processes"
+	echo "  ✗ FAIL: Stray processes after cleanup:"
+	echo "$_strays" | sed 's/^/      /'
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f 'progress-wrapper\|progress-test\|abatui' 2>/dev/null; true"
+	$_TUI_SSH "pkill -9 -f 'progress-wrapper\|progress-test\|abatui\|dialog --' 2>/dev/null; true"
+	sleep 1
 fi
-
-tui_stop 2>/dev/null
 tui_summary
