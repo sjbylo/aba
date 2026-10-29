@@ -1723,6 +1723,22 @@ if [ "$cur_target" ]; then
 			# without invoking make (avoids cascading dependency rebuilds
 			# that could recreate VMs on an already-running cluster).
 			if [ -f .install-complete ]; then
+				# On VM platforms, verify VMs still exist. If they were
+				# deleted outside ABA, the markers are stale and the user
+				# would otherwise be sent in circles (install→startup→install).
+				_install_vms_gone=
+				case "${platform:-}" in
+					vmw|kvm)
+						_vm_rc=0
+						$ABA_ROOT/scripts/${platform}-exists.sh 2>/dev/null || _vm_rc=$?
+						[ "$_vm_rc" -eq 1 ] && _install_vms_gone=1
+						;;
+				esac
+				if [ "$_install_vms_gone" ]; then
+					aba_warn "Cluster was installed but VMs no longer exist (deleted outside ABA?)."
+					aba_info "To re-install: 'aba -d $(basename "$PWD") clean' then 'aba -d $(basename "$PWD") install'."
+					exit 0
+				fi
 				if [ -f .shutdown.log ]; then
 					aba_info "Cluster is installed but shut down. Run 'aba -d $(basename "$PWD") startup' to power it on."
 				else
