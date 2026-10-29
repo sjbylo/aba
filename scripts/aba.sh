@@ -235,7 +235,7 @@ if [ "$(basename "$0")" = "abatui" ]; then
 	exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
 fi
 
-source $ABA_ROOT/scripts/include_all.sh
+source "$ABA_ROOT/scripts/include_all.sh"
 
 # Redact sensitive flags (--reg-password) from argument strings before logging.
 _redact_args() {
@@ -308,7 +308,7 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	# Create images.conf from template (if not already present)
 	[ ! -f "$ABA_ROOT/images.conf" ] && cp "$ABA_ROOT/templates/images.conf" "$ABA_ROOT/images.conf"
 else
-	source <(cd $ABA_ROOT && normalize-aba-conf)
+	source <(cd "$ABA_ROOT" && normalize-aba-conf)
 	# Only auto-fill empty network values in bundle mode (on internal/disconnected network).
 	# For pre-created bundles, aba.conf will exist but network values will be empty ... so attempt to fill them in.
 	if [ -f "$ABA_ROOT/.bundle" ]; then
@@ -327,7 +327,7 @@ else
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
-source <(cd $ABA_ROOT && normalize-aba-conf)
+source <(cd "$ABA_ROOT" && normalize-aba-conf)
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
@@ -619,7 +619,7 @@ for i in imgs:
 			opt_out="--out -"
 		else
 			echo "$1" | grep -q "^-" && aba_abort "in parsing --out path argument"
-			[ "$1" ] && [ ! -d $(dirname $1) ] && aba_abort "directory: [$(dirname $1)] incorrect or missing!"
+			[ "$1" ] && [ ! -d "$(dirname "$1")" ] && aba_abort "directory: [$(dirname "$1")] incorrect or missing!"
 			[ -f "$1.tar" ] && aba_abort "install bundle file [$1.tar] already exists!"
 
 			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
@@ -1832,7 +1832,7 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 # Change to the top level repo directory
-cd $ABA_ROOT
+cd "$ABA_ROOT"
 
 aba_debug "Running aba interactive mode ..."
 

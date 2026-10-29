@@ -53,25 +53,25 @@ echo
 
 # FIXME: Use $config above? ###
 #eval `scripts/cluster-config.sh || exit 1`
-eval "$config || exit 1"
+eval "$config" || exit 1
 aba_debug "Cluster configuration loaded: CLUSTER_NAME=$CLUSTER_NAME BASE_DOMAIN=$BASE_DOMAIN"
 
-if [ -d $ASSETS_DIR ]; then
+if [ -d "$ASSETS_DIR" ]; then
 	aba_debug "Backing up existing $ASSETS_DIR directory"
 	aba_info "Backing up previous $ASSETS_DIR' dir to '$ASSETS_DIR.backup':"
 
-	rm -rf $ASSETS_DIR.backup
-	cp -rp $ASSETS_DIR $ASSETS_DIR.backup
+	rm -rf "$ASSETS_DIR.backup"
+	cp -rp "$ASSETS_DIR" "$ASSETS_DIR.backup"
 fi
 
 aba_info Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
 aba_debug "Removing old $ASSETS_DIR and creating fresh directory"
 
-rm -rf $ASSETS_DIR 
-mkdir -p $ASSETS_DIR
+rm -rf "$ASSETS_DIR"
+mkdir -p "$ASSETS_DIR"
 
 aba_debug "Copying install-config.yaml and agent-config.yaml to $ASSETS_DIR"
-cp install-config.yaml agent-config.yaml $ASSETS_DIR
+cp install-config.yaml agent-config.yaml "$ASSETS_DIR"
 
 # Copy extra manifests into the ISO if present in openshift/ or manifests/ directories.
 # openshift-install applies these during cluster bootstrap.
