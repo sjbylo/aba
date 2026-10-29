@@ -1,0 +1,14 @@
+# Name: Storage Vendor CSI Drivers
+# Select this set, then remove the vendors you don't use.
+# For Red Hat OpenShift Data Foundation (ODF), use the 'odf' operator set instead.
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+dell-csm-operator-certified        # Dell Container Storage Modules
+trident-operator                   # NetApp Trident CSI driver
+ibm-block-csi-operator             # IBM Block Storage
+hpe-csi-operator                   # HPE CSI
+hspc-operator                      # Hitachi Storage Plug-in for Containers (HPE)
+portworx-certified                 # Portworx Enterprise
+portworx-multi-cluster-certified   # Portworx Multi-Cluster replication
+
+cincinnati-operator                # Included for easier cluster upgrades
