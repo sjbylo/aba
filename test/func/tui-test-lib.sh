@@ -8,7 +8,8 @@
 
 _TUI_HOST="${TUI_TEST_HOST:-conno.example.com}"
 _TUI_SESSION="${TUI_TEST_SESSION:-tui-test}"
-_TUI_SSH="ssh -F $HOME/.aba/ssh.conf $_TUI_HOST"
+_TUI_SSH_CFG="$HOME/.aba/ssh.conf"
+_TUI_SSH="ssh -F $_TUI_SSH_CFG $_TUI_HOST"
 _TUI_PASS=0
 _TUI_FAIL=0
 _TUI_WIDTH=160
@@ -376,6 +377,53 @@ tui_require_internet() {
 		return 1
 	fi
 	return 0
+}
+
+# --- Common patterns (DRY helpers) ---
+
+# Deploy latest TUI + script code to the test host.
+# Replaces the 3-line scp block repeated in every test file.
+# Usage: tui_deploy_code
+tui_deploy_code() {
+	scp -q -F "$_TUI_SSH_CFG" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
+	scp -q -F "$_TUI_SSH_CFG" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
+	echo "  Code deployed"
+}
+
+# Start TUI, dismiss startup dialogs, detect mode, land on main menu.
+# Combines: tui_start + splash dismiss + mode detection.
+# On failure (e.g. "Internet Access Required" exit), stops TUI and returns 1.
+# Usage: tui_start_to_menu [start_cmd] || { tui_summary; exit 1; }
+tui_start_to_menu() {
+	local cmd="${1:-cd ~/aba && abatui}"
+	tui_start "$cmd"
+	tui_dismiss_startup 60 || { tui_stop; return 1; }
+	tui_detect_mode
+	return 0
+}
+
+# Dismiss a cluster selection dialog if present.
+# Many TUI actions prompt "Select cluster" when multiple clusters exist.
+# Usage: tui_dismiss_cluster_select
+tui_dismiss_cluster_select() {
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "select.*cluster"; then
+		tui_keys Enter
+		tui_wait_gone "select.*cluster" 5
+	fi
+}
+
+# Dismiss an execution mode dialog if present.
+# TUI shows "Run in Terminal" / "Run in TUI" before certain commands.
+# Usage: tui_dismiss_exec_mode
+tui_dismiss_exec_mode() {
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Terminal\|Execution\|Run in"; then
+		tui_keys Enter
+		sleep 2
+	fi
 }
 
 # --- Session management ---

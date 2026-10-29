@@ -24,9 +24,8 @@ source test/func/tui-test-lib.sh
 _CONNO="conno.example.com"
 _DISCO="${TUI_TEST_HOST:-disco.example.com}"
 _CLUSTER="${TUI_CLUSTER_NAME:-sno}"
-_ssh_cfg="$HOME/.aba/ssh.conf"
-_SSH_CONNO="ssh -F $_ssh_cfg $_CONNO"
-_SSH_DISCO="ssh -F $_ssh_cfg $_DISCO"
+_SSH_CONNO="ssh -F $_TUI_SSH_CFG $_CONNO"
+_SSH_DISCO="ssh -F $_TUI_SSH_CFG $_DISCO"
 _BUNDLE_PATH="${TUI_BUNDLE_PATH:-}"
 _BUNDLE_DEST="/tmp/disco-test-bundle.tar"
 
@@ -176,7 +175,7 @@ if [[ "$_BUNDLE_DEST" == /tmp/* ]]; then
 	_BUNDLE_ON_DISCO="/tmp/disco-test-bundle.tar"
 else
 	# Bundle is local on bastion
-	scp -F "$_ssh_cfg" "$_BUNDLE_DEST" "$_DISCO:/tmp/disco-test-bundle.tar"
+	scp -F "$_TUI_SSH_CFG" "$_BUNDLE_DEST" "$_DISCO:/tmp/disco-test-bundle.tar"
 	_BUNDLE_ON_DISCO="/tmp/disco-test-bundle.tar"
 fi
 
@@ -231,9 +230,7 @@ echo "================================================================"
 echo ""
 
 # Deploy latest TUI code
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_DISCO:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_DISCO:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 
 # Launch TUI
 tui_start

@@ -26,10 +26,7 @@ $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 $_TUI_SSH "pkill -f aba-progress-wrapper 2>/dev/null; pkill -f aba-progress-test 2>/dev/null; true"
 sleep 0.5
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # Create a quick-running progress test script on the remote host
