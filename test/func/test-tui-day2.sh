@@ -6,16 +6,13 @@ cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
 _CLUSTER="${TUI_CLUSTER_NAME:-sno}"
-_ssh_cfg="$HOME/.aba/ssh.conf"
 
 echo "=== TUI Day-2 Workflow Test ==="
 echo "  Host: $_TUI_HOST"
 echo "  Cluster: $_CLUSTER"
 echo ""
 
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # Verify cluster exists and is installed
@@ -29,12 +26,7 @@ if [[ "$_inst" != "yes" ]]; then
 fi
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # ============================================================================
 # 1. Enter Day-2 menu
