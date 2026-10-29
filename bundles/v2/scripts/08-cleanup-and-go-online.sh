@@ -51,4 +51,8 @@ else
 	rm -rf "$WORK_BUNDLE_DIR"
 fi
 
+# Clean NAS temp dir (belt and suspenders — step 07 renames it, but if the
+# build failed or was interrupted, temp dir may still exist)
+rm -rf "$NAS_TEMP_DIR/$BUNDLE_NAME"
+
 echo_step "Done $0"
