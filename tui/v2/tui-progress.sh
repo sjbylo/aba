@@ -442,14 +442,17 @@ _tp_show_error() {
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
 	while true; do
 		_btn_rc=0
+		# Use --msgbox (not --yesno) — dialog 1.3 ignores custom labels on
+		# --yesno when --extra-button is present.  --msgbox + --help-button
+		# gives 3 reliable buttons: Dismiss (OK), Retry (Extra), View Output (Help).
 		_tp_dlg --backtitle "$(ui_backtitle)" --title " ${_title}: Error " \
-			--ok-label "View Output" \
+			--ok-label "Dismiss" \
 			--extra-button --extra-label "Retry" \
-			--cancel-label "OK" \
-			--yesno "$_msg" \
+			--help-button --help-label "View Output" \
+			--msgbox "$_msg" \
 			0 0 || _btn_rc=$?
 		case "$_btn_rc" in
-			0) _tp_show_output ;;
+			2) _tp_show_output ;;
 			3) _TP_RETRY=1; return ;;
 			*) return ;;
 		esac
