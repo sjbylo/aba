@@ -14,6 +14,11 @@ _TUI_FAIL=0
 _TUI_WIDTH=160
 _TUI_HEIGHT=45
 
+# Per-run screenshot directory: /tmp/tui-test/<testname>-<timestamp>/
+_TUI_TEST_NAME="$(basename "${BASH_SOURCE[1]:-unknown}" .sh)"
+_TUI_RUN_DIR="/tmp/tui-test/${_TUI_TEST_NAME}-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$_TUI_RUN_DIR"
+
 # --- Core helpers ---
 
 # Check if the tmux session is still alive
@@ -33,6 +38,7 @@ tui_keys() {
 
 # Wait for a pattern to appear on screen (polls every 0.5s)
 # Usage: tui_wait_for "pattern" [timeout_seconds]
+# On failure, auto-captures a screenshot for debugging.
 tui_wait_for() {
 	local pattern="$1"
 	local timeout="${2:-10}"
@@ -40,6 +46,7 @@ tui_wait_for() {
 	for (( i=0; i<timeout*2; i++ )); do
 		if ! tui_session_alive; then
 			echo "  SESSION DEAD waiting for: $pattern" >&2
+			tui_screenshot "DEAD-$(date +%H%M%S)"
 			return 1
 		fi
 		if tui_capture | grep -qi "$pattern"; then
@@ -47,7 +54,31 @@ tui_wait_for() {
 		fi
 		sleep 0.5
 	done
-	echo "  TIMEOUT waiting for: $pattern" >&2
+	echo "  TIMEOUT (${timeout}s) waiting for: $pattern" >&2
+	tui_screenshot "TIMEOUT-$(date +%H%M%S)"
+	return 1
+}
+
+# Confirm a --defaultno yesno dialog by pressing the Yes/OK button.
+# --defaultno focuses the No/Cancel button; Left arrow moves to Yes.
+tui_confirm_yes() {
+	tui_keys Left
+	sleep 0.3
+	tui_keys Enter
+}
+
+# Dismiss post-command result screens (terminal, progress, or TUI mode).
+# Terminal mode: "Press ENTER to continue" or "Press R to retry, ENTER to return"
+# Progress mode: "All steps completed successfully" with Done button
+# Returns 0 if a prompt was found and dismissed, 1 otherwise.
+tui_dismiss_result() {
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded"; then
+		tui_keys Enter
+		sleep 2
+		return 0
+	fi
 	return 1
 }
 
@@ -146,6 +177,7 @@ tui_select_item() {
 	if [[ -z "$key" ]]; then
 		echo "  WARNING: menu item '$label' not found on screen" >&2
 		tui_menu_items | sed 's/^/    available: /' >&2
+		tui_screenshot "ITEM-NOT-FOUND-$(date +%H%M%S)"
 		return 1
 	fi
 	tui_keys "$key"
@@ -177,6 +209,7 @@ tui_back_to() {
 		sleep 1
 	done
 	echo "  WARNING: could not navigate back to '$pattern' after $max Escapes" >&2
+	tui_screenshot "NAV-FAIL-$(date +%H%M%S)"
 	return 1
 }
 
@@ -230,7 +263,10 @@ tui_clear_failed_tasks() {
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
+	$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; pkill -9 -f 'dialog --' 2>/dev/null; true"
+	sleep 1
+	# Verify no stale TUI left — kill again if needed
+	$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; true"
 	tui_clear_failed_tasks
 	sleep 0.5
 	$_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT '$cmd'"
@@ -295,11 +331,15 @@ tui_assert_appears() {
 	fi
 }
 
-# Save a screenshot (capture) to a file for debugging
+# Save a screenshot (capture) to a file for debugging.
+# Files go into $_TUI_RUN_DIR for per-run isolation.
+# A symlink /tmp/tui-test-<label>.txt points to the latest for quick access.
 tui_screenshot() {
 	local label="${1:-screenshot}"
-	local file="/tmp/tui-test-${label}.txt"
+	local file="$_TUI_RUN_DIR/${label}.txt"
+	local link="/tmp/tui-test-${label}.txt"
 	tui_capture > "$file"
+	ln -sf "$file" "$link"
 	echo "  [screenshot: $file]"
 }
 
@@ -311,6 +351,7 @@ tui_summary() {
 	echo "  TUI Test Results"
 	echo "  PASS: $_TUI_PASS"
 	echo "  FAIL: $_TUI_FAIL"
+	echo "  Screenshots: $_TUI_RUN_DIR/"
 	echo "========================================"
 	[ "$_TUI_FAIL" -eq 0 ]
 }

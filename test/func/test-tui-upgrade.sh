@@ -137,6 +137,8 @@ elif echo "$_scr" | grep -qi "Current.*4\.\|z-stream\|minor"; then
 			break
 		fi
 
+		tui_dismiss_result && continue
+
 		if echo "$_scr" | grep -q "Actions\|Day-2"; then
 			echo "  Returned to menu (upgrade may have completed)"
 			break
@@ -144,6 +146,7 @@ elif echo "$_scr" | grep -qi "Current.*4\.\|z-stream\|minor"; then
 
 		sleep 30
 	done
+	tui_dismiss_result
 elif echo "$_scr" | grep -qi "Upgrade Check Failed\|failed.*query"; then
 	echo "  ~ NOTE: Upgrade check failed (cluster may not be reachable)"
 	tui_keys Enter; sleep 1
@@ -162,6 +165,19 @@ if [[ -n "$_ver" ]]; then
 	echo "  Cluster version: $_ver"
 	echo "  ✓ PASS: Cluster version retrieved"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Could not retrieve cluster version after upgrade"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
+
+# Verify cluster is healthy after upgrade
+_nodes=$($_TUI_SSH "export KUBECONFIG=~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig; oc get nodes --no-headers 2>/dev/null | grep -c Ready" 2>/dev/null || echo 0)
+if [[ "$_nodes" -gt 0 ]]; then
+	echo "  ✓ PASS: Cluster has $_nodes Ready node(s) post-upgrade"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: No Ready nodes after upgrade"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
