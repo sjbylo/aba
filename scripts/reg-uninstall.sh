@@ -73,6 +73,11 @@ reg_setup_data_dir "$vendor"
 
 ssh_conf_file=~/.aba/ssh.conf
 
+# Resolve ~ on remote host (reg_setup_data_dir keeps ~ literal for remote)
+if [ "$reg_ssh_key" ]; then
+	reg_root=$(ssh -i "$reg_ssh_key" -F $ssh_conf_file $reg_ssh_user@$reg_host "echo $reg_root")
+fi
+
 # Enable interactive prompting, but respect -y flag if the user passed it
 export ask=1
 

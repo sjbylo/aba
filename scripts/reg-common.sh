@@ -349,6 +349,8 @@ reg_setup_data_dir() {
 	# Explicitly set --quayStorage and --sqliteStorage to subdirectories of reg_root.
 	# Without these, mirror-registry defaults to Podman named volumes, which scatters
 	# data outside the data dir and requires root to uninstall.
+	# NB: paths in reg_root_opts are unquoted — spaces in data_dir are unsupported.
+	# Fixing this requires splitting local/remote representations (see #1009).
 	if [ "$vendor" = "quay" ]; then
 		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 	else
@@ -785,14 +787,14 @@ reg_rm_data_dir() {
 	local vendor="$1" dir="$2" ssh_cmd="${3:-}"
 
 	if [ "$ssh_cmd" ]; then
-		$ssh_cmd "[ -d $dir ]" 2>/dev/null || return 0
+		$ssh_cmd "[ -d '$dir' ]" 2>/dev/null || return 0
 		aba_info "Removing registry data at $dir on $reg_host ..."
 		case "$vendor" in
-			quay)  $ssh_cmd "$SUDO rm -rf $dir" ;;
-			*)     $ssh_cmd "rm -rf $dir" ;;
+			quay)  $ssh_cmd "$SUDO rm -rf '$dir'" ;;
+			*)     $ssh_cmd "rm -rf '$dir'" ;;
 		esac
 		# Remove empty parent data_dir (never HOME)
-		$ssh_cmd "p=\$(dirname $dir); [ \"\$p\" != \"\$HOME\" ] && [ -d \"\$p\" ] && rmdir \"\$p\"" 2>/dev/null || true
+		$ssh_cmd "p=\$(dirname '$dir'); [ \"\$p\" != \"\$HOME\" ] && [ -d \"\$p\" ] && rmdir \"\$p\"" 2>/dev/null || true
 	else
 		[ -d "$dir" ] || return 0
 		aba_info "Removing registry data at $dir ..."
@@ -937,7 +939,7 @@ To verify:    cd $PWD && aba verify
 To uninstall: cd $PWD && aba uninstall"
 
 	if [ -n "$ssh_cmd" ]; then
-		echo "$_text" | $ssh_cmd "cat > $reg_root/INSTALLED_BY_ABA.md"
+		echo "$_text" | $ssh_cmd "cat > '$reg_root/INSTALLED_BY_ABA.md'"
 	else
 		echo "$_text" > "$reg_root/INSTALLED_BY_ABA.md"
 	fi
@@ -1118,7 +1120,7 @@ reg_omr_install_or_recover() {
 		aba_debug "OMR workaround: uninstall service (keep data) on $_where so install can retry"
 		if [ -n "$ssh_cmd" ]; then
 			# shellcheck disable=SC2086
-			$ssh_cmd "$remote_dir/mirror-registry uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve" || true
+			$ssh_cmd "'$remote_dir/mirror-registry' uninstall $_OMR_LOG_FLAG -data-dir '$reg_root' -auto-approve" || true
 		else
 			"$bin" uninstall $_OMR_LOG_FLAG -data-dir "$reg_root" -auto-approve || true
 		fi
@@ -1200,7 +1202,7 @@ reg_omr_remove() {
 		local _bin_dir="omr"
 		local _bin="$_bin_dir/mirror-registry"
 
-		if ! $ssh_cmd "test -x $reg_root/../$_bin_dir/mirror-registry 2>/dev/null"; then
+		if ! $ssh_cmd "test -x '$reg_root/../$_bin_dir/mirror-registry' 2>/dev/null"; then
 			aba_info "mirror-registry binary not found on remote host, uploading ..."
 			if [ ! -x "$_bin" ]; then
 				aba_abort "$_OMR_VENDOR binary '$_bin' not found locally." \
@@ -1208,7 +1210,7 @@ reg_omr_remove() {
 			fi
 			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
 			local _target="$reg_ssh_user@$reg_host"
-			$ssh_cmd "mkdir -p $reg_root/../$_bin_dir" || true
+			$ssh_cmd "mkdir -p '$reg_root/../$_bin_dir'" || true
 			$_scp "$_bin" "$_target:$reg_root/../$_bin_dir/" || \
 				aba_abort "Failed to copy mirror-registry binary to $reg_host"
 		fi
@@ -1216,9 +1218,9 @@ reg_omr_remove() {
 		local _remote_bin="$reg_root/../$_bin_dir/mirror-registry"
 		aba_info "Running: mirror-registry uninstall on $reg_host ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			$ssh_cmd "$_remote_bin uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve -purge" || _uninst_rc=$?
+			$ssh_cmd "'$_remote_bin' uninstall $_OMR_LOG_FLAG -data-dir '$reg_root' -auto-approve -purge" || _uninst_rc=$?
 		else
-			$ssh_cmd "$_remote_bin uninstall $_OMR_LOG_FLAG -data-dir $reg_root -auto-approve" || _uninst_rc=$?
+			$ssh_cmd "'$_remote_bin' uninstall $_OMR_LOG_FLAG -data-dir '$reg_root' -auto-approve" || _uninst_rc=$?
 		fi
 	else
 		# Local
@@ -1274,7 +1276,7 @@ reg_quay_remove() {
 		local _mirror_dir
 		_mirror_dir="$(dirname "$reg_root")"
 
-		if ! $ssh_cmd "test -f $_mirror_dir/mirror-registry && test -f $_mirror_dir/execution-environment.tar"; then
+		if ! $ssh_cmd "test -f '$_mirror_dir/mirror-registry' && test -f '$_mirror_dir/execution-environment.tar'"; then
 			aba_info "mirror-registry or supporting files not found on remote host, uploading ..."
 			local tarball=""
 			for f in mirror-registry-*.tar.gz; do
@@ -1285,15 +1287,15 @@ reg_quay_remove() {
 			fi
 
 			local remote_tmp="/tmp/.aba-${reg_ssh_user}/reg-uninstall-$$"
-			$ssh_cmd "mkdir -p $remote_tmp" || aba_abort "Failed to create temp dir on $reg_host"
-			trap '$ssh_cmd "rm -rf $remote_tmp" 2>/dev/null' EXIT
+			$ssh_cmd "mkdir -p '$remote_tmp'" || aba_abort "Failed to create temp dir on $reg_host"
+			trap '$ssh_cmd "rm -rf '\''$remote_tmp'\''" 2>/dev/null' EXIT
 
 			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
 			$_scp "$tarball" "$reg_ssh_user@$reg_host:$remote_tmp/" || \
 				aba_abort "Failed to copy mirror-registry tarball to $reg_host"
-			$ssh_cmd "mkdir -p $_mirror_dir && tar -C $_mirror_dir --no-same-owner -xmzf $remote_tmp/$tarball" || \
+			$ssh_cmd "mkdir -p '$_mirror_dir' && tar -C '$_mirror_dir' --no-same-owner -xmzf '$remote_tmp/$tarball'" || \
 				aba_abort "Failed to extract mirror-registry on $reg_host"
-			$ssh_cmd "rm -rf $remote_tmp"
+			$ssh_cmd "rm -rf '$remote_tmp'"
 		fi
 
 		# mirror-registry hardcodes --name ansible_runner_instance without --replace
@@ -1302,9 +1304,9 @@ reg_quay_remove() {
 		aba_info "Running: mirror-registry uninstall on $reg_host ..."
 		local _uninst_rc=0
 		if [ "${REG_DELETE_DATA:-}" ]; then
-			$ssh_cmd "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?
+			$ssh_cmd "cd '$_mirror_dir' && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?
 		else
-			$ssh_cmd "cd $_mirror_dir && printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opts" || _uninst_rc=$?
+			$ssh_cmd "cd '$_mirror_dir' && printf 'n\n' | ./mirror-registry uninstall -v $reg_root_opts" || _uninst_rc=$?
 		fi
 	else
 		# Local
@@ -1355,7 +1357,7 @@ reg_quay_remove() {
 	if [ -z "${REG_DELETE_DATA:-}" ]; then
 		aba_debug "Fixing ownership of persisted data in $reg_root"
 		if [ -n "$ssh_cmd" ]; then
-			$ssh_cmd "podman unshare chown -R 0:0 $reg_root" 2>/dev/null || true
+			$ssh_cmd "podman unshare chown -R 0:0 '$reg_root'" 2>/dev/null || true
 		else
 			podman unshare chown -R 0:0 "$reg_root" 2>/dev/null || true
 		fi
@@ -1486,6 +1488,7 @@ reg_remote_pre_install() {
 			"See .remote_host_check.out for details."
 
 	# Resolve reg_root on remote host (~ may expand differently than localhost)
+	# NB: $reg_root intentionally unquoted inside SSH to allow remote ~ expansion
 	reg_root=$($_ssh "echo $reg_root")
 
 	# Rebuild reg_root_opts with resolved path (see reg_setup_data_dir comment)
