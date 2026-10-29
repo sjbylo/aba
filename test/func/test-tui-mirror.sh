@@ -204,6 +204,8 @@ if echo "$_scr" | grep -qi "Sync\|OCP\|Continue"; then
 		if echo "$_scr" | grep -qi "All steps completed\|Done"; then
 			break
 		fi
+		# Terminal "Press ENTER" prompt
+		tui_dismiss_result && continue
 		# Back at main menu
 		if echo "$_scr" | grep -qi "Actions"; then
 			break
@@ -238,6 +240,22 @@ elif echo "$_scr" | grep -qi "not installed\|no mirror"; then
 else
 	echo "  ~ NOTE: Unexpected sync screen"
 	tui_screenshot "mirr-04-unexpected"
+fi
+
+# ============================================================================
+# 4b. Server-side sync verification
+# ============================================================================
+echo ""
+echo "--- 4b. Verify sync on server ---"
+_sync_state=$($_TUI_SSH "grep -s 'last_action=' ~/.aba/mirror/*/state.sh 2>/dev/null | head -1 | cut -d= -f2" 2>/dev/null || echo "")
+if [[ "$_sync_state" == "sync" || "$_sync_state" == "load" ]]; then
+	echo "  ✓ PASS: Mirror state confirms sync (last_action=$_sync_state)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+elif [[ -n "$_sync_state" ]]; then
+	echo "  ~ NOTE: Mirror last_action=$_sync_state (expected sync)"
+else
+	echo "  ✗ FAIL: No mirror state file — sync may not have executed"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================

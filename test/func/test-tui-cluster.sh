@@ -291,6 +291,8 @@ while true; do
 		break
 	fi
 
+	tui_dismiss_result && continue
+
 	# Check if we're back at main menu (install finished)
 	if echo "$_scr" | grep -q "Actions"; then
 		echo "  Returned to main menu — checking cluster state..."
@@ -306,6 +308,7 @@ while true; do
 
 	sleep 30
 done
+tui_dismiss_result
 
 tui_screenshot "cl-06-final"
 

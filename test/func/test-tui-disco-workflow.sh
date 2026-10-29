@@ -342,11 +342,7 @@ while true; do
 		continue
 	fi
 
-	# Handle "Press R to retry, ENTER to return" after command completion
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-		continue
-	fi
+	tui_dismiss_result && continue
 
 	# "Load images to mirror" confirmation dialog
 	if echo "$_scr" | grep -qi "Load images to mirror" && echo "$_scr" | grep -qi "Continue"; then
@@ -405,10 +401,7 @@ else
 	fi
 	# Wait for install to complete
 	tui_wait_for "Actions\|Registry\|Load\|Install Cluster\|Press R\|ENTER to return" 1200
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-	fi
+	tui_dismiss_result
 	_mirror_ok=$($_SSH_DISCO "test -f ~/aba/mirror/.available && echo yes || echo no")
 	if [[ "$_mirror_ok" == "yes" ]]; then
 		echo "  ✓ PASS: Mirror registry installed via TUI"
@@ -449,10 +442,7 @@ else
 	tui_wait_for "Actions\|Registry\|Load\|Install Cluster\|loaded\|Press R\|ENTER to return" 2700
 	tui_screenshot "disco-wf-04b-load-done"
 
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-	fi
+	tui_dismiss_result
 
 	_loaded=$($_SSH_DISCO "grep -q 'last_action=load\|last_action=sync' ~/.aba/mirror/*/state.sh 2>/dev/null && echo yes || echo no" 2>/dev/null || echo "no")
 	if [[ "$_loaded" == "yes" ]]; then
@@ -643,8 +633,7 @@ while true; do
 	fi
 
 	# Check if back at menu (install finished)
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
+	if tui_dismiss_result; then
 		_scr=$(tui_capture)
 	fi
 
