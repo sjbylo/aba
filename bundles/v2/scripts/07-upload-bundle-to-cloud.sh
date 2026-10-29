@@ -35,7 +35,7 @@ if ls "$WORK_BUNDLE_DIR"/ocp_* &>/dev/null; then
 		cd "$WORK_BUNDLE_DIR"
 		for f in ocp_*; do
 			until < "$f" tee "$NAS_TEMP_DIR/$BUNDLE_NAME/$f" \
-				| cksum | sed "s| -$| $f|" >> "$NAS_TEMP_DIR/$BUNDLE_NAME/CHECKSUM.txt"
+				| cksum | awk -v f="$f" '{print $1, $2, f}' >> "$NAS_TEMP_DIR/$BUNDLE_NAME/CHECKSUM.txt"
 			do
 				echo "ERROR: copy failed for $f -- retrying in 10s ..." >&2
 				rm -f "$NAS_TEMP_DIR/$BUNDLE_NAME/$f"
