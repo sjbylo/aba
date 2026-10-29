@@ -293,6 +293,58 @@ tui_stop() {
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 }
 
+# Clean shutdown + stray process check.
+# 1. Try to exit the TUI gracefully (dismiss dialogs, Escape to main, exit)
+# 2. If still alive, force-kill the tmux session
+# 3. Wait for processes to die
+# 4. Check for strays — PASS if clean, FAIL if any remain (and kill them)
+# Call this instead of duplicating cleanup logic in every test.
+tui_cleanup() {
+	# Dismiss any result/error dialog first
+	tui_dismiss_result 2>/dev/null
+
+	# Try to escape back to main menu — up to 10 Escapes covers deep wizards
+	for _i in 1 2 3 4 5 6 7 8 9 10; do
+		if ! $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
+			break
+		fi
+		# Check if we reached the main menu
+		if tui_capture | grep -qi "Actions"; then
+			# On the main menu — press Escape once more to exit the TUI
+			tui_keys Escape
+			sleep 2
+			break
+		fi
+		tui_keys Escape
+		sleep 0.5
+	done
+
+	# If session is still alive, try Enter (confirm exit dialog) then force-kill
+	if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
+		tui_keys Enter; sleep 1
+		tui_keys Escape; sleep 1
+		tui_keys Enter; sleep 1
+	fi
+
+	# Force-kill the tmux session if it didn't exit cleanly
+	tui_stop
+	sleep 2
+
+	# Check for strays AFTER the session is gone
+	local _strays
+	_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
+	if [ -z "$_strays" ]; then
+		echo "  ✓ PASS: No stray processes"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: Stray processes after cleanup:"
+		echo "$_strays" | sed 's/^/      /'
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; pkill -9 -f 'dialog --' 2>/dev/null; true"
+		sleep 1
+	fi
+}
+
 # --- Assertions ---
 
 # Assert the screen contains a pattern

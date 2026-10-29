@@ -384,21 +384,5 @@ fi
 # ============================================================================
 echo ""
 echo "--- 11. Cleanup ---"
-tui_back_to "Actions\|Registry\|Load\|Mirror" 5
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary
