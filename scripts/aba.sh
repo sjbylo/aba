@@ -1368,7 +1368,7 @@ done
 
 # Guard for VM lifecycle targets: validate platform + hypervisor config
 _ensure_hv_ready() {
-	source <(normalize-aba-conf)
+	source <(cd "$ABA_ROOT" && normalize-aba-conf)
 	case "$platform" in
 		vmw)
 			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
@@ -1674,7 +1674,7 @@ if [ "$cur_target" ]; then
 			# init may fail on corrupted state — non-fatal for delete
 			make -s init 2>/dev/null || aba_warn "Cluster .init failed — proceeding with best-effort delete."
 
-			source <(normalize-aba-conf)
+			source <(cd "$ABA_ROOT" && normalize-aba-conf)
 			case "$platform" in
 				vmw|kvm)
 					_ensure_hv_ready
