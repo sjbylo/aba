@@ -12,6 +12,7 @@
 - **Smart DNS hint in preflight** — When the cluster DNS cannot resolve the registry but the bastion can, ABA detects whether the bastion runs DNS (dnsmasq/auto-DNS) and gives a specific actionable hint (`set dns_servers=<bastion_ip>` or `add a DNS record`).
 - **TUI version in status labels** — Sync/Save/Load menu labels now show the OCP version so stale labels are self-evident after a version change (Bug #945).
 - **Removed misleading operator count** — The install confirmation summary no longer shows the operator basket count (which reflected config, not actual mirror content).
+- **TUI ISC run_once patterns DRY refactor** — Extracted repeated ISC trigger/wait patterns into `tui_ensure_isconf()` (non-blocking ensure+trigger) and `tui_wait_isconf()` (blocking poll+wait with infobox), replacing 7 inline call sites.
 
 ### Fixed
 
@@ -29,7 +30,6 @@
 - **TUI empty ports accepted** — Pressing Next with an empty ports field was silently accepted, producing invalid `cluster.conf`. Now rejected with an actionable error message.
 - **TUI bare-metal port default missing** — KVM (`enp1s0`) and VMware (`ens160`) had port defaults but bare-metal did not. Added `eno1` as the default for bare-metal in both the config generator and TUI platform toggle.
 - **TUI ISC "View Config" shows "not yet generated"** — Clicking View Config in Sync/Save/Load/Bundle dialogs failed when the ISC hadn't been generated yet. Generation is now triggered at dialog entry (non-blocking) and waited on at View Config click, with stale `run_once` state detection and reset.
-- **TUI ISC run_once patterns DRY refactor** — Extracted repeated ISC trigger/wait patterns into `tui_ensure_isconf()` (non-blocking ensure+trigger) and `tui_wait_isconf()` (blocking poll+wait with infobox), replacing 7 inline call sites.
 - **TUI startup ISC trigger without config guard** — Background ISC generation at TUI startup could fire before the setup wizard completed, failing on missing `ocp_version`/`ocp_channel` and storing a stale error in `run_once` metadata. Now guarded by `_direct_config_complete`.
 
 ---
