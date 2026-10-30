@@ -33,6 +33,33 @@ Issues or Pull Requests.
 
 ---
 
+## Multi-value image_source for multi-mirror clusters
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-30
+**ADR:** `devel/adr/017-multi-value-image-source.md`
+
+**Problem:** To integrate multiple mirrors with one cluster, the user must
+create a separate cluster directory per mirror (via `aba import` or manual
+copy), making it look like multiple clusters when it's really one.  This is
+confusing and fragile.
+
+**Root cause:** `image_source` in `cluster.conf` is a scalar value.
+`day2.sh` reads it to determine which mirror's CatalogSources, IDMS, CA,
+and pull-secret to apply.  Only one mirror per cluster directory is possible.
+
+**Proposed fix:** Allow `image_source` to be a comma-separated list
+(e.g. `image_source=mirror,mm2,enclave3`).  `day2` would loop over all
+mirrors.  `--mirror-name mm2` on an existing cluster would append to the
+list.  See ADR-017 for the full design.
+
+**Workaround:** Create a second cluster directory pointing at the second
+mirror: `aba import --kubeconfig <cluster>/auth/kubeconfig --name mm2-test
+--image-source mm2 --force` then `aba --dir mm2-test day2`.
+
+---
+
 ## oc-mirror v2 load: stale .history causes "manifest unknown" on retry
 
 **Severity:** HIGH
