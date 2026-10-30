@@ -1,5 +1,30 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.2...HEAD)
 
+### Added
+
+- **`aba image set` subcommand** — Manage curated image groups (`ocp`, `virt`, `ai`) with `aba image set add|remove|list`.
+- **`--disk-hint` and `--bond-mode` CLI flags** — Set disk selection and bonding mode from the command line with per-role variants (`--disk-hint-master`, `--bond-mode-worker`, etc.). Values are appended to `cluster.conf` on demand.
+- **Consolidated storage operator set** — Five vendor-specific sets (dell, netapp, ibmstorage, hpe, portworx) merged into a single `storage` set containing all CSI drivers. Users remove vendors they don't need.
+
+### Changed
+
+- **Preflight error severity** — IP conflicts and unreachable-DNS/NTP conditions now display as `[ABA] Error:` (not `Warning:`) to match the fact that they halt execution.
+- **Smart DNS hint in preflight** — When the cluster DNS cannot resolve the registry but the bastion can, ABA detects whether the bastion runs DNS (dnsmasq/auto-DNS) and gives a specific actionable hint (`set dns_servers=<bastion_ip>` or `add a DNS record`).
+- **TUI version in status labels** — Sync/Save/Load menu labels now show the OCP version so stale labels are self-evident after a version change (Bug #945).
+- **Removed misleading operator count** — The install confirmation summary no longer shows the operator basket count (which reflected config, not actual mirror content).
+
+### Fixed
+
+- **TUI error dialog buttons (dialog 1.3)** — `--yesno` with `--extra-button` ignored custom labels on RHEL 9 dialog 1.3. Switched to `--msgbox` with `--help-button` for three reliable buttons (Dismiss / Retry / View Output).
+- **Parallel ISO generation cache corruption** — Running `aba install` for multiple clusters simultaneously could corrupt `~/.cache/agent/`. ISO generation is now serialized with `flock`.
+- **VMs deleted outside ABA** — When cluster VMs are removed via vCenter/virsh directly, the stale `.install-complete` marker caused a confusing dead-end. ABA now detects missing VMs and suggests `clean` then `install`.
+- **Unquoted shell variables** — `$ABA_ROOT` (4 sites in aba.sh) and `$ASSETS_DIR` (generate-image.sh) are now properly quoted to prevent word-splitting on paths with spaces (Bugs #1006, #1007, #1010).
+- **TUI stale vendor cache** — Mirror vendor shown in the main menu was stale after mirror install; now refreshed in both CONNO and DISCO loops (Bug #1001).
+- **TUI wrong config source** — `cluster_delete()` and `_day2_startup()` used awk/globals instead of normalize for the platform variable (Bug #1002).
+- **TUI inconsistent channel defaults** — Channel defaults now consistent across wizard and config (Bug #1003).
+- **TUI subshell-echo antipattern** — Six `$(source <(normalize-*-conf) && echo "$var")` patterns replaced with direct sourcing (Bugs #1004, #1005).
+- **Bundle reset** — Fixed bundle reset operation.
+
 ---
 
 ## [1.4.2](https://github.com/sjbylo/aba/releases/tag/v1.4.2) - 2026-10-26
