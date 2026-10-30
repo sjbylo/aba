@@ -759,10 +759,14 @@ cluster_install_flow() {
 			[[ -n "$ingress_dns" ]] && cl_ingress_vip="$ingress_dns"
 		fi
 
-		# Platform-aware default port name
+	fi
+
+	# Fill empty ports with platform-aware default (config is king, but never show blank)
+	if [[ -z "$cl_ports" ]]; then
 		case "$cl_platform" in
 			vmw) cl_ports="ens160" ;;
 			kvm) cl_ports="enp1s0" ;;
+			bm)  cl_ports="eno1" ;;
 		esac
 	fi
 
@@ -952,19 +956,20 @@ Toggle 'Type' or 'Platform' to cycle options.
 
 --- Page 2: Network ---
 • Machine network: cluster subnet CIDR (e.g. 10.0.0.0/24)
-• Starting IP: first IP for cluster nodes
+• Starting IP: IPs are assigned sequentially from this address
+  (masters first, then workers)
 • API VIP / Ingress VIP: virtual IPs (compact/standard)
 • DNS / Gateway / NTP: network services
 
 --- Page 3: Interfaces ---
-• Ports: host NIC name(s) (e.g. ens1f0)
+• Ports: interface name(s) (e.g. ens1f0) — labels only, MAC decides the NIC
 • VLAN: optional VLAN tag
 • Image source: mirror | proxy | direct
 
 --- Page 4: VM Resources (vmw/kvm only) ---
 • CPUs / Memory: per-VM allocation
 • Data disk: additional disk in GB
-• MAC template: prefix for generated MACs
+• MAC template: prefix for generated VM MACs (VMs only)
 
 --- Navigation ---
 Select: edit a field   Next: advance page   Back: previous page
@@ -1066,7 +1071,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			# Only update port default if user hasn't manually edited it
 			local _prev_default=""
 			case "$cl_platform" in
-				bm)  _prev_default="" ;;
+				bm)  _prev_default="eno1" ;;
 				vmw) _prev_default="ens160" ;;
 				kvm) _prev_default="enp1s0" ;;
 			esac
@@ -1080,7 +1085,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				case "$cl_platform" in
 					vmw) cl_ports="ens160" ;;
 					kvm) cl_ports="enp1s0" ;;
-					bm)  cl_ports="" ;;
+					bm)  cl_ports="eno1" ;;
 				esac
 			fi
 			replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
@@ -1139,13 +1144,20 @@ _cluster_page_network() {
 			3) return 0 ;;  # Next
 			2) show_help "$TUI2_TITLE_CLUSTER_NETWORK" \
 "• Machine network: cluster subnet in CIDR (e.g. 10.0.0.0/24)
-• Starting IP: first IP for cluster nodes (auto-calculated if blank)
+
+• Starting IP: IPs are assigned sequentially from this address
+  (masters first, then workers; auto-calculated if blank)
+
 • API VIP: virtual IP for Kubernetes API (compact/standard only)
+
 • Ingress VIP: virtual IP for ingress routes (compact/standard only)
   VIPs are auto-fetched from DNS if not set.
+
 • DNS servers: comma-separated DNS server IPs
+
 • Gateway: default gateway IP
-• NTP servers: comma-separated NTP server addresses (optional)"
+
+• NTP servers: comma-separated NTP server addresses (recommended)"
 			   continue ;;
 			1) return 1 ;;  # Back
 			255) return 255 ;;
@@ -1350,10 +1362,17 @@ _cluster_page_iface() {
 		local rc=$?
 
 		case "$rc" in
-			3) return 0 ;;  # Next (Extra button)
+			3)	# Next — require at least one port name
+				if [[ -z "$cl_ports" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Ports cannot be empty.\n\nEnter at least one interface name (e.g. ens160, ens1f0)." 0 0 || true
+					continue
+				fi
+				return 0 ;;
 			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
-"• Ports: network port names (e.g. ens160, ens1f0)
+"• Ports: network interface names (e.g. ens160, ens1f0)
   Multiple ports create a bond (e.g. ens1f0,ens1f1)
+  Names are labels only — the MAC address determines the actual NIC.
 
 • VLAN: optional 802.1Q VLAN tag
 
@@ -1454,6 +1473,15 @@ ${_conn_help}
 					rm -f "$_mac_edit"
 					continue
 				fi
+				# Reject duplicate MACs (case-insensitive)
+				local _dup_macs
+				_dup_macs=$(echo "$_new_macs" | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
+				if [[ -n "$_dup_macs" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Duplicate MAC address(es):\n\n${_dup_macs}\n\nEach node must have a unique MAC." 0 0 || true
+					rm -f "$_mac_edit"
+					continue
+				fi
 				cl_macs="$_new_macs"
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
 				# Warn if count doesn't match expected MACs (nodes × ports)
@@ -1530,11 +1558,16 @@ _cluster_page_vm() {
 			3) return 0 ;;  # Next
 			2) show_help "$TUI2_TITLE_CLUSTER_VM" \
 "• Master CPUs: vCPU count per control-plane VM (min 4)
+
 • Master Memory: RAM in GB per control-plane VM (min 16)
+
 • Worker CPUs: vCPU count per worker VM (standard only, min 2)
+
 • Worker Memory: RAM in GB per worker VM (standard only, min 8)
+
 • Data disk: additional disk in GB (0 = no extra disk)
-• MAC template: prefix for auto-generated MAC addresses
+
+• MAC template: prefix for auto-generated VM MAC addresses (VMs only)
   (e.g. 00:50:56:xx — last 3 octets auto-filled)"
 			   continue ;;
 			1) return 1 ;;  # Back
@@ -1740,9 +1773,20 @@ _cluster_execute() {
 		summary+="  MAC template: ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
-		local mac_cnt
+		local mac_cnt _mac_line _mac_idx=0
 		mac_cnt=$(echo "$cl_macs" | wc -l)
-		summary+="  MACs:         $mac_cnt addresses\n"
+		while IFS= read -r _mac_line; do
+			[ -z "$_mac_line" ] && continue
+			_mac_idx=$(( _mac_idx + 1 ))
+			if [[ $_mac_idx -eq 1 ]]; then
+				summary+="  MACs:         $_mac_line\n"
+			elif [[ $_mac_idx -le 6 ]]; then
+				summary+="                $_mac_line\n"
+			elif [[ $_mac_idx -eq 7 ]]; then
+				summary+="                ... ($mac_cnt total)\n"
+				break
+			fi
+		done <<< "$cl_macs"
 	fi
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INSTALL" \

@@ -514,6 +514,9 @@ _mirror_op_confirm() {
 		source <(normalize-aba-conf) 2>/dev/null
 		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
 
+		# Ensure ISC generation is running (ready by the time user clicks View Config)
+		tui_ensure_isconf
+
 		local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
 		local transfer_upgrade_to="" transfer_operator_count="" transfer_operators=""
 		eval "$(_tui_transfer_info_shell --local)"  # --local: yaml on disk, not aba-transfer.tar
@@ -661,17 +664,15 @@ _mirror_op_confirm() {
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Could not read the ImageSet Configuration." 0 0
 				fi
 				rm -f "$_tmp_isc"
-			elif [[ -f "$_isc_for_view" ]]; then
-				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"$TUI2_MSG_ISC_GENERATING" 0 0
-					run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-				fi
-				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
-					--exit-label "OK" --textbox "$_isc_for_view" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config not yet generated." 0 0
+				# Wait for ISC generation (triggered when this dialog opened)
+				tui_wait_isconf
+				if [[ -f "$_isc_for_view" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+						--exit-label "OK" --textbox "$_isc_for_view" 0 0
+				else
+					dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config could not be generated.\n\nCheck the TUI log for details." 0 0
+				fi
 			fi
 			continue
 		fi
@@ -1260,7 +1261,7 @@ _OP_BASKET_DIRTY=false
 _persist_operator_basket() {
 	# If basket hasn't changed, just ensure ISC generation is running/done
 	if [[ "$_OP_BASKET_DIRTY" != "true" ]]; then
-		(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
+		tui_ensure_isconf
 		return
 	fi
 
@@ -1635,12 +1636,7 @@ _mirror_isc_advanced() {
 		case "$choice" in
 			V|E)
 				# Wait for any in-flight ISC regeneration to finish
-				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"$TUI2_MSG_ISC_GENERATING" 0 0
-					run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-				fi
+				tui_wait_isconf
 				;;&
 			V)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
@@ -2678,6 +2674,9 @@ _ensure_offline_prereqs() {
 mirror_create_bundle() {
 	tui_log "Action: Create Install Bundle"
 
+	# Ensure ISC generation is running early (ready by View Config)
+	tui_ensure_isconf
+
 	# OCP line from local yaml (Save/Sync/bundle), not from a leftover transfer tar.
 	source <(normalize-aba-conf) 2>/dev/null
 	local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
@@ -2742,17 +2741,12 @@ mirror_create_bundle() {
 		if [[ $rc -eq 2 ]]; then
 			# Help button = View ISC
 			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+			tui_wait_isconf
 			if [[ -f "$_isc" ]]; then
-				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"$TUI2_MSG_ISC_GENERATING" 0 0
-					run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-				fi
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config not yet generated." 0 0
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config could not be generated.\n\nCheck the TUI log for details." 0 0
 			fi
 			continue
 		fi

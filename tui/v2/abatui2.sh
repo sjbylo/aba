@@ -936,9 +936,12 @@ tui_log "Final mode: $_TUI_MODE"
 
 # Background ISC generation (so it's ready before user opens Mirror Payload)
 # Only in connected modes — in DISCO the ISC is already baked into the bundle
-if [[ "$_TUI_MODE" != "DISCO" && -f "$ABA_ROOT/aba.conf" ]]; then
+# Guard: skip if config is incomplete (wizard hasn't run yet) — triggering
+# ISC generation without ocp_version/channel/platform would fail and store
+# a stale error in run_once metadata, confusing the Payload menu later.
+if [[ "$_TUI_MODE" != "DISCO" && -f "$ABA_ROOT/aba.conf" ]] && _direct_config_complete; then
 	tui_log "Kicking off background ISC generation"
-	aba_isconf_generate_start
+	tui_ensure_isconf
 fi
 
 while :; do

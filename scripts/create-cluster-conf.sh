@@ -123,7 +123,13 @@ fi
 [ ! "$worker_prefix" ]		&& export worker_prefix=worker
 [ ! "$ssh_key_file" ]		&& export ssh_key_file='~/.ssh/id_rsa'
 [ ! "$image_source" ]		&& export image_source=mirror
-[ ! "$ports" ]			&& export ports=ens160
+if [ ! "$ports" ]; then
+	case "${platform:-}" in
+		kvm) export ports=enp1s0 ;;
+		bm)  export ports=eno1 ;;
+		*)   export ports=ens160 ;;
+	esac
+fi
 [ ! "$vlan" ]			&& export vlan=
 [ ! "$disk_hint" ]		&& export disk_hint=
 [ ! "$bond_mode" ]		&& export bond_mode=

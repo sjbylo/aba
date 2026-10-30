@@ -161,7 +161,7 @@ _valid_port_names() {
 _TUI_TMP=$(mktemp)
 
 _tui_cleanup() {
-	rm -f "$_TUI_TMP" "${_TUI_TMP}.edit" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
+	rm -f "$_TUI_TMP" "${_TUI_TMP}.edit" "${_TUI_TMP}.macs" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
 	tui_log "TUI v2 exited"
 }
 trap '_tui_cleanup' EXIT
@@ -297,8 +297,10 @@ dlg() {
 			next_is_text=true; _add_trailing=true ;;
 		--inputbox)
 			next_is_text=true; _add_trailing=true; _needs_tab_hint=true ;;
-		--mixedform|--editbox)
+		--mixedform)
 			next_is_text=true; _needs_tab_hint=true ;;
+		--editbox)
+			_needs_tab_hint=true ;;
 		esac
 		args+=("$arg")
 	done
@@ -1528,6 +1530,28 @@ tui_kick_isconf_regen() {
 	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
 	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
 	_TUI_ISC_UPDATED=true
+}
+
+# Ensure ISC generation is running (non-blocking).
+# If the file is missing but run_once has stale "completed" state, resets first.
+# Call early (e.g. on dialog entry) so the ISC is ready before the user needs it.
+tui_ensure_isconf() {
+	local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+	if [[ ! -f "$_isc" ]] && run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+		run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+	fi
+	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
+}
+
+# Wait for ISC generation to complete (blocking).
+# Shows a "Generating..." infobox if the task is still in progress.
+tui_wait_isconf() {
+	if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"$TUI2_MSG_ISC_GENERATING" 0 0
+		run_once -q -w -i "aba:isconf:generate" -- \
+			make -sC "$ABA_ROOT/mirror" isconf >>"${_TUI_LOG_FILE:-/dev/null}" 2>&1 || true
+	fi
 }
 
 # Gate Install Cluster menu action: prompts for mirror/registry prep when needed.
