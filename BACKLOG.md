@@ -33,6 +33,83 @@ Issues or Pull Requests.
 
 ---
 
+## Audit progress dialogs for "next steps" advice on error paths
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-30
+
+**Problem:** When a long-running TUI operation fails (sync, save, load, bundle,
+day2, install mirror, etc.), the progress dialog shows "Stopped before all
+steps finished" or a generic error, but gives no guidance on what to do next.
+Users are left guessing whether to retry, check logs, fix config, or ask for
+help.
+
+**Proposed fix:** Audit every `_exec_with_progress` / progress-tracked workflow
+and ensure each error/stopped outcome includes actionable "next steps" advice,
+e.g. "Check the TUI log at ~/.aba/tui.log", "Run 'aba mirror sync' to retry",
+"Verify your pull secret is valid", etc. The advice should be context-specific
+to the operation that failed, not a one-size-fits-all message.
+
+---
+
+## Guard ISC generation helpers against incomplete config
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-30
+
+**Problem:** The `tui_ensure_isconf()` and `tui_wait_isconf()` helpers trigger
+ISC generation (`make -sC mirror isconf`) which depends on `aba.conf` having
+`ocp_version`, `ocp_channel`, `platform`, and a valid `pull_secret_file`. If
+called before the setup wizard completes (config incomplete), the generation
+fails and `run_once` stores the error exit code. This stale error can cascade
+into the Payload menu, showing a confusing error dialog on first entry.
+
+**Root cause:** The helpers assume config is complete. The startup call site in
+`abatui2.sh` is currently guarded with `_direct_config_complete`, but the guard
+is external — other call sites rely on being structurally unreachable before
+the wizard runs, which is fragile if new call sites are added.
+
+**Proposed fix:** Move the `_direct_config_complete` guard into the helpers
+themselves (silent no-op when config is incomplete). Remove the external guard
+from `abatui2.sh`. This provides defense-in-depth: no caller can accidentally
+trigger ISC generation with incomplete config, even if new call sites are added
+later.
+
+**Workaround:** None needed — current code works because post-wizard call sites
+are structurally safe, and the startup site is already guarded.
+
+---
+
+## TUI "Install Cluster" auto-detect picks already-installed cluster
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-30
+
+**Problem:** When the user selects "Install Cluster" in the TUI, the wizard
+auto-detects the most recently modified `cluster.conf` as the default cluster
+name. If that cluster is already installed (e.g. shut down), the user is
+immediately shown a "Cluster Already Installed — create a new cluster instead?"
+dialog. This is confusing — the user expected to go straight to the cluster
+wizard, not be questioned about an existing cluster they didn't choose.
+
+**Root cause:** `cluster_install_flow()` picks the latest `cluster.conf` by
+mtime (`ls -t */cluster.conf | head -1`) and then checks `.install-complete`.
+There is no intermediate cluster-picker step.
+
+**Proposed fix:** When multiple cluster dirs exist and the auto-detected one is
+already installed, show a cluster picker listing all dirs with their status
+(installed / shut down / not installed) so the user can choose which cluster to
+work with, or create a new one. Only skip straight to the wizard when there is
+a single un-installed cluster or no clusters at all.
+
+**Workaround:** Select "New Cluster" in the dialog, then type the desired
+cluster name on the first wizard page.
+
+---
+
 ## Multi-value image_source for multi-mirror clusters
 
 **Severity:** MEDIUM
