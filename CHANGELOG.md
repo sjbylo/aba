@@ -24,6 +24,13 @@
 - **TUI inconsistent channel defaults** — Channel defaults now consistent across wizard and config (Bug #1003).
 - **TUI subshell-echo antipattern** — Six `$(source <(normalize-*-conf) && echo "$var")` patterns replaced with direct sourcing (Bugs #1004, #1005).
 - **Bundle reset** — Fixed bundle reset operation.
+- **TUI editbox "Not a file" error** — The `dlg()` wrapper treated `--editbox` file paths as display text (prepending `\n`), causing dialog to reject the corrupted path. Separated `--editbox` from `--mixedform` so file paths pass through unchanged.
+- **TUI duplicate MACs accepted** — The MAC address editor allowed identical MACs for different nodes without warning. Added uniqueness validation with a clear error listing the duplicates.
+- **TUI empty ports accepted** — Pressing Next with an empty ports field was silently accepted, producing invalid `cluster.conf`. Now rejected with an actionable error message.
+- **TUI bare-metal port default missing** — KVM (`enp1s0`) and VMware (`ens160`) had port defaults but bare-metal did not. Added `eno1` as the default for bare-metal in both the config generator and TUI platform toggle.
+- **TUI ISC "View Config" shows "not yet generated"** — Clicking View Config in Sync/Save/Load/Bundle dialogs failed when the ISC hadn't been generated yet. Generation is now triggered at dialog entry (non-blocking) and waited on at View Config click, with stale `run_once` state detection and reset.
+- **TUI ISC run_once patterns DRY refactor** — Extracted repeated ISC trigger/wait patterns into `tui_ensure_isconf()` (non-blocking ensure+trigger) and `tui_wait_isconf()` (blocking poll+wait with infobox), replacing 7 inline call sites.
+- **TUI startup ISC trigger without config guard** — Background ISC generation at TUI startup could fire before the setup wizard completed, failing on missing `ocp_version`/`ocp_channel` and storing a stale error in `run_once` metadata. Now guarded by `_direct_config_complete`.
 
 ---
 
