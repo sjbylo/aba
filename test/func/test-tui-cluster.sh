@@ -31,10 +31,17 @@ echo "  Host: $_TUI_HOST"
 echo "  Cluster: $_CLUSTER"
 echo ""
 
-# Pre-test cleanup: destroy any leftover cluster VMs and state from prior runs
+# Pre-test cleanup: destroy any leftover cluster VMs and state from prior runs.
+# Must run BEFORE tui_deploy_code so the delete uses the current scripts.
+# The delete must actually remove VMs from the hypervisor — otherwise the
+# cluster's IP stays in use and preflight blocks the install.
 if $_TUI_SSH "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
 	echo "  Cleaning up leftover '$_CLUSTER' cluster from prior run..."
-	$_TUI_SSH "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; rm -rf ~/aba/$_CLUSTER; true"
+	if ! $_TUI_SSH "cd ~/aba && aba -d $_CLUSTER delete --yes" 2>&1 | tail -10; then
+		echo "  ERROR: 'aba -d $_CLUSTER delete --yes' failed!"
+		echo "  VMs may still be running and holding IPs. Fix manually before re-running."
+		exit 1
+	fi
 	sleep 5
 fi
 
