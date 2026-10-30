@@ -166,7 +166,7 @@ _E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
-_E2E_STALE_FW_PORTS="${POOL_REG_PORT}/tcp 8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
+_E2E_STALE_FW_PORTS="${POOL_REG_PORT}/tcp 8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 5222/tcp 80/tcp"
 
 # Print filesystem snapshot of conN (local) and disN (remote) for debug diagnostics.
 _print_fs_snapshot() {

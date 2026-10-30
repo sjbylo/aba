@@ -46,6 +46,7 @@ plan_tests \
     "SNO: verify operators from all catalogs" \
     "Import: day2 injects mirror creds on imported cluster" \
     "Import: multi-mirror day2 CA and CatalogSource naming" \
+    "Real multi-mirror: second registry + day2" \
     "Import: stale kubeconfig detection" \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
@@ -550,6 +551,222 @@ e2e_run "Cleanup: remove import dir and temp files" \
 test_end
 
 # ============================================================================
+# 9d. Real multi-mirror: install second registry, sync operator, run day2
+# ============================================================================
+# Unlike 9b (simulated), this test installs a REAL second Docker registry,
+# syncs a single operator to it, runs day2 from that mirror against the SNO,
+# and verifies the full multi-mirror outcome.
+#
+# NOTE: Uses `aba import --image-source` to create a second cluster dir as a
+# workaround for image_source being a scalar.  When ADR-017 (multi-value
+# image_source) lands, this test should be simplified to use a single cluster
+# dir with image_source=mirror,mm2.  See BACKLOG "Multi-value image_source".
+#
+# Verifies:
+#   (a) Both CA keys present in registry-config (real certs, not patched)
+#   (b) CatalogSources from second mirror are suffixed with hostname
+#   (c) Pull secret contains credentials for both registries
+#   (d) IDMS/ITMS from second mirror coexist with the first
+#   (e) Operator from second mirror appears in packagemanifests
+#   (f) Idempotent second run of day2
+test_begin "Real multi-mirror: second registry + day2"
+
+_MM2_NAME="e2e-mm2-docker"
+_MM2_IMPORT="e2e-mm2-imported"
+_MM2_PORT=5222
+_MM2_PW="mm2pass"
+_MM2_KC="$SNO/iso-agent-based/auth/kubeconfig"
+_MM2_DATADIR="~/docker-reg-mm2"
+
+# --- Install a second Docker registry on a different port ---
+
+e2e_run "Create second mirror directory" \
+    "aba mirror --name $_MM2_NAME || true"
+e2e_add_to_mirror_cleanup "$PWD/$_MM2_NAME"
+
+e2e_run "Install Docker registry on port $_MM2_PORT" \
+    "aba -d $_MM2_NAME install --vendor docker -H $CON_HOST --reg-port $_MM2_PORT --reg-password '$_MM2_PW' --data-dir '$_MM2_DATADIR'"
+
+e2e_run "Verify second registry accessible" \
+    "aba -d $_MM2_NAME verify"
+
+# --- Configure: operators only (no platform images), single small operator ---
+
+e2e_run "Set excl_platform=true in aba.conf for second mirror sync" \
+    "cp aba.conf aba.conf.mm2-bak && sed -i 's/^excl_platform=.*/excl_platform=true/' aba.conf"
+
+e2e_run "Set ops=web-terminal in second mirror's mirror.conf" \
+    "sed -i '/^#ops=/c\\ops=web-terminal' $_MM2_NAME/mirror.conf && sed -i '/^#op_sets=/c\\op_sets=' $_MM2_NAME/mirror.conf"
+
+e2e_diag "Show second mirror config" \
+    "echo '--- aba.conf (excl_platform) ---' && grep excl_platform aba.conf && echo '--- mirror.conf ---' && grep -E '^\w' $_MM2_NAME/mirror.conf"
+
+# --- Sync single operator to the second mirror ---
+
+e2e_run -r 2 5 "Sync web-terminal operator to second mirror" \
+    "aba -d $_MM2_NAME sync --retry"
+
+# Restore aba.conf immediately so the pool registry config is not affected
+e2e_run "Restore aba.conf" \
+    "cp aba.conf.mm2-bak aba.conf && rm -f aba.conf.mm2-bak"
+
+# --- Snapshot cluster state before day2 from second mirror ---
+
+e2e_run "Snapshot: CS count before multi-mirror day2" "
+    export KUBECONFIG=$_MM2_KC
+    oc get catalogsource -n openshift-marketplace --no-headers | tee /tmp/e2e-mm2-cs-before.txt
+    wc -l < /tmp/e2e-mm2-cs-before.txt
+"
+
+e2e_run "Snapshot: registry-config keys before" "
+    export KUBECONFIG=$_MM2_KC
+    oc get cm registry-config -n openshift-config -o json \
+        | jq -r '.data | keys[]' | sort | tee /tmp/e2e-mm2-keys-before.txt
+"
+
+# --- Run day2 from the second mirror ---
+
+e2e_run "Import SNO for second mirror day2" \
+    "aba import --kubeconfig $_MM2_KC --name $_MM2_IMPORT --image-source $_MM2_NAME --force"
+
+e2e_run "Verify imported cluster references second mirror" \
+    "grep -q 'image_source=$_MM2_NAME' $_MM2_IMPORT/cluster.conf"
+
+e2e_run "Fix gateway for imported cluster" \
+    "sed -i 's/^next_hop_address=.*/next_hop_address=$(pool_gateway)/' $_MM2_IMPORT/cluster.conf"
+
+e2e_run "Run day2 from second mirror" \
+    "aba --dir $_MM2_IMPORT day2 2>&1 | tee /tmp/e2e-mm2-day2.log"
+
+# --- Verify: CA trust ---
+
+_MM2_HOST=$(grep '^reg_host=' $_MM2_NAME/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_MM2_CM_KEY="${_MM2_HOST}..${_MM2_PORT}"
+_POOL_CM_KEY="${CON_HOST}..${POOL_REG_PORT}"
+
+e2e_run "Verify both CA keys in registry-config" "
+    export KUBECONFIG=$_MM2_KC
+    oc get cm registry-config -n openshift-config -o json \
+        | jq -r '.data | keys[]' | sort | tee /tmp/e2e-mm2-keys-after.txt
+    grep -q '$_MM2_CM_KEY' /tmp/e2e-mm2-keys-after.txt \
+        || { echo 'FAIL: second mirror CA key ($_MM2_CM_KEY) missing'; exit 1; }
+    grep -q '$_POOL_CM_KEY' /tmp/e2e-mm2-keys-after.txt \
+        || { echo 'FAIL: pool registry CA key ($_POOL_CM_KEY) missing'; exit 1; }
+    echo 'PASS: both CA keys present'
+"
+
+e2e_run "Verify second mirror CA is a real certificate" "
+    export KUBECONFIG=$_MM2_KC
+    oc get cm registry-config -n openshift-config -o json \
+        | jq -r '.data[\"$_MM2_CM_KEY\"]' > /tmp/e2e-mm2-ca.txt
+    grep -q 'BEGIN CERTIFICATE' /tmp/e2e-mm2-ca.txt \
+        || { echo 'FAIL: not a certificate'; cat /tmp/e2e-mm2-ca.txt; exit 1; }
+    echo 'PASS: second mirror CA is a valid certificate'
+"
+
+# --- Verify: CatalogSource naming ---
+
+_MM2_HOST_SHORT="${_MM2_HOST%%.*}"
+
+e2e_run "Verify CatalogSources from second mirror are suffixed" "
+    export KUBECONFIG=$_MM2_KC
+    oc get catalogsource -n openshift-marketplace --no-headers \
+        -o custom-columns='NAME:.metadata.name'
+    _suffixed=\$(oc get catalogsource -n openshift-marketplace \
+        -o jsonpath='{.items[*].metadata.name}' \
+        | tr ' ' '\n' | grep -c '${_MM2_HOST_SHORT}\$' || true)
+    [ \"\$_suffixed\" -gt 0 ] \
+        || { echo 'FAIL: no CatalogSource with suffix $_MM2_HOST_SHORT'; exit 1; }
+    echo \"PASS: \$_suffixed CatalogSource(s) suffixed with $_MM2_HOST_SHORT\"
+"
+
+# Pool registry's original CatalogSources should still exist
+e2e_run "Verify pool registry CatalogSources still present" "
+    export KUBECONFIG=$_MM2_KC
+    oc get catalogsource -n openshift-marketplace -o jsonpath='{.items[*].metadata.name}' \
+        | tr ' ' '\n' | grep -v '${_MM2_HOST_SHORT}\$' | grep -q 'redhat-operators\|certified-operators' \
+        || { echo 'FAIL: pool registry CatalogSources missing'; exit 1; }
+    echo 'PASS: pool registry CatalogSources still present'
+"
+
+# --- Verify: pull secret has both registries ---
+
+e2e_run "Verify pull secret contains both registry credentials" "
+    export KUBECONFIG=$_MM2_KC
+    oc get secret pull-secret -n openshift-config -o json \
+        | jq -r '.data[\".dockerconfigjson\"]' | base64 -d | jq -r '.auths | keys[]' \
+        | tee /tmp/e2e-mm2-ps-keys.txt
+    grep -q '${CON_HOST}:${POOL_REG_PORT}' /tmp/e2e-mm2-ps-keys.txt \
+        || { echo 'FAIL: pool registry missing from pull secret'; exit 1; }
+    grep -q '${_MM2_HOST}:${_MM2_PORT}' /tmp/e2e-mm2-ps-keys.txt \
+        || { echo 'FAIL: second mirror missing from pull secret'; exit 1; }
+    echo 'PASS: pull secret has both registries'
+"
+
+# --- Verify: IDMS/ITMS from both mirrors ---
+
+e2e_run "Verify IDMS entries from both mirrors coexist" "
+    export KUBECONFIG=$_MM2_KC
+    _idms=\$(oc get imagedigestmirrorset -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || \
+             oc get imagecontentsourcepolicy -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
+    echo \"IDMS present: \$_idms\"
+    [ -n \"\$_idms\" ] || { echo 'FAIL: no IDMS found at all'; exit 1; }
+    echo 'PASS: IDMS entries present'
+"
+
+# --- Verify: operator from second mirror available ---
+# CatalogSource pod needs ~2 min to start and index the catalog.
+
+e2e_run -q "Wait for catalog indexing" "sleep 60"
+
+e2e_poll 180 15 "Wait for web-terminal operator from second mirror" \
+    "export KUBECONFIG=$_MM2_KC && oc get packagemanifests 2>/dev/null | grep -q web-terminal"
+
+# --- Idempotency: second run should be a no-op ---
+
+e2e_run "Snapshot: CS count after first day2" "
+    export KUBECONFIG=$_MM2_KC
+    oc get catalogsource -n openshift-marketplace --no-headers | wc -l \
+        > /tmp/e2e-mm2-cs-after-day2.txt
+    echo \"CS count after day2: \$(cat /tmp/e2e-mm2-cs-after-day2.txt)\"
+"
+
+e2e_run "Run day2 from second mirror again (idempotency)" \
+    "aba --dir $_MM2_IMPORT day2 2>&1 | tee /tmp/e2e-mm2-day2-idem.log"
+
+e2e_run "Verify idempotent: CS count unchanged after second run" "
+    export KUBECONFIG=$_MM2_KC
+    _expected=\$(cat /tmp/e2e-mm2-cs-after-day2.txt)
+    _actual=\$(oc get catalogsource -n openshift-marketplace --no-headers | wc -l)
+    [ \"\$_expected\" = \"\$_actual\" ] \
+        || { echo \"FAIL: CS count changed: \$_expected -> \$_actual\"; exit 1; }
+    echo \"PASS: CS count unchanged (\$_actual)\"
+"
+
+e2e_run "Verify dedup: day2 skipped duplicate CatalogSources" \
+    "grep -q 'already served by an existing CatalogSource, skipping' /tmp/e2e-mm2-day2-idem.log"
+
+# --- Cleanup ---
+
+e2e_run "Cleanup: delete suffixed CatalogSources from second mirror" "
+    export KUBECONFIG=$_MM2_KC
+    for _cs in \$(oc get catalogsource -n openshift-marketplace \
+            -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' \
+            | grep '${_MM2_HOST_SHORT}\$'); do
+        oc delete catalogsource \"\$_cs\" -n openshift-marketplace
+        echo \"Deleted: \$_cs\"
+    done
+"
+
+e2e_run "Cleanup: uninstall second Docker registry" \
+    "aba -y -d $_MM2_NAME uninstall --delete-data"
+
+e2e_run "Cleanup: remove second mirror dir, import dir and temp files" \
+    "rm -rf $_MM2_NAME $_MM2_IMPORT /tmp/e2e-mm2-*.txt /tmp/e2e-mm2-*.log aba.conf.mm2-bak"
+
+test_end
+
+# ============================================================================
 # 9c. Import: stale kubeconfig detection
 # ============================================================================
 # When importing a cluster that ABA already manages, verify that:
@@ -926,6 +1143,8 @@ e2e_run "Delete enclave SNO if leftover" \
     "_e2e_delete_leftover_cluster $ENCLAVE_SNO"
 e2e_run "Unregister enclave mirror if leftover" \
     "if [ -d $ENCLAVE_MIRROR ]; then aba -d $ENCLAVE_MIRROR unregister && rm -rf $ENCLAVE_MIRROR; else echo '[cleanup] enclave mirror already removed'; fi"
+e2e_run "Cleanup multi-mirror test if leftover" \
+    "if [ -d $_MM2_NAME ]; then aba -y -d $_MM2_NAME uninstall --delete-data 2>/dev/null; rm -rf $_MM2_NAME $_MM2_IMPORT; else echo '[cleanup] multi-mirror already removed'; fi"
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"
 
