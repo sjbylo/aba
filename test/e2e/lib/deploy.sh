@@ -35,7 +35,10 @@ _make_source_tar() {
 		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
 	fi
 
-	tar czf "$_tar" -C "$aba_root" --exclude='*/.*' "${_paths[@]}"
+	# Use git ls-files to respect .gitignore (includes tracked + untracked-not-ignored)
+	(cd "$aba_root" && git ls-files --cached --others --exclude-standard -- "${_paths[@]}" \
+		| tar czf "$_tar" -C "$aba_root" -T -)
+
 	echo "$_tar"
 }
 
@@ -61,9 +64,9 @@ _source_checksum() {
 		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
 	fi
 
-	# Build sorted file list (excludes dotfiles to match tarball --exclude='*/.*')
+	# Use git ls-files to respect .gitignore (same file set as _make_source_tar)
 	local _filelist
-	_filelist=$(cd "$aba_root" && find "${_paths[@]}" -type f ! -path '*/.*' 2>/dev/null | LC_ALL=C sort)
+	_filelist=$(cd "$aba_root" && git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | LC_ALL=C sort)
 
 	# Save file list for verify-code to push to pools
 	echo "$_filelist" > /tmp/e2e-source-filelist
