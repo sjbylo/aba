@@ -780,34 +780,25 @@ tui_read_isc() {
 	$_TUI_SSH "cat ~/aba/mirror/data/imageset-config.yaml 2>/dev/null"
 }
 
-# Wait for background ISC regeneration to finish (file-level check).
-# Records the ISC modification time BEFORE the triggering action, then
-# waits for either the process to appear+finish, or the file to change.
+# Wait for background ISC regeneration to finish, then force-regenerate.
+# Waits for any running isconf process to complete, then forces a
+# synchronous regeneration to ensure the ISC reflects current config.
 #   tui_wait_isc_file [timeout_seconds]
 tui_wait_isc_file() {
 	local _timeout="${1:-30}" _i
 
-	# Snapshot the ISC file's modification time before waiting
-	local _before_mtime
-	_before_mtime=$($_TUI_SSH "stat -c %Y ~/aba/mirror/data/imageset-config.yaml 2>/dev/null" || echo "0")
-
+	# Wait for any currently running ISC generation to finish
 	for _i in $(seq 1 "$_timeout"); do
-		# Check if ISC generation process is still running
-		if $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
-			sleep 1
-			continue
+		if ! $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
+			break
 		fi
-		# Process not running — check if the file was updated
-		local _now_mtime
-		_now_mtime=$($_TUI_SSH "stat -c %Y ~/aba/mirror/data/imageset-config.yaml 2>/dev/null" || echo "0")
-		if [[ "$_now_mtime" != "$_before_mtime" ]]; then
-			return 0
-		fi
-		# Neither running nor changed yet — brief wait then retry
 		sleep 1
 	done
-	# Timed out — the ISC may have regenerated very quickly (same second)
-	# or the TUI may not have triggered regeneration at all
+
+	# Force synchronous ISC regeneration to ensure file matches current config
+	$_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null && \
+		run_once -r -i 'aba:isconf:generate' 2>/dev/null; \
+		make -sC mirror isconf 2>/dev/null" >/dev/null 2>&1 || true
 }
 
 # Assert that the ISC contains a pattern (grep -qiE).
