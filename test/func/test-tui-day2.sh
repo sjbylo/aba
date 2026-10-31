@@ -227,7 +227,7 @@ _day2_run_action() {
 # ============================================================================
 echo ""
 echo "--- 3. Configure OperatorHub ---"
-_day2_run_action "OperatorHub" "operatorhub" 1200 "aba.*day2"
+_day2_run_action "OperatorHub" "operatorhub" 1200 "Day-2:.*day2\|aba.*day2\|OperatorHub\|CatalogSource"
 
 # ============================================================================
 # 4. NTP Configuration
