@@ -88,6 +88,41 @@ summary, with neutral styling when OK and red when tight/short.
 
 ---
 
+## Viewing oc-mirror logs after sync/save/load (idea)
+
+**Severity:** LOW
+**Status:** Idea
+**Added:** 2026-10-31
+
+**Problem:** After sync/save/load, scrolling back through terminal output
+is garbled — oc-mirror uses `\r` carriage returns and ANSI escape codes
+for dynamic progress bars which render as garbage in scrollback / `less`.
+
+**Root cause:** Terminal scrollback records every `\r` overwrite as raw
+bytes.  `less` and terminal scrollback replay them as truncated/overlapping
+lines.  oc-mirror already writes a clean structured log to
+`mirror/data/working-dir/logs/oc-mirror-YYYYMMDD_HHMMSS.log` with all
+INFO/WARN/ERROR messages, results, and timing — but users don't know it
+exists.
+
+**Workaround:** `less -R` renders ANSI colors natively:
+`less -R mirror/data/working-dir/logs/oc-mirror-*.log`
+
+**Possible idea (Phase 1):** Add `aba mirror log` Make target to open the
+latest log in `less -R`.  May not be needed if the workaround is sufficient.
+
+**Proposed fix (Phase 2 — moderate risk):** Wrap oc-mirror execution with
+`script -q` to capture full terminal output (including per-image progress)
+to a file while preserving TTY behavior.  Post-process the capture: split
+on `\r`, strip ANSI, keep only the last version of each progress line.
+Risks: signal handling, exit code masking, PTY allocation quirks.  Requires
+E2E testing across sync/save/load before release.
+
+**What Phase 1 gives:** All INFO messages, results, timings, errors.
+**What Phase 2 adds:** Per-image `✓`/`↑` progress lines.
+
+---
+
 ## Multiple ABA repos on same host: shared state conflict
 
 **Severity:** LOW
