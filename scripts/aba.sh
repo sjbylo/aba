@@ -1371,11 +1371,14 @@ _ensure_hv_ready() {
 	source <(cd "$ABA_ROOT" && normalize-aba-conf)
 	case "$platform" in
 		vmw)
+			# Remove dangling symlink so ln can recreate it
+			[ -L vmware.conf ] && [ ! -e vmware.conf ] && rm -f vmware.conf
 			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
 			[ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first."
 			ensure_govc
 			;;
 		kvm)
+			[ -L kvm.conf ] && [ ! -e kvm.conf ] && rm -f kvm.conf
 			[ ! -s kvm.conf ] && [ -f ../kvm.conf ] && ln -s ../kvm.conf
 			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
 			ensure_virsh
@@ -1677,7 +1680,9 @@ if [ "$cur_target" ]; then
 			source <(cd "$ABA_ROOT" && normalize-aba-conf)
 			case "$platform" in
 				vmw|kvm)
-					_ensure_hv_ready
+					# Best-effort: missing vmware.conf/kvm.conf must not block cleanup —
+					# vmw-delete.sh / kvm-delete.sh handle missing config gracefully.
+					( _ensure_hv_ready ) 2>/dev/null || aba_warn "vmware.conf/kvm.conf not found — proceeding with best-effort delete."
 					$ABA_ROOT/scripts/${platform}-delete.sh || exit $?
 					;;
 				bm)
