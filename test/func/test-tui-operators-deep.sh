@@ -144,12 +144,15 @@ if [[ "$_found_logging" == "true" ]]; then
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
-	# ISC round-trip: verify the ISC file reflects the logging operators
-	# Allow background ISC regeneration to complete
-	sleep 5
+	# ISC round-trip: navigate back to payload menu to trigger basket
+	# persistence and ISC regeneration, then verify ISC content
+	tui_keys Escape; sleep 3
+	tui_wait_isc_file 60
 	echo "  Verifying ISC contains logging operators..."
 	tui_assert_isc_contains "cluster-logging|loki-operator|cincinnati-operator" "logging operators in ISC"
 	tui_assert_isc_contains "^  operators:" "operators section in ISC"
+	# Return to operators menu for subsequent tests
+	_goto_operators
 else
 	echo "  ~ SKIP: Could not find 'logging' in operator sets list"
 fi
