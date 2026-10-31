@@ -143,6 +143,13 @@ if [[ "$_found_logging" == "true" ]]; then
 		echo "  ✗ FAIL: Basket still empty after adding logging set"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
+
+	# ISC round-trip: verify the ISC file reflects the logging operators
+	# Allow background ISC regeneration to complete
+	sleep 5
+	echo "  Verifying ISC contains logging operators..."
+	tui_assert_isc_contains "cluster-logging|loki-operator|cincinnati-operator" "logging operators in ISC"
+	tui_assert_isc_contains "^  operators:" "operators section in ISC"
 else
 	echo "  ~ SKIP: Could not find 'logging' in operator sets list"
 fi
@@ -399,6 +406,18 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_screenshot "od-08-final-empty"
+
+# ISC round-trip: after clearing all operators, ISC should have no operator packages
+echo "  Verifying ISC has no operators after clear..."
+_isc_cleared=$(tui_read_isc)
+_pkg_lines=$(echo "$_isc_cleared" | grep -c '^\s*- name:.*operator' 2>/dev/null) || _pkg_lines=0
+if [[ "$_pkg_lines" -eq 0 ]]; then
+	echo "  ✓ PASS: ISC has no operator packages after clear"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: ISC still has $_pkg_lines operator packages after clear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
 
 # ============================================================================
 # 9. View/Edit on empty basket — verify empty message

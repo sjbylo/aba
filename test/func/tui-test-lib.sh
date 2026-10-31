@@ -753,6 +753,62 @@ tui_delete_cluster() {
 	return 0
 }
 
+# --- ISC (ImageSetConfiguration) verification helpers ---
+
+# Read the ISC YAML from the remote host.  Caller captures output.
+tui_read_isc() {
+	$_TUI_SSH "cat ~/aba/mirror/data/imageset-config.yaml 2>/dev/null"
+}
+
+# Wait for background ISC regeneration to finish (file-level check).
+# Polls for the make/run_once ISC process to complete on the remote host.
+#   tui_wait_isc_file [timeout_seconds]
+tui_wait_isc_file() {
+	local _timeout="${1:-30}" _i
+	for _i in $(seq 1 "$_timeout"); do
+		# Check if ISC generation is still running (make isconf or run_once)
+		if ! $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
+			return 0
+		fi
+		sleep 1
+	done
+	echo "  (ISC generation still running after ${_timeout}s — proceeding anyway)"
+}
+
+# Assert that the ISC contains a pattern (grep -qiE).
+# Waits for ISC regeneration to finish first.
+#   tui_assert_isc_contains  <pattern>  <label>
+tui_assert_isc_contains() {
+	local _pat="$1" _label="$2"
+	local _isc
+	tui_wait_isc_file 30
+	_isc=$(tui_read_isc)
+	if echo "$_isc" | grep -qiE "$_pat"; then
+		echo "  ✓ PASS: ISC contains $_label"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: ISC missing $_label (pattern: $_pat)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+}
+
+# Assert that the ISC does NOT contain a pattern.
+# Waits for ISC regeneration to finish first.
+#   tui_assert_isc_not_contains  <pattern>  <label>
+tui_assert_isc_not_contains() {
+	local _pat="$1" _label="$2"
+	local _isc
+	tui_wait_isc_file 30
+	_isc=$(tui_read_isc)
+	if echo "$_isc" | grep -qiE "$_pat"; then
+		echo "  ✗ FAIL: ISC still contains $_label (should have been removed)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	else
+		echo "  ✓ PASS: ISC no longer contains $_label"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	fi
+}
+
 # --- Reporting ---
 
 tui_summary() {
