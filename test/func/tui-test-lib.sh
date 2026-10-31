@@ -718,7 +718,14 @@ tui_delete_cluster() {
 	local _installed
 	_installed=$($_TUI_SSH "test -f ~/aba/$cluster/.install-complete && echo yes || echo no")
 	if [[ "$_installed" != "yes" ]]; then
-		echo "  Pre-cleanup: '$cluster' not installed — nothing to delete"
+		# No .install-complete — VMs should not exist.
+		# Clean up any leftover directory (stale config from a previous run).
+		if $_TUI_SSH "test -d ~/aba/$cluster" 2>/dev/null; then
+			echo "  Pre-cleanup: '$cluster' not installed — removing stale directory"
+			$_TUI_SSH "rm -rf ~/aba/$cluster" 2>/dev/null
+		else
+			echo "  Pre-cleanup: '$cluster' not installed — nothing to delete"
+		fi
 		return 0
 	fi
 

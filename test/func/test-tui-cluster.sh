@@ -41,6 +41,25 @@ tui_start_to_menu || { tui_summary; exit 1; }
 # Pre-test cleanup: delete any leftover cluster via the TUI
 tui_delete_cluster "$_CLUSTER"
 
+# Also clean up any cluster directory without .install-complete (leftover from
+# a previous clean+delete cycle where the VM was already destroyed)
+_dir_exists=$($_TUI_SSH "test -d ~/aba/$_CLUSTER && echo yes || echo no")
+_inst_exists=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
+if [[ "$_dir_exists" == "yes" && "$_inst_exists" != "yes" ]]; then
+	echo "  Pre-cleanup: removing leftover cluster directory '$_CLUSTER' (no .install-complete)"
+	$_TUI_SSH "rm -rf ~/aba/$_CLUSTER" 2>/dev/null
+fi
+
+# Wait for the target IP to be free (previous VM may still be powering off)
+echo "  Pre-cleanup: checking IP $_api_ip is free..."
+for _arping_try in $(seq 1 30); do
+	if ! $_TUI_SSH "arping -c 1 -w 2 $_api_ip 2>/dev/null" | grep -q "reply from"; then
+		break
+	fi
+	echo "  Pre-cleanup: IP $_api_ip still in use, waiting... ($_arping_try/30)"
+	sleep 10
+done
+
 # ============================================================================
 # 1. Open cluster install wizard
 # ============================================================================
