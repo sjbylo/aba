@@ -48,7 +48,9 @@ if [[ "${_TUI_LOCK_HELD:-}" != "1" ]]; then
 fi
 
 # --- Pre-test disk cleanup ---
-# Removes expendable caches and artifacts to prevent "disk full" during tests.
+# Removes expendable artifacts to prevent "disk full" during tests.
+# Conservative: keeps oc-mirror cache (saves network downloads) and only
+# removes tar files that have already been loaded into the registry.
 # Call tui_pre_cleanup before any long-running test (sync, install, upgrade).
 tui_pre_cleanup() {
 	echo "  Pre-test disk cleanup on $_TUI_HOST..."
@@ -58,41 +60,32 @@ tui_pre_cleanup() {
 	_before=$(( _before / 1024 / 1024 ))  # GB
 	echo "  Disk free before: ${_before} GB"
 
-	# 1. Podman: prune all unused images (old operator catalog indexes, etc.)
+	# 1. Podman: prune unused images (old operator catalog indexes, etc.)
 	echo "  Pruning podman images..."
 	$_TUI_SSH "podman image prune -af 2>/dev/null" >/dev/null 2>&1 || true
 
-	# 2. oc-mirror cache — rebuilt on next sync, safe to delete
-	local _cache_size
-	_cache_size=$($_TUI_SSH "du -sm ~/.oc-mirror 2>/dev/null | cut -f1" 2>/dev/null || echo 0)
-	_cache_size=${_cache_size//[^0-9]/}
-	: "${_cache_size:=0}"
-	if [[ "$_cache_size" -gt 500 ]]; then
-		echo "  Removing oc-mirror cache ($(( _cache_size / 1024 )) GB)..."
-		$_TUI_SSH "rm -rf ~/.oc-mirror" 2>/dev/null || true
-	fi
+	# 2. Keep ~/.oc-mirror — it's a download cache that reduces network traffic.
 
-	# 3. Leftover oc-mirror tar archives (only on sync hosts, not save/disco)
-	#    These are not needed after sync completes — the images are in the registry.
-	local _tui_mode
-	_tui_mode=$($_TUI_SSH "cd ~/aba 2>/dev/null && source scripts/include_all.sh 2>/dev/null && . aba.conf 2>/dev/null && echo \${aba_mode:-}" 2>/dev/null || true)
-	if [[ "$_tui_mode" != "disco" && "$_tui_mode" != "DISCO" ]]; then
-		local _tar_size
-		_tar_size=$($_TUI_SSH "du -sm ~/aba/mirror/data/mirror_*.tar 2>/dev/null | awk '{s+=\$1} END{print s+0}'" 2>/dev/null || echo 0)
-		_tar_size=${_tar_size//[^0-9]/}
-		: "${_tar_size:=0}"
-		if [[ "$_tar_size" -gt 500 ]]; then
-			echo "  Removing leftover mirror tar files ($(( _tar_size / 1024 )) GB)..."
+	# 3. Mirror tar archives — only delete if already loaded into the registry.
+	#    Check: .oc-mirror-exit-code == 0 means the last sync/load succeeded,
+	#    so the tar contents are in the registry and the tars are expendable.
+	local _tar_size _oc_rc
+	_tar_size=$($_TUI_SSH "du -sm ~/aba/mirror/data/mirror_*.tar 2>/dev/null | awk '{s+=\$1} END{print s+0}'" 2>/dev/null || echo 0)
+	_tar_size=${_tar_size//[^0-9]/}
+	: "${_tar_size:=0}"
+	if [[ "$_tar_size" -gt 500 ]]; then
+		_oc_rc=$($_TUI_SSH "cat ~/aba/mirror/.oc-mirror-exit-code 2>/dev/null" 2>/dev/null || echo "")
+		_oc_rc=${_oc_rc//[^0-9]/}
+		if [[ "$_oc_rc" == "0" ]]; then
+			echo "  Removing loaded mirror tar files ($(( _tar_size / 1024 )) GB)..."
 			$_TUI_SSH "rm -f ~/aba/mirror/data/mirror_*.tar" 2>/dev/null || true
+		else
+			echo "  Keeping mirror tar files (not yet loaded, exit code: ${_oc_rc:-unknown})"
 		fi
 	fi
 
 	# 4. Podman container storage cleanup (stopped containers, build cache)
 	$_TUI_SSH "podman system prune -f 2>/dev/null" >/dev/null 2>&1 || true
-
-	# 5. Old test screenshot dirs (keep 3 most recent per test)
-	rm -rf /tmp/tui-test/*-2*/  2>/dev/null || true
-	# (Already pruned per-test above; this catches orphaned dirs)
 
 	_after=$($_TUI_SSH "df --output=avail /home 2>/dev/null | tail -1 | tr -d ' '" 2>/dev/null || echo 0)
 	_after=$(( _after / 1024 / 1024 ))  # GB
