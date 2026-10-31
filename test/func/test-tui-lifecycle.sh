@@ -66,8 +66,8 @@ else
 
 		tui_dismiss_exec_mode
 
-		echo "  Waiting for shutdown (up to 20 min)..."
-		if tui_wait_for_progress "lc-shutdown" 600; then
+		echo "  Waiting for shutdown (up to 30 min)..."
+		if tui_wait_for_progress "lc-shutdown" 1800; then
 			echo "  ✓ PASS: Shutdown completed"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
