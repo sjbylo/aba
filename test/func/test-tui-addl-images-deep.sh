@@ -205,6 +205,12 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
+# ISC round-trip: verify the ISC file contains both images
+echo "  Verifying ISC reflects added images..."
+tui_assert_isc_contains "additionalImages:" "additionalImages section in ISC"
+tui_assert_isc_contains "ubi9/ubi" "ubi9/ubi image in ISC"
+tui_assert_isc_contains "support-tools" "support-tools image in ISC"
+
 # ============================================================================
 # 6. List images — verify both are shown
 # ============================================================================
@@ -269,6 +275,10 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
+# ISC round-trip: when excluded, additionalImages should be commented out or absent
+echo "  Verifying ISC excludes additional images..."
+tui_assert_isc_not_contains "^  additionalImages:" "active additionalImages (should be excluded)"
+
 _goto_addl
 sleep 1
 _scr=$(tui_capture)
@@ -323,6 +333,18 @@ if echo "$_scr" | grep -qi "ubi9/ubi\|support-tools"; then
 		echo "  ✗ FAIL: Expected 1 image after remove, got $_count"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
+
+	# ISC round-trip: verify the ISC has only 1 image after removal
+	echo "  Verifying ISC reflects removal..."
+	_isc_after_rm=$(tui_read_isc)
+	_img_count=$(echo "$_isc_after_rm" | grep -c 'additionalImages:' 2>/dev/null) || _img_count=0
+	if [[ "$_img_count" -ge 1 ]]; then
+		echo "  ✓ PASS: ISC still has additionalImages section (1 image remains)"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: ISC lost additionalImages section entirely"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
 else
 	echo "  ✗ FAIL: Remove checklist not shown"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -372,6 +394,18 @@ if echo "$_scr" | grep -qi "Remove all\|Clear All\|cannot be undone"; then
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
 		echo "  ✗ FAIL: Expected 0 images after clear, got $_count"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+
+	# ISC round-trip: after clearing all images, ISC should have no additionalImages
+	echo "  Verifying ISC has no additional images after clear..."
+	_isc_cleared=$(tui_read_isc)
+	_addl_active=$(echo "$_isc_cleared" | grep -c '^  additionalImages:' 2>/dev/null) || _addl_active=0
+	if [[ "$_addl_active" -eq 0 ]]; then
+		echo "  ✓ PASS: ISC has no additionalImages after clear"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: ISC still has additionalImages section after clear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else
