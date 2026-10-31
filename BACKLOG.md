@@ -3135,38 +3135,17 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 **Alternative:** Keep `reg_host` as a full FQDN but add a validation check that warns if its domain suffix doesn't match `domain` from `aba.conf`.
 
-## `vmw-delete.sh` fails to destroy VMs when agent config files are missing
+## `vmw-delete.sh` should fall back to `cluster.conf` when agent config files are missing
 
-**Severity:** MEDIUM — leaves orphaned VMs on vSphere, causes IP conflicts on re-install
+**Severity:** LOW — only affects `aba delete` on an already-deleted cluster
 **Status:** Planned
 **Added:** 2026-10-31
 
-**Problem:** When `aba delete` is run a second time on a cluster directory (e.g. a test re-run, or after a partial cleanup), `vmw-delete.sh` exits with "Cluster config files missing -- nothing to delete" even though VMs are still running on vSphere. The next `aba install` then fails with "IP conflict: 10.0.x.x is already in use".
+**Problem:** `vmw-delete.sh` gets `CLUSTER_NAME` from `install-config.yaml` / `agent-config.yaml`. After a first `aba delete`, those files are correctly removed by `make clean`. If `aba delete` is called again (e.g. by accident), `vmw-delete.sh` says "Cluster config files missing -- nothing to delete" because it has no fallback.
 
-**Root cause:** `vmw-delete.sh` gets `CLUSTER_NAME` from `cluster-config.sh`, which parses `install-config.yaml` and `agent-config.yaml`. But `make clean` (called at the end of `aba delete`) removes those files. On a second delete, the YAML files are gone, so `CLUSTER_NAME` is empty, and `vmw-delete.sh` skips VM destruction entirely.
+This is a minor robustness issue — the first delete already destroys VMs and cleans files, so the second delete is a no-op. Callers should check `.install-complete` before calling `aba delete`.
 
-Meanwhile, `cluster.conf` still exists and contains all the information needed: `cluster_name`, `num_masters`, `num_workers`, `base_domain`. The VM names can be derived from these using the existing `vm_name()` function.
+**Proposed fix:** In `vmw-delete.sh`, fall back to `cluster.conf` (via `normalize-cluster-conf`) when `CLUSTER_NAME` is empty and agent config files are gone. `cluster.conf` has `cluster_name`, `num_masters`, `num_workers` — enough to derive VM names via `vm_name()`.
 
-**Proposed fix:** In `vmw-delete.sh` (and `kvm-delete.sh` for consistency), when `CLUSTER_NAME` is empty and agent config files are missing, fall back to `cluster.conf`:
-
-```bash
-if [ ! "$CLUSTER_NAME" ]; then
-    if [ -s cluster.conf ]; then
-        # Fall back to cluster.conf when agent config files have been cleaned
-        source <(normalize-cluster-conf)
-        CLUSTER_NAME="$cluster_name"
-        CP_REPLICAS="${num_masters:-1}"
-        WORKER_REPLICAS="${num_workers:-0}"
-        # Derive CP_NAMES/WORKER_NAMES the same way cluster-config.sh does
-        ...
-    elif [ ! -s install-config.yaml ] || [ ! -s agent-config.yaml ]; then
-        aba_info "Cluster config files missing -- nothing to delete"
-        exit 0
-    fi
-fi
-```
-
-This ensures VMs are always cleaned up as long as `cluster.conf` exists, regardless of whether the agent config files survived.
-
-**Workaround:** Manually destroy VMs via `govc vm.power -off <vm> && govc vm.destroy <vm>` before re-installing, or ensure `aba delete` is only called once per install cycle.
+**Workaround:** Only call `aba delete` when `.install-complete` exists.
 

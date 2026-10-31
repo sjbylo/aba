@@ -703,23 +703,22 @@ tui_screenshot() {
 	echo "  [screenshot: $file]"
 }
 
-# Delete a cluster via the TUI if it exists.
+# Delete a cluster via the TUI if it was installed.
+# Only runs when .install-complete exists — that means VMs and state files
+# are present and need cleaning up. Without it, there are no VMs to destroy
+# and no agent config files for vmw-delete.sh to work with.
 # Navigates: Actions → Day-2 → Delete → select cluster → confirm → wait.
-# Returns 0 if cluster was deleted or didn't exist, 1 on error.
-#
-# NOTE: if VMs survive a delete (see BACKLOG.md: "vmw-delete.sh fails to
-# destroy VMs when agent config files are missing"), fix the root cause in
-# vmw-delete.sh rather than adding govc workarounds here.
+# Returns 0 if cluster was deleted or wasn't installed, 1 on error.
 # Usage: tui_delete_cluster "sno"
 tui_delete_cluster() {
 	local cluster="$1"
 	echo "  Pre-cleanup: checking for leftover '$cluster'..."
 
-	# Quick check: does the cluster directory even exist?
-	local _has_dir
-	_has_dir=$($_TUI_SSH "test -d ~/aba/$cluster && echo yes || echo no")
-	if [[ "$_has_dir" != "yes" ]]; then
-		echo "  Pre-cleanup: '$cluster' directory does not exist — nothing to delete"
+	# Only delete if the cluster was actually installed (VMs exist)
+	local _installed
+	_installed=$($_TUI_SSH "test -f ~/aba/$cluster/.install-complete && echo yes || echo no")
+	if [[ "$_installed" != "yes" ]]; then
+		echo "  Pre-cleanup: '$cluster' not installed — nothing to delete"
 		return 0
 	fi
 
