@@ -291,8 +291,18 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-# Toggle back to included
-tui_keys X; sleep 0.3; tui_keys Enter
+# Toggle back to included — may be at Mirror Payload level (T) or submenu (X)
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Additional Images:.*excluded"; then
+	# At Mirror Payload level — toggle key is T
+	tui_keys T; sleep 0.3; tui_keys Enter
+elif echo "$_scr" | grep -qi "Exclude\|Include.*toggle\|X.*clude"; then
+	# At submenu level — toggle key is X
+	tui_keys X; sleep 0.3; tui_keys Enter
+else
+	# Fallback: try to find toggle via tui_select_item
+	tui_select_item "Additional Images.*excluded\|excluded" 2>/dev/null || tui_keys T; sleep 0.3; tui_keys Enter
+fi
 sleep 2
 _excl=$($_TUI_SSH "grep '^excl_additional=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
 if [[ "$_excl" == "false" ]]; then
