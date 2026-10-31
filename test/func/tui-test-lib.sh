@@ -314,14 +314,23 @@ tui_dialog_title() {
 tui_back_to() {
 	local pattern="$1"
 	local max="${2:-5}"
-	local i
+	local i _scr
 	for (( i=0; i<max; i++ )); do
 		if ! tui_session_alive; then
 			echo "  WARNING: tmux session gone while navigating back to '$pattern'" >&2
 			return 1
 		fi
-		if tui_capture | grep -qi "$pattern"; then
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "$pattern"; then
 			return 0
+		fi
+		# Protect against exit confirmation — pressing Escape at the main
+		# menu opens an "Exit?" dialog; pressing Escape again would exit TUI
+		if echo "$_scr" | grep -qi "Exit ABA\|Are you sure.*exit\|Really exit\|Quit ABA"; then
+			echo "  (exit dialog detected — pressing Cancel to stay)" >&2
+			tui_press_button "Cancel" 2>/dev/null || tui_keys Enter
+			sleep 1
+			continue
 		fi
 		tui_keys Escape
 		sleep 1
