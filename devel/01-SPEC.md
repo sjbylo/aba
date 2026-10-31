@@ -545,6 +545,92 @@ is set.
 
 ---
 
+## TUI Testing and Baselines
+
+### Purpose
+
+TUI tests are automated functional tests that exercise the TUI through a
+remote tmux session, sending keystrokes and verifying screen content.  They
+serve as the primary regression gate for TUI and ABA changes alike — any
+code change that breaks a TUI test must be fixed before release.
+
+### Test structure
+
+Tests live in `test/func/` and share a common library:
+
+| File | Role |
+|------|------|
+| `tui-test-lib.sh` | Shared library: SSH helpers, screen capture, assertions, ISC verification, progress waiting, cleanup |
+| `test-tui-all.sh` | Master runner: executes all tests in order, collects per-test pass/fail counts, prints summary |
+| `test-tui-*.sh` | Individual test scripts (smoke, navigation, operators, images, lifecycle, upgrade, etc.) |
+
+### Baseline concept
+
+A **baseline** is a verified full run of `test-tui-all.sh` where every test
+passes (0 FAIL across all suites).  The baseline proves that the current
+code + test combination produces correct results.
+
+**Establishing a baseline:**
+
+1. Deploy the latest code to the test host (`test/func/` + `scripts/` + `tui/`).
+2. Ensure a clean environment (no leftover VMs using cluster IPs, disk space
+   adequate, mirror registry running).
+3. Run the full suite: `TUI_TEST_HOST=<host> TUI_CLUSTER_NAME=<name> bash test/func/test-tui-all.sh`
+4. **Verify** the results: every test must show 0 FAIL in the summary.
+   Additionally, review screenshot files in `/tmp/tui-test/` to confirm the
+   TUI rendered expected content (not just that patterns matched).
+5. Record the baseline: commit hash, date, host, total PASS count, per-test
+   counts.  This is the reference point for regression detection.
+
+**Detecting regressions:**
+
+After any code change (TUI, scripts, Makefiles, templates), re-run the full
+suite.  Compare results against the baseline:
+
+- **New FAIL** in a previously-passing test → regression in the code.
+  Fix the code, not the test (unless the test itself was wrong).
+- **PASS count decreased** without new FAILs → a test assertion was
+  silently skipped.  Investigate why.
+- **PASS count increased** → new assertions added.  Update the baseline.
+
+**When to update the baseline:**
+
+- After fixing a genuine bug that required test changes.
+- After adding new test assertions (ISC verification, new workflows, etc.).
+- After TUI behavior intentionally changes (new menu items, renamed labels,
+  restructured navigation).
+- Never silently — always re-run the full suite and verify 0 FAIL before
+  declaring a new baseline.
+
+### Test categories
+
+Tests run in dependency order (the master runner enforces this):
+
+| Category | Examples | Destructive? | Duration |
+|----------|----------|-------------|----------|
+| Quick / Non-destructive | Smoke, Help, Nav, Wizard, Operators, Mirror Config, Payload Deep, Cluster Pages, DISCO Smoke, Operators Deep, Settings Deep, Addl Images Deep, Platform Config, ISC Verify, Progress Integration | No | ~15 min total |
+| Destructive | Mirror Workflow, Cluster Install, Day-2 Deep, Day-2 Operations, Upgrade, Lifecycle | Yes (creates/deletes VMs, modifies mirror) | ~60–90 min total |
+
+Quick tests may run in any order.  Destructive tests depend on prior state
+(e.g. Day-2 requires a running cluster from Cluster Install).
+
+### ISC round-trip verification
+
+When tests add or remove operators/images through the TUI, they must verify
+the ImageSetConfiguration (ISC) file reflects those changes.  This is the
+"round-trip" check: TUI action → config change → ISC regeneration → file
+content matches.  Library helpers: `tui_assert_isc_contains`,
+`tui_assert_isc_not_contains`, `tui_wait_isc_file`.
+
+### Pre-test cleanup
+
+`tui_pre_cleanup()` runs before destructive tests to prevent disk-full
+failures.  It is conservative: prunes unused podman images, deletes tar files
+only if already loaded into the mirror (`.oc-mirror-exit-code == 0`), but
+preserves `~/.oc-mirror` download cache to avoid re-downloading.
+
+---
+
 ## Makefile Structure
 
 | Makefile | Location | Scope |

@@ -33,6 +33,34 @@ Issues or Pull Requests.
 
 ---
 
+## Multiple ABA repos on same host: shared state conflict
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** When two ABA repositories exist on the same host (e.g. `~/aba`
+and a bundle-extracted repo), they share state via `~/.aba/mirror/`.  If
+repo A installs the registry, repo B sees `.available` / `state.sh` but
+lacks the `omr/mirror-registry` binary.  Uninstall from repo B fails with
+a confusing "omr binary not found" error.
+
+**Root cause:** `regcreds/state.sh` is shared (symlinked to `~/.aba/`), but
+binaries and marker files are per-repo.  No mechanism tracks which repo
+performed the install.
+
+**Proposed fix:** Add `reg_installed_from=<path>` to `state.sh` during
+install.  On uninstall/stop/start, compare with `$PWD` and abort with a
+clear message: "Registry was installed from `<path>`. Run the operation
+from that directory."  Alternatively, copy the OMR binary to a shared
+location under `~/.aba/mirror/bin/`.
+
+**Workaround:** Run install/uninstall from the same ABA repo that originally
+installed the registry.  Or manually delete `~/.aba/mirror/mirror/state.sh`
+to clear stale state.
+
+---
+
 ## Prepare Upgrade: toggle candidate channel versions on/off
 
 **Severity:** LOW

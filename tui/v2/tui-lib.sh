@@ -430,7 +430,7 @@ show_help() {
 	local body="$2"
 	_tui_redirect_restore
 	dialog --no-shadow --colors --backtitle "$(ui_backtitle)" \
-		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 {ABA_TUI_FLOCK_FD}>&- || true
+		--title " $title " --cr-wrap --msgbox "\n$body\n " 0 0 {ABA_TUI_FLOCK_FD}>&- || true
 	_tui_redirect_activate
 }
 
@@ -838,7 +838,7 @@ _tui_read_mirror_state() {
 		return
 	fi
 	local reg_state=""
-	eval "$(aba_mirror_runtime_read)"
+	eval "$(aba_mirror_runtime_read | grep '^[a-z_]*=')"
 	_TUI_REG_STATE="${reg_state:-unknown}"
 }
 
