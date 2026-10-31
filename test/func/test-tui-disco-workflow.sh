@@ -232,6 +232,10 @@ echo ""
 # Deploy latest TUI code
 tui_deploy_code
 
+# Ensure disco host has no internet access (must be fully air-gapped)
+echo "  Ensuring internet is down on disco host..."
+$_SSH_DISCO "internet.sh down 2>&1" || true
+
 # Launch TUI
 tui_start
 tui_assert_appears "OpenShift Installer\|ABA" "TUI launched in DISCO mode" 30 || {
