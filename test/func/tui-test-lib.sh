@@ -325,10 +325,11 @@ tui_back_to() {
 			return 0
 		fi
 		# Protect against exit confirmation — pressing Escape at the main
-		# menu opens an "Exit?" dialog; pressing Escape again would exit TUI
-		if echo "$_scr" | grep -qi "Exit ABA\|Are you sure.*exit\|Really exit\|Quit ABA"; then
-			echo "  (exit dialog detected — pressing Cancel to stay)" >&2
-			tui_press_button "Cancel" 2>/dev/null || tui_keys Enter
+		# menu opens "Confirm Exit" with buttons "Exit" (Yes) and "Continue" (No).
+		# Tab to the "Continue" button and press Enter to stay in the TUI.
+		if echo "$_scr" | grep -qi "Exit ABA\|Confirm Exit\|Are you sure.*exit\|Really exit\|Quit ABA"; then
+			echo "  (exit dialog detected — pressing Continue to stay)" >&2
+			tui_press_button "Continue" 2>/dev/null || { tui_keys Tab Enter; }
 			sleep 1
 			continue
 		fi
