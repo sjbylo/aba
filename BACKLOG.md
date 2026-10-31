@@ -67,14 +67,26 @@ the cluster?" or "is kubevirt-hyperconverged mirrored?" are currently only
 done inline in the TUI Day-2 flow. Users running CLI workflows have no way to
 check readiness before running Day-2 operations.
 
-**Proposed fix:** Extend `aba status` (or add `aba status --cluster <name>`)
-to report useful pre-flight information:
-- Operator availability on the cluster (packagemanifests)
-- Whether key operators (OSUS, virt) are installed (CSVs)
-- Mirror content vs ISC config (what's configured vs what's synced)
-- Cluster health summary (nodes, cluster operators)
+**Design principle:** TUI is dumb, `aba` is smart. All complex logic lives
+in `aba status`; the TUI just calls `aba status --shell` and displays results.
 
-This would give both CLI and TUI users a single command to check readiness.
+**Fast checks (default, instant — read config/marker files):**
+- OCP version, channel, platform (from aba.conf)
+- Mirror registry type + state: installed/running/stopped (marker files)
+- Last sync version + date (mirror metadata)
+- Clusters: list with install state (marker files)
+- CLI tool versions: oc, oc-mirror, openshift-install
+- ISC: configured operator count + names (parse yaml)
+
+**Slow checks (behind `--full` flag — needs cluster API, 5s+ timeout):**
+- Cluster health: node status, cluster operators (degraded/progressing)
+- Operator availability on the cluster (packagemanifests)
+- Installed operators (CSVs) — OSUS, virt, etc.
+- Internet connectivity (already cached by run_once)
+
+**Interface:** `aba status --shell` outputs key=value pairs for the TUI to
+eval. `aba status` (no flag) prints human-readable summary. `aba status --full`
+includes slow cluster checks. Per-cluster: `aba status --dir <cluster>`.
 
 ---
 
