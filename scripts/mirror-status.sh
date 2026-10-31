@@ -24,15 +24,17 @@ source scripts/include_all.sh
 _mode="human"
 _op=""
 _show_disk=false
+_skip_release_check=false
 for arg in "$@"; do
 	case "$arg" in
-		shell|--shell)         _mode="shell" ;;
-		runtime|--runtime)     _mode="runtime" ;;
-		preflight|--preflight) _mode="preflight" ;;
-		disk|--disk)           _show_disk=true ;;
-		op=save)               _mode="op"; _op="save" ;;
-		op=sync)               _mode="op"; _op="sync" ;;
-		op=load)               _mode="op"; _op="load" ;;
+		shell|--shell)                       _mode="shell" ;;
+		runtime|--runtime)                   _mode="runtime" ;;
+		preflight|--preflight)               _mode="preflight" ;;
+		disk|--disk)                         _show_disk=true ;;
+		--skip-release-check)                _skip_release_check=true ;;
+		op=save)                             _mode="op"; _op="save" ;;
+		op=sync)                             _mode="op"; _op="sync" ;;
+		op=load)                             _mode="op"; _op="load" ;;
 	esac
 done
 
@@ -147,9 +149,10 @@ _reg_host="${reg_host:-}"
 _reg_port="${reg_port:-}"
 _reg_path="${reg_path:-}"
 
-# Release image check (non-blocking -- use cached result if available)
+# Release image check — curl to registry, can be slow when unreachable.
+# --skip-release-check: skip the probe (TUI confirm dialogs don't need it).
 _mirror_has_release=false
-if [ "$_mirror_installed" = "true" ]; then
+if [ "$_mirror_installed" = "true" ] && [ "$_skip_release_check" != "true" ]; then
 	export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 	if check_release_image 2>/dev/null; then
 		_mirror_has_release=true
