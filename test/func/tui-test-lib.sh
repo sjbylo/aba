@@ -794,17 +794,33 @@ tui_read_isc() {
 
 # Wait for background ISC regeneration to finish (file-level check).
 # Polls for the make/run_once ISC process to complete on the remote host.
+# First waits up to 10s for ISC generation to START (the TUI triggers it
+# asynchronously), then waits up to timeout for it to FINISH.
 #   tui_wait_isc_file [timeout_seconds]
 tui_wait_isc_file() {
-	local _timeout="${1:-30}" _i
-	for _i in $(seq 1 "$_timeout"); do
-		# Check if ISC generation is still running (make isconf or run_once)
-		if ! $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
-			return 0
+	local _timeout="${1:-30}" _i _started=0
+
+	# Phase 1: wait for ISC generation to start (up to 10s)
+	for _i in $(seq 1 10); do
+		if $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
+			_started=1
+			break
 		fi
 		sleep 1
 	done
-	echo "  (ISC generation still running after ${_timeout}s — proceeding anyway)"
+
+	# Phase 2: wait for it to finish
+	if [[ $_started -eq 1 ]]; then
+		for _i in $(seq 1 "$_timeout"); do
+			if ! $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
+				return 0
+			fi
+			sleep 1
+		done
+		echo "  (ISC generation still running after ${_timeout}s — proceeding anyway)"
+	fi
+	# If ISC never started, the TUI may have completed it synchronously or
+	# via a cached result.  Either way, the file should be current.
 }
 
 # Assert that the ISC contains a pattern (grep -qiE).
