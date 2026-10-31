@@ -20,6 +20,86 @@ _TUI_TEST_NAME="$(basename "${BASH_SOURCE[1]:-unknown}" .sh)"
 _TUI_RUN_DIR="/tmp/tui-test/${_TUI_TEST_NAME}-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$_TUI_RUN_DIR"
 
+# Prune old screenshot dirs for this test, keeping the 3 most recent
+_tui_old_dirs=$(ls -dt /tmp/tui-test/${_TUI_TEST_NAME}-* 2>/dev/null | tail -n +4)
+[ -n "$_tui_old_dirs" ] && rm -rf $_tui_old_dirs
+unset _tui_old_dirs
+
+# --- Per-host exclusive lock ---
+# Only one TUI test may run against a given host at a time.
+# Uses flock with a per-host lock file; a second test on the same host
+# fails immediately instead of silently conflicting.
+# Skip if test-tui-all.sh already holds the outer lock (_TUI_LOCK_HELD=1).
+if [[ "${_TUI_LOCK_HELD:-}" != "1" ]]; then
+	_TUI_LOCK_FILE="/tmp/tui-test-${_TUI_HOST}.lock"
+	_tui_lock_holder=$(cat "$_TUI_LOCK_FILE" 2>/dev/null || true)
+	exec 9>"$_TUI_LOCK_FILE"
+	if ! flock -n 9; then
+		echo "FATAL: Another TUI test is already running on $_TUI_HOST"
+		echo "  Lock file: $_TUI_LOCK_FILE"
+		echo "  Holder:    ${_tui_lock_holder:-unknown}"
+		echo ""
+		echo "  If no test is running, remove the lock file:"
+		echo "    rm -f $_TUI_LOCK_FILE"
+		exit 99
+	fi
+	echo "PID=$$ test=$_TUI_TEST_NAME started=$(date +%Y%m%d-%H%M%S)" >&9
+	unset _tui_lock_holder
+fi
+
+# --- Pre-test disk cleanup ---
+# Removes expendable caches and artifacts to prevent "disk full" during tests.
+# Call tui_pre_cleanup before any long-running test (sync, install, upgrade).
+tui_pre_cleanup() {
+	echo "  Pre-test disk cleanup on $_TUI_HOST..."
+	local _before _after
+
+	_before=$($_TUI_SSH "df --output=avail /home 2>/dev/null | tail -1 | tr -d ' '" 2>/dev/null || echo 0)
+	_before=$(( _before / 1024 / 1024 ))  # GB
+	echo "  Disk free before: ${_before} GB"
+
+	# 1. Podman: prune all unused images (old operator catalog indexes, etc.)
+	echo "  Pruning podman images..."
+	$_TUI_SSH "podman image prune -af 2>/dev/null" >/dev/null 2>&1 || true
+
+	# 2. oc-mirror cache — rebuilt on next sync, safe to delete
+	local _cache_size
+	_cache_size=$($_TUI_SSH "du -sm ~/.oc-mirror 2>/dev/null | cut -f1" 2>/dev/null || echo 0)
+	_cache_size=${_cache_size//[^0-9]/}
+	: "${_cache_size:=0}"
+	if [[ "$_cache_size" -gt 500 ]]; then
+		echo "  Removing oc-mirror cache ($(( _cache_size / 1024 )) GB)..."
+		$_TUI_SSH "rm -rf ~/.oc-mirror" 2>/dev/null || true
+	fi
+
+	# 3. Leftover oc-mirror tar archives (only on sync hosts, not save/disco)
+	#    These are not needed after sync completes — the images are in the registry.
+	local _tui_mode
+	_tui_mode=$($_TUI_SSH "cd ~/aba 2>/dev/null && source scripts/include_all.sh 2>/dev/null && . aba.conf 2>/dev/null && echo \${aba_mode:-}" 2>/dev/null || true)
+	if [[ "$_tui_mode" != "disco" && "$_tui_mode" != "DISCO" ]]; then
+		local _tar_size
+		_tar_size=$($_TUI_SSH "du -sm ~/aba/mirror/data/mirror_*.tar 2>/dev/null | awk '{s+=\$1} END{print s+0}'" 2>/dev/null || echo 0)
+		_tar_size=${_tar_size//[^0-9]/}
+		: "${_tar_size:=0}"
+		if [[ "$_tar_size" -gt 500 ]]; then
+			echo "  Removing leftover mirror tar files ($(( _tar_size / 1024 )) GB)..."
+			$_TUI_SSH "rm -f ~/aba/mirror/data/mirror_*.tar" 2>/dev/null || true
+		fi
+	fi
+
+	# 4. Podman container storage cleanup (stopped containers, build cache)
+	$_TUI_SSH "podman system prune -f 2>/dev/null" >/dev/null 2>&1 || true
+
+	# 5. Old test screenshot dirs (keep 3 most recent per test)
+	rm -rf /tmp/tui-test/*-2*/  2>/dev/null || true
+	# (Already pruned per-test above; this catches orphaned dirs)
+
+	_after=$($_TUI_SSH "df --output=avail /home 2>/dev/null | tail -1 | tr -d ' '" 2>/dev/null || echo 0)
+	_after=$(( _after / 1024 / 1024 ))  # GB
+	local _freed=$(( _after - _before ))
+	echo "  Disk free after: ${_after} GB (freed ${_freed} GB)"
+}
+
 # --- Core helpers ---
 
 # Run an SSH command with retry.  On first failure, wait and retry once.
@@ -95,6 +175,39 @@ tui_dismiss_result() {
 	return 1
 }
 
+# Dismiss a TUI error/failure dialog and return to the main menu.
+# Handles: "Failed" / "Error" progress dialogs, "View Output" button,
+# terminal "Press ENTER" prompts.
+# Returns 0 when back at Actions menu, 1 on failure.
+tui_dismiss_error() {
+	local _scr _i
+	for (( _i=0; _i<5; _i++ )); do
+		_scr=$(tui_capture)
+		# Already at main menu
+		if echo "$_scr" | grep -qi "Actions"; then
+			return 0
+		fi
+		# Error dialog with buttons — press Back/Done/Enter to dismiss
+		if echo "$_scr" | grep -qi "FAILED\|Error.*step\|failed"; then
+			tui_keys Enter; sleep 2
+			continue
+		fi
+		# Terminal prompt
+		if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return"; then
+			tui_keys Enter; sleep 2
+			continue
+		fi
+		# Progress result with Done button
+		if echo "$_scr" | grep -qi "steps completed\|Done"; then
+			tui_press_button "Done" 2>/dev/null || tui_keys Enter
+			sleep 2
+			continue
+		fi
+		tui_keys Escape; sleep 1
+	done
+	tui_back_to "Actions" 5
+}
+
 # Wait for pattern to disappear (e.g. after pressing Enter on a dialog)
 # Usage: tui_wait_gone "pattern" [timeout_seconds]
 tui_wait_gone() {
@@ -154,7 +267,6 @@ tui_button_count() {
 }
 
 # Navigate to a specific button by label and press Enter.
-# Reads the screen to find button positions, calculates Tab count.
 # Assumes focus starts on the first button (OK/Select/Continue).
 # Usage: tui_press_button "Help"
 tui_press_button() {
@@ -175,7 +287,7 @@ tui_press_button() {
 	fi
 	for (( i=0; i<idx; i++ )); do
 		tui_keys Tab
-		sleep 0.3
+		sleep 0.2
 	done
 	tui_keys Enter
 }
@@ -320,7 +432,7 @@ tui_dismiss_startup() {
 		# Splash screen — press Enter
 		if echo "$_scr" | grep -qi "OpenShift Installer\|Continue.*Exit\|ABA.*OpenShift"; then
 			tui_keys Enter
-			sleep 3
+			sleep 1
 			continue
 		fi
 
@@ -336,14 +448,28 @@ tui_dismiss_startup() {
 		# "Bundle on connected host" — select Fully Disconnected (default)
 		if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
 			tui_keys Enter
-			sleep 3
+			sleep 1
 			continue
 		fi
 
 		# Bundle info / payload summary — dismiss
 		if echo "$_scr" | grep -qi "Install Bundle\|payload summary\|Disconnected.*payload"; then
 			tui_keys Enter
-			sleep 3
+			sleep 1
+			continue
+		fi
+
+		# Post-install auto-dialogs (e.g., "Configure OperatorHub") — escape them
+		if echo "$_scr" | grep -qi "Configure OperatorHub\|OperatorHub\|day2\|Day-2:"; then
+			tui_keys Escape
+			sleep 2
+			continue
+		fi
+
+		# Any progress dialog during startup — wait
+		if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|steps completed"; then
+			tui_keys Enter 2>/dev/null
+			sleep 1
 			continue
 		fi
 
@@ -422,7 +548,7 @@ tui_dismiss_exec_mode() {
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "Terminal\|Execution\|Run in"; then
 		tui_keys Enter
-		sleep 2
+		sleep 1
 	fi
 }
 
@@ -485,14 +611,14 @@ tui_cleanup() {
 
 	# If session is still alive, try Enter (confirm exit dialog) then force-kill
 	if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
-		tui_keys Enter; sleep 1
-		tui_keys Escape; sleep 1
-		tui_keys Enter; sleep 1
+		tui_keys Enter; sleep 0.5
+		tui_keys Escape; sleep 0.5
+		tui_keys Enter; sleep 0.5
 	fi
 
 	# Force-kill the tmux session if it didn't exit cleanly
 	tui_stop
-	sleep 2
+	sleep 1
 
 	# Check for strays AFTER the session is gone
 	local _strays
@@ -574,6 +700,66 @@ tui_screenshot() {
 	echo "  [screenshot: $file]"
 }
 
+# Delete a cluster via the TUI if it exists.
+# Navigates: Actions → Day-2 → Delete → select cluster → confirm → wait.
+# Returns 0 if cluster was deleted or didn't exist, 1 on error.
+# Usage: tui_delete_cluster "sno"
+tui_delete_cluster() {
+	local cluster="$1"
+	echo "  Pre-cleanup: checking for leftover '$cluster'..."
+
+	# Quick check: does the cluster directory even exist?
+	local _has_dir
+	_has_dir=$($_TUI_SSH "test -d ~/aba/$cluster && echo yes || echo no")
+	if [[ "$_has_dir" != "yes" ]]; then
+		echo "  Pre-cleanup: '$cluster' directory does not exist — nothing to delete"
+		return 0
+	fi
+
+	# Delete via TUI: Day-2 → Delete → confirm
+	echo "  Deleting '$cluster' via TUI..."
+	tui_back_to "Actions" 5
+	tui_select_item "Day-2"
+	sleep 1
+	tui_select_item "Delete"
+	sleep 1
+	tui_screenshot "pre-delete-start"
+
+	local _scr
+	_scr=$(tui_capture)
+
+	# Handle cluster selection dialog
+	if echo "$_scr" | grep -qi "select.*cluster\|choose.*cluster"; then
+		tui_keys Enter
+		sleep 2
+		_scr=$(tui_capture)
+	fi
+
+	# Confirm delete (--defaultno: Cancel is focused, so Left+Enter for Yes)
+	if echo "$_scr" | grep -qi "Delete cluster\|destroy\|sure\|remove\|Are you sure"; then
+		tui_confirm_yes
+		sleep 1
+	fi
+
+	# Handle execution mode dialog
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
+		tui_keys Enter
+		sleep 1
+	fi
+
+	# Wait for delete to complete
+	if tui_wait_for_progress "pre-delete" 300; then
+		echo "  Pre-cleanup: '$cluster' delete completed via TUI"
+	else
+		echo "  Pre-cleanup: '$cluster' delete may have had issues"
+	fi
+	tui_dismiss_result
+	# Navigate back to main menu
+	tui_back_to "Actions" 5
+	return 0
+}
+
 # --- Reporting ---
 
 tui_summary() {
@@ -585,4 +771,255 @@ tui_summary() {
 	echo "  Screenshots: $_TUI_RUN_DIR/"
 	echo "========================================"
 	[ "$_TUI_FAIL" -eq 0 ]
+}
+
+# Wait for a TUI progress/execution dialog to finish, with automatic retry.
+#
+# Every long-running TUI operation (sync, install, load, save, …) follows
+# the same lifecycle:
+#   1. Progress dialog runs until completion or error
+#   2. On success  → "All steps completed" / "Done" / back to Actions menu
+#   3. On error    → "FAILED" / "Error" dialog with <Dismiss> <Retry> <View Output>
+#
+# This function handles that lifecycle once, so callers don't duplicate it.
+#
+# Usage:
+#   tui_wait_for_progress <label> [timeout_sec] [screenshot_interval_sec]
+#
+#   label          - Short name for screenshots (e.g. "sync", "install")
+#   timeout_sec    - Max wait time (default 3600 = 60 min)
+#   ss_interval    - Seconds between periodic screenshots (default 300 = 5 min)
+#
+# Returns:
+#   0 = success (completed / back at menu)
+#   1 = failed (error detected, no Retry available or retries exhausted)
+#   2 = session died
+#   3 = timeout
+#
+# The function uses the TUI's built-in Retry button when available.
+# After exhausting inner retries it returns 1 so the caller can decide
+# whether to do a full outer retry (dismiss + re-navigate + call again).
+#
+# Press "View Output" on a progress/error dialog and screenshot the output.
+# If the button isn't present, this is a no-op.
+_tui_capture_output() {
+	local label="${1:-output}"
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "View Output\|Output"; then
+		tui_press_button "View Output" 2>/dev/null || tui_press_button "Output" 2>/dev/null || return 0
+		sleep 2
+		tui_screenshot "${label}-output"
+		# Return from output view (Q to quit less/viewer, or Escape)
+		tui_keys q 2>/dev/null; sleep 1
+		tui_keys Escape 2>/dev/null; sleep 1
+	fi
+}
+
+tui_wait_for_progress() {
+	local label="${1:-progress}"
+	local timeout="${2:-600}"
+	local ss_interval="${3:-120}"
+	local _start _elapsed _last_ss _scr _inner_retries=0 _max_inner=3
+	local _saw_progress=0
+	local _menu_pat="── Mirror ──\|── Registry ──\|── Cluster ──\|── Advanced ──\|── Configuration ──\|── Lifecycle ──\|── Cleanup ──\|── Transfer ──\|── Status ──"
+
+	_start=$(date +%s)
+	_last_ss=0
+
+	while true; do
+		_elapsed=$(( $(date +%s) - _start ))
+		if [[ $_elapsed -ge $timeout ]]; then
+			echo "  TIMEOUT waiting for '$label' (${timeout}s)"
+			tui_screenshot "${label}-timeout"
+			return 3
+		fi
+
+		if ! tui_session_alive; then
+			echo "  SESSION DEAD during '$label'"
+			return 2
+		fi
+
+		_scr=$(tui_capture)
+
+		# Bail immediately if we accidentally exited the TUI
+		if echo "$_scr" | grep -qi "Exit ABA TUI\|Confirm Exit"; then
+			echo "  WARNING: '$label' — accidental exit dialog detected, pressing Continue"
+			tui_press_button "Continue" 2>/dev/null || tui_keys Right Enter 2>/dev/null
+			sleep 1
+			continue
+		fi
+
+		# Periodic screenshots
+		if (( _elapsed - _last_ss >= ss_interval )); then
+			tui_screenshot "${label}-progress-${_elapsed}s"
+			_last_ss=$_elapsed
+		fi
+
+		# Phase 1: wait for the screen to leave the menu (progress/dialog appears)
+		# Use specific execution keywords — avoid generic words like "Upgrade"
+		# that appear in menus and buttons.
+		if [[ $_saw_progress -eq 0 ]]; then
+			if echo "$_scr" | grep -qi "Executing\|Progress.*step\|Running.*step\|Syncing.*mirror\|Installing\|Graceful.*shut\|Shutdown.*progress\|Startup.*progress\|All steps completed\|steps completed successfully\|Press.*ENTER.*return\|ENTER to return\|── Success ──\|── FAILED ──"; then
+				_saw_progress=1
+			elif ! echo "$_scr" | grep -q "$_menu_pat"; then
+				_saw_progress=1
+			else
+				# Still on menu — wait briefly for operation to start
+				if (( _elapsed >= 10 )); then
+					echo "  WARNING: '$label' — still on menu after ${_elapsed}s"
+					tui_screenshot "${label}-still-on-menu"
+				fi
+				# After 20s assume the menu IS the result (quick operation)
+				if (( _elapsed >= 20 )); then
+					echo "  Progress '$label' — assuming quick completion (${_elapsed}s)"
+					return 0
+				fi
+				sleep 2
+				continue
+			fi
+		fi
+
+		# Success: completed dialog (progress or confirm_and_execute)
+		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|─── Success ───\|── Success ──"; then
+			echo "  Progress '$label' completed successfully (${_elapsed}s)"
+			_tui_capture_output "$label"
+			# Dismiss OK button on success msgbox
+			if echo "$_scr" | grep -qi "Success"; then
+				tui_keys Enter; sleep 1
+			fi
+			return 0
+		fi
+
+		# Completed with errors: progress dialog done, "Quit" button visible
+		# Only treat as complete when NO step is still "In Progress"
+		if echo "$_scr" | grep -qi "Quit.*Q\|Q.*ESC"; then
+			if echo "$_scr" | grep -qi "Failed\|No-op\|Done\|Skipped\|Succeeded"; then
+				if echo "$_scr" | grep -qi "In Progress"; then
+					# Steps still running — do not quit yet
+					sleep 5
+					continue
+				fi
+				local _has_fail=0
+				echo "$_scr" | grep -qi "Failed" && _has_fail=1
+				tui_keys q; sleep 1
+				if [[ $_has_fail -eq 1 ]]; then
+					echo "  Progress '$label' completed with step failures (${_elapsed}s)"
+					tui_screenshot "${label}-completed-with-errors"
+					return 1
+				else
+					echo "  Progress '$label' completed (${_elapsed}s)"
+					return 0
+				fi
+			fi
+		fi
+
+		# Back at any menu — only trust this if enough time has passed
+		# (avoids false positives from brief menu flash between dialogs)
+		if echo "$_scr" | grep -q "$_menu_pat"; then
+			if (( _elapsed >= 10 )); then
+				echo "  Progress '$label' returned to menu (${_elapsed}s)"
+				return 0
+			fi
+			# < 10s: likely a menu flash, keep waiting
+			sleep 2
+			continue
+		fi
+
+		# Error/failure dialog: title contains ─ box-drawing around Error/FAILED
+		if echo "$_scr" | grep -qi "Error.*─\|─.*Error\|─.*FAILED\|FAILED.*─\|A step failed"; then
+			echo "  Error detected during '$label' (${_elapsed}s)"
+			tui_screenshot "${label}-error"
+			_tui_capture_output "$label"
+
+			if echo "$_scr" | grep -qi "Retry" && [[ $_inner_retries -lt $_max_inner ]]; then
+				_inner_retries=$(( _inner_retries + 1 ))
+				echo "  Pressing TUI Retry button ($_inner_retries/$_max_inner)..."
+				tui_press_button "Retry"
+				sleep 3
+				continue
+			fi
+			return 1
+		fi
+
+		# Execution mode dialog (appears after Retry or re-run)
+		if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
+			echo "  Dismissing execution mode dialog during '$label'"
+			tui_keys Enter
+			sleep 2
+			continue
+		fi
+
+		# Warning/confirmation dialogs (e.g. OSUS Warning, Continue anyway?)
+		if echo "$_scr" | grep -qi "Continue anyway\|Warning.*Continue\|Continue.*Cancel"; then
+			echo "  Dismissing warning dialog during '$label'"
+			tui_keys Enter
+			sleep 2
+			continue
+		fi
+
+		# "Press ENTER to return" terminal prompt
+		if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return"; then
+			tui_keys Enter
+			sleep 1
+			continue
+		fi
+
+		# Log progress every 30s so user sees activity
+		(( _elapsed % 30 == 0 && _elapsed > 0 )) && echo "  ... '$label' running (${_elapsed}s)"
+
+		sleep 2
+	done
+}
+
+# Run a TUI operation with full outer retry: dismiss errors, re-navigate, retry.
+#
+# This is the top-level helper that tests should call for any long-running
+# TUI action.  It wraps tui_wait_for_progress with an outer retry loop
+# that handles session recovery and re-navigation.
+#
+# Usage:
+#   tui_run_operation <label> <nav_func> [max_retries] [timeout_sec]
+#
+#   label        - Short name for log/screenshots (e.g. "sync", "reg-install")
+#   nav_func     - Shell function/commands to navigate to and start the operation.
+#                  Called once per attempt.  Should leave TUI in the progress dialog.
+#   max_retries  - Outer retry limit (default 3)
+#   timeout_sec  - Per-attempt timeout (default 3600)
+#
+# Returns 0 on success, 1 on failure after all retries exhausted.
+#
+tui_run_operation() {
+	local label="$1"
+	local nav_func="$2"
+	local max_retries="${3:-2}"
+	local timeout="${4:-600}"
+	local _attempt=0 _rc
+
+	while [[ $_attempt -lt $max_retries ]]; do
+		_attempt=$(( _attempt + 1 ))
+		[[ $_attempt -gt 1 ]] && echo "  Outer retry $_attempt/$max_retries for '$label'..."
+
+		if ! tui_session_alive; then
+			echo "  Session dead — restarting TUI for '$label' retry..."
+			tui_stop 2>/dev/null; sleep 1
+			tui_start_to_menu || { echo "  Failed to restart TUI"; continue; }
+		fi
+
+		eval "$nav_func"
+
+		tui_wait_for_progress "$label" "$timeout"
+		_rc=$?
+
+		case $_rc in
+			0) return 0 ;;
+			2) echo "  Session died during '$label' — will retry"; sleep 1; continue ;;
+			3) echo "  '$label' timed out — not retrying"; tui_dismiss_error; return 1 ;;
+			1) echo "  '$label' failed (attempt $_attempt) — dismissing error"
+			   tui_dismiss_error; sleep 1; continue ;;
+		esac
+	done
+
+	echo "  '$label' failed after $max_retries attempts"
+	return 1
 }

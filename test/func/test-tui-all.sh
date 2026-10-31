@@ -48,6 +48,23 @@ done
 export TUI_CLUSTER_NAME="${TUI_CLUSTER_NAME:-sno}"
 [[ "$_NO_DELETE" == "true" ]] && export TUI_SKIP_DELETE=1
 
+# Acquire per-host lock for the entire suite run.
+# Individual tests also lock, but this outer lock prevents a gap between
+# child tests from allowing a rogue parallel run to slip in.
+_TUI_ALL_HOST="${TUI_TEST_HOST:-conno.example.com}"
+_TUI_ALL_LOCK="/tmp/tui-test-${_TUI_ALL_HOST}.lock"
+_tui_lock_holder=$(cat "$_TUI_ALL_LOCK" 2>/dev/null || true)
+exec 8>"$_TUI_ALL_LOCK"
+if ! flock -n 8; then
+	echo "FATAL: Another TUI test is already running on $_TUI_ALL_HOST"
+	echo "  Lock file: $_TUI_ALL_LOCK"
+	echo "  Holder:    ${_tui_lock_holder:-unknown}"
+	exit 99
+fi
+echo "PID=$$ test=test-tui-all started=$(date +%Y%m%d-%H%M%S)" >&8
+# Tell child tests that the parent already holds the lock
+export _TUI_LOCK_HELD=1
+
 _total_pass=0
 _total_fail=0
 _total_skip=0
@@ -100,7 +117,6 @@ _run_test "Operators" "test/func/test-tui-operators.sh" || true
 _run_test "Mirror Config" "test/func/test-tui-mirror-config.sh" || true
 _run_test "Payload Deep" "test/func/test-tui-payload-deep.sh" || true
 _run_test "Cluster Pages" "test/func/test-tui-cluster-pages.sh" || true
-_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 _run_test "DISCO Smoke" "test/func/test-tui-disco-smoke.sh" || true
 _run_test "Operators Deep" "test/func/test-tui-operators-deep.sh" || true
 _run_test "Settings Deep" "test/func/test-tui-settings-deep.sh" || true
@@ -112,12 +128,13 @@ _run_test "Progress Integration" "test/func/test-tui-progress-integration.sh" ||
 
 if [[ "$_QUICK" == "true" ]]; then
 	echo ""
-	echo "  (--quick mode: skipping destructive mirror, cluster, day2, upgrade, lifecycle)"
-	_total_skip=5
+	echo "  (--quick mode: skipping destructive mirror, cluster, day2-deep, day2, upgrade, lifecycle)"
+	_total_skip=6
 else
 	# --- Destructive tests (full mode only, pipeline order) ---
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
+	_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 	_run_test "Day-2 Operations" "test/func/test-tui-day2.sh" || true
 	_run_test "Upgrade" "test/func/test-tui-upgrade.sh" || true
 	_run_test "Lifecycle" "test/func/test-tui-lifecycle.sh" || true

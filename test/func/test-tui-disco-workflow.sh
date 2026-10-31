@@ -97,7 +97,7 @@ fi
 # Skip infrastructure setup if disco is already set up (TUI_SKIP_SETUP=1)
 _SKIP_SETUP="${TUI_SKIP_SETUP:-0}"
 if [[ "$_SKIP_SETUP" == "1" ]] && $_SSH_DISCO "test -f ~/aba/.bundle && test -f ~/aba/mirror/.available" 2>/dev/null; then
-	echo "  SKIP: Phases 2-3 (disco already has bundle + mirror)"
+	echo "  (TUI_SKIP_SETUP=1) Phases 2-3 skipped — disco already has bundle + mirror"
 	# Just clean up any existing test cluster
 	if $_SSH_DISCO "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
 		echo "  Cleaning up leftover '$_CLUSTER' cluster..."
@@ -389,22 +389,27 @@ if [[ "$_mirror_ok" == "yes" ]]; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
 	echo "  Mirror not installed yet — attempting via TUI menu..."
-	# Navigate to Install Registry
-	tui_select_item "Install Registry\|Registry"
-	sleep 3
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-		tui_keys Enter; sleep 2
+
+	_nav_reg_install() {
+		tui_back_to "Actions" 5
+		tui_select_item "Install Registry\|Registry"
+		sleep 3
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
+			tui_keys Enter; sleep 2
+		fi
+	}
+
+	if tui_run_operation "reg-install" _nav_reg_install 3 1200; then
+		tui_dismiss_result
+		_mirror_ok=$($_SSH_DISCO "test -f ~/aba/mirror/.available && echo yes || echo no")
 	fi
-	# Wait for install to complete
-	tui_wait_for "Actions\|Registry\|Load\|Install Cluster\|Press R\|ENTER to return" 1200
-	tui_dismiss_result
-	_mirror_ok=$($_SSH_DISCO "test -f ~/aba/mirror/.available && echo yes || echo no")
+
 	if [[ "$_mirror_ok" == "yes" ]]; then
 		echo "  ✓ PASS: Mirror registry installed via TUI"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Mirror registry install failed"
+		echo "  ✗ FAIL: Mirror registry install failed after retries"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 fi
@@ -418,35 +423,32 @@ if [[ "$_loaded" == "yes" ]]; then
 	echo "  ✓ PASS: Images already loaded in mirror"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  Loading images via TUI..."
-	tui_select_item "Load images"
-	sleep 5
-	tui_screenshot "disco-wf-04-load"
+	_nav_load_images() {
+		tui_back_to "Actions" 5
+		tui_select_item "Load images"
+		sleep 5
+		tui_screenshot "disco-wf-04-load"
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Confirm\|Load\|OCP\|Continue\|Yes"; then
+			tui_keys Enter; sleep 3
+		fi
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
+			tui_keys Enter; sleep 2
+		fi
+	}
 
-	_scr=$(tui_capture)
-	# Handle confirmation dialog
-	if echo "$_scr" | grep -qi "Confirm\|Load\|OCP\|Continue\|Yes"; then
-		tui_keys Enter; sleep 3
+	if tui_run_operation "image-load" _nav_load_images 3 2700; then
+		tui_screenshot "disco-wf-04b-load-done"
+		tui_dismiss_result
+		_loaded=$($_SSH_DISCO "grep -q 'last_action=load\|last_action=sync' ~/.aba/mirror/*/state.sh 2>/dev/null && echo yes || echo no" 2>/dev/null || echo "no")
 	fi
 
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-		tui_keys Enter; sleep 2
-	fi
-
-	# Wait for load to complete (can take 20-30 min)
-	echo "  Waiting for image load (up to 45 min)..."
-	tui_wait_for "Actions\|Registry\|Load\|Install Cluster\|loaded\|Press R\|ENTER to return" 2700
-	tui_screenshot "disco-wf-04b-load-done"
-
-	tui_dismiss_result
-
-	_loaded=$($_SSH_DISCO "grep -q 'last_action=load\|last_action=sync' ~/.aba/mirror/*/state.sh 2>/dev/null && echo yes || echo no" 2>/dev/null || echo "no")
 	if [[ "$_loaded" == "yes" ]]; then
 		echo "  ✓ PASS: Images loaded into mirror"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Image load failed or incomplete"
+		echo "  ✗ FAIL: Image load failed after retries"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 fi
@@ -460,14 +462,12 @@ echo "  Phase 5: Cluster install on disco"
 echo "================================================================"
 echo ""
 
-# Pre-install cleanup: destroy any leftover cluster on disco AND conno
-# Both hosts share the same DNS/IP space, so a running cluster on conno
-# with the same name/IP will cause arping IP conflicts on disco.
-if $_SSH_DISCO "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
-	echo "  Cleaning up leftover '$_CLUSTER' cluster on disco..."
-	$_SSH_DISCO "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; rm -rf ~/aba/$_CLUSTER; true"
-	sleep 5
-fi
+# Pre-install cleanup: delete any leftover cluster via the TUI (disco host).
+# The TUI handles VM destruction through the hypervisor, freeing the IP.
+tui_delete_cluster "$_CLUSTER"
+
+# Also clean up any cluster with the same name on conno — both hosts share
+# the same DNS/IP space, so a running cluster on conno causes IP conflicts.
 if $_SSH_CONNO "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
 	echo "  Cleaning up '$_CLUSTER' cluster on conno (IP conflict prevention)..."
 	$_SSH_CONNO "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; rm -rf ~/aba/$_CLUSTER; true"
@@ -583,72 +583,19 @@ tui_keys Enter
 sleep 3
 tui_screenshot "disco-wf-05g-install-start"
 
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Terminal\|Execution\|execution"; then
-	echo "  Execution mode dialog appeared"
-	tui_keys Enter
-	sleep 2
-fi
+tui_dismiss_exec_mode
 
 # Wait for install to complete (SNO ~30-45 min)
 echo "  Waiting for cluster install (up to 60 min)..."
-_install_timeout=3600
-_start_time=$(date +%s)
-_last_ss=0
-while true; do
-	_elapsed=$(( $(date +%s) - _start_time ))
-	[[ $_elapsed -ge $_install_timeout ]] && {
-		echo "  TIMEOUT: cluster install did not complete in 60 min"
-		break
-	}
+if tui_wait_for_progress "disco-wf-install" 3600; then
+	echo "  ✓ PASS: Cluster install completed"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Cluster install failed"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
 
-	if ! tui_session_alive; then
-		echo "  SESSION DEAD during cluster install"
-		break
-	fi
-	_scr=$(tui_capture)
-
-	# Periodic screenshots
-	if (( _elapsed - _last_ss >= 300 )); then
-		tui_screenshot "disco-wf-install-${_elapsed}s"
-		_last_ss=$_elapsed
-	fi
-
-	# Check for actual install completion
-	if echo "$_scr" | grep -qi "Cluster is installed\|Install complete\|install completed.*marker\|Login to the console"; then
-		echo "  ✓ PASS: Cluster install completed (${_elapsed}s)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		break
-	fi
-
-	# Check for fatal error
-	if echo "$_scr" | grep -qi "FAILED\|fatal\|timed out.*bootstrap"; then
-		echo "  ✗ FAIL: Cluster install failed"
-		tui_screenshot "disco-wf-install-fail"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		break
-	fi
-
-	# Check if back at menu (install finished)
-	if tui_dismiss_result; then
-		_scr=$(tui_capture)
-	fi
-
-	if echo "$_scr" | grep -q "Install Cluster\|Registry\|Load"; then
-		echo "  Returned to DISCO menu — checking cluster state..."
-		_inst=$($_SSH_DISCO "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
-		if [[ "$_inst" == "yes" ]]; then
-			echo "  ✓ PASS: Cluster install completed (marker file, ${_elapsed}s)"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
-		else
-			echo "  ~ NOTE: Back at menu but .install-complete not found"
-		fi
-		break
-	fi
-
-	sleep 30
-done
-
+tui_dismiss_result
 tui_screenshot "disco-wf-05g-install-final"
 
 # ============================================================================

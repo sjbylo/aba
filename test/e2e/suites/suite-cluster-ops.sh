@@ -574,7 +574,7 @@ test_begin "Real multi-mirror: second registry + day2"
 _MM2_NAME="e2e-mm2-docker"
 _MM2_IMPORT="e2e-mm2-imported"
 _MM2_PORT=5222
-_MM2_PW="mm2pass"
+_MM2_PW="mm2pass1"
 _MM2_KC="$SNO/iso-agent-based/auth/kubeconfig"
 _MM2_DATADIR="~/docker-reg-mm2"
 
