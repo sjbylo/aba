@@ -117,7 +117,8 @@ _run_test "Operators" "test/func/test-tui-operators.sh" || true
 _run_test "Mirror Config" "test/func/test-tui-mirror-config.sh" || true
 _run_test "Payload Deep" "test/func/test-tui-payload-deep.sh" || true
 _run_test "Cluster Pages" "test/func/test-tui-cluster-pages.sh" || true
-_run_test "DISCO Smoke" "test/func/test-tui-disco-smoke.sh" || true
+# DISCO smoke defaults to disco host — unset TUI_TEST_HOST so it uses its own default
+TUI_TEST_HOST= _run_test "DISCO Smoke" "test/func/test-tui-disco-smoke.sh" || true
 _run_test "Operators Deep" "test/func/test-tui-operators-deep.sh" || true
 _run_test "Settings Deep" "test/func/test-tui-settings-deep.sh" || true
 _run_test "Addl Images Deep" "test/func/test-tui-addl-images-deep.sh" || true
