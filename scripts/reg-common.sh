@@ -1185,6 +1185,50 @@ reg_omr_install_or_recover() {
 	return 1
 }
 
+# --- _omr_ensure_binary ----------------------------------------------------
+# Ensure the omr mirror-registry binary exists and is healthy.  Extracts from
+# the podman image (loaded from omr-image.tgz if needed).  Detects and
+# replaces a corrupt binary.
+# Used by: reg-install-omr.sh, reg-install-omr-remote.sh, reg_omr_remove().
+_omr_ensure_binary() {
+	local _bin_dir="omr"
+	local _bin="$_bin_dir/mirror-registry"
+	local _image_file="omr-image.tgz"
+
+	# Already exists and healthy?
+	if [ -x "$_bin" ]; then
+		if ./"$_bin" version >/dev/null 2>&1; then
+			return 0
+		fi
+		aba_warn "Binary $_bin exists but appears corrupt — re-extracting"
+		rm -f "$_bin"
+	fi
+
+	aba_info "$_OMR_VENDOR binary not found — extracting ..."
+
+	# Load the image into podman if not already present.
+	if ! podman image exists "$_OMR_IMAGE" 2>/dev/null; then
+		if [ -f "$_image_file" ]; then
+			aba_info "Loading $_OMR_VENDOR image from $_image_file ..."
+			podman load -i "$_image_file" || \
+				aba_abort "Failed to load $_OMR_VENDOR image from $_image_file." \
+					"The archive may be corrupt. Delete it and retry."
+		else
+			aba_abort "$_OMR_VENDOR binary '$_bin' not found and image '$_image_file' is missing." \
+				"Re-run from the ABA repo that originally installed the registry," \
+				"or copy '$_image_file' into $(pwd)."
+		fi
+	fi
+
+	mkdir -p "$_bin_dir"
+	local _cid
+	_cid=$(podman create "$_OMR_IMAGE")
+	podman cp "$_cid:/mirror-registry" "$_bin"
+	podman rm "$_cid" >/dev/null
+	chmod +x "$_bin"
+	aba_info "Extracted $_bin"
+}
+
 # --- reg_omr_remove -------------------------------------------------------
 # Core omr uninstall: call the tool's own 'uninstall' command.
 # Same pattern as reg_quay_remove — use the tool, then verify clean.
@@ -1204,10 +1248,7 @@ reg_omr_remove() {
 
 		if ! $ssh_cmd "test -x '$reg_root/../$_bin_dir/mirror-registry' 2>/dev/null"; then
 			aba_info "mirror-registry binary not found on remote host, uploading ..."
-			if [ ! -x "$_bin" ]; then
-				aba_abort "$_OMR_VENDOR binary '$_bin' not found locally." \
-					"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
-			fi
+			_omr_ensure_binary
 			local _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
 			local _target="$reg_ssh_user@$reg_host"
 			$ssh_cmd "mkdir -p '$reg_root/../$_bin_dir'" || true
@@ -1225,10 +1266,7 @@ reg_omr_remove() {
 	else
 		# Local
 		local _bin="omr/mirror-registry"
-		if [ ! -x "$_bin" ]; then
-			aba_abort "$_OMR_VENDOR binary '$_bin' not found." \
-				"Run 'aba -d $(basename "$PWD") uninstall' so the Makefile provides it."
-		fi
+		_omr_ensure_binary
 
 		aba_info "Running: mirror-registry uninstall -data-dir $reg_root ..."
 		if [ "${REG_DELETE_DATA:-}" ]; then
