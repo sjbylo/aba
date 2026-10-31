@@ -290,7 +290,7 @@ TUI2_MSG_VM_WORKER_CPU_PROMPT="Number of CPUs per worker node:"
 TUI2_MSG_VM_WORKER_MEM_PROMPT="Memory per worker node (GB):"
 TUI2_MSG_VM_DISK_PROMPT="Additional data disk size (GB, empty for none):"
 TUI2_MSG_VM_MAC_PROMPT="MAC address prefix (e.g. 52:54:00):"
-TUI2_MSG_OSUS_WARNING="The Cincinnati/OSUS operator does not appear to be in your imageset-config.yaml.\n\nThe OSUS Day-2 operation may fail without it.\n\nContinue anyway?"
+TUI2_MSG_OSUS_WARNING="The Cincinnati/OSUS operator does not appear to be available on the cluster.\n\nThe OSUS Day-2 operation may fail without it.\n\nContinue anyway?"
 TUI2_MSG_NO_CLUSTERS="No clusters configured."
 TUI2_MSG_NO_INSTALLED_CLUSTERS="No installed clusters found."
 

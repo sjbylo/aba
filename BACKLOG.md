@@ -33,6 +33,29 @@ Issues or Pull Requests.
 
 ---
 
+## Prepare Upgrade: toggle candidate channel versions on/off
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** The "Prepare Upgrade for Transfer" dialog shows candidate-channel
+versions with `[switch to candidate]` labels alongside stable/fast versions.
+Candidate versions are pre-release and less tested — showing them by default
+risks users accidentally selecting a candidate upgrade, especially for z-stream
+bumps that are only marginally newer than the latest stable.
+
+**Proposed fix:** Add a toggle option in the menu (e.g.
+`f  Show candidate versions: off`) that controls whether candidate-channel
+versions are displayed. Off by default. Versions from fast or stable channels
+should still show normally with their `[switch to ...]` labels — only candidate
+is hidden behind the toggle.
+
+**Workaround:** Ignore items marked `[switch to candidate]`, or use `h`
+(Change channel) to switch to candidate explicitly.
+
+---
+
 ## Audit progress dialogs for "next steps" advice on error paths
 
 **Severity:** MEDIUM

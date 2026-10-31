@@ -935,7 +935,7 @@ change your channel when selected." 0 0
 	if [[ -n "$_next1" && "$_next1" != "$_existing_target" && "$_next1" != "$_current_ver" ]]; then
 		_ver_entries+=("${_next1}	Minor $(_ver_minor "$_next1")  (latest: $_next1)	")
 	fi
-	# Fallback channel items
+	# Fallback channel items (from other channels)
 	for _item in "${_fb_items[@]}"; do
 		local _fb_tag="${_item%%|*}"
 		local _rest="${_item#*|}"
@@ -991,7 +991,7 @@ change your channel when selected." 0 0
 			--default-item "$_default_tag" \
 			--ok-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_CANCEL" \
-			--menu "Select target upgrade version ($_channel channel):\n\n\\ZbBase version (aba.conf): ${_current_ver}\\Zn\n\nNote: target versions are based on the base version in aba.conf,\nnot any live cluster. If all your clusters have been upgraded\npast this version, update the base version (b)." 0 0 0 \
+			--menu "Select target upgrade version ($_channel channel):\n\n\\ZbBase version (aba.conf): ${_current_ver}\\Zn\n\nSet the base version (b) to match the current version of\nthe cluster you plan to upgrade. If all clusters have been\nupgraded past the base version, change the base version\nto match." 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
