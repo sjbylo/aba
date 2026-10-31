@@ -81,23 +81,63 @@ fi
 # Return to Day-2 menu
 tui_back_to "Day-2\|Cluster Management" 5
 
+# Helper: navigate reliably to the Day-2 menu.
+# The Day-2 menu is identified by its title "Day-2 / Cluster Management"
+# and the presence of menu items with keys (R, N, O, etc.).
+_nav_to_day2_menu() {
+	local _w _scr
+	for _w in 1 2 3 4 5; do
+		_scr=$(tui_capture)
+		# Check for the actual Day-2 menu (has section headers like "Configuration" and menu keys)
+		if echo "$_scr" | grep -q "── Configuration ──\|── Status ──\|── Lifecycle ──"; then
+			return 0
+		fi
+		# Dismiss any stale dialogs (success, error, output pager)
+		if echo "$_scr" | grep -qi "steps completed\|── Success ──\|ENTER to return"; then
+			tui_keys Enter; sleep 1; continue
+		fi
+		if echo "$_scr" | grep -qi "── FAILED ──\|Quit.*Q\|Dismiss"; then
+			tui_keys Enter; sleep 1; continue
+		fi
+		if echo "$_scr" | grep -qi "scroll.*PgUp\|Press Q to quit"; then
+			tui_keys q; sleep 1; continue
+		fi
+		# Navigate back from wherever we are
+		tui_back_to "Actions" 3
+		if tui_capture | grep -q "Actions"; then
+			tui_select_item "Day-2"; sleep 2
+		fi
+	done
+	# Final check
+	if tui_capture | grep -q "── Configuration ──"; then
+		return 0
+	fi
+	echo "  WARNING: Could not navigate to Day-2 menu" >&2
+	return 1
+}
+
 # Helper: run a Day-2 action via the progress dialog.
-# Selects the menu item, handles cluster selection if shown,
-# waits for the progress dialog, dismisses result.
+# Navigates to Day-2 menu, selects the item, waits for progress, verifies output.
 _day2_run_action() {
 	local item_label="$1"
 	local action_name="$2"
 	local timeout="${3:-600}"
+	local expected_cmd="${4:-}"
 
-	# Ensure we're at the Day-2 menu before selecting
-	if ! tui_capture | grep -qi "OperatorHub\|NTP\|OSUS\|shutdown\|startup"; then
-		tui_back_to "Day-2\|Cluster Management\|Actions" 5
-		if tui_capture | grep -q "Actions"; then
-			tui_select_item "Day-2"; sleep 2
-		fi
+	# Navigate to the Day-2 menu first
+	if ! _nav_to_day2_menu; then
+		echo "  ✗ FAIL: Cannot reach Day-2 menu for $action_name"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		return 1
 	fi
+	tui_screenshot "d2-${action_name}-menu"
 
-	tui_select_item "$item_label"
+	# Select the menu item
+	if ! tui_select_item "$item_label"; then
+		echo "  ✗ FAIL: Menu item '$item_label' not found for $action_name"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		return 1
+	fi
 	sleep 1
 	tui_screenshot "d2-${action_name}-start"
 
@@ -117,7 +157,7 @@ _day2_run_action() {
 	_scr=$(tui_capture)
 
 	# Detect progress dialog or any running state
-	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|day2\|Day-2:\|Progress\|steps completed"; then
+	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|Day-2:.*${action_name}\|Progress\|steps completed"; then
 		echo "  ✓ PASS: $action_name progress dialog appeared"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 
@@ -128,21 +168,25 @@ _day2_run_action() {
 			echo "  ✗ FAIL: $action_name failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
+
+		# Verify the correct command ran (not a stale/generic one)
+		if [[ -n "$expected_cmd" ]]; then
+			tui_screenshot "d2-${action_name}-output"
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qi "$expected_cmd"; then
+				echo "  ✓ PASS: $action_name ran correct command ($expected_cmd)"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+			else
+				echo "  ✗ FAIL: $action_name did not run expected command ($expected_cmd)"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			fi
+		fi
+
 		tui_dismiss_result
 	else
-		echo "  ✗ FAIL: $action_name screen unclear"
+		echo "  ✗ FAIL: $action_name progress not detected"
 		tui_screenshot "d2-${action_name}-unclear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	fi
-
-	# Ensure we're back at the Day-2 menu before the next action
-	sleep 1
-	_scr=$(tui_capture)
-	if ! echo "$_scr" | grep -qi "OperatorHub\|NTP\|OSUS\|shutdown\|startup"; then
-		tui_back_to "Day-2\|Cluster Management\|Actions" 5
-		if tui_capture | grep -q "Actions"; then
-			tui_select_item "Day-2"; sleep 2
-		fi
 	fi
 }
 
@@ -151,21 +195,21 @@ _day2_run_action() {
 # ============================================================================
 echo ""
 echo "--- 3. Configure OperatorHub ---"
-_day2_run_action "OperatorHub" "operatorhub" 1200
+_day2_run_action "OperatorHub" "operatorhub" 1200 "aba.*day2"
 
 # ============================================================================
 # 4. NTP Configuration
 # ============================================================================
 echo ""
 echo "--- 4. NTP Configuration ---"
-_day2_run_action "Network Time" "ntp" 300
+_day2_run_action "Network Time" "ntp" 300 "day2-ntp\|day2.*ntp\|chrony\|NTP"
 
 # ============================================================================
 # 5. OSUS (OpenShift Update Service)
 # ============================================================================
 echo ""
 echo "--- 5. OSUS ---"
-_day2_run_action "Update Service" "osus" 600
+_day2_run_action "Update Service" "osus" 600 "osus\|update.service\|cincinnati"
 
 tui_back_to "Actions" 5
 

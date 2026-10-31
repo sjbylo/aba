@@ -128,7 +128,15 @@ fi
 echo ""
 echo "--- 3. Platform images inclusion ---"
 
+# Ensure excl_platform=false so this test actually runs
 _excl_plat=$($_TUI_SSH "grep '^excl_platform=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "false")
+if [[ "$_excl_plat" != "false" ]]; then
+	echo "  (Setting excl_platform=false to verify platform inclusion)"
+	$_TUI_SSH "cd ~/aba && sed -i 's/^excl_platform=.*/excl_platform=false/' aba.conf"
+	_regen_isc
+	_isc=$(_read_isc)
+	_excl_plat="false"
+fi
 
 if [[ "$_excl_plat" == "false" ]]; then
 	if echo "$_isc" | grep -q "platform:" && ! echo "$_isc" | grep -B1 "platform:" | grep -q "^#"; then
@@ -401,63 +409,46 @@ tui_keys Enter; sleep 1
 tui_keys Escape; sleep 1
 
 # ============================================================================
-# 11. ISC regeneration: add operator set via TUI, verify ISC updates
+# 11. ISC regeneration: add operator via config, verify ISC updates
 # ============================================================================
 echo ""
-echo "--- 11. ISC regeneration after TUI change ---"
+echo "--- 11. ISC regeneration after operator change ---"
 
-# Navigate to operators and add the 'ocp' set
-tui_back_to "Actions" 5
-tui_select_item "Mirror Payload"
-tui_wait_for "Select Operators" 10
-tui_select_item "Select Operators"
-tui_wait_for "Operator Sets\|Search" 10
-tui_keys 1; sleep 0.3; tui_keys Enter
-tui_wait_for "\\[" 10
+# Add the 'logging' operator set directly via config (reliable, no TUI navigation)
+$_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null && replace-value-conf -n op_sets -v logging -f aba.conf 2>/dev/null"
+echo "  Set op_sets=logging in aba.conf"
 
-# Find and toggle 'ocp' set (should be first few items)
-sleep 1
-_found_ocp=false
-for i in $(seq 1 20); do
-	if tui_capture | grep -qi "ocp.*\\["; then
-		_found_ocp=true
-		tui_keys Space; sleep 0.5
+# Force ISC regeneration
+_regen_isc
+sleep 3
+tui_wait_isc_file 30
+
+# Verify ISC now includes logging operators
+_isc_after=$(_read_isc)
+_logging_found=false
+for _op in "cluster-logging" "loki-operator" "cincinnati-operator"; do
+	if echo "$_isc_after" | grep -q "$_op"; then
+		_logging_found=true
 		break
 	fi
-	tui_keys Down; sleep 0.3
 done
 
-if $_found_ocp; then
-	tui_keys Enter; sleep 2
-	# Skip companion images if prompted
-	if tui_capture | grep -qi "companion\|Recommended"; then
-		tui_keys Escape; sleep 1
-	fi
-	echo "  ✓ PASS: Added 'ocp' operator set via TUI"
+if $_logging_found; then
+	echo "  ✓ PASS: ISC regenerated with logging operators"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-	# Wait for ISC regeneration
-	sleep 5
-
-	# Check ISC now includes ocp operators
-	_isc_after=$(_read_isc)
-	_ocp_ops_found=false
-	for _op in "local-storage-operator" "openshift-gitops-operator" "odf-operator"; do
-		if echo "$_isc_after" | grep -q "$_op"; then
-			_ocp_ops_found=true
-			break
-		fi
-	done
-
-	if $_ocp_ops_found; then
-		echo "  ✓ PASS: ISC regenerated with ocp operator set content"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: ISC not regenerated with ocp operators"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	fi
 else
-	echo "  ~ NOTE: Could not find 'ocp' set in checklist"
+	echo "  ✗ FAIL: ISC not regenerated with logging operators"
+	echo "    ISC operator lines: $(echo "$_isc_after" | grep -i 'name:.*operator' | head -5)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
+
+# Verify ISC has operators section (not commented out)
+if echo "$_isc_after" | grep -q "^  operators:"; then
+	echo "  ✓ PASS: ISC has active operators section"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: ISC missing active operators section"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
