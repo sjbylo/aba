@@ -86,21 +86,36 @@ tui_back_to "Day-2\|Cluster Management" 5
 # and the presence of menu items with keys (R, N, O, etc.).
 _nav_to_day2_menu() {
 	local _w _scr
-	for _w in 1 2 3 4 5; do
+	for _w in 1 2 3 4 5 6 7 8; do
 		_scr=$(tui_capture)
 		# Check for the actual Day-2 menu (has section headers like "Configuration" and menu keys)
 		if echo "$_scr" | grep -q "── Configuration ──\|── Status ──\|── Lifecycle ──"; then
 			return 0
 		fi
-		# Dismiss any stale dialogs (success, error, output pager)
-		if echo "$_scr" | grep -qi "steps completed\|── Success ──\|ENTER to return"; then
-			tui_keys Enter; sleep 1; continue
+		# Dismiss progress dialog that completed (Succeeded, 100%)
+		if echo "$_scr" | grep -qi "steps completed\|── Success ──\|ENTER to return\|Succeeded\|100%"; then
+			echo "  (_nav: dismissing completion dialog)" >&2
+			tui_keys Enter; sleep 2; continue
 		fi
+		# Dismiss failure or error dialogs
 		if echo "$_scr" | grep -qi "── FAILED ──\|Quit.*Q\|Dismiss"; then
+			echo "  (_nav: dismissing failure dialog)" >&2
 			tui_keys Enter; sleep 1; continue
 		fi
-		if echo "$_scr" | grep -qi "scroll.*PgUp\|Press Q to quit"; then
+		# Dismiss output pager
+		if echo "$_scr" | grep -qi "scroll.*PgUp\|Press Q to quit\|Press.*Escape.*to close"; then
+			echo "  (_nav: dismissing output pager)" >&2
 			tui_keys q; sleep 1; continue
+		fi
+		# Dismiss "Output (Space)" button on progress dialog
+		if echo "$_scr" | grep -qi "Output.*Space.*Quit"; then
+			echo "  (_nav: dismissing progress output)" >&2
+			tui_keys Escape; sleep 1; continue
+		fi
+		# Still showing progress (In Progress / N/A) — wait a bit
+		if echo "$_scr" | grep -qi "In Progress\|Day-2:.*day2\|Overall Progress"; then
+			echo "  (_nav: progress dialog still active, waiting...)" >&2
+			sleep 10; continue
 		fi
 		# Navigate back from wherever we are
 		tui_back_to "Actions" 3
@@ -197,6 +212,13 @@ _day2_run_action() {
 		echo "  ✗ FAIL: $action_name progress not detected"
 		tui_screenshot "d2-${action_name}-unclear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		# Even though we didn't detect progress, the dialog may be on
+		# screen — wait for it and dismiss it so subsequent actions work
+		if echo "$_scr" | grep -qi "Day-2:\|One moment\|please"; then
+			echo "  (waiting for possible background progress to finish...)"
+			tui_wait_for_progress "d2-${action_name}-recovery" "$timeout" 2>/dev/null || true
+			tui_dismiss_result
+		fi
 	fi
 }
 
