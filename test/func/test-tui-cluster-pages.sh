@@ -26,8 +26,29 @@ tui_select_item "Install Cluster"
 sleep 3
 tui_screenshot "cp-01-entry"
 
-# Handle gates: "Mirror Required", "Cluster Already Installed"
+# Handle gates: "Mirror Required", "Mirror Stopped", "Cluster Already Installed"
 _scr=$(tui_capture)
+
+# Mirror stopped — dismiss and start it via Advanced menu
+if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped"; then
+	echo "  Mirror is stopped — starting it first..."
+	tui_keys Enter; sleep 2  # dismiss the dialog
+	tui_back_to "Actions" 3
+	tui_select_item "Advanced"
+	sleep 1
+	tui_select_item "Start.*Mirror\|Start.*Registry\|Start"
+	sleep 5
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "started\|Running\|Success\|OK"; then
+		tui_keys Enter; sleep 1
+	fi
+	tui_back_to "Actions" 3
+	# Retry Install Cluster
+	tui_select_item "Install Cluster"
+	sleep 3
+	_scr=$(tui_capture)
+fi
+
 if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*required"; then
 	echo "  ✓ PASS: Mirror Required gate appeared (mirror not installed)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
