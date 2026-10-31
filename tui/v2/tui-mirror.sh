@@ -455,8 +455,9 @@ _mirror_install_remote() {
 # Stdout of mirror-status.sh --shell for the TUI to eval.
 # Provides mirror state, upgrade path validation, risks, etc.
 # Caller must eval the output to set local variables.
+# Optional args (e.g. --skip-release-check) are forwarded to mirror-status.sh.
 _tui_mirror_status_shell() {
-	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/mirror-status.sh" --shell) 2>/dev/null || true
+	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/mirror-status.sh" --shell "$@") 2>/dev/null || true
 }
 
 # Stdout of transfer-info.sh --shell for the TUI to eval.
@@ -551,11 +552,12 @@ _mirror_op_confirm() {
 
 	# Mirror status (ISC operator count, disk, upgrade path) — single source of truth.
 	# operator_count/operators from ISC override stale OP_BASKET when available.
+	# --skip-release-check: confirm dialog doesn't need the live registry probe.
 	local disk_save_summary="" disk_sync_summary="" disk_load_summary=""
 	local disk_save_short=false disk_sync_short=false disk_load_short=false
 	local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
 	local operator_count="" operators=""
-	eval "$(_tui_mirror_status_shell)"
+	eval "$(_tui_mirror_status_shell --skip-release-check)"
 
 	if [[ $_op_count -ne -1 ]]; then
 		if [[ -n "$operator_count" && "$operator_count" -gt 0 ]]; then
@@ -2719,8 +2721,9 @@ mirror_create_bundle() {
 		_ver="${_ver} → ${transfer_upgrade_to}"
 	fi
 	# Operator count and transfer warnings from aba core (mirror-status.sh)
+	# --skip-release-check: bundle dialog doesn't need the live registry probe.
 	local transfer_excl_release="" operator_count="" operators="" isc_user_managed=""
-	eval "$(_tui_mirror_status_shell)"
+	eval "$(_tui_mirror_status_shell --skip-release-check)"
 
 	local _op_count _op_preview=""
 	if [[ "$isc_user_managed" == "true" ]]; then

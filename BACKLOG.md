@@ -66,6 +66,28 @@ actually change.  Options:
 
 ---
 
+## TUI confirm dialog: show estimated mirror size
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** Before sync/save/load, the TUI confirmation dialog shows OCP
+version, operator count, and disk warnings — but only when disk space is
+tight.  The user has no idea how large the operation will be when free space
+is ample (e.g. "~23 GB needed" is useful even with 200 GB free).
+
+**Root cause:** `mirror-status.sh --shell` already computes `estimate_bytes`
+(via `estimate-isc-size.sh`) but only exposes it in the `disk_*_summary`
+fields, which are suppressed when the disk level is `ok`.
+
+**Proposed fix:** Add an `estimate_size` output field to `mirror-status.sh
+--shell` (always emitted, human-formatted e.g. "23 GB").  Have
+`_mirror_op_confirm` always display an "Estimated size: ~23 GB" line in the
+summary, with neutral styling when OK and red when tight/short.
+
+---
+
 ## Multiple ABA repos on same host: shared state conflict
 
 **Severity:** LOW
