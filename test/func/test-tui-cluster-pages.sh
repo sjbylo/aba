@@ -49,6 +49,20 @@ if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped";
 	_scr=$(tui_capture)
 fi
 
+# Release Image Missing — mirror is installed but empty (no images synced yet)
+if echo "$_scr" | grep -qi "Release Image Missing\|no release images\|release.*missing"; then
+	echo "  ✓ PASS: Release Image Missing gate appeared (mirror has no images)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_press_button "Back" 2>/dev/null || tui_keys Escape
+	sleep 1
+	echo "  ~ SKIP: Cluster wizard pages require synced images in the mirror"
+	echo ""
+	echo "--- Cleanup ---"
+	tui_cleanup
+	tui_summary
+	exit 0
+fi
+
 if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*required"; then
 	echo "  ✓ PASS: Mirror Required gate appeared (mirror not installed)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
