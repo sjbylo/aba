@@ -795,9 +795,11 @@ tui_wait_isc_file() {
 		sleep 1
 	done
 
-	# Force synchronous ISC regeneration to ensure file matches current config
+	# Force synchronous ISC regeneration: touch .created to be newer than
+	# the ISC file so make considers it stale, then regenerate
 	$_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null && \
 		run_once -r -i 'aba:isconf:generate' 2>/dev/null; \
+		touch mirror/data/.created; \
 		make -sC mirror isconf 2>/dev/null" >/dev/null 2>&1 || true
 }
 

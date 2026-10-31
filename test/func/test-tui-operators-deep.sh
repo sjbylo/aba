@@ -104,22 +104,30 @@ _scr=$(tui_capture)
 echo "  Available sets:"
 echo "$_scr" | sed -n 's/.*\[\(.\)\][[:space:]]*\(.*\)/    [\1] \2/p' | head -10
 
-# Type 'l' to jump to logging (dialog supports first-letter navigation in checklists)
-# Actually in dialog checklists, we navigate with arrows. Let's search for the position.
-# Simpler: use the dialog's search - scroll to find logging
-# Reset to top of list, then scroll down to find logging
+# Navigate to "logging" by going to top, then counting items until logging.
+# Each Down key moves the cursor by one item in the checklist.
 _found_logging=false
 for i in $(seq 1 30); do tui_keys Up; sleep 0.1; done
-for i in $(seq 1 35); do
-	if tui_capture | grep -qi "logging"; then
+sleep 0.5
+_scr=$(tui_capture)
+# Count how many [X]/[ ] items appear before "logging" in the screen output
+_all_items=$(echo "$_scr" | grep -oP '\[.\]\s+\S+' | awk '{print $2}')
+_pos=0
+while IFS= read -r _item; do
+	if [[ "$_item" == "logging" ]]; then
 		_found_logging=true
 		break
 	fi
-	tui_keys Down; sleep 0.3
-done
+	_pos=$(( _pos + 1 ))
+done <<< "$_all_items"
+if [[ "$_found_logging" == "true" ]]; then
+	for _d in $(seq 1 "$_pos"); do
+		tui_keys Down; sleep 0.15
+	done
+fi
 
 if [[ "$_found_logging" == "true" ]]; then
-	# Toggle it on with Space
+	# Toggle logging on with Space — cursor should now be on it
 	tui_keys Space
 	sleep 0.5
 	tui_screenshot "od-02b-logging-toggled"
