@@ -89,12 +89,17 @@ case "${BUNDLE_VENDOR:-omr}" in
 esac
 
 op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
-[ ! "$op_list" ] && op_list="  - No Operators!"
+if [ "$op_list" ]; then
+	op_count=$(echo "$op_list" | wc -l)
+else
+	op_list="  (none)"
+	op_count="No"
+fi
 
-sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" -e "s/<VENDOR>/$vendor_display/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
+sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" -e "s/<VENDOR>/$vendor_display/g" -e "s/<OP_COUNT>/$op_count/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
 
-# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
-test_body=$(grep -v '^## ' "$WORK_TEST_LOG")
+# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header, leading blank lines, and prepend "  - " to each line to match the doc style)
+test_body=$(grep -v '^## ' "$WORK_TEST_LOG" | sed '/./,$!d' | sed 's/^/  - /')
 awk -v results="$test_body" '{
 	if ($0 == "<TEST_RESULTS>") print results
 	else print
@@ -104,7 +109,7 @@ awk -v results="$test_body" '{
 # Append operator list and imageset-config to README
 (
 	echo
-	echo "## List of Operators included in this install bundle:"
+	echo "## $op_count operators included in this install bundle:"
 	echo
 	echo "$op_list"
 	echo
