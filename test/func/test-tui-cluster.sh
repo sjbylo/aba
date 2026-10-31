@@ -52,13 +52,22 @@ fi
 
 # Wait for the target IP to be free (previous VM may still be powering off)
 echo "  Pre-cleanup: checking IP $_api_ip is free..."
+_ip_free=false
 for _arping_try in $(seq 1 30); do
-	if ! $_TUI_SSH "arping -c 1 -w 2 $_api_ip 2>/dev/null" | grep -q "reply from"; then
+	# arping exit code 0 = got replies (IP in use), 1 = no replies (IP free)
+	if ! $_TUI_SSH "arping -c 1 -w 2 $_api_ip 2>&1" | grep -qi "reply"; then
+		echo "  Pre-cleanup: IP $_api_ip is free"
+		_ip_free=true
 		break
 	fi
 	echo "  Pre-cleanup: IP $_api_ip still in use, waiting... ($_arping_try/30)"
 	sleep 10
 done
+if [[ "$_ip_free" != "true" ]]; then
+	echo "  ERROR: IP $_api_ip still in use after 5 minutes — cannot proceed"
+	echo "  A VM or device is holding this IP. Manual cleanup required."
+	exit 1
+fi
 
 # ============================================================================
 # 1. Open cluster install wizard
@@ -84,8 +93,22 @@ tui_screenshot "cl-01b-basics"
 tui_assert_contains "Name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 
-# Verify cluster name and type are shown correctly
-tui_assert_contains "$_CLUSTER" "Cluster name pre-filled"
+# Set cluster name if not already correct (fresh install has default name)
+_scr=$(tui_capture)
+if ! echo "$_scr" | grep -q "$_CLUSTER"; then
+	echo "  Setting cluster name to $_CLUSTER"
+	# Press N to highlight the cluster-name item, Enter to open inputbox
+	tui_keys N; sleep 0.5
+	tui_keys Enter; sleep 1
+	tui_screenshot "cl-01b-name-inputbox"
+	# Clear old value and type the correct name
+	tui_keys C-u; sleep 0.3
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
+	sleep 0.3
+	tui_keys Enter; sleep 1
+	tui_screenshot "cl-01b-name-set"
+fi
+tui_assert_contains "$_CLUSTER" "Cluster name set"
 tui_assert_contains "sno\|compact\|standard" "Cluster type shown"
 tui_screenshot "cl-01c-basics-detail"
 
