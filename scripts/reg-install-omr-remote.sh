@@ -31,30 +31,8 @@ if [ ! -f "$_image_file" ]; then
 	make -s "$_image_file"
 fi
 
-# Extract the install binary from the container image (locally).
-# Skip if the binary already exists and is healthy — avoids a redundant
-# podman load on hosts with large image stores.
-_need_extract=""
-if [ ! -x "$_bin" ]; then
-	_need_extract=1
-elif ! ./"$_bin" version >/dev/null 2>&1; then
-	aba_warn "Binary $_bin exists but appears corrupt — re-extracting"
-	rm -f "$_bin"
-	_need_extract=1
-fi
-
-if [ -n "$_need_extract" ]; then
-	aba_info "Extracting $_OMR_VENDOR install binary ..."
-	mkdir -p "$_bin_dir"
-	if ! podman load -i "$_image_file"; then
-		aba_abort "Failed to load $_OMR_VENDOR image from $_image_file." \
-			"The archive may be corrupt. Delete it and retry."
-	fi
-	_cid=$(podman create "$_OMR_IMAGE")
-	podman cp "$_cid:/mirror-registry" "$_bin"
-	podman rm "$_cid" >/dev/null
-	chmod +x "$_bin"
-fi
+# Ensure the install binary is extracted from the container image.
+_omr_ensure_binary
 
 # Copy binary and image tarball to remote host
 aba_info "Copying $_OMR_VENDOR binary and image to remote host ..."
