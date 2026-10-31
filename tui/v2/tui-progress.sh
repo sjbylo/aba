@@ -314,9 +314,13 @@ _tp_auto_complete_one() {
 # is changed to status 6 (Skipped).
 
 _tp_sweep_skipped() {
-	local id ps _any=0
+	local id ps _any=0 _saw_failure=0
 	for id in "${_tp_order[@]}"; do
 		ps="${_tp_status[$id]:-9}"
+		# Once a step has failed, leave all subsequent steps untouched (N/A)
+		# so the dialog doesn't label unreached steps as "No-op".
+		[ "$ps" = "1" ] && _saw_failure=1 && continue
+		[ "$_saw_failure" -eq 1 ] && continue
 		if [ -z "${_tp_real_done[$id]:-}" ]; then
 			if [ "$ps" = "9" ] || [ "$ps" = "0" ]; then
 				_tp_status[$id]="6"

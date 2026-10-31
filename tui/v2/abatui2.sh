@@ -739,7 +739,10 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && mirror_install
+					_exec_with_progress "aba --dir mirror uninstall --yes" "Uninstall Existing Mirror" _invalidate_mirror_cache
+					local _urc=$?
+					[[ $_urc -eq 2 ]] && confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && _urc=0
+					[[ $_urc -eq 0 ]] && mirror_install
 				fi
 			else
 				mirror_install

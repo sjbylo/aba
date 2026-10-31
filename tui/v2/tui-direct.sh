@@ -157,7 +157,7 @@ direct_wizard() {
 				if [[ ! "$_ps_ver" == *.*.* ]]; then
 					# Wait for version fetch started at TUI boot (should be done by now)
 					run_once -q -w -i "ocp:stable:latest_version" 2>/dev/null || true
-					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null)
+					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
 				fi
 				if [[ "$_ps_ver" == *.*.* ]]; then
 					local _cat_ver
@@ -422,7 +422,9 @@ _direct_channel() {
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
 "• stable — recommended for production, well-tested
+
 • fast — latest GA release, receives z-stream updates before stable
+
 • candidate — pre-release versions for testing only"
 			DIALOG_RC="repeat"
 			;;
@@ -465,9 +467,11 @@ _direct_version() {
 	fi
 
 	local latest previous older
-	latest=$(run_once -o -i "ocp:${_ch}:latest_version" 2>/dev/null)
-	previous=$(run_once -o -i "ocp:${_ch}:latest_version_previous" 2>/dev/null)
-	older=$(run_once -o -i "ocp:${_ch}:latest_version_older" 2>/dev/null)
+	# run_once -o returns the full log (stdout + stderr merged);
+	# extract only the last valid version string, discarding error messages.
+	latest=$(run_once -o -i "ocp:${_ch}:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
+	previous=$(run_once -o -i "ocp:${_ch}:latest_version_previous" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
+	older=$(run_once -o -i "ocp:${_ch}:latest_version_older" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
 
 	if [[ -z "$latest" ]]; then
 		# Fallback: use existing version from aba.conf or allow manual entry
@@ -685,7 +689,9 @@ _direct_platform() {
 		2)
 			show_help "$TUI2_HELP_TITLE_PLATFORM" \
 "• Bare metal: physical servers or pre-existing VMs (you manage MAC addresses)
+
 • VMware vSphere: ABA creates VMs on vCenter (requires ~/.vmware.conf)
+
 • KVM/libvirt: ABA creates VMs on KVM host (requires ~/.kvm.conf)"
 			DIALOG_RC="repeat"
 			;;

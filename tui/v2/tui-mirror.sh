@@ -414,6 +414,7 @@ mirror_install() {
 "A mirror registry stores OpenShift container images locally.
 
 • Local: installs on this host (Docker, Quay, or OMR)
+
 • Remote: installs on another host via SSH
 
 After installation, use 'Save', 'Sync', or 'Load' to populate it with images."
@@ -639,7 +640,7 @@ _mirror_op_confirm() {
 		_summary+="\n\\Z1Additional images configured but excluded — they won't be mirrored\\Zn"
 	fi
 
-	_summary+="\n\nContinue?"
+	_summary+="\nContinue?"
 
 	# For "View ISC": show the ISC from the transfer tar if available
 	_isc_for_view="$ABA_ROOT/mirror/data/imageset-config.yaml"
@@ -844,8 +845,9 @@ mirror_prep_upgrade() {
 	fi
 
 	# Read combined output: CHANNEL\tLABEL\tVERSION
+	# Filter: only lines with tab-separated fields (discard error messages from log)
 	local _all_targets
-	_all_targets=$(run_once -o -i "$_task_id" 2>/dev/null)
+	_all_targets=$(run_once -o -i "$_task_id" 2>/dev/null | grep $'^\t*[a-z].*\t')
 
 	# Parse own-channel targets
 	while IFS=$'\t' read -r _ch _label _ver; do
@@ -1509,7 +1511,7 @@ mirror_payload_menu() {
 			--ok-label "Select" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "${_payload_summary}\n" 0 0 0 \
+			--menu "${_payload_summary}" 0 0 0 \
 				"${_payload_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
@@ -1618,12 +1620,34 @@ _mirror_isc_advanced() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_ISC_ADVANCED" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
+			--help-button \
 			--default-item "$default_item" \
-			--menu "\n" 0 0 0 \
+			--menu "View, edit, or reset the generated ImageSet configuration." 0 0 0 \
 				"${_adv_items[@]}" \
 				2>"$_TUI_TMP"
 		local rc=$?
 		case "$rc" in
+			2)
+				show_help "$TUI2_TITLE_CONNO_ISC_ADVANCED" \
+"The imageset-config.yaml (ISC) controls which container images
+are mirrored — OCP release images, operators, and additional images.
+
+ABA generates and manages this file automatically based on your
+settings in aba.conf and mirror.conf. In most cases you should
+use the Mirror Payload menu to change what gets mirrored.
+
+• View — inspect the current ISC (read-only)
+
+• Edit — open the ISC in an editor. ABA preserves your manual
+  edits on subsequent regenerations. Only edit if you need
+  fine-grained control not available through the menu
+  (e.g. pinning a specific operator channel or version).
+
+• Reset — discard all manual edits and regenerate the ISC
+  based on aba.conf + mirror.conf settings.
+  Use this if the file is corrupted or you want a clean start."
+				continue
+				;;
 			0) ;;
 			*) return 0 ;;
 		esac
@@ -1743,7 +1767,8 @@ _operator_menu() {
 			else
 				printf -v _line "  %-22s %s" "${_cat}s:" "(downloading)"
 			fi
-			_cat_stats="${_cat_stats}${_line}\n"
+			[[ -n "$_cat_stats" ]] && _cat_stats="${_cat_stats}\n"
+			_cat_stats="${_cat_stats}${_line}"
 		done
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_OPERATORS" \
@@ -1766,8 +1791,11 @@ _operator_menu() {
 "Choose operators to include in your mirror/bundle.
 
 • Operator Sets: pre-defined groups (ocp, odf, virt, acm, quay...)
+
 • Search: find operators by name in the catalog
+
 • View/Edit Selection: see and modify your current selection
+
 • Clear: remove all operators from the selection
 
 Selected operators will be included in the ImageSet config."
@@ -2451,7 +2479,7 @@ mirror_manage_images() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "Extra container images included in the mirror payload.\nCurrently: $_count $( (( _count == 1 )) && echo image || echo images) in images.conf\n" 0 0 0 \
+			--menu "Extra container images included in the mirror payload.\nCurrently: $_count $( (( _count == 1 )) && echo image || echo images) in images.conf" 0 0 0 \
 			"${_menu_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -2468,11 +2496,14 @@ and will be mirrored alongside OpenShift platform and operator images.
 • Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
 • Remove: remove a previously added image
 • Delete all: clear all additional images from images.conf
+
 • Recommended Images: add or remove curated image sets (AI, Virt, OCP)
   that complement selected operator sets
+
 • Additional Images: toggle whether additional images are included in the
   ImageSet configuration. When excluded, images.conf is kept intact but
   the images are not mirrored. Toggle back on to re-include them.
+
 • Edit: open images.conf directly in the editor
 
 Images are stored in images.conf (next to aba.conf).
