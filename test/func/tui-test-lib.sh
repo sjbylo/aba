@@ -781,34 +781,33 @@ tui_read_isc() {
 }
 
 # Wait for background ISC regeneration to finish (file-level check).
-# Polls for the make/run_once ISC process to complete on the remote host.
-# First waits up to 10s for ISC generation to START (the TUI triggers it
-# asynchronously), then waits up to timeout for it to FINISH.
+# Records the ISC modification time BEFORE the triggering action, then
+# waits for either the process to appear+finish, or the file to change.
 #   tui_wait_isc_file [timeout_seconds]
 tui_wait_isc_file() {
-	local _timeout="${1:-30}" _i _started=0
+	local _timeout="${1:-30}" _i
 
-	# Phase 1: wait for ISC generation to start (up to 10s)
-	for _i in $(seq 1 10); do
+	# Snapshot the ISC file's modification time before waiting
+	local _before_mtime
+	_before_mtime=$($_TUI_SSH "stat -c %Y ~/aba/mirror/data/imageset-config.yaml 2>/dev/null" || echo "0")
+
+	for _i in $(seq 1 "$_timeout"); do
+		# Check if ISC generation process is still running
 		if $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
-			_started=1
-			break
+			sleep 1
+			continue
 		fi
+		# Process not running — check if the file was updated
+		local _now_mtime
+		_now_mtime=$($_TUI_SSH "stat -c %Y ~/aba/mirror/data/imageset-config.yaml 2>/dev/null" || echo "0")
+		if [[ "$_now_mtime" != "$_before_mtime" ]]; then
+			return 0
+		fi
+		# Neither running nor changed yet — brief wait then retry
 		sleep 1
 	done
-
-	# Phase 2: wait for it to finish
-	if [[ $_started -eq 1 ]]; then
-		for _i in $(seq 1 "$_timeout"); do
-			if ! $_TUI_SSH "pgrep -f 'isconf\|imageset-config' >/dev/null 2>&1"; then
-				return 0
-			fi
-			sleep 1
-		done
-		echo "  (ISC generation still running after ${_timeout}s — proceeding anyway)"
-	fi
-	# If ISC never started, the TUI may have completed it synchronously or
-	# via a cached result.  Either way, the file should be current.
+	# Timed out — the ISC may have regenerated very quickly (same second)
+	# or the TUI may not have triggered regeneration at all
 }
 
 # Assert that the ISC contains a pattern (grep -qiE).

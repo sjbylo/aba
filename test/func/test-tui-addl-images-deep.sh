@@ -346,6 +346,7 @@ if echo "$_scr" | grep -qi "ubi9/ubi\|support-tools"; then
 
 	# ISC round-trip: verify the ISC has only 1 image after removal
 	echo "  Verifying ISC reflects removal..."
+	tui_wait_isc_file 30
 	_isc_after_rm=$(tui_read_isc)
 	_img_count=$(echo "$_isc_after_rm" | grep -c 'additionalImages:' 2>/dev/null) || _img_count=0
 	if [[ "$_img_count" -ge 1 ]]; then

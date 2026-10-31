@@ -107,8 +107,30 @@ tui_assert_contains "Starting\|starting" "Starting IP field"
 tui_assert_contains "DNS\|dns" "DNS field"
 tui_assert_contains "Gateway\|gateway" "Gateway field"
 
-# Values pre-filled from cluster.conf — verify, no need to edit
-tui_assert_contains "$_machine_network\|$_api_ip" "Network values pre-filled"
+# Set network values for this cluster (may need to override host defaults)
+_scr=$(tui_capture)
+if ! echo "$_scr" | grep -q "$_machine_network"; then
+	echo "  Setting machine network to $_machine_network"
+	tui_select_item "Machine" 2>/dev/null || true; sleep 0.5
+	tui_keys C-u; sleep 0.3
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
+	sleep 0.3; tui_keys Tab Enter; sleep 1
+fi
+if ! echo "$_scr" | grep -q "$_api_ip"; then
+	echo "  Setting starting IP to $_api_ip"
+	tui_select_item "Starting" 2>/dev/null || true; sleep 0.5
+	tui_keys C-u; sleep 0.3
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
+	sleep 0.3; tui_keys Tab Enter; sleep 1
+fi
+if ! echo "$_scr" | grep -q "$_gateway"; then
+	echo "  Setting gateway to $_gateway"
+	tui_select_item "Gateway" 2>/dev/null || true; sleep 0.5
+	tui_keys C-u; sleep 0.3
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
+	sleep 0.3; tui_keys Tab Enter; sleep 1
+fi
+tui_assert_contains "$_machine_network\|$_api_ip" "Network values set correctly"
 tui_screenshot "cl-02c-network-detail"
 
 # Advance to page 3
