@@ -110,8 +110,8 @@ _found_logging=false
 for i in $(seq 1 30); do tui_keys Up; sleep 0.1; done
 sleep 0.5
 _scr=$(tui_capture)
-# Count how many [X]/[ ] items appear before "logging" in the screen output
-_all_items=$(echo "$_scr" | grep -oP '\[.\]\s+\S+' | awk '{print $2}')
+# Extract item names from checklist rows: "│ │[ ] logging   OpenShift Logging"
+_all_items=$(echo "$_scr" | grep '\[.\]' | sed 's/.*\[.\][[:space:]]*//' | awk '{print $1}')
 _pos=0
 while IFS= read -r _item; do
 	if [[ "$_item" == "logging" ]]; then
