@@ -56,6 +56,28 @@ is hidden behind the toggle.
 
 ---
 
+## Add operator/cluster checks to "aba status" command
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** Pre-flight checks like "is the Cincinnati operator available on
+the cluster?" or "is kubevirt-hyperconverged mirrored?" are currently only
+done inline in the TUI Day-2 flow. Users running CLI workflows have no way to
+check readiness before running Day-2 operations.
+
+**Proposed fix:** Extend `aba status` (or add `aba status --cluster <name>`)
+to report useful pre-flight information:
+- Operator availability on the cluster (packagemanifests)
+- Whether key operators (OSUS, virt) are installed (CSVs)
+- Mirror content vs ISC config (what's configured vs what's synced)
+- Cluster health summary (nodes, cluster operators)
+
+This would give both CLI and TUI users a single command to check readiness.
+
+---
+
 ## Audit progress dialogs for "next steps" advice on error paths
 
 **Severity:** MEDIUM
