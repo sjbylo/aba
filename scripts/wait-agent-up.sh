@@ -1,5 +1,8 @@
 #!/bin/bash 
 # Wait for the Agent REST API (port 8090) on the rendezvous node.
+# This short pause gives the agent time to come online and start producing
+# log output so that monitor-install.sh (openshift-install wait-for) has
+# something to show when it starts.
 #
 # Edge case (reviewed, intentionally not fixed):
 # After 'aba refresh', if bootstrap succeeds and the node reboots before
