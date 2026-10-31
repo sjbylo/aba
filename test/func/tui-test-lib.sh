@@ -703,35 +703,17 @@ tui_screenshot() {
 	echo "  [screenshot: $file]"
 }
 
-# Force-destroy leftover VMs that may conflict with a cluster install.
-# Uses govc to power off and destroy VMs matching the cluster name.
-# This is needed when VMs persist from previous test runs or E2E tests.
-# Usage: tui_destroy_leftover_vms "sno"
-tui_destroy_leftover_vms() {
-	local cluster="$1"
-	local _vms
-	_vms=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null; source aba.conf 2>/dev/null; source vmware.conf 2>/dev/null; export GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_INSECURE GOVC_DATACENTER GOVC_DATASTORE GOVC_NETWORK; govc find /\$(govc datacenter.info -json | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"datacenterInfoList\"][0][\"datacenter\"][\"name\"])' 2>/dev/null || echo Datacenter)/vm -type m -name '*${cluster}*' 2>/dev/null | grep -v aba-e2e | head -5" 2>/dev/null) || true
-	if [[ -n "$_vms" ]]; then
-		echo "  Pre-cleanup: destroying leftover VMs matching '$cluster':"
-		while IFS= read -r vm; do
-			[[ -z "$vm" ]] && continue
-			echo "    $vm"
-			$_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null; source aba.conf 2>/dev/null; source vmware.conf 2>/dev/null; export GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_INSECURE GOVC_DATACENTER GOVC_DATASTORE GOVC_NETWORK; govc vm.power -off -force '$vm' 2>/dev/null; govc vm.destroy '$vm' 2>/dev/null" 2>/dev/null || true
-		done <<< "$_vms"
-		echo "  Pre-cleanup: leftover VMs destroyed"
-	fi
-}
-
 # Delete a cluster via the TUI if it exists.
 # Navigates: Actions → Day-2 → Delete → select cluster → confirm → wait.
 # Returns 0 if cluster was deleted or didn't exist, 1 on error.
+#
+# NOTE: if VMs survive a delete (see BACKLOG.md: "vmw-delete.sh fails to
+# destroy VMs when agent config files are missing"), fix the root cause in
+# vmw-delete.sh rather than adding govc workarounds here.
 # Usage: tui_delete_cluster "sno"
 tui_delete_cluster() {
 	local cluster="$1"
 	echo "  Pre-cleanup: checking for leftover '$cluster'..."
-
-	# Also destroy leftover VMs that may cause IP conflicts
-	tui_destroy_leftover_vms "$cluster"
 
 	# Quick check: does the cluster directory even exist?
 	local _has_dir
