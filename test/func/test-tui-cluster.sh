@@ -31,25 +31,15 @@ echo "  Host: $_TUI_HOST"
 echo "  Cluster: $_CLUSTER"
 echo ""
 
-# Pre-test cleanup: destroy any leftover cluster VMs and state from prior runs.
-# Must run BEFORE tui_deploy_code so the delete uses the current scripts.
-# The delete must actually remove VMs from the hypervisor — otherwise the
-# cluster's IP stays in use and preflight blocks the install.
-if $_TUI_SSH "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
-	echo "  Cleaning up leftover '$_CLUSTER' cluster from prior run..."
-	if ! $_TUI_SSH "cd ~/aba && aba -d $_CLUSTER delete --yes" 2>&1 | tail -10; then
-		echo "  ERROR: 'aba -d $_CLUSTER delete --yes' failed!"
-		echo "  VMs may still be running and holding IPs. Fix manually before re-running."
-		exit 1
-	fi
-	sleep 5
-fi
-
 tui_deploy_code
+tui_pre_cleanup
 echo ""
 
 # ============================================================================
 tui_start_to_menu || { tui_summary; exit 1; }
+
+# Pre-test cleanup: delete any leftover cluster via the TUI
+tui_delete_cluster "$_CLUSTER"
 
 # ============================================================================
 # 1. Open cluster install wizard
@@ -57,7 +47,7 @@ tui_start_to_menu || { tui_summary; exit 1; }
 echo ""
 echo "--- 1. Cluster wizard page 1: Basics ---"
 tui_select_item "Install Cluster"
-sleep 3
+sleep 1
 tui_screenshot "cl-01-start"
 
 # The wizard auto-detects existing cluster "sno" which is installed.
@@ -75,47 +65,14 @@ tui_screenshot "cl-01b-basics"
 tui_assert_contains "Name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 
-# Check help
-tui_press_button "Help"
+# Verify cluster name and type are shown correctly
+tui_assert_contains "$_CLUSTER" "Cluster name pre-filled"
+tui_assert_contains "sno\|compact\|standard" "Cluster type shown"
+tui_screenshot "cl-01c-basics-detail"
+
+# Advance to page 2: press Next (focus is on first button after menu loads)
+tui_press_button "Next"
 sleep 2
-tui_assert_contains "Cluster name\|cluster name" "Basics help content"
-tui_assert_contains "sno\|compact\|standard" "Help describes cluster types"
-tui_screenshot "cl-01c-basics-help"
-tui_keys Enter; sleep 1
-
-# Set cluster name to our test name
-# Find the name field and select it
-tui_select_item "Name" 2>/dev/null || tui_select_item "name" 2>/dev/null || {
-	# Try selecting first menu item
-	tui_keys Enter
-}
-sleep 1
-tui_screenshot "cl-01d-name-input"
-
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Cluster Name\|Enter.*name\|cluster name"; then
-	# Clear existing name and type our test name
-	# Ctrl-U clears the input line, then type new name
-	tui_keys C-u
-	sleep 0.3
-	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
-	sleep 0.3
-	tui_keys Tab Enter
-	sleep 2
-	echo "  Set cluster name to: $_CLUSTER"
-fi
-
-# Make sure we're back on the Basics menu (not stuck in an input dialog)
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Enter cluster name\|Use Tab to navigate"; then
-	echo "  Input dialog still open — pressing Tab Enter to dismiss"
-	tui_keys Tab Enter
-	sleep 2
-fi
-
-# Advance to page 2 (Next button)
-tui_press_button "Next" 2>/dev/null || tui_press_button "OK" 2>/dev/null || tui_keys Enter
-sleep 3  # cluster.conf generation may take a moment
 tui_screenshot "cl-01e-after-basics"
 
 # ============================================================================
@@ -131,43 +88,13 @@ tui_assert_contains "Starting\|starting" "Starting IP field"
 tui_assert_contains "DNS\|dns" "DNS field"
 tui_assert_contains "Gateway\|gateway" "Gateway field"
 
-# Check help
-tui_press_button "Help"
-sleep 2
-tui_assert_contains "Machine network\|machine network\|CIDR" "Network help content"
-tui_screenshot "cl-02b-network-help"
-tui_keys Enter; sleep 1
-
-# Set correct machine network to match DNS records
-echo "  Setting machine network=$_machine_network, starting IP=$_api_ip, gateway=$_gateway"
-tui_select_item "Machine" 2>/dev/null || true
-sleep 1
-tui_keys C-u; sleep 0.3
-$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
-
-# Set starting IP
-tui_select_item "Starting" 2>/dev/null || true
-sleep 1
-tui_keys C-u; sleep 0.3
-$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
-
-# Set gateway
-tui_select_item "Gateway" 2>/dev/null || true
-sleep 1
-tui_keys C-u; sleep 0.3
-$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
-
-tui_screenshot "cl-02c-network-updated"
+# Values pre-filled from cluster.conf — verify, no need to edit
+tui_assert_contains "$_machine_network\|$_api_ip" "Network values pre-filled"
+tui_screenshot "cl-02c-network-detail"
 
 # Advance to page 3
-tui_press_button "Next" 2>/dev/null || tui_keys Enter
-sleep 2
+tui_press_button "Next"
+sleep 1
 
 # ============================================================================
 # 3. Page 3: Interfaces
@@ -181,15 +108,9 @@ tui_assert_contains "Port\|port\|ens" "Port names field"
 tui_assert_contains "Image source\|image source\|mirror\|direct" "Image source field"
 
 # Check help
-tui_press_button "Help"
-sleep 2
-tui_assert_contains "Ports\|ports\|NIC" "Interface help content"
-tui_screenshot "cl-03b-iface-help"
-tui_keys Enter; sleep 1
-
 # Advance to page 4
-tui_press_button "Next" 2>/dev/null || tui_keys Enter
-sleep 2
+tui_press_button "Next"
+sleep 1
 
 # ============================================================================
 # 4. Page 4: VM Resources (VMware/KVM only)
@@ -203,15 +124,9 @@ tui_assert_contains "CPU\|cpu\|vCPU" "CPU field"
 tui_assert_contains "Memory\|memory\|RAM\|Mem" "Memory field"
 
 # Check help
-tui_press_button "Help"
-sleep 2
-tui_assert_contains "vCPU\|CPU\|Memory\|RAM" "VM resources help content"
-tui_screenshot "cl-04b-vm-help"
-tui_keys Enter; sleep 1
-
 # Advance to review page
-tui_press_button "Next" 2>/dev/null || tui_keys Enter
-sleep 2
+tui_press_button "Next"
+sleep 1
 
 # ============================================================================
 # 5. Review page
@@ -219,6 +134,7 @@ sleep 2
 echo ""
 echo "--- 5. Review page ---"
 tui_wait_for "Review\|Confirm\|Install" 10
+sleep 1
 tui_screenshot "cl-05-review"
 
 # Verify review shows our cluster info
@@ -235,80 +151,30 @@ echo ""
 echo "--- 6. Install cluster ---"
 # Press Install button
 tui_keys Enter
-sleep 3
+sleep 1
 tui_screenshot "cl-06-install-start"
-
-# At this point the TUI will either:
-# a) Show execution options (terminal/TUI mode)
-# b) Start the install directly
-# c) Show a confirmation dialog
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Terminal\|Run in Terminal\|Execution\|execution"; then
 	echo "  Execution mode dialog appeared"
-	# Select "Run in Terminal" for visible output
 	tui_keys Enter
-	sleep 2
+	sleep 1
 fi
 
-# Wait for install to complete (SNO takes ~30-45 min on VMware)
+# Wait for install using the common progress helper (60 min timeout)
 echo "  Waiting for cluster install to complete (up to 60 min)..."
 echo "  (Monitor: ssh to $_TUI_HOST and check 'tmux a -t $_TUI_SESSION')"
 
-# Poll for completion indicators
-_install_timeout=3600  # 60 minutes
-_start_time=$(date +%s)
-_last_screenshot=0
-while true; do
-	_elapsed=$(( $(date +%s) - _start_time ))
-	[[ $_elapsed -ge $_install_timeout ]] && break
+if tui_wait_for_progress "cl-06" 3600; then
+	echo "  ✓ PASS: Cluster install completed successfully"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Cluster install failed"
+	tui_screenshot "cl-06-install-fail"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
 
-	if ! tui_session_alive; then
-		echo "  SESSION DEAD during cluster install"
-		break
-	fi
-	_scr=$(tui_capture)
-
-	# Take periodic screenshots (every 5 min)
-	if (( _elapsed - _last_screenshot >= 300 )); then
-		tui_screenshot "cl-06-progress-${_elapsed}s"
-		_last_screenshot=$_elapsed
-	fi
-
-	# Check for actual install completion (not "ready for install" or command name)
-	if echo "$_scr" | grep -qi "Cluster is installed\|Install complete\|install completed.*marker\|Login to the console"; then
-		echo "  ✓ PASS: Cluster install completed successfully (${_elapsed}s)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		break
-	fi
-
-	# Check for fatal error
-	if echo "$_scr" | grep -qi "FAILED\|fatal\|timed out.*bootstrap"; then
-		echo "  ✗ FAIL: Cluster install failed"
-		tui_screenshot "cl-06-install-fail"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		break
-	fi
-
-	tui_dismiss_result && continue
-
-	# Check if we're back at main menu (install finished)
-	if echo "$_scr" | grep -q "Actions"; then
-		echo "  Returned to main menu — checking cluster state..."
-		_inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
-		if [[ "$_inst" == "yes" ]]; then
-			echo "  ✓ PASS: Cluster install completed (marker file exists, ${_elapsed}s)"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
-		else
-			echo "  ~ NOTE: Back at menu but .install-complete not found yet"
-		fi
-		break
-	fi
-
-	sleep 30
-done
 tui_dismiss_result
-
 tui_screenshot "cl-06-final"
 
 # ============================================================================

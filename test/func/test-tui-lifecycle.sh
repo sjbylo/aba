@@ -17,12 +17,13 @@ echo "  Skip delete: $_SKIP_DELETE"
 echo ""
 
 tui_deploy_code
+tui_pre_cleanup
 echo ""
 
 _inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" != "yes" ]]; then
-	echo "  SKIP: Cluster '$_CLUSTER' not installed — skipping lifecycle test"
-	_TUI_PASS=0; _TUI_FAIL=0; tui_summary; exit 0
+	echo "  ✗ FAIL: Cluster '$_CLUSTER' not installed — cannot run lifecycle test"
+	_TUI_FAIL=1; tui_summary; exit 1
 fi
 
 # ============================================================================
@@ -44,48 +45,33 @@ else
 	tui_select_item "Day-2"
 	tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 	tui_select_item "shutdown"
-	sleep 3
+	sleep 1
 	tui_screenshot "lc-01-shutdown"
 
 	_scr=$(tui_capture)
 	# Handle cluster selection
 	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter; sleep 2
+		tui_keys Enter; sleep 1
 		_scr=$(tui_capture)
 	fi
 
-	if echo "$_scr" | grep -qi "confirm\|shutdown\|proceed\|sure"; then
+	if echo "$_scr" | grep -qi "shutdown\|Graceful.*shutdown\|shut.*down"; then
 		echo "  ✓ PASS: Shutdown confirmation dialog"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_screenshot "lc-01b-shutdown-confirm"
 
 		# Confirm: --defaultno focuses Cancel, move to Yes first
-		tui_confirm_yes; sleep 3
+		tui_confirm_yes; sleep 1
 		tui_screenshot "lc-01c-after-confirm"
 
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-			tui_keys Enter; sleep 2
-			tui_screenshot "lc-01d-exec-mode"
-		fi
+		tui_dismiss_exec_mode
 
-		# Wait for shutdown to complete (typically 5-15 min)
-		# Include Error|FAILED so we don't hang on error dialogs
 		echo "  Waiting for shutdown (up to 20 min)..."
-		if tui_wait_for "steps completed\|success\|Command completed\|Press.*ENTER\|Error\|FAILED" 1200; then
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "Error\|FAILED"; then
-				echo "  ✗ FAIL: Shutdown reported an error"
-				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-				tui_screenshot "lc-01e-shutdown-error"
-				# Dismiss error dialog
-				tui_keys Enter; sleep 2
-			else
-				echo "  ✓ PASS: Shutdown completed"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
-			fi
+		if tui_wait_for_progress "lc-shutdown" 600; then
+			echo "  ✓ PASS: Shutdown completed"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			echo "  ✗ FAIL: Shutdown did not complete"
+			echo "  ✗ FAIL: Shutdown failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
 		tui_screenshot "lc-01f-shutdown-result"
@@ -98,7 +84,7 @@ else
 	# ---- Verify shutdown ----
 	echo ""
 	echo "--- 2. Verify shutdown ---"
-	sleep 5
+	sleep 2
 	_shutdown_log=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.shutdown.log && echo yes || echo no")
 	if [[ "$_shutdown_log" == "yes" ]]; then
 		echo "  ✓ PASS: Shutdown log exists"
@@ -118,43 +104,29 @@ tui_back_to "Actions" 5
 tui_select_item "Day-2"
 tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 tui_select_item "startup"
-sleep 3
+sleep 1
 tui_screenshot "lc-03-startup"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "select.*cluster"; then
-	tui_keys Enter; sleep 2
+	tui_keys Enter; sleep 1
 	_scr=$(tui_capture)
 fi
 
-if echo "$_scr" | grep -qi "confirm\|startup\|start\|proceed\|power"; then
+if echo "$_scr" | grep -qi "startup\|Graceful.*start\|start.*cluster\|power.*on"; then
 	echo "  ✓ PASS: Startup dialog appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_keys Enter; sleep 3
+	tui_keys Enter; sleep 1
 	tui_screenshot "lc-03c-after-confirm"
 
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-		tui_keys Enter; sleep 2
-		tui_screenshot "lc-03d-exec-mode"
-	fi
+	tui_dismiss_exec_mode
 
-	# Wait for startup (VMs power on + cluster recovers: 10-20 min)
 	echo "  Waiting for startup (up to 30 min)..."
-	# Avoid generic words like "ready"/"started" — they match step labels in the progress dialog
-	if tui_wait_for "steps completed\|success\|Command completed\|Press.*ENTER\|Error\|FAILED" 1800; then
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qi "Error\|FAILED"; then
-			echo "  ✗ FAIL: Startup reported an error"
-			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-			tui_screenshot "lc-03e-startup-error"
-			tui_keys Enter; sleep 2
-		else
-			echo "  ✓ PASS: Startup completed"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
-		fi
+	if tui_wait_for_progress "lc-startup" 900; then
+		echo "  ✓ PASS: Startup completed"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Startup did not complete"
+		echo "  ✗ FAIL: Startup failed"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	tui_screenshot "lc-03b-startup-result"
@@ -199,13 +171,12 @@ else
 	tui_select_item "Day-2"
 	tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 	tui_select_item "Clean"
-	sleep 3
+	sleep 1
 	tui_screenshot "lc-05-clean"
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "select.*cluster"; then
 		tui_keys Enter
-		# Wait for cluster selection to dismiss before checking next dialog
 		tui_wait_gone "select.*cluster" 5
 		_scr=$(tui_capture)
 	fi
@@ -214,29 +185,16 @@ else
 		echo "  ✓ PASS: Clean confirmation dialog"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 
-		# Confirm: --defaultno focuses Cancel, move to Yes first
-		tui_confirm_yes; sleep 3
+		tui_confirm_yes; sleep 1
 		tui_screenshot "lc-05c-after-confirm"
 
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-			tui_keys Enter; sleep 2
-			tui_screenshot "lc-05d-exec-mode"
-		fi
+		tui_dismiss_exec_mode
 
-		if tui_wait_for "steps completed\|success\|Command completed\|Press.*ENTER\|Error\|FAILED" 300; then
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "Error\|FAILED"; then
-				echo "  ✗ FAIL: Clean reported an error"
-				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-				tui_screenshot "lc-05e-clean-error"
-				tui_keys Enter; sleep 2
-			else
-				echo "  ✓ PASS: Clean completed"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
-			fi
+		if tui_wait_for_progress "lc-clean" 120; then
+			echo "  ✓ PASS: Clean completed"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			echo "  ✗ FAIL: Clean did not complete"
+			echo "  ✗ FAIL: Clean failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
 		tui_screenshot "lc-05b-clean-result"
@@ -266,7 +224,7 @@ else
 	tui_select_item "Day-2"
 	tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 	tui_select_item "Delete"
-	sleep 3
+	sleep 1
 	tui_screenshot "lc-06-delete"
 
 	_scr=$(tui_capture)
@@ -280,29 +238,16 @@ else
 		echo "  ✓ PASS: Delete confirmation dialog"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 
-		# Confirm: --defaultno focuses Cancel, move to Yes first
-		tui_confirm_yes; sleep 3
+		tui_confirm_yes; sleep 1
 		tui_screenshot "lc-06c-after-confirm"
 
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-			tui_keys Enter; sleep 2
-			tui_screenshot "lc-06d-exec-mode"
-		fi
+		tui_dismiss_exec_mode
 
-		if tui_wait_for "steps completed\|success\|Command completed\|Press.*ENTER\|Error\|FAILED" 600; then
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "Error\|FAILED"; then
-				echo "  ✗ FAIL: Delete reported an error"
-				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-				tui_screenshot "lc-06e-delete-error"
-				tui_keys Enter; sleep 2
-			else
-				echo "  ✓ PASS: Delete completed"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
-			fi
+		if tui_wait_for_progress "lc-delete" 120; then
+			echo "  ✓ PASS: Delete completed"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			echo "  ✗ FAIL: Delete did not complete"
+			echo "  ✗ FAIL: Delete failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
 		tui_screenshot "lc-06b-delete-result"

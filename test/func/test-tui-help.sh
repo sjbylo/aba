@@ -205,7 +205,8 @@ if grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
 	tui_keys Enter; sleep 1
 	tui_back_to "Actions"
 else
-	echo "  ~ SKIP: Day-2 menu not reached"
+	echo "  ✗ FAIL: Day-2 menu not reached"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================

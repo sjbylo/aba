@@ -115,7 +115,8 @@ if grep -qiE "toggle|setting" /tmp/_tui_settings_help.txt; then
 	echo "  ✓ PASS: Settings help appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ SKIP: Settings help content unclear"
+	echo "  ✗ FAIL: Settings help content unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Enter; sleep 1
 tui_back_to "Actions"
@@ -181,7 +182,8 @@ if grep -qiE "Day-2|Cluster Management" /tmp/_tui_day2_check.txt; then
 	tui_keys Enter; sleep 1
 	tui_back_to "Actions"
 else
-	echo "  ~ SKIP: Day-2 menu not reached (may need cluster)"
+	echo "  ✗ FAIL: Day-2 menu not reached"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================

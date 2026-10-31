@@ -17,12 +17,11 @@ echo ""
 # Pre-check: does an installed cluster exist?
 _installed=$($_TUI_SSH "ls ~/aba/*/.install-complete 2>/dev/null" || true)
 if [ -z "$_installed" ]; then
-	echo "  SKIP: No installed cluster on $_TUI_HOST — skipping Day-2 deep tests"
+	echo "  ✗ FAIL: No installed cluster on $_TUI_HOST — cannot run Day-2 deep tests"
 	echo ""
-	echo "  ✓ PASS: (skipped — no cluster)"
-	_TUI_PASS=1
+	_TUI_FAIL=1
 	tui_summary
-	exit 0
+	exit 1
 fi
 echo "  Installed cluster(s): $(echo "$_installed" | sed 's|.*/\(.*\)/.install-complete|\1|' | paste -sd, -)"
 echo ""
@@ -59,7 +58,7 @@ tui_assert_contains "Virtualization\|Boot Sources" "Virtualization item"
 echo ""
 echo "--- 2. Cluster Status ---"
 # Select status
-tui_keys S; sleep 0.3; tui_keys Enter
+tui_select_item "status"
 sleep 3
 tui_screenshot "d2d-02a-cluster-select"
 
@@ -115,7 +114,7 @@ echo "--- 3. OSUS check ---"
 # Back to Day-2 menu
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys O; sleep 0.3; tui_keys Enter
+tui_select_item "OSUS\|Update Service"
 sleep 3
 tui_screenshot "d2d-03-osus"
 
@@ -151,7 +150,7 @@ echo ""
 echo "--- 4. Virtualization Boot Sources ---"
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys V; sleep 0.3; tui_keys Enter
+tui_select_item "Virtualization\|Boot Source"
 sleep 3
 tui_screenshot "d2d-04-virt"
 
@@ -177,7 +176,7 @@ echo ""
 echo "--- 5. Upgrade version picker ---"
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys U; sleep 0.3; tui_keys Enter
+tui_select_item "Upgrade"
 sleep 3
 tui_screenshot "d2d-05a-upgrade-cluster"
 
@@ -248,7 +247,7 @@ echo ""
 echo "--- 6. Shutdown confirmation ---"
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys G; sleep 0.3; tui_keys Enter
+tui_select_item "shutdown\|Shutdown"
 sleep 3
 tui_screenshot "d2d-06-shutdown"
 
@@ -279,7 +278,7 @@ if ! tui_capture | grep -qi "Day-2\|Cluster Management"; then
 	tui_wait_for "Day-2\|Cluster Management" 10
 fi
 
-tui_keys D; sleep 0.3; tui_keys Enter
+tui_select_item "Delete"
 sleep 3
 tui_screenshot "d2d-07-delete"
 
