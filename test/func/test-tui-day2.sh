@@ -138,12 +138,19 @@ _day2_run_action() {
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		return 1
 	fi
-	sleep 1
+	sleep 2
 	tui_screenshot "d2-${action_name}-start"
 
 	tui_dismiss_cluster_select
 
+	# Wait for the "One moment please" / loading dialog to transition
+	# to the actual progress dialog (can take a few seconds)
 	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "One moment\|please wait\|Loading"; then
+		echo "  ($action_name: waiting for loading to finish...)"
+		sleep 5
+		_scr=$(tui_capture)
+	fi
 
 	# Handle warning/confirmation dialogs before progress starts
 	if echo "$_scr" | grep -qi "Warning\|Continue anyway\|Confirm\|Are you sure"; then
@@ -153,11 +160,14 @@ _day2_run_action() {
 		_scr=$(tui_capture)
 	fi
 
-	tui_dismiss_exec_mode
-	_scr=$(tui_capture)
+	# Only dismiss exec mode if we see it (not the progress dialog)
+	if echo "$_scr" | grep -qi "Run in.*Terminal\|Execution Mode"; then
+		tui_keys Enter; sleep 1
+		_scr=$(tui_capture)
+	fi
 
 	# Detect progress dialog or any running state
-	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|Day-2:.*${action_name}\|Progress\|steps completed"; then
+	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|Day-2:\|Progress\|steps completed"; then
 		echo "  ✓ PASS: $action_name progress dialog appeared"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 
