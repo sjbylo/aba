@@ -33,6 +33,39 @@ Issues or Pull Requests.
 
 ---
 
+## mirror.conf timestamp triggers unnecessary registry reinstall
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** After the TUI or CLI edits `mirror.conf` (e.g., changing OCP version,
+operators, or channel), the file's mtime becomes newer than `.available`.  The next
+`sync`, `save`, or `load` triggers Make to re-run the `.available` recipe, which
+attempts a full registry reinstall.  If the registry is remote or temporarily
+unreachable, this fails and blocks the operation entirely.  In the TUI, this also
+prevents the progress dialog from showing (PLAN events never fire because install
+fails before sync starts).
+
+**Root cause:** The Makefile uses `mirror.conf` as a dependency for `.available`:
+`.available: mirror.conf | .init .rpmsext $(_REGISTRY_PREREQ)`.  This is correct
+when registry settings change (hostname, port, vendor, credentials), but not every
+`mirror.conf` edit requires a registry reinstall — changing operators, OCP version,
+channel, or upgrade targets only affects the ImageSet config, not the registry itself.
+
+**Proposed fix:** Split `mirror.conf` into registry-affecting fields and
+payload-affecting fields.  Only trigger `.available` rebuild when registry settings
+actually change.  Options:
+- Extract a checksum of registry-relevant fields; only invalidate `.available` when
+  the checksum changes.
+- Use a separate stamp file (e.g., `.reg-conf-checksum`) that tracks only the
+  registry fields.
+
+**Workaround:** Run `touch mirror/.available` to reset the timestamp, or
+`aba -d mirror verify` to re-stamp `.available` after confirming the registry is up.
+
+---
+
 ## Multiple ABA repos on same host: shared state conflict
 
 **Severity:** LOW
