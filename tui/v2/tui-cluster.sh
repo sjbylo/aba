@@ -2338,10 +2338,16 @@ _day2_run() {
 }
 
 _day2_run_osus() {
-	# Pre-check: warn if Cincinnati operator not in ISC
-	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
-	if [[ -f "$isconf_file" ]]; then
-		if ! grep -q "cincinnati-operator" "$isconf_file" 2>/dev/null; then
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_MENU" "Select cluster for Day-2:"; then
+		return 1
+	fi
+
+	# Pre-check: warn if Cincinnati operator is not available on the cluster
+	local _kc
+	_kc=$(cd "$ABA_ROOT/$SELECTED_CLUSTER" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || _kc=""
+	if [[ -n "$_kc" && -f "$_kc" ]]; then
+		if ! timeout 5 env KUBECONFIG="$_kc" oc get packagemanifest cincinnati-operator \
+				>/dev/null 2>&1; then
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_OSUS_WARN" \
 				--yes-label "$TUI2_BTN_CONTINUE" \
 				--no-label "$TUI2_BTN_CANCEL" \
@@ -2350,23 +2356,39 @@ _day2_run_osus() {
 		fi
 	fi
 
-	_day2_run "day2-osus"
+	local _cmd="aba --dir $SELECTED_CLUSTER day2-osus"
+	local _title="Day-2: day2-osus"
+	_exec_with_progress "$_cmd --yes" "$_title"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" && rc=$?
+	return $rc
 }
 
 _day2_run_virt() {
-	# Pre-check: warn if kubevirt-hyperconverged operator not in ISC
-	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
-	if [[ -f "$isconf_file" ]]; then
-		if ! grep -q "kubevirt-hyperconverged" "$isconf_file" 2>/dev/null; then
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_MENU" "Select cluster for Day-2:"; then
+		return 1
+	fi
+
+	# Pre-check: warn if kubevirt-hyperconverged operator is not available on the cluster
+	local _kc
+	_kc=$(cd "$ABA_ROOT/$SELECTED_CLUSTER" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || _kc=""
+	if [[ -n "$_kc" && -f "$_kc" ]]; then
+		if ! timeout 5 env KUBECONFIG="$_kc" oc get packagemanifest kubevirt-hyperconverged \
+				>/dev/null 2>&1; then
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_VIRT" \
 				--yes-label "$TUI2_BTN_CONTINUE" \
 				--no-label "$TUI2_BTN_CANCEL" \
-				--yesno "The 'kubevirt-hyperconverged' operator was not found in the ImageSet config.\n\nOpenShift Virtualization must be installed before configuring boot sources.\n\nContinue anyway?" 0 0
+				--yesno "The 'kubevirt-hyperconverged' operator is not available on the cluster.\n\nOpenShift Virtualization must be mirrored and available before configuring boot sources.\n\nContinue anyway?" 0 0
 			[[ $? -ne 0 ]] && return 0
 		fi
 	fi
 
-	_day2_run "day2-virt"
+	local _cmd="aba --dir $SELECTED_CLUSTER day2-virt"
+	local _title="Day-2: day2-virt"
+	_exec_with_progress "$_cmd --yes" "$_title"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" && rc=$?
+	return $rc
 }
 
 # --- Status: oc get co + oc get nodes ---
