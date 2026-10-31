@@ -629,6 +629,33 @@ failures.  It is conservative: prunes unused podman images, deletes tar files
 only if already loaded into the mirror (`.oc-mirror-exit-code == 0`), but
 preserves `~/.oc-mirror` download cache to avoid re-downloading.
 
+### Background screenshot monitoring
+
+Long-running TUI tests (cluster install, upgrade, lifecycle) can take 20–60
+minutes each.  Rather than blocking on a single long sleep, use a background
+screenshot monitor that captures the tmux pane state continuously:
+
+1. A lightweight loop on the test host captures `tmux capture-pane` output
+   every 2 seconds to a fixed file (e.g. `/tmp/tui-monitor/latest.txt`).
+2. The monitoring agent wakes every 60 seconds, reads the latest capture,
+   checks for progress/completion/errors, and reports status.
+3. Old captures are overwritten automatically (single file, not accumulating).
+
+This decouples observation from action: the test runs uninterrupted while
+progress is checked asynchronously.  Early failures are detected within
+60 seconds instead of waiting for the full timeout.
+
+Example monitor script (runs on the test host):
+
+```bash
+#!/bin/bash
+mkdir -p /tmp/tui-monitor
+while true; do
+    tmux capture-pane -t tui-test -p > /tmp/tui-monitor/latest.txt 2>/dev/null
+    sleep 2
+done
+```
+
 ---
 
 ## Makefile Structure
