@@ -156,7 +156,12 @@ tui_select_item "Day-2"
 sleep 2
 tui_screenshot "07-day2"
 tui_capture > /tmp/_tui_day2_check.txt
-if grep -qiE "Day-2|Cluster Management" /tmp/_tui_day2_check.txt; then
+if grep -qiE "No clusters configured" /tmp/_tui_day2_check.txt; then
+	echo "  ✓ PASS: Day-2 shows 'No clusters configured' (expected — no cluster installed)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_keys Enter; sleep 1
+	tui_back_to "Actions"
+elif grep -qiE "Day-2|Cluster Management" /tmp/_tui_day2_check.txt; then
 	echo "  ✓ PASS: Day-2 menu reached"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
