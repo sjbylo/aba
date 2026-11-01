@@ -20,6 +20,7 @@ tui_start
 tui_assert_appears "OpenShift Installer" "Splash screen appeared" 15 || {
 	tui_screenshot "splash-fail"; tui_stop; tui_summary; exit 1
 }
+tui_assert_title "OpenShift Installer\|ABA" "Splash screen title"
 tui_assert_contains "ABA v" "Version string present"
 # Check buttons dynamically
 _splash_btns=$(tui_buttons | tr '\n' ', ')
@@ -51,6 +52,7 @@ echo ""
 echo "--- 3. Main menu ---"
 tui_keys Enter
 tui_assert_appears "Actions" "Main menu appeared" 10
+tui_assert_title "Partially Disconnected\|Fully Disconnected\|Fully Connected" "Main menu title"
 tui_screenshot "03-main-menu"
 
 # Dynamically discover all menu items
@@ -103,6 +105,7 @@ echo "--- 5. Settings submenu ---"
 tui_back_to "Actions" 3
 tui_select_item "Configure"
 tui_assert_appears "Settings" "Settings dialog appeared" 5
+tui_assert_title "Settings" "Settings dialog title"
 tui_assert_contains "Registry Type" "Registry Type setting"
 tui_assert_contains "Retry" "Retry setting"
 tui_screenshot "05-settings"
@@ -128,6 +131,7 @@ echo ""
 echo "--- 6. Advanced submenu ---"
 tui_select_item "Advanced"
 tui_assert_appears "Advanced" "Advanced menu appeared" 5
+tui_assert_title "Advanced" "Advanced menu title"
 tui_assert_contains "Platform Settings" "Platform Settings item"
 tui_assert_contains "Switch Mode" "Switch Mode section"
 tui_assert_contains "Danger Zone" "Danger Zone section"

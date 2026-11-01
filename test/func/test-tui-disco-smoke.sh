@@ -197,6 +197,8 @@ elif echo "$_scr" | grep -qi "Partially Disconnected\|CONNO"; then
 fi
 
 # Check menu items — DISCO and CONNO have different items
+tui_assert_title "Disconnected\|Connected\|Actions" "DISCO main menu title"
+
 if [[ "$_detected_disco" == "true" ]]; then
 	# DISCO-specific items
 	tui_assert_contains "Install.*Registry\|Registry" "Install Registry item"

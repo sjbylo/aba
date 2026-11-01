@@ -38,6 +38,7 @@ tui_select_item "Day-2"
 sleep 2
 tui_screenshot "d2d-01-day2"
 
+tui_assert_title "Day-2\|Cluster Management" "Day-2 menu dialog title"
 tui_assert_contains "Day-2\|Cluster Management" "Day-2 menu title"
 tui_assert_contains "OperatorHub" "OperatorHub item"
 tui_assert_contains "NTP\|Network Time" "NTP item"

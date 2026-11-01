@@ -66,6 +66,8 @@ done
 if [[ "$_ip_free" != "true" ]]; then
 	echo "  ERROR: IP $_api_ip still in use after 5 minutes — cannot proceed"
 	echo "  A VM or device is holding this IP. Manual cleanup required."
+	tui_stop
+	tui_summary
 	exit 1
 fi
 
@@ -89,6 +91,7 @@ fi
 
 # Page 1: Basics — should show cluster name, type, platform
 tui_wait_for "Basics\|Cluster Name\|cluster_name\|Name\|Type" 10
+tui_assert_title "Basics" "Basics page title"
 tui_screenshot "cl-01b-basics"
 tui_assert_contains "Name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
@@ -134,6 +137,7 @@ tui_screenshot "cl-01e-after-basics"
 echo ""
 echo "--- 2. Cluster wizard page 2: Networking ---"
 tui_wait_for "Network\|Machine\|Starting\|DNS\|Gateway" 10
+tui_assert_title "Networking" "Networking page title"
 tui_screenshot "cl-02-network"
 
 tui_assert_contains "Machine\|machine" "Machine network field"
@@ -177,6 +181,7 @@ sleep 1
 echo ""
 echo "--- 3. Cluster wizard page 3: Interfaces ---"
 tui_wait_for "Interface\|Ports\|Port\|VLAN\|Image source\|ens" 10
+tui_assert_title "Interfaces" "Interfaces page title"
 tui_screenshot "cl-03-iface"
 
 tui_assert_contains "Port\|port\|ens" "Port names field"
@@ -193,6 +198,7 @@ sleep 1
 echo ""
 echo "--- 4. Cluster wizard page 4: VM Resources ---"
 tui_wait_for "CPU\|Memory\|Master\|VM\|Resources\|Data" 10
+tui_assert_title "VM Resources\|Resources" "VM Resources page title"
 tui_screenshot "cl-04-vm"
 
 tui_assert_contains "CPU\|cpu\|vCPU" "CPU field"
@@ -209,6 +215,7 @@ sleep 1
 echo ""
 echo "--- 5. Review page ---"
 tui_wait_for "Review\|Confirm\|Install" 10
+tui_assert_title "Install Cluster\|Review" "Review page title"
 sleep 1
 tui_screenshot "cl-05-review"
 

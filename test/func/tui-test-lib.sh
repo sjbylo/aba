@@ -309,6 +309,24 @@ tui_dialog_title() {
 	tui_capture | sed -n 's/.*┌[─ ]*\(.*[^ ─]\)[─ ]*┐.*/\1/p' | head -1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
+# Assert the dialog title matches a pattern (case-insensitive).
+# Usage: tui_assert_title "Cluster – Basics" "Basics page title"
+tui_assert_title() {
+	local pattern="$1"
+	local desc="$2"
+	local title
+	title=$(tui_dialog_title)
+	if echo "$title" | grep -qi "$pattern"; then
+		echo "  ✓ PASS: $desc (title: '$title')"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		return 0
+	else
+		echo "  ✗ FAIL: $desc (expected title matching '$pattern', got '$title')"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		return 1
+	fi
+}
+
 # Navigate back to a known screen (by title/pattern), pressing Escape as needed.
 # Usage: tui_back_to "Actions" [max_attempts]
 tui_back_to() {
@@ -579,6 +597,8 @@ tui_start() {
 	sleep 0.5
 	$_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT '$cmd'"
 	sleep 2
+	# Safety net: ensure tmux session is killed on unexpected exit
+	trap 'tui_stop 2>/dev/null' EXIT
 }
 
 # Kill the TUI session
@@ -621,11 +641,12 @@ tui_cleanup() {
 
 	# Force-kill the tmux session if it didn't exit cleanly
 	tui_stop
-	sleep 1
+	sleep 2
 
 	# Check for strays AFTER the session is gone
+	# Exclude tmux itself (its cmdline contains "abatui" from new-session args)
 	local _strays
-	_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
+	_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep | grep -v 'tmux '" 2>/dev/null || true)
 	if [ -z "$_strays" ]; then
 		echo "  ✓ PASS: No stray processes"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))

@@ -25,6 +25,7 @@ echo "--- 1. Mirror Payload menu ---"
 tui_select_item "Mirror Payload"
 tui_wait_isc_done 120
 tui_assert_appears "Mirror Payload\|Additional Images" "Payload menu appeared" 15
+tui_assert_title "Mirror Payload" "Payload menu title"
 tui_screenshot "op-01-payload"
 
 # Check payload menu items are present
@@ -55,6 +56,7 @@ echo ""
 echo "--- 2. Select Operators menu ---"
 tui_select_item "Select Operators"
 tui_assert_appears "Select Operators\|Operator" "Operator menu appeared" 15
+tui_assert_title "Select Operators" "Operator menu title"
 tui_screenshot "op-02-operator-menu"
 
 # Check operator menu items

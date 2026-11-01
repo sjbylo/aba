@@ -54,6 +54,7 @@ fi
 echo ""
 echo "--- 2. Channel selection ---"
 tui_wait_for "Channel\|channel" 10
+tui_assert_title "Channel" "Channel dialog title"
 tui_screenshot "wiz-02-channel"
 tui_assert_contains "stable" "stable channel option"
 tui_assert_contains "fast" "fast channel option"
@@ -79,6 +80,7 @@ fi
 echo ""
 echo "--- 3. Version selection ---"
 tui_wait_for "Version\|version" 15
+tui_assert_title "Version" "Version dialog title"
 tui_screenshot "wiz-03-version"
 # Should show Latest, Previous, Older, Manual options
 tui_assert_contains "Latest\|latest" "Latest version option"
@@ -109,6 +111,7 @@ fi
 echo ""
 echo "--- 4. Platform selection ---"
 tui_wait_for "Platform\|platform\|Bare\|metal\|VMware\|KVM" 10
+tui_assert_title "Platform" "Platform dialog title"
 tui_screenshot "wiz-04-platform"
 tui_assert_contains "Bare\|bare" "Bare metal option"
 tui_assert_contains "VMware\|vSphere\|vmw" "VMware option"
@@ -135,6 +138,7 @@ echo ""
 echo "--- 5. Operator selection ---"
 # This page may take time (catalog indexes)
 tui_wait_for "Operator\|operator" 30
+tui_assert_title "Select Operators" "Operator selection dialog title"
 tui_screenshot "wiz-05-operators"
 
 # Should show operator sets, search, view options

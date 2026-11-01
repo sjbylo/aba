@@ -375,17 +375,37 @@ _tp_show_output() {
 			printf '\n\n\033[0;30;43m ↑/↓/PgUp/PgDn to scroll.  Press Q to quit. \033[0m\n\n' >> "$_tp_output_log"
 			_tp_less_hint_added=1
 		fi
-		# -r: pass ANSI escape codes through for colored output
-		# -f: force open (ANSI escapes trigger "binary file" detection otherwise)
-		# +G: start at end of file so the user sees the most recent output first
-		less -rf +G "$_tp_output_log" 2>/dev/null || true
+		# Clean PTY output for readable paging:
+		#   1. Collapse \r overwrites (oc-mirror progress ticks)
+		#   2. Strip SI/SO (^O/^N) — oc-mirror emits after every ANSI reset
+		#   3. Strip cursor-up (ESC[nA) and erase-to-end (ESC[J) — block redraws
+		#   4. Strip progress bar lines (NNN / NNN ...)
+		#   5. Remove duplicate lines from block redraws (awk dedup)
+		#   6. Squeeze consecutive blank lines
+		# -R: render ANSI color codes natively (safer than -r)
+		# smcup/rmcup: preserve the dialog screen behind less
+		tput smcup 2>/dev/null
+		sed $'s/.*\r\\(.\\)/\\1/' "$_tp_output_log" |
+			tr -d $'\r\017\016' |
+			sed $'s/\033\\[[0-9]*A//g; s/\033\\[J//g' |
+			grep -v '^ *[0-9]\{1,\} / [0-9]\{1,\} (' |
+			awk '!seen[$0]++' |
+			cat -s |
+			less -Rf +G 2>/dev/null || true
+		tput rmcup 2>/dev/null
+		# Clear screen so dialog redraws cleanly (fixes terminals without
+		# alternate-screen support, e.g. nested tmux over SSH)
+		clear 2>/dev/null
 	else
-		# Live: stream output with tail -f, press any key to return
-		clear
+		# Live: enter alternate screen for output, dialog stays in main buffer.
+		# tput smcup saves the dialog screen; rmcup restores it instantly.
+		# clear ensures a clean canvas on terminals without alternate-screen support.
+		tput smcup 2>/dev/null
+		clear 2>/dev/null
 		printf '\033[1;33m'
-		echo "═══════════════════════════════════════════════════════"
-		echo "  ABA Live Output         (press any key to return)"
-		echo "═══════════════════════════════════════════════════════"
+		printf '═══════════════════════════════════════════════════════\n'
+		printf '  ABA Live Output         (press any key to return)\n'
+		printf '═══════════════════════════════════════════════════════\n'
 		printf '\033[0m\n'
 		cat "$_tp_output_log" 2>/dev/null
 		tail -n 0 -f "$_tp_output_log" 2>/dev/null &
@@ -394,6 +414,9 @@ _tp_show_output() {
 		kill "$_tp_tail_pid" 2>/dev/null || true
 		wait "$_tp_tail_pid" 2>/dev/null || true
 		_tp_tail_pid=""
+		# Restore dialog screen — clear handles terminals without alternate-screen
+		tput rmcup 2>/dev/null
+		clear 2>/dev/null
 	fi
 }
 
@@ -610,7 +633,14 @@ _exec_with_progress() {
 		if [ "$_tp_done" -eq 1 ]; then
 			while _tp_auto_complete_one; do
 				_tp_draw "$title"
-				sleep 0.2
+				# Check for keypress during auto-complete animation so user input
+				# isn't swallowed by dialog redraws in rapid succession.
+				if IFS= read -rsn1 -t 0.2 key; then
+					case "$key" in
+						o|O|' ') _tp_show_output ;;
+						q|Q|$'\e') _rc=1; break ;;
+					esac
+				fi
 			done
 
 			# Crash detection: if the process exited non-zero and no step
@@ -655,7 +685,14 @@ _exec_with_progress() {
 		fi
 
 		if _tp_auto_complete_one; then
-			sleep 0.2
+			# Check for keypress during auto-complete animation so user input
+			# isn't swallowed by dialog redraws in rapid succession.
+			if IFS= read -rsn1 -t 0.2 key; then
+				case "$key" in
+					o|O|' ') _tp_show_output ;;
+					q|Q|$'\e') _rc=1; break ;;
+				esac
+			fi
 			continue
 		fi
 
