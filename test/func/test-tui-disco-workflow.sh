@@ -521,24 +521,26 @@ tui_screenshot "disco-wf-05b-basics"
 tui_assert_contains "Cluster name\|cluster name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 
-# Set cluster name
+# Set cluster name — open inputbox, type name, confirm
 tui_select_item "Cluster name\|name" 2>/dev/null || true
 sleep 1
 tui_screenshot "disco-wf-05b-name-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "DNS label" 10
+sleep 1
 tui_screenshot "disco-wf-05b-name-set"
 echo "  Set cluster name to: $_CLUSTER"
 
-# Press Next
+# Press Next — must Tab once from menu to first button, then Tab to Next
 tui_press_button "Next"
-sleep 3
+sleep 2
 
 echo ""
 echo "--- 5c. Cluster wizard page 2: Networking ---"
-tui_wait_for "Network\|Machine\|Starting\|DNS\|Gateway" 10
+tui_wait_for "Network\|Machine\|Starting\|DNS\|Gateway" 15
 tui_assert_title "Networking" "Networking page title"
 tui_screenshot "disco-wf-05c-network"
 
@@ -552,8 +554,10 @@ sleep 1
 tui_screenshot "disco-wf-05c-machine-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "CIDR notation" 10
+sleep 1
 
 # Set starting IP
 tui_select_item "Starting" 2>/dev/null || true
@@ -561,8 +565,10 @@ sleep 1
 tui_screenshot "disco-wf-05c-startip-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "First IP for cluster" 10
+sleep 1
 
 # Set gateway
 tui_select_item "Gateway" 2>/dev/null || true
@@ -570,14 +576,16 @@ sleep 1
 tui_screenshot "disco-wf-05c-gateway-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "Default gateway IP" 10
+sleep 1
 
 tui_screenshot "disco-wf-05c-network-done"
 
 # Press Next
 tui_press_button "Next"
-sleep 3
+sleep 2
 
 echo ""
 echo "--- 5d. Cluster wizard page 3: Interfaces ---"
@@ -629,6 +637,15 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
+# Handle post-install "Configure OperatorHub" dialog — press "No, later"
+# to skip Day-2 during the test (we just want to verify the install)
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Configure OperatorHub\|installed successfully\|apply now"; then
+	echo "  Dismissing OperatorHub dialog (pressing No, later)"
+	tui_screenshot "disco-wf-05g-operatorhub"
+	tui_press_button "No" 2>/dev/null || tui_keys Tab Enter 2>/dev/null
+	sleep 3
+fi
 tui_dismiss_result
 tui_screenshot "disco-wf-05g-install-final"
 
