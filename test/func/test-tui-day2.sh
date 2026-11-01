@@ -35,6 +35,7 @@ echo ""
 echo "--- 1. Day-2 menu ---"
 tui_select_item "Day-2"
 sleep 2
+tui_assert_title "Day-2\|Cluster Management" "Day-2 menu dialog title"
 tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu appeared" 10
 tui_screenshot "d2-01-menu"
 

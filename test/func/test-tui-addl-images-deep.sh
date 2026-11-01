@@ -45,6 +45,7 @@ _goto_addl() {
 	# Select Additional Images (tag G)
 	tui_keys G; sleep 0.3; tui_keys Enter
 	tui_wait_for "Add image\|Recommended" 10
+	tui_assert_title "Additional Images" "Additional Images dialog title"
 }
 
 # Helper: read image count from images.conf on remote

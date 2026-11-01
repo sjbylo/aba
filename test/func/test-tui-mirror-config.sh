@@ -77,6 +77,7 @@ elif echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; t
 		if echo "$_scr" | grep -qi "Mirror Configuration\|Hostname\|Port"; then
 			echo "  ✓ PASS: Local mirror config form appeared"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_assert_title "Install Mirror\|Mirror Configuration" "Mirror config dialog title"
 
 			# Verify config form fields
 			tui_assert_contains "Hostname" "Hostname field"

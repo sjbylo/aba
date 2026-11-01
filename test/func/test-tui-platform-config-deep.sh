@@ -53,6 +53,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "VMware\|vCenter\|ESXi"; then
 	echo "  ✓ PASS: VMware configuration form opened"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "VMware\|ESXi" "VMware config dialog title"
 
 	# Verify all expected fields
 	tui_assert_contains "vCenter.*URL\|ESXi.*URL\|URL" "VMware URL field"

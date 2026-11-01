@@ -43,6 +43,7 @@ if [[ "$_already_down" == "yes" ]]; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
 	tui_select_item "Day-2"
+	tui_assert_title "Day-2\|Cluster Management" "Day-2 dialog title"
 	tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 	tui_select_item "shutdown"
 	sleep 1

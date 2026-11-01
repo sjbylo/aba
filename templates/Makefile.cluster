@@ -51,6 +51,9 @@ install: $(TARGET_DEPENDENCIES) ## Install the cluster (generate ISO, boot VMs, 
 check: init
 #	ln -sf $(SCRIPTS)
 	$(SCRIPTS)/check-cluster-installed.sh
+ifdef HV_PREFIX
+	@$(SCRIPTS)/check-vm-state.sh
+endif
 
 ##@ Help-related tasks
 .PHONY: help

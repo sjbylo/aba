@@ -19,6 +19,7 @@ tui_start_to_menu || { tui_summary; exit 1; }
 # Helper: navigate to Mirror Payload menu
 _goto_payload() {
 	if tui_capture | grep -q "Additional Images"; then
+		tui_assert_title "Mirror Payload" "Mirror Payload menu title"
 		return 0
 	fi
 	if tui_capture | grep -q "Select Operator Sets"; then

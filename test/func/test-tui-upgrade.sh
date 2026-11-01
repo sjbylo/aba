@@ -342,6 +342,7 @@ fi
 tui_back_to "Actions" 5
 
 tui_select_item "Day-2"
+tui_assert_title "Day-2\|Cluster Management" "Day-2 dialog title"
 tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 tui_select_item "Upgrade"
 sleep 5

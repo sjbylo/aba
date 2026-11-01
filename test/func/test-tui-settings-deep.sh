@@ -38,6 +38,7 @@ _goto_settings() {
 	tui_back_to "Actions" 5
 	tui_select_item "Configure"
 	tui_wait_for "Registry Type\|Retry Count" 10
+	tui_assert_title "Settings" "Settings dialog title"
 }
 
 # Helper: read vendor from config file on remote host

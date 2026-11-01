@@ -109,6 +109,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
 	echo "  ✓ PASS: Basics page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Basics" "Basics page title"
 
 	# Check basics page fields
 	tui_assert_contains "Cluster Name\|Name" "Cluster Name field"
@@ -154,6 +155,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Network\|CIDR\|Subnet\|DNS\|Gateway\|API VIP\|Starting IP"; then
 	echo "  ✓ PASS: Network page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Networking" "Networking page title"
 
 	# Check network page fields
 	tui_assert_contains "Subnet\|CIDR\|Machine Network" "Subnet/CIDR field"
@@ -194,6 +196,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Interface\|Port\|MAC\|NIC\|ens\|enp"; then
 	echo "  ✓ PASS: Interfaces page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Interfaces" "Interfaces page title"
 
 	# Check interface fields
 	tui_assert_contains "NIC\|Port\|Interface\|ens\|enp" "NIC/Port field"
@@ -228,6 +231,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "VM Resources\|CPU\|Memory\|Disk\|vCPU\|RAM"; then
 	echo "  ✓ PASS: VM Resources page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "VM Resources" "VM Resources page title"
 
 	# Check VM resource fields
 	tui_assert_contains "CPU\|vCPU" "CPU field"
@@ -264,6 +268,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm\|cluster.conf"; then
 	echo "  ✓ PASS: Review page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Install Cluster" "Review page title"
 
 	# Check review contains key config items
 	if echo "$_scr" | grep -qi "cluster_name\|Cluster Name\|Name:"; then
