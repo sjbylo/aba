@@ -979,11 +979,12 @@ tui_wait_for_progress() {
 		fi
 
 		# Success: completed dialog (progress or confirm_and_execute)
-		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|─── Success ───\|── Success ──"; then
+		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|─── Success ───\|── Success ──\|installed successfully"; then
 			echo "  Progress '$label' completed successfully (${_elapsed}s)"
 			_tui_capture_output "$label"
-			# Dismiss OK button on success msgbox
-			if echo "$_scr" | grep -qi "Success"; then
+			# Dismiss OK/success dialog — but NOT post-install yesno dialogs
+			# ("Configure OperatorHub" has Yes/No, not OK)
+			if echo "$_scr" | grep -qi "── Success ──" && ! echo "$_scr" | grep -qi "Yes.*No\|apply now\|later"; then
 				tui_keys Enter; sleep 1
 			fi
 			return 0
