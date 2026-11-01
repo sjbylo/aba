@@ -175,7 +175,12 @@ sleep 2
 tui_capture > /tmp/_hc_day2_menu.txt
 tui_screenshot "hc-05-day2-menu"
 
-if grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
+if grep -qi "No clusters configured" /tmp/_hc_day2_menu.txt; then
+	echo "  ✓ PASS: Day-2 shows 'No clusters configured' (no cluster installed)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_keys Enter; sleep 1
+	tui_back_to "Actions"
+elif grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
 	tui_press_button "Help"
 	sleep 2
 	tui_capture > /tmp/_hc_day2_help.txt
