@@ -311,6 +311,7 @@ while true; do
 
 	# "Bundle on connected host" dialog — select Fully Disconnected (first button)
 	if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
+		tui_screenshot "disco-wf-gate-mode-select"
 		tui_keys Enter; sleep 5
 		continue
 	fi
@@ -326,12 +327,14 @@ while true; do
 
 	# Mirror install location dialog — select "Install locally"
 	if echo "$_scr" | grep -qi "Install locally\|Install on remote"; then
+		tui_screenshot "disco-wf-gate-mirror-location"
 		tui_keys Enter; sleep 3
 		continue
 	fi
 
 	# Mirror config review — press Next
 	if echo "$_scr" | grep -qi "Hostname\|Image path\|Vendor\|Data dir" && echo "$_scr" | grep -qi "Next"; then
+		tui_screenshot "disco-wf-gate-mirror-config"
 		tui_press_button "Next" 2>/dev/null || tui_keys Enter
 		sleep 3
 		continue
@@ -339,6 +342,7 @@ while true; do
 
 	# Handle execution mode dialog
 	if echo "$_scr" | grep -qi "Terminal\|Execution\|Run in"; then
+		tui_screenshot "disco-wf-gate-exec-mode"
 		tui_keys Enter; sleep 2
 		continue
 	fi
@@ -348,12 +352,14 @@ while true; do
 	# "Load images to mirror" confirmation dialog
 	if echo "$_scr" | grep -qi "Load images to mirror" && echo "$_scr" | grep -qi "Continue"; then
 		echo "  Load images confirmation — pressing Continue"
+		tui_screenshot "disco-wf-gate-load-confirm"
 		tui_keys Enter; sleep 10
 		continue
 	fi
 
 	# Handle confirmation dialogs (load, sync, etc.)
 	if echo "$_scr" | grep -qi "Confirm\|Continue\|Proceed" && echo "$_scr" | grep -qi "Yes\|OK"; then
+		tui_screenshot "disco-wf-gate-confirm-${_elapsed}s"
 		tui_keys Enter; sleep 3
 		continue
 	fi
@@ -367,6 +373,7 @@ while true; do
 	# Completion dialog with "Done" button (after mirror install/load)
 	if echo "$_scr" | grep -qi "All steps completed\|Done.*Output\|Mirror Updated\|updated successfully"; then
 		echo "  Completion dialog — dismissing"
+		tui_screenshot "disco-wf-gate-complete"
 		tui_keys Enter; sleep 5
 		continue
 	fi
@@ -398,8 +405,10 @@ else
 		tui_back_to "Actions" 5
 		tui_select_item "Install Registry\|Registry"
 		sleep 3
+		tui_screenshot "disco-wf-04-reg-install"
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
+			tui_screenshot "disco-wf-04-reg-exec-mode"
 			tui_keys Enter; sleep 2
 		fi
 	}
@@ -431,13 +440,15 @@ else
 		tui_back_to "Actions" 5
 		tui_select_item "Load images"
 		sleep 5
-		tui_screenshot "disco-wf-04-load"
+		tui_screenshot "disco-wf-04c-load-dialog"
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "Confirm\|Load\|OCP\|Continue\|Yes"; then
+			tui_screenshot "disco-wf-04c-load-confirm"
 			tui_keys Enter; sleep 3
 		fi
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
+			tui_screenshot "disco-wf-04c-load-exec-mode"
 			tui_keys Enter; sleep 2
 		fi
 	}
@@ -495,6 +506,7 @@ tui_screenshot "disco-wf-05-cluster-start"
 echo ""
 echo "--- 5b. Cluster wizard page 1: Basics ---"
 tui_wait_for "Cluster Basics\|Cluster name\|Platform\|cluster.*name" 15
+tui_assert_title "Basics" "Basics page title"
 tui_screenshot "disco-wf-05b-basics"
 
 tui_assert_contains "Cluster name\|cluster name\|name" "Cluster name field"
@@ -503,6 +515,7 @@ tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 # Set cluster name
 tui_select_item "Cluster name\|name" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05b-name-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
 sleep 0.3
@@ -517,6 +530,7 @@ sleep 3
 echo ""
 echo "--- 5c. Cluster wizard page 2: Networking ---"
 tui_wait_for "Network\|Machine\|Starting\|DNS\|Gateway" 10
+tui_assert_title "Networking" "Networking page title"
 tui_screenshot "disco-wf-05c-network"
 
 tui_assert_contains "Machine\|machine" "Machine network field"
@@ -526,6 +540,7 @@ tui_assert_contains "Starting\|starting" "Starting IP field"
 echo "  Setting machine network=$_machine_network, starting IP=$_api_ip, gateway=$_gateway"
 tui_select_item "Machine" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05c-machine-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
 sleep 0.3
@@ -534,6 +549,7 @@ tui_keys Tab Enter; sleep 1
 # Set starting IP
 tui_select_item "Starting" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05c-startip-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
 sleep 0.3
@@ -542,6 +558,7 @@ tui_keys Tab Enter; sleep 1
 # Set gateway
 tui_select_item "Gateway" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05c-gateway-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
 sleep 0.3
@@ -556,6 +573,7 @@ sleep 3
 echo ""
 echo "--- 5d. Cluster wizard page 3: Interfaces ---"
 tui_wait_for "Interface\|Ports\|Port\|VLAN\|Image source\|ens" 10
+tui_assert_title "Interfaces" "Interfaces page title"
 tui_screenshot "disco-wf-05d-iface"
 tui_assert_contains "Port\|port\|ens" "Port names field"
 
@@ -566,6 +584,7 @@ sleep 3
 echo ""
 echo "--- 5e. Cluster wizard page 4: VM Resources ---"
 tui_wait_for "CPU\|Memory\|Resources\|VM" 10
+tui_assert_title "VM Resources\|Resources" "VM Resources page title"
 tui_screenshot "disco-wf-05e-vm"
 tui_assert_contains "CPU\|cpu\|Core" "CPU field"
 
@@ -576,6 +595,7 @@ sleep 3
 echo ""
 echo "--- 5f. Review page ---"
 tui_wait_for "Review\|Install\|Summary" 10
+tui_assert_title "Install Cluster\|Review" "Review page title"
 tui_screenshot "disco-wf-05f-review"
 tui_assert_contains "$_CLUSTER" "Review shows cluster name"
 tui_assert_contains "Install\|install" "Install button present"
@@ -587,6 +607,7 @@ tui_keys Enter
 sleep 3
 tui_screenshot "disco-wf-05g-install-start"
 
+tui_screenshot "disco-wf-05g-exec-mode"
 tui_dismiss_exec_mode
 
 # Wait for install to complete (SNO ~30-45 min)
