@@ -144,9 +144,9 @@ $_SSH_DISCO "
   rm -f ~/.config/containers/systemd/quay.container 2>/dev/null
   systemctl --user daemon-reload 2>/dev/null
 
-  # Remove mirror data
+  # Remove mirror data (sudo needed for container-owned files in quay-storage)
   sudo rm -rf /opt/quay 2>/dev/null
-  rm -rf ~/quay-install 2>/dev/null
+  sudo rm -rf ~/quay-install 2>/dev/null
 
   # Remove ABA installation and state
   rm -rf ~/aba
@@ -367,6 +367,15 @@ while true; do
 	# Progress dialog — just wait
 	if echo "$_scr" | grep -qi "Progress\|Installing\|Loading\|Syncing\|%"; then
 		sleep 15
+		continue
+	fi
+
+	# Error dialog — dismiss and let the wizard retry
+	if echo "$_scr" | grep -qi "Error\|Failed\|failed"; then
+		echo "  Error dialog detected — dismissing (will retry)"
+		tui_screenshot "disco-wf-gate-error-${_elapsed}s"
+		tui_dismiss_error
+		sleep 5
 		continue
 	fi
 
