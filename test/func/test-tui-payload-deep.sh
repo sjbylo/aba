@@ -10,23 +10,16 @@ echo "=== TUI Payload Deep Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # Helper: navigate to Mirror Payload menu
 _goto_payload() {
 	if tui_capture | grep -q "Additional Images"; then
+		tui_assert_title "Mirror Payload" "Mirror Payload menu title"
 		return 0
 	fi
 	if tui_capture | grep -q "Select Operator Sets"; then
@@ -372,21 +365,5 @@ fi
 # ============================================================================
 echo ""
 echo "--- 8. Cleanup ---"
-tui_back_to "Actions" 5
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

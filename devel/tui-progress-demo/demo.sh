@@ -18,7 +18,7 @@
 # 3. OVER-GENEROUS PLANs — every step that MIGHT run is declared.
 #    Steps that don't actually execute (Make skips them, or the script
 #    has a conditional path) never get START/DONE events.
-#    At the end, _sweep_skipped() marks them as "Skipped".
+#    At the end, _sweep_skipped() marks them as "No-op".
 #
 # 4. PLAN ORDER = EXECUTION ORDER — the PLAN list must match the order
 #    Make will actually execute the steps.  Auto-complete marks
@@ -109,7 +109,7 @@ export ABA_DEMO_TMP="$tmpdir"
 # _exit_code   — exit code from the Make process.  Non-zero = crash.
 #                Used to distinguish a graceful FAIL (script emits FAIL event)
 #                from an unexpected crash (syntax error, command not found, etc.)
-declare -A _status _text _real_done
+declare -A _status _text _real_done _weight
 declare -a _order _errors _details _nexts _failed
 _prompt_msg=""
 _abort=""
@@ -126,6 +126,7 @@ cleanup() {
 	trap '' INT TTOU TTIN
 	[ -n "$tail_pid" ] && kill "$tail_pid" 2>/dev/null || true
 	[ -n "$script_pid" ] && kill "$script_pid" 2>/dev/null || true
+	tput rmcup 2>/dev/null
 	exec 8>&- 2>/dev/null || true
 	exec 7>&- 2>/dev/null || true
 	wait 2>/dev/null || true
@@ -169,11 +170,16 @@ _parse_event() {
 			# This happens when Make runs a script before its plan target fires.
 			# In that case, _status[] is already set but _text[] is empty.
 			# We add to _order and set _text, but keep the existing status.
-			# Strip trailing weight from "text|weight" → keep only "text".
-			local _plan_text="${arg1%|*}"
 			if [ -z "${_text[$id]:-}" ]; then
+				# arg1 is "text" or "text|weight" — split on last |
+				local _plan_text="${arg1%|*}" _plan_weight="${arg1##*|}"
+				# If no weight field, text==weight (no | separator)
+				if [ "$_plan_text" = "$_plan_weight" ]; then
+					_plan_weight=1
+				fi
 				_order+=("$id")
 				_text[$id]="$_plan_text"
+				_weight[$id]="$_plan_weight"
 				# Only set initial N/A status if no START/DONE has arrived yet.
 				# Use if/then — NOT "[ ] && cmd" which returns 1 under set -e.
 				if [ -z "${_status[$id]:-}" ]; then
@@ -188,7 +194,7 @@ _parse_event() {
 			_real_done[$id]="started"
 			# Catch missing PLAN declarations early
 			if [ -z "${_text[$id]:-}" ]; then
-				echo "[DEBUG] Progress: START for unplanned step '$id'" >&2
+				echo "[DEBUG] Progress: START for unplanned step '$id'" >> "$output_log"
 			fi
 			;;
 		DONE)        _status[$id]="0"; _real_done[$id]="done" ;;
@@ -213,7 +219,6 @@ _drain_events() {
 		while read -t 0.2 -r -u 8 _line; do
 			_parse_event "$_line"
 		done
-		# Capture exit code — non-zero means the Make process crashed
 		_exit_code=0
 		wait "$script_pid" 2>/dev/null || _exit_code=$?
 		_done=1
@@ -231,7 +236,7 @@ _drain_events() {
 #   3  = Completed
 #   4  = Checked
 #   5  = Done
-#   6  = Skipped (internally; displayed as "Satisfied" via custom text)
+#   6  = Skipped (internally; displayed as "No-op" via custom text)
 #   7  = In Progress
 #   8  = (blank)
 #   9  = N/A
@@ -240,7 +245,7 @@ _drain_events() {
 draw_progress() {
 	local _title="$1"
 	local _subtitle_override="${2:-}"
-	local args=() total=0 done_count=0 id text status
+	local args=() total=0 done_weight=0 total_weight=0 id text status
 	local _idx=0
 
 	# Find the last step with a non-N/A status (the "frontier").
@@ -268,19 +273,21 @@ draw_progress() {
 		if [ "$_idx" -gt "$_last_real_idx" ]; then
 			status="9"
 		fi
-		# Custom label: "Satisfied" instead of dialog's built-in "Skipped"
-		[ "$status" = "6" ] && status="Satisfied"
+		# Custom label: "No-op" instead of dialog's built-in "Skipped"
+		[ "$status" = "6" ] && status="No-op"
 		args+=("$text" "$status")
 		total=$((total + 1))
-		# Count Succeeded, Completed, Done, and Satisfied toward progress %
-		case "$status" in 0|3|5|6|Satisfied) done_count=$((done_count + 1)) ;; esac
+		# Accumulate weighted progress for completed steps
+		local _w="${_weight[$id]:-1}"
+		case "$status" in 0|3|5|6|No-op) done_weight=$((done_weight + _w)) ;; esac
+		total_weight=$((total_weight + _w))
 		_idx=$((_idx + 1))
 	done
 
 	[ "$total" -eq 0 ] && return
 
 	local pct=0
-	[ "$total" -gt 0 ] && pct=$((done_count * 100 / total))
+	[ "$total_weight" -gt 0 ] && pct=$((done_weight * 100 / total_weight))
 
 	local _subtitle="\n     < Output (Space) >      < Quit (Q/ESC) >\n"
 	if [ -n "$_subtitle_override" ]; then
@@ -340,22 +347,48 @@ show_output() {
 			printf '\n\n\033[0;30;43m ↑/↓/PgUp/PgDn to scroll.  Press Q to quit. \033[0m\n\n' >> "$output_log"
 			_less_hint_added=1
 		fi
-		less -rf +G "$output_log" 2>/dev/null || true
+		# Clean PTY output for readable paging:
+		#   1. Collapse \r overwrites (oc-mirror progress ticks)
+		#   2. Strip SI/SO (^O/^N) — oc-mirror emits after every ANSI reset
+		#   3. Strip cursor-up (ESC[nA) and erase-to-end (ESC[J) — block redraws
+		#   4. Strip progress bar lines (NNN / NNN ...)
+		#   5. Remove duplicate lines from block redraws (awk dedup)
+		#   6. Squeeze consecutive blank lines
+		# -R: render ANSI color codes natively (safer than -r)
+		# smcup/rmcup: preserve the dialog screen behind less
+		tput smcup 2>/dev/null
+		sed $'s/.*\r\\(.\\)/\\1/' "$output_log" |
+			tr -d $'\r\017\016' |
+			sed $'s/\033\\[[0-9]*A//g; s/\033\\[J//g' |
+			grep -v '^ *[0-9]\{1,\} / [0-9]\{1,\} (' |
+			awk '!seen[$0]++' |
+			cat -s |
+			less -Rf +G 2>/dev/null || true
+		tput rmcup 2>/dev/null
+		# Clear screen so dialog redraws cleanly (fixes terminals without
+		# alternate-screen support, e.g. nested tmux over SSH)
+		clear 2>/dev/null
 	else
-		# Live: stream output with tail -f, press any key to return
-		clear
+		# Live: enter alternate screen for output, dialog stays in main buffer.
+		# tput smcup saves the dialog screen; rmcup restores it instantly.
+		# clear ensures a clean canvas on terminals without alternate-screen support.
+		tput smcup 2>/dev/null
+		clear 2>/dev/null
 		printf '\033[1;33m'
-		echo "═══════════════════════════════════════════════════════"
-		echo "  ABA Live Output         (press any key to return)"
-		echo "═══════════════════════════════════════════════════════"
+		printf '═══════════════════════════════════════════════════════\n'
+		printf '  ABA Live Output         (press any key to return)\n'
+		printf '═══════════════════════════════════════════════════════\n'
 		printf '\033[0m\n'
 		cat "$output_log" 2>/dev/null
+		# Stream new output as it arrives
 		tail -n 0 -f "$output_log" 2>/dev/null &
-		tail_pid=$!
+		local _tail_pid=$!
 		read -rsn1 || true
-		kill "$tail_pid" 2>/dev/null || true
-		wait "$tail_pid" 2>/dev/null || true
-		tail_pid=""
+		kill "$_tail_pid" 2>/dev/null || true
+		wait "$_tail_pid" 2>/dev/null || true
+		# Restore dialog screen — clear handles terminals without alternate-screen
+		tput rmcup 2>/dev/null
+		clear 2>/dev/null
 	fi
 }
 
@@ -428,15 +461,19 @@ _auto_complete_one() {
 # edge cases like steps that were never predecessors of any active step.
 
 _sweep_skipped() {
-	local id ps _any=0
+	local id ps _any=0 _saw_failure=0
 	for id in "${_order[@]}"; do
 		ps="${_status[$id]:-9}"
+		# Once a step has failed, leave all subsequent steps untouched (N/A)
+		# so the dialog doesn't label unreached steps as "No-op".
+		[ "$ps" = "1" ] && _saw_failure=1 && continue
+		[ "$_saw_failure" -eq 1 ] && continue
 		if [ -z "${_real_done[$id]:-}" ]; then
 			if [ "$ps" = "9" ] || [ "$ps" = "0" ]; then
 				_status[$id]="6"
 				_any=1
 			fi
-			echo "[DEBUG] Progress: PLANned step '$id' (${_text[$id]:-?}) was never started" >&2
+			echo "[DEBUG] Progress: PLANned step '$id' (${_text[$id]:-?}) was never started" >> "$output_log"
 		fi
 	done
 	return $(( 1 - _any ))
@@ -465,6 +502,7 @@ finish_outcome() {
 show_error() {
 	local _title="${1:-Error}"
 	local _msg="\n" line
+	local _btn_rc
 
 	# Show which step(s) failed
 	for line in "${_failed[@]}"; do
@@ -488,12 +526,22 @@ show_error() {
 		done
 	fi
 	_msg="${_msg}\n  Press 'View Output' for full output.\n"
-	while dialog --title " ${_title}: Error " \
-		--yes-label "View Output" \
-		--no-label "OK" \
-		--yesno "$_msg" \
-		0 0; do
-		show_output
+	while true; do
+		_btn_rc=0
+		# Use --msgbox (not --yesno) — dialog 1.3 ignores custom labels on
+		# --yesno when --extra-button is present.  --msgbox + --help-button
+		# gives 3 reliable buttons: Dismiss (OK), Retry (Extra), View Output (Help).
+		dialog --title " ${_title}: Error " \
+			--ok-label "Dismiss" \
+			--extra-button --extra-label "Retry" \
+			--help-button --help-label "View Output" \
+			--msgbox "$_msg" \
+			0 0 || _btn_rc=$?
+		case "$_btn_rc" in
+			2) show_output ;;
+			3) _RETRY=1; return ;;
+			*) return ;;
+		esac
 	done
 }
 
@@ -522,7 +570,7 @@ show_success() {
 		case "$status" in
 			0)  _label=" Succeeded "; _color="\\Z2" ;;
 			1)  _label="  Failed   "; _color="\\Z1" ;;
-			6)  _label=" Satisfied "; _color="\\Z2" ;;
+			6)  _label="   No-op   "; _color="\\Z2" ;;
 			7)  _label="In Progress"; _color="\\Z5" ;;
 			9)  _label="    N/A    "; _color="" ;;
 			*)  _label="$status"; _color="" ;;
@@ -563,6 +611,7 @@ _reset_state() {
 	_status=()
 	_text=()
 	_real_done=()
+	_weight=()
 	_order=()
 	_errors=()
 	_details=()
@@ -574,6 +623,7 @@ _reset_state() {
 	_exit_code=0
 	_done=0
 	_interrupted=0
+	_less_hint_added=""
 	# Drain any leftover FIFO data from previous run
 	local _line
 	while read -t 0.05 -r -u 8 _line; do :; done
@@ -624,7 +674,7 @@ show_menu() {
 		"install-fresh" "Install registry (fresh — all steps run)" \
 		"sync"          "Sync images (cached — RPMs & catalogs skipped)" \
 		"sync-catalogs" "Sync images (catalogs need downloading)" \
-		"sync-bg"       "Sync + background CLI download (parallel)" \
+		"sync-bg"       "Sync (full output) + background CLI download" \
 		"save"          "Save images (cached, no prompt)" \
 		"save-prompt"   "Save images (with interactive prompt)" \
 		"save-error"    "Save images (fails during save step)" \
@@ -633,8 +683,8 @@ show_menu() {
 		"sync-crash"    "Sync crash (script dies, no FAIL event)" \
 		"uninstall"     "Uninstall registry (all steps run)" \
 		"fresh-all"     "Sync (mirror not installed — installs first)" \
-		"fresh-bg"      "Sync fresh + background CLI download" \
-		"verbose"       "Install + verbose output (multi-page, tests less -r)" \
+		"fresh-bg"      "Sync fresh (full output) + bg CLI download" \
+		"verbose"       "Install + verbose output (multi-page, tests less -R)" \
 		3>&1 1>&2 2>&3) || _choice="quit"
 	printf '%s' "$_choice"
 }
@@ -677,15 +727,16 @@ run_workflow() {
 			envs="SKIP_OC_MIRROR=1 FORCE_CATALOG_DOWNLOAD=1"
 			;;
 		sync-bg)
-			# Sync with a real run_once download running in parallel.
+			# Sync with a real background download running in parallel.
+			# Full oc-mirror simulation (heavy output) + parallel CLI download.
 			# "Download CLI tools" stays In Progress beside the sync steps.
-			# "Wait for CLI tools" is the run_once -w at the end.
+			# "Wait for CLI tools" is the file-poll wait at the end.
 			# The frontier mask leaves the background row visible while
 			# later steps are also in progress.
 			make_target="sync"
 			wdir_mode="cached-installed"
 			title="Sync Images to Mirror"
-			envs="SKIP_OC_MIRROR=1 SIMULATE_BG_DOWNLOAD=1"
+			envs="SIMULATE_BG_DOWNLOAD=1"
 			;;
 		save)
 			make_target="save"
@@ -744,12 +795,13 @@ run_workflow() {
 			;;
 		fresh-bg)
 			# Fresh sync + background CLI download — both features together.
+			# Full oc-mirror simulation (heavy output) + parallel CLI download.
 			# Install PLANs arrive first, then sync PLANs (with bg download steps).
 			# The bg task runs in parallel with sequential sync work.
 			make_target="sync"
 			wdir_mode="fresh"
 			title="Sync Images to Mirror"
-			envs="FORCE_RPM_INSTALL=1 FORCE_CATALOG_DOWNLOAD=1 SKIP_OC_MIRROR=1 SIMULATE_BG_DOWNLOAD=1"
+			envs="FORCE_RPM_INSTALL=1 FORCE_CATALOG_DOWNLOAD=1 SIMULATE_BG_DOWNLOAD=1"
 			;;
 		verbose)
 			# Install with verbose output — produces several pages of output
@@ -761,20 +813,36 @@ run_workflow() {
 			;;
 	esac
 
+	local _RETRY=0
+
+	while true; do
+	_RETRY=0
+	_interrupted=0
+	_reset_state
 	_setup_workdir "$wdir_mode"
+
+	# Write the command being executed to the output log header
+	printf 'Executing: make %s\n\n' "$make_target" > "$output_log"
 
 	# Launch Make in a real PTY with scenario-specific env vars
 	eval "$envs python3 \"$DEMO_DIR/pty-run.py\" --input-fifo \"$input_fifo\" \"$output_log\" \
-		make -C \"$work_dir\" $make_target &"
+		make --no-print-directory -C \"$work_dir\" $make_target &"
 	script_pid=$!
 
-	# Wait for PLAN events before first draw
-	local _wait=30
+	# Show immediate feedback while waiting for the command to emit PLAN events
+	dialog --title " $title " --infobox "\n  One moment please ..." 5 30 2>/dev/null || true
+
+	# Wait for PLAN events before first draw (10s timeout — aba.sh startup takes ~4s)
+	local _wait=100
 	while [ "${#_order[@]}" -eq 0 ] && [ "$_wait" -gt 0 ] && [ "$_done" -eq 0 ]; do
 		_drain_events
 		sleep 0.1
 		_wait=$((_wait - 1))
 	done
+
+	# Dialog runs in alternate screen. Output renders to main buffer on demand.
+	# Main buffer preserves output between toggles — second view is instant.
+	tput smcup 2>/dev/null
 
 	# Main event loop
 	while true; do
@@ -787,7 +855,14 @@ run_workflow() {
 			# Process exited.  Auto-complete any lagging predecessors.
 			while _auto_complete_one; do
 				draw_progress "$title"
-				sleep 0.2
+				# Check for keypress during auto-complete animation so user input
+				# isn't swallowed by dialog redraws in rapid succession.
+				if IFS= read -rsn1 -t 0.2 key; then
+					case "$key" in
+						o|O|' ') show_output ;;
+						q|Q|$'\e') break ;;
+					esac
+				fi
 			done
 
 			# Crash detection: if the process exited non-zero and no step
@@ -836,7 +911,14 @@ run_workflow() {
 		# During execution: auto-complete one predecessor per loop iteration
 		# (animated fill-in, one step at a time)
 		if _auto_complete_one; then
-			sleep 0.2
+			# Check for keypress during auto-complete animation so user input
+			# isn't swallowed by dialog redraws in rapid succession.
+			if IFS= read -rsn1 -t 0.2 key; then
+				case "$key" in
+					o|O|' ') show_output ;;
+					q|Q|$'\e') break ;;
+				esac
+			fi
 			continue
 		fi
 
@@ -855,10 +937,18 @@ run_workflow() {
 		fi
 	done
 
+	# Leave alternate screen
+	tput rmcup 2>/dev/null
+
 	# Ensure child is stopped
 	[ -n "$script_pid" ] && kill "$script_pid" 2>/dev/null || true
 	wait "$script_pid" 2>/dev/null || true
 	script_pid=""
+
+	# If user pressed Retry, loop; otherwise break out
+	[[ "$_RETRY" -eq 1 ]] && continue
+	break
+	done  # retry loop
 }
 
 # ============================================================

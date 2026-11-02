@@ -18,12 +18,20 @@ It is a bash project (~100 scripts) orchestrated by Make and a CLI wrapper.
 # Run functional tests
 test/func/run-all-tests.sh
 
+# Run E2E tests on all pools
+test/e2e/run.sh run --all -p 1-4 --dev
+
 # Run pre-commit checks before committing
 build/pre-commit-checks.sh
 
 # Pre-commit for docs-only changes
 build/pre-commit-checks.sh --skip-version
 ```
+
+**All func and E2E tests must pass before release.** Test failures are never
+acceptable as "environment issues" — if a test fails, either fix the code,
+fix the test, or fix the environment so it passes. No test may be skipped
+or ignored for a release.
 
 ## Architecture (quick reference)
 

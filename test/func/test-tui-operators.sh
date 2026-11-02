@@ -11,19 +11,11 @@ echo "=== TUI Operator Workflow Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # ============================================================================
 # 1. Navigate to Mirror Payload → Select Operators
@@ -33,6 +25,7 @@ echo "--- 1. Mirror Payload menu ---"
 tui_select_item "Mirror Payload"
 tui_wait_isc_done 120
 tui_assert_appears "Mirror Payload\|Additional Images" "Payload menu appeared" 15
+tui_assert_title "Mirror Payload" "Payload menu title"
 tui_screenshot "op-01-payload"
 
 # Check payload menu items are present
@@ -63,6 +56,7 @@ echo ""
 echo "--- 2. Select Operators menu ---"
 tui_select_item "Select Operators"
 tui_assert_appears "Select Operators\|Operator" "Operator menu appeared" 15
+tui_assert_title "Select Operators" "Operator menu title"
 tui_screenshot "op-02-operator-menu"
 
 # Check operator menu items
@@ -412,20 +406,5 @@ tui_assert_contains "Actions" "Back at main menu"
 # ============================================================================
 echo ""
 echo "--- 12. Cleanup ---"
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

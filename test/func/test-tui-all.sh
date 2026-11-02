@@ -22,12 +22,15 @@
 #   8.  cluster-pages  - cluster wizard page navigation (non-destructive)
 #   9.  day2-deep      - day-2 status, OSUS, upgrade picker, confirmations
 #  10.  disco-smoke    - DISCO mode on disco host (non-destructive)
+#  11.  operators-deep - operator set add/remove/search/clear permutations
+#  12.  settings-deep  - vendor/retry toggles, persistence, config file checks
+#  13.  progress-integ - progress dialog lifecycle, output view, error path
 #  --- destructive (full mode only) ---
-#  11.  mirror         - mirror install + sync (destructive, ~15 min)
-#  12.  cluster        - cluster wizard + install (destructive, ~45 min)
-#  13.  day2           - OperatorHub, NTP, OSUS (~10 min)
-#  14.  upgrade        - version selection + upgrade (~45 min)
-#  15.  lifecycle      - shutdown, startup, clean, delete (~30 min)
+#  14.  mirror         - mirror install + sync (destructive, ~15 min)
+#  15.  cluster        - cluster wizard + install (destructive, ~45 min)
+#  16.  day2           - OperatorHub, NTP, OSUS (~10 min)
+#  17.  upgrade        - version selection + upgrade (~45 min)
+#  18.  lifecycle      - shutdown, startup, clean, delete (~30 min)
 
 set -o pipefail
 
@@ -44,6 +47,23 @@ done
 
 export TUI_CLUSTER_NAME="${TUI_CLUSTER_NAME:-sno}"
 [[ "$_NO_DELETE" == "true" ]] && export TUI_SKIP_DELETE=1
+
+# Acquire per-host lock for the entire suite run.
+# Individual tests also lock, but this outer lock prevents a gap between
+# child tests from allowing a rogue parallel run to slip in.
+_TUI_ALL_HOST="${TUI_TEST_HOST:-conno.example.com}"
+_TUI_ALL_LOCK="/tmp/tui-test-${_TUI_ALL_HOST}.lock"
+_tui_lock_holder=$(cat "$_TUI_ALL_LOCK" 2>/dev/null || true)
+exec 8>"$_TUI_ALL_LOCK"
+if ! flock -n 8; then
+	echo "FATAL: Another TUI test is already running on $_TUI_ALL_HOST"
+	echo "  Lock file: $_TUI_ALL_LOCK"
+	echo "  Holder:    ${_tui_lock_holder:-unknown}"
+	exit 99
+fi
+echo "PID=$$ test=test-tui-all started=$(date +%Y%m%d-%H%M%S)" >&8
+# Tell child tests that the parent already holds the lock
+export _TUI_LOCK_HELD=1
 
 _total_pass=0
 _total_fail=0
@@ -97,17 +117,25 @@ _run_test "Operators" "test/func/test-tui-operators.sh" || true
 _run_test "Mirror Config" "test/func/test-tui-mirror-config.sh" || true
 _run_test "Payload Deep" "test/func/test-tui-payload-deep.sh" || true
 _run_test "Cluster Pages" "test/func/test-tui-cluster-pages.sh" || true
-_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
-_run_test "DISCO Smoke" "test/func/test-tui-disco-smoke.sh" || true
+# DISCO smoke defaults to disco host — unset TUI_TEST_HOST so it uses its own default
+TUI_TEST_HOST= _run_test "DISCO Smoke" "test/func/test-tui-disco-smoke.sh" || true
+_run_test "Operators Deep" "test/func/test-tui-operators-deep.sh" || true
+_run_test "Settings Deep" "test/func/test-tui-settings-deep.sh" || true
+_run_test "Addl Images Deep" "test/func/test-tui-addl-images-deep.sh" || true
+_run_test "Platform Config" "test/func/test-tui-platform-config-deep.sh" || true
+_run_test "ISC Verify" "test/func/test-tui-isc-verify.sh" || true
+# Progress Integration uses raw tmux sessions (not the TUI); run last to avoid stale sessions
+_run_test "Progress Integration" "test/func/test-tui-progress-integration.sh" || true
 
 if [[ "$_QUICK" == "true" ]]; then
 	echo ""
-	echo "  (--quick mode: skipping destructive mirror, cluster, day2, upgrade, lifecycle)"
-	_total_skip=5
+	echo "  (--quick mode: skipping destructive mirror, cluster, day2-deep, day2, upgrade, lifecycle)"
+	_total_skip=6
 else
 	# --- Destructive tests (full mode only, pipeline order) ---
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
+	_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 	_run_test "Day-2 Operations" "test/func/test-tui-day2.sh" || true
 	_run_test "Upgrade" "test/func/test-tui-upgrade.sh" || true
 	_run_test "Lifecycle" "test/func/test-tui-lifecycle.sh" || true

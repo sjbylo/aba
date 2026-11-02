@@ -9,21 +9,13 @@ echo "=== TUI Navigation Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # ============================================================================
 # Start TUI, get to main menu
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter
-tui_assert_appears "Actions" "Main menu appeared" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # Remember the main menu title for back-navigation
 _main_title=$(tui_dialog_title)
@@ -148,17 +140,5 @@ tui_screenshot "nav-05-relaunch"
 # ============================================================================
 echo ""
 echo "--- 6. Cleanup ---"
-tui_stop
-sleep 1
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	echo "$_strays" | sed 's/^/      /'
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
+tui_cleanup
 tui_summary

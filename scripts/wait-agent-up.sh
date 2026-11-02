@@ -1,5 +1,16 @@
 #!/bin/bash 
-# This will wait for the Agent port to become alive on the rendezvous node0...
+# Wait for the Agent REST API (port 8090) on the rendezvous node.
+# This short pause gives the agent time to come online and start producing
+# log output so that monitor-install.sh (openshift-install wait-for) has
+# something to show when it starts.
+#
+# Edge case (reviewed, intentionally not fixed):
+# After 'aba refresh', if bootstrap succeeds and the node reboots before
+# the user re-runs 'aba install', port 8090 is gone.  The .auto-agent-up
+# marker was removed by refresh, so Make re-runs this script and it waits
+# the full 5-min timeout before falling through to monitor-install.sh.
+# This is harmless — monitor-install picks up the running install fine.
+# Using 'aba mon' instead of 'aba install' skips this wait entirely.
 
 source scripts/include_all.sh
 

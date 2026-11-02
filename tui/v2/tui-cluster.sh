@@ -759,10 +759,14 @@ cluster_install_flow() {
 			[[ -n "$ingress_dns" ]] && cl_ingress_vip="$ingress_dns"
 		fi
 
-		# Platform-aware default port name
+	fi
+
+	# Fill empty ports with platform-aware default (config is king, but never show blank)
+	if [[ -z "$cl_ports" ]]; then
 		case "$cl_platform" in
 			vmw) cl_ports="ens160" ;;
 			kvm) cl_ports="enp1s0" ;;
+			bm)  cl_ports="eno1" ;;
 		esac
 	fi
 
@@ -952,19 +956,20 @@ Toggle 'Type' or 'Platform' to cycle options.
 
 --- Page 2: Network ---
 • Machine network: cluster subnet CIDR (e.g. 10.0.0.0/24)
-• Starting IP: first IP for cluster nodes
+• Starting IP: IPs are assigned sequentially from this address
+  (masters first, then workers)
 • API VIP / Ingress VIP: virtual IPs (compact/standard)
 • DNS / Gateway / NTP: network services
 
 --- Page 3: Interfaces ---
-• Ports: host NIC name(s) (e.g. ens1f0)
+• Ports: interface name(s) (e.g. ens1f0) — labels only, MAC decides the NIC
 • VLAN: optional VLAN tag
 • Image source: mirror | proxy | direct
 
 --- Page 4: VM Resources (vmw/kvm only) ---
 • CPUs / Memory: per-VM allocation
 • Data disk: additional disk in GB
-• MAC template: prefix for generated MACs
+• MAC template: prefix for generated VM MACs (VMs only)
 
 --- Navigation ---
 Select: edit a field   Next: advance page   Back: previous page
@@ -1066,7 +1071,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			# Only update port default if user hasn't manually edited it
 			local _prev_default=""
 			case "$cl_platform" in
-				bm)  _prev_default="" ;;
+				bm)  _prev_default="eno1" ;;
 				vmw) _prev_default="ens160" ;;
 				kvm) _prev_default="enp1s0" ;;
 			esac
@@ -1080,7 +1085,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				case "$cl_platform" in
 					vmw) cl_ports="ens160" ;;
 					kvm) cl_ports="enp1s0" ;;
-					bm)  cl_ports="" ;;
+					bm)  cl_ports="eno1" ;;
 				esac
 			fi
 			replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
@@ -1139,13 +1144,20 @@ _cluster_page_network() {
 			3) return 0 ;;  # Next
 			2) show_help "$TUI2_TITLE_CLUSTER_NETWORK" \
 "• Machine network: cluster subnet in CIDR (e.g. 10.0.0.0/24)
-• Starting IP: first IP for cluster nodes (auto-calculated if blank)
+
+• Starting IP: IPs are assigned sequentially from this address
+  (masters first, then workers; auto-calculated if blank)
+
 • API VIP: virtual IP for Kubernetes API (compact/standard only)
+
 • Ingress VIP: virtual IP for ingress routes (compact/standard only)
   VIPs are auto-fetched from DNS if not set.
+
 • DNS servers: comma-separated DNS server IPs
+
 • Gateway: default gateway IP
-• NTP servers: comma-separated NTP server addresses (optional)"
+
+• NTP servers: comma-separated NTP server addresses (recommended)"
 			   continue ;;
 			1) return 1 ;;  # Back
 			255) return 255 ;;
@@ -1350,10 +1362,17 @@ _cluster_page_iface() {
 		local rc=$?
 
 		case "$rc" in
-			3) return 0 ;;  # Next (Extra button)
+			3)	# Next — require at least one port name
+				if [[ -z "$cl_ports" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Ports cannot be empty.\n\nEnter at least one interface name (e.g. ens160, ens1f0)." 0 0 || true
+					continue
+				fi
+				return 0 ;;
 			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
-"• Ports: network port names (e.g. ens160, ens1f0)
+"• Ports: network interface names (e.g. ens160, ens1f0)
   Multiple ports create a bond (e.g. ens1f0,ens1f1)
+  Names are labels only — the MAC address determines the actual NIC.
 
 • VLAN: optional 802.1Q VLAN tag
 
@@ -1454,6 +1473,15 @@ ${_conn_help}
 					rm -f "$_mac_edit"
 					continue
 				fi
+				# Reject duplicate MACs (case-insensitive)
+				local _dup_macs
+				_dup_macs=$(echo "$_new_macs" | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
+				if [[ -n "$_dup_macs" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Duplicate MAC address(es):\n\n${_dup_macs}\n\nEach node must have a unique MAC." 0 0 || true
+					rm -f "$_mac_edit"
+					continue
+				fi
 				cl_macs="$_new_macs"
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
 				# Warn if count doesn't match expected MACs (nodes × ports)
@@ -1530,11 +1558,16 @@ _cluster_page_vm() {
 			3) return 0 ;;  # Next
 			2) show_help "$TUI2_TITLE_CLUSTER_VM" \
 "• Master CPUs: vCPU count per control-plane VM (min 4)
+
 • Master Memory: RAM in GB per control-plane VM (min 16)
+
 • Worker CPUs: vCPU count per worker VM (standard only, min 2)
+
 • Worker Memory: RAM in GB per worker VM (standard only, min 8)
+
 • Data disk: additional disk in GB (0 = no extra disk)
-• MAC template: prefix for auto-generated MAC addresses
+
+• MAC template: prefix for auto-generated VM MAC addresses (VMs only)
   (e.g. 00:50:56:xx — last 3 octets auto-filled)"
 			   continue ;;
 			1) return 1 ;;  # Back
@@ -1680,9 +1713,6 @@ _cluster_execute() {
 		[[ -z "$_mirror_disp" || "$_mirror_disp" == ":" ]] && _mirror_disp="(local mirror)"
 	fi
 
-	# Operator count
-	local _op_count="${#OP_BASKET[@]}"
-
 	# Image source display (enrich with details)
 	local _conn_disp="$cl_connection"
 	if [[ -z "$_conn_disp" ]]; then
@@ -1743,13 +1773,21 @@ _cluster_execute() {
 		summary+="  MAC template: ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
-		local mac_cnt
+		local mac_cnt _mac_line _mac_idx=0
 		mac_cnt=$(echo "$cl_macs" | wc -l)
-		summary+="  MACs:         $mac_cnt addresses\n"
+		while IFS= read -r _mac_line; do
+			[ -z "$_mac_line" ] && continue
+			_mac_idx=$(( _mac_idx + 1 ))
+			if [[ $_mac_idx -eq 1 ]]; then
+				summary+="  MACs:         $_mac_line\n"
+			elif [[ $_mac_idx -le 6 ]]; then
+				summary+="                $_mac_line\n"
+			elif [[ $_mac_idx -eq 7 ]]; then
+				summary+="                ... ($mac_cnt total)\n"
+				break
+			fi
+		done <<< "$cl_macs"
 	fi
-	summary+="\n"
-	summary+="  Operators:    $_op_count selected\n"
-
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INSTALL" \
 			--yes-label "$TUI2_BTN_INSTALL" \
@@ -1943,6 +1981,9 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	source <(normalize-aba-conf) 2>/dev/null || true
+	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
+
 	local _del_msg _del_help
 	if [[ "${platform:-bm}" == "bm" ]]; then
 		_del_msg="Delete cluster '$cl_display'?\n\nThis removes cluster state files only.\nThe physical servers are left running — decommission them manually."
@@ -2120,9 +2161,8 @@ R - Clean ABA: Removes configuration and state files so you can\n\
 				[[ $? -eq 2 ]] && confirm_and_execute "aba --dir mirror start" "Start Mirror Registry" _invalidate_mirror_cache
 				;;
 			"U")
-				local _unreg_host
-				_unreg_host=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_host")
-				[[ -z "$_unreg_host" ]] && _unreg_host="localhost"
+				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+				local _unreg_host="${reg_host:-localhost}"
 				local _delete_data=""
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
 					--ok-label "Uninstall" --cancel-label "$TUI2_BTN_CANCEL" \
@@ -2298,10 +2338,16 @@ _day2_run() {
 }
 
 _day2_run_osus() {
-	# Pre-check: warn if Cincinnati operator not in ISC
-	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
-	if [[ -f "$isconf_file" ]]; then
-		if ! grep -q "cincinnati-operator" "$isconf_file" 2>/dev/null; then
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_MENU" "Select cluster for Day-2:"; then
+		return 1
+	fi
+
+	# Pre-check: warn if Cincinnati operator is not available on the cluster
+	local _kc
+	_kc=$(cd "$ABA_ROOT/$SELECTED_CLUSTER" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || _kc=""
+	if [[ -n "$_kc" && -f "$_kc" ]]; then
+		if ! timeout 5 env KUBECONFIG="$_kc" oc get packagemanifest cincinnati-operator \
+				>/dev/null 2>&1; then
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_OSUS_WARN" \
 				--yes-label "$TUI2_BTN_CONTINUE" \
 				--no-label "$TUI2_BTN_CANCEL" \
@@ -2310,23 +2356,39 @@ _day2_run_osus() {
 		fi
 	fi
 
-	_day2_run "day2-osus"
+	local _cmd="aba --dir $SELECTED_CLUSTER day2-osus"
+	local _title="Day-2: day2-osus"
+	_exec_with_progress "$_cmd --yes" "$_title"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" && rc=$?
+	return $rc
 }
 
 _day2_run_virt() {
-	# Pre-check: warn if kubevirt-hyperconverged operator not in ISC
-	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
-	if [[ -f "$isconf_file" ]]; then
-		if ! grep -q "kubevirt-hyperconverged" "$isconf_file" 2>/dev/null; then
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_MENU" "Select cluster for Day-2:"; then
+		return 1
+	fi
+
+	# Pre-check: warn if kubevirt-hyperconverged operator is not available on the cluster
+	local _kc
+	_kc=$(cd "$ABA_ROOT/$SELECTED_CLUSTER" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || _kc=""
+	if [[ -n "$_kc" && -f "$_kc" ]]; then
+		if ! timeout 5 env KUBECONFIG="$_kc" oc get packagemanifest kubevirt-hyperconverged \
+				>/dev/null 2>&1; then
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_VIRT" \
 				--yes-label "$TUI2_BTN_CONTINUE" \
 				--no-label "$TUI2_BTN_CANCEL" \
-				--yesno "The 'kubevirt-hyperconverged' operator was not found in the ImageSet config.\n\nOpenShift Virtualization must be installed before configuring boot sources.\n\nContinue anyway?" 0 0
+				--yesno "The 'kubevirt-hyperconverged' operator is not available on the cluster.\n\nOpenShift Virtualization must be mirrored and available before configuring boot sources.\n\nContinue anyway?" 0 0
 			[[ $? -ne 0 ]] && return 0
 		fi
 	fi
 
-	_day2_run "day2-virt"
+	local _cmd="aba --dir $SELECTED_CLUSTER day2-virt"
+	local _title="Day-2: day2-virt"
+	_exec_with_progress "$_cmd --yes" "$_title"
+	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" && rc=$?
+	return $rc
 }
 
 # --- Status: oc get co + oc get nodes ---
@@ -2469,8 +2531,9 @@ _day2_ssh() {
 	cd "$ABA_ROOT/$SELECTED_CLUSTER"
 
 	# Read SSH key and rendezvous IP from cluster config
-	local _ssh_key _ssh_ip
-	_ssh_key=$(source <(normalize-cluster-conf) && echo "$ssh_key_file")
+	source <(normalize-cluster-conf) 2>/dev/null || true
+	local _ssh_key="${ssh_key_file:-~/.ssh/id_rsa}"
+	local _ssh_ip
 	_ssh_ip=$(cat iso-agent-based/rendezvousIP 2>/dev/null)
 
 	if [[ -z "$_ssh_ip" ]]; then
@@ -2782,9 +2845,9 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
-	local _cl_platform=""
-	_cl_platform=$(awk -F= '/^platform=/{print $2}' "$ABA_ROOT/$SELECTED_CLUSTER/cluster.conf" 2>/dev/null)
-	[[ "$_cl_platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
+	source <(normalize-aba-conf) 2>/dev/null || true
+	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
+	[[ "${platform:-bm}" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \

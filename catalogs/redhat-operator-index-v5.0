@@ -25,10 +25,12 @@ container-security-operator Container Security stable-3.18
 costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
+deployment-validation-operator Deployment Validation Operator alpha
 devspaces Red Hat OpenShift Dev Spaces stable
 devworkspace-operator DevWorkspace Operator fast
 dpu-network-operator DPU Network Operator stable
 eap JBoss EAP stable
+external-dns-operator ExternalDNS Operator stable-v1
 fence-agents-remediation Fence Agents Remediation Operator stable
 file-integrity-operator File Integrity Operator stable
 gatekeeper-operator-product Gatekeeper Operator stable
@@ -38,9 +40,10 @@ kernel-module-management-hub Kernel Module Management (Hub) stable
 kernel-module-management Kernel Module Management stable
 kiali-ossm Kiali Operator stable
 kubevirt-hyperconverged OpenShift Virtualization stable
-kueue-operator Red Hat build of Kueue stable-v1.4
+kueue-operator Red Hat build of Kueue stable-v1.5
 leader-worker-set Leader Worker Set Operator stable-v1.0
 lifecycle-agent Lifecycle Agent stable
+lightspeed-operator OpenShift Lightspeed Operator stable
 logic-operator OpenShift Serverless Logic Operator stable
 logic-operator-rhel8 OpenShift Serverless Logic Operator (Alpha) alpha
 machine-deletion-remediation Machine Deletion Remediation operator stable
@@ -79,6 +82,7 @@ quay-bridge-operator Quay Bridge Operator stable-3.18
 quay-operator Quay stable-3.18
 recipe Recipe stable-4.22
 red-hat-hawtio-operator HawtIO Operator v2
+redhat-oadp-operator OADP Operator stable
 rhacs-operator Advanced Cluster Security for Kubernetes stable
 rhcl-operator Red Hat Connectivity Link stable-1.5
 rhpam-kogito-operator RHPAM Kogito Operator 7.x

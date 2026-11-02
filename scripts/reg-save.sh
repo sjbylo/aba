@@ -213,7 +213,7 @@ done
 
 if [ "$_is_upgrade" ]; then
 	_bundle_ver="$ocp_upgrade_to"
-	_bundle_chan="${ocp_channel:-fast}"
+	_bundle_chan="${ocp_channel:-stable}"
 
 	# CLI tarballs for the upgrade target version (all rhel variants).
 	# Base version CLIs are already on the disconnected host from the initial install.

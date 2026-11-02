@@ -6,35 +6,27 @@ cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
 _CLUSTER="${TUI_CLUSTER_NAME:-sno}"
-_ssh_cfg="$HOME/.aba/ssh.conf"
 
 echo "=== TUI Day-2 Workflow Test ==="
 echo "  Host: $_TUI_HOST"
 echo "  Cluster: $_CLUSTER"
 echo ""
 
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # Verify cluster exists and is installed
 _inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" != "yes" ]]; then
-	echo "  SKIP: Cluster '$_CLUSTER' not installed — skipping Day-2 tests"
+	echo "  ✗ FAIL: Cluster '$_CLUSTER' not installed — cannot run Day-2 tests"
 	echo ""
-	_TUI_PASS=0; _TUI_FAIL=0
+	_TUI_FAIL=1
 	tui_summary
-	exit 0
+	exit 1
 fi
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # ============================================================================
 # 1. Enter Day-2 menu
@@ -43,6 +35,7 @@ echo ""
 echo "--- 1. Day-2 menu ---"
 tui_select_item "Day-2"
 sleep 2
+tui_assert_title "Day-2\|Cluster Management" "Day-2 menu dialog title"
 tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu appeared" 10
 tui_screenshot "d2-01-menu"
 
@@ -67,7 +60,7 @@ done
 echo ""
 echo "--- 2. Cluster Status ---"
 tui_select_item "status"
-sleep 5
+sleep 3
 tui_screenshot "d2-02-status"
 
 _scr=$(tui_capture)
@@ -78,7 +71,7 @@ if echo "$_scr" | grep -qi "AVAILABLE\|Ready\|node\|operator\|select.*cluster"; 
 	# If there's a cluster selection dialog, select our cluster
 	if echo "$_scr" | grep -qi "select.*cluster"; then
 		tui_keys Enter  # select first/default cluster
-		sleep 5
+		sleep 2
 		tui_screenshot "d2-02b-status-detail"
 	fi
 else
@@ -89,84 +82,143 @@ fi
 # Return to Day-2 menu
 tui_back_to "Day-2\|Cluster Management" 5
 
+# Helper: navigate reliably to the Day-2 menu.
+# The Day-2 menu is identified by its title "Day-2 / Cluster Management"
+# and the presence of menu items with keys (R, N, O, etc.).
+_nav_to_day2_menu() {
+	local _w _scr
+	for _w in 1 2 3 4 5 6 7 8; do
+		_scr=$(tui_capture)
+		# Check for the actual Day-2 menu (has section headers like "Configuration" and menu keys)
+		if echo "$_scr" | grep -q "── Configuration ──\|── Status ──\|── Lifecycle ──"; then
+			return 0
+		fi
+		# Dismiss progress dialog that completed (Succeeded, 100%)
+		if echo "$_scr" | grep -qi "steps completed\|── Success ──\|ENTER to return\|Succeeded\|100%"; then
+			echo "  (_nav: dismissing completion dialog)" >&2
+			tui_keys Enter; sleep 2; continue
+		fi
+		# Dismiss failure or error dialogs
+		if echo "$_scr" | grep -qi "── FAILED ──\|Quit.*Q\|Dismiss"; then
+			echo "  (_nav: dismissing failure dialog)" >&2
+			tui_keys Enter; sleep 1; continue
+		fi
+		# Dismiss output pager
+		if echo "$_scr" | grep -qi "scroll.*PgUp\|Press Q to quit\|Press.*Escape.*to close"; then
+			echo "  (_nav: dismissing output pager)" >&2
+			tui_keys q; sleep 1; continue
+		fi
+		# Dismiss "Output (Space)" button on progress dialog
+		if echo "$_scr" | grep -qi "Output.*Space.*Quit"; then
+			echo "  (_nav: dismissing progress output)" >&2
+			tui_keys Escape; sleep 1; continue
+		fi
+		# Still showing progress (In Progress / N/A) — wait a bit
+		if echo "$_scr" | grep -qi "In Progress\|Day-2:.*day2\|Overall Progress"; then
+			echo "  (_nav: progress dialog still active, waiting...)" >&2
+			sleep 10; continue
+		fi
+		# Navigate back from wherever we are
+		tui_back_to "Actions" 3
+		if tui_capture | grep -q "Actions"; then
+			tui_select_item "Day-2"; sleep 2
+		fi
+	done
+	# Final check
+	if tui_capture | grep -q "── Configuration ──"; then
+		return 0
+	fi
+	echo "  WARNING: Could not navigate to Day-2 menu" >&2
+	return 1
+}
+
 # Helper: run a Day-2 action via the progress dialog.
-# Selects the menu item, handles cluster selection if shown,
-# waits for the progress dialog to finish, presses Done.
+# Navigates to Day-2 menu, selects the item, waits for progress, verifies output.
 _day2_run_action() {
 	local item_label="$1"
 	local action_name="$2"
 	local timeout="${3:-600}"
+	local expected_cmd="${4:-}"
 
-	tui_select_item "$item_label"
-	sleep 3
+	# Navigate to the Day-2 menu first
+	if ! _nav_to_day2_menu; then
+		echo "  ✗ FAIL: Cannot reach Day-2 menu for $action_name"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		return 1
+	fi
+	tui_screenshot "d2-${action_name}-menu"
+
+	# Select the menu item
+	if ! tui_select_item "$item_label"; then
+		echo "  ✗ FAIL: Menu item '$item_label' not found for $action_name"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		return 1
+	fi
+	sleep 2
 	tui_screenshot "d2-${action_name}-start"
 
-	_scr=$(tui_capture)
+	tui_dismiss_cluster_select
 
-	# Handle cluster selection dialog (shown when multiple clusters exist)
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		echo "  (cluster selection dialog — selecting default)"
-		tui_keys Enter; sleep 2
+	# Wait for the "One moment please" / loading dialog to transition
+	# to the actual progress dialog (can take a few seconds)
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "One moment\|please wait\|Loading"; then
+		echo "  ($action_name: waiting for loading to finish...)"
+		sleep 5
 		_scr=$(tui_capture)
 	fi
 
-	# Detect progress dialog (title contains "Day-2:" or step statuses)
-	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|day2\|Day-2:"; then
+	# Handle warning/confirmation dialogs before progress starts
+	if echo "$_scr" | grep -qi "Warning\|Continue anyway\|Confirm\|Are you sure"; then
+		echo "  ($action_name: dismissing warning dialog)"
+		tui_screenshot "d2-${action_name}-warning"
+		tui_keys Enter; sleep 1
+		_scr=$(tui_capture)
+	fi
+
+	# Only dismiss exec mode if we see it (not the progress dialog)
+	if echo "$_scr" | grep -qi "Run in.*Terminal\|Execution Mode"; then
+		tui_keys Enter; sleep 1
+		_scr=$(tui_capture)
+	fi
+
+	# Detect progress dialog or any running state
+	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|Day-2:\|Progress\|steps completed"; then
 		echo "  ✓ PASS: $action_name progress dialog appeared"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 
-		# Wait for all steps to complete (look for Done button or completion text)
-		# IMPORTANT: do NOT match "Day-2" — the progress dialog title contains it
-		echo "  Waiting for $action_name to complete (up to ${timeout}s)..."
-		local _timed_out=0
-		for (( _i=0; _i<timeout; _i+=5 )); do
-			if ! tui_session_alive; then
-				echo "  SESSION DEAD during $action_name"
-				break
-			fi
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "All steps completed"; then
-				break
-			fi
-			if echo "$_scr" | grep -qi "FAILED"; then
-				echo "  $action_name had failures"
-				break
-			fi
-			sleep 5
-			(( _i % 60 == 0 && _i > 0 )) && echo "  ... still running (${_i}s)"
-		done
-		if (( _i >= timeout )); then
-			echo "  TIMEOUT: $action_name did not complete in ${timeout}s"
-			_timed_out=1
+		if tui_wait_for_progress "d2-${action_name}" "$timeout"; then
+			echo "  ✓ PASS: $action_name completed"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
+		else
+			echo "  ✗ FAIL: $action_name failed"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
-		tui_screenshot "d2-${action_name}-result"
 
-		# Return to Day-2 menu
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qi "Done"; then
-			tui_press_button "Done"
-			sleep 2
-		elif (( _timed_out )); then
-			# Operation still running — quit via Q/ESC
-			tui_keys q; sleep 2
+		# Verify the correct command ran (not a stale/generic one)
+		if [[ -n "$expected_cmd" ]]; then
+			tui_screenshot "d2-${action_name}-output"
 			_scr=$(tui_capture)
-			# Confirm quit if asked
-			if echo "$_scr" | grep -qi "confirm\|sure\|abort"; then
-				tui_keys Enter; sleep 2
+			if echo "$_scr" | grep -qi "$expected_cmd"; then
+				echo "  ✓ PASS: $action_name ran correct command ($expected_cmd)"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+			else
+				echo "  ✗ FAIL: $action_name did not run expected command ($expected_cmd)"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			fi
 		fi
+
+		tui_dismiss_result
 	else
-		echo "  ~ NOTE: $action_name screen unclear"
+		echo "  ✗ FAIL: $action_name progress not detected"
 		tui_screenshot "d2-${action_name}-unclear"
-	fi
-
-	# Ensure we're back at the Day-2 menu before the next action
-	sleep 1
-	_scr=$(tui_capture)
-	if ! echo "$_scr" | grep -qi "OperatorHub\|NTP\|OSUS\|shutdown\|startup"; then
-		tui_back_to "Day-2\|Cluster Management\|Actions" 5
-		if tui_capture | grep -q "Actions"; then
-			tui_select_item "Day-2"; sleep 2
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		# Even though we didn't detect progress, the dialog may be on
+		# screen — wait for it and dismiss it so subsequent actions work
+		if echo "$_scr" | grep -qi "Day-2:\|One moment\|please"; then
+			echo "  (waiting for possible background progress to finish...)"
+			tui_wait_for_progress "d2-${action_name}-recovery" "$timeout" 2>/dev/null || true
+			tui_dismiss_result
 		fi
 	fi
 }
@@ -176,21 +228,21 @@ _day2_run_action() {
 # ============================================================================
 echo ""
 echo "--- 3. Configure OperatorHub ---"
-_day2_run_action "OperatorHub" "operatorhub" 1200
+_day2_run_action "OperatorHub" "operatorhub" 1200 "Day-2:.*day2\|aba.*day2\|OperatorHub\|CatalogSource"
 
 # ============================================================================
 # 4. NTP Configuration
 # ============================================================================
 echo ""
 echo "--- 4. NTP Configuration ---"
-_day2_run_action "Network Time" "ntp" 300
+_day2_run_action "Network Time" "ntp" 300 "day2-ntp\|day2.*ntp\|chrony\|NTP"
 
 # ============================================================================
 # 5. OSUS (OpenShift Update Service)
 # ============================================================================
 echo ""
 echo "--- 5. OSUS ---"
-_day2_run_action "Update Service" "osus" 600
+_day2_run_action "Update Service" "osus" 600 "osus\|update.service\|cincinnati"
 
 tui_back_to "Actions" 5
 
@@ -199,20 +251,5 @@ tui_back_to "Actions" 5
 # ============================================================================
 echo ""
 echo "--- 6. Cleanup ---"
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

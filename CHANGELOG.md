@@ -1,4 +1,43 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.3...HEAD)
+
+---
+
+## [1.4.3](https://github.com/sjbylo/aba/releases/tag/v1.4.3) - 2026-11-02
+
+TUI reliability, CLI enhancements, and fixes
+
+
+### Added
+
+- **`aba image set` subcommand** — Manage curated image groups (`ocp`, `virt`, `ai`) with `aba image set add|remove|list`.
+- **`--disk-hint` and `--bond-mode` CLI flags** — Set disk selection and bonding mode from the command line with per-role variants (`--disk-hint-master`, `--bond-mode-worker`, etc.). Values are appended to `cluster.conf` on demand.
+- **Consolidated storage operator set** — Five vendor-specific sets (dell, netapp, ibmstorage, hpe, portworx) merged into a single `storage` set containing all CSI drivers. Users remove vendors they don't need.
+
+### Changed
+
+- **Preflight error severity** — IP conflicts and unreachable-DNS/NTP conditions now display as `[ABA] Error:` (not `Warning:`) to match the fact that they halt execution.
+- **Smart DNS hint in preflight** — When the cluster DNS cannot resolve the registry but the bastion can, ABA detects whether the bastion runs DNS (dnsmasq/auto-DNS) and gives a specific actionable hint (`set dns_servers=<bastion_ip>` or `add a DNS record`).
+- **TUI version in status labels** — Sync/Save/Load menu labels now show the OCP version so stale labels are self-evident after a version change (Bug #945).
+- **Removed misleading operator count** — The install confirmation summary no longer shows the operator basket count (which reflected config, not actual mirror content).
+- **TUI ISC run_once patterns DRY refactor** — Extracted repeated ISC trigger/wait patterns into `tui_ensure_isconf()` (non-blocking ensure+trigger) and `tui_wait_isconf()` (blocking poll+wait with infobox), replacing 7 inline call sites.
+
+### Fixed
+
+- **TUI error dialog buttons (dialog 1.3)** — `--yesno` with `--extra-button` ignored custom labels on RHEL 9 dialog 1.3. Switched to `--msgbox` with `--help-button` for three reliable buttons (Dismiss / Retry / View Output).
+- **Parallel ISO generation cache corruption** — Running `aba install` for multiple clusters simultaneously could corrupt `~/.cache/agent/`. ISO generation is now serialized with `flock`.
+- **VMs deleted outside ABA** — When cluster VMs are removed via vCenter/virsh directly, the stale `.install-complete` marker caused a confusing dead-end. ABA now detects missing VMs and suggests `clean` then `install`.
+- **Unquoted shell variables** — `$ABA_ROOT` (4 sites in aba.sh) and `$ASSETS_DIR` (generate-image.sh) are now properly quoted to prevent word-splitting on paths with spaces (Bugs #1006, #1007, #1010).
+- **TUI stale vendor cache** — Mirror vendor shown in the main menu was stale after mirror install; now refreshed in both CONNO and DISCO loops (Bug #1001).
+- **TUI wrong config source** — `cluster_delete()` and `_day2_startup()` used awk/globals instead of normalize for the platform variable (Bug #1002).
+- **TUI inconsistent channel defaults** — Channel defaults now consistent across wizard and config (Bug #1003).
+- **TUI subshell-echo antipattern** — Six `$(source <(normalize-*-conf) && echo "$var")` patterns replaced with direct sourcing (Bugs #1004, #1005).
+- **Bundle reset** — Fixed bundle reset operation.
+- **TUI editbox "Not a file" error** — The `dlg()` wrapper treated `--editbox` file paths as display text (prepending `\n`), causing dialog to reject the corrupted path. Separated `--editbox` from `--mixedform` so file paths pass through unchanged.
+- **TUI duplicate MACs accepted** — The MAC address editor allowed identical MACs for different nodes without warning. Added uniqueness validation with a clear error listing the duplicates.
+- **TUI empty ports accepted** — Pressing Next with an empty ports field was silently accepted, producing invalid `cluster.conf`. Now rejected with an actionable error message.
+- **TUI bare-metal port default missing** — KVM (`enp1s0`) and VMware (`ens160`) had port defaults but bare-metal did not. Added `eno1` as the default for bare-metal in both the config generator and TUI platform toggle.
+- **TUI ISC "View Config" shows "not yet generated"** — Clicking View Config in Sync/Save/Load/Bundle dialogs failed when the ISC hadn't been generated yet. Generation is now triggered at dialog entry (non-blocking) and waited on at View Config click, with stale `run_once` state detection and reset.
+- **TUI startup ISC trigger without config guard** — Background ISC generation at TUI startup could fire before the setup wizard completed, failing on missing `ocp_version`/`ocp_channel` and storing a stale error in `run_once` metadata. Now guarded by `_direct_config_complete`.
 
 ---
 

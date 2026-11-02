@@ -56,6 +56,9 @@ Additional images:
   aba image add <image:tag>            # Add an image (writes to images.conf)
   aba image remove <image:tag>         # Remove an image
   aba image list                       # Show all configured additional images
+  aba image set list                   # List available image sets and their status
+  aba image set add <set> [version]    # Add a curated image set (ocp, virt, ai)
+  aba image set remove <set>           # Remove an image set from images.conf
 
   Images are stored in images.conf (next to aba.conf) and optionally in
   mirror/images.conf (per-mirror overrides). Both files are merged at ISC

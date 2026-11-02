@@ -33,6 +33,285 @@ Issues or Pull Requests.
 
 ---
 
+## mirror.conf timestamp triggers unnecessary registry reinstall
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** After the TUI or CLI edits `mirror.conf` (e.g., changing OCP version,
+operators, or channel), the file's mtime becomes newer than `.available`.  The next
+`sync`, `save`, or `load` triggers Make to re-run the `.available` recipe, which
+attempts a full registry reinstall.  If the registry is remote or temporarily
+unreachable, this fails and blocks the operation entirely.  In the TUI, this also
+prevents the progress dialog from showing (PLAN events never fire because install
+fails before sync starts).
+
+**Root cause:** The Makefile uses `mirror.conf` as a dependency for `.available`:
+`.available: mirror.conf | .init .rpmsext $(_REGISTRY_PREREQ)`.  This is correct
+when registry settings change (hostname, port, vendor, credentials), but not every
+`mirror.conf` edit requires a registry reinstall — changing operators, OCP version,
+channel, or upgrade targets only affects the ImageSet config, not the registry itself.
+
+**Proposed fix:** Split `mirror.conf` into registry-affecting fields and
+payload-affecting fields.  Only trigger `.available` rebuild when registry settings
+actually change.  Options:
+- Extract a checksum of registry-relevant fields; only invalidate `.available` when
+  the checksum changes.
+- Use a separate stamp file (e.g., `.reg-conf-checksum`) that tracks only the
+  registry fields.
+
+**Workaround:** Run `touch mirror/.available` to reset the timestamp, or
+`aba -d mirror verify` to re-stamp `.available` after confirming the registry is up.
+
+---
+
+## TUI confirm dialog: show estimated mirror size
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** Before sync/save/load, the TUI confirmation dialog shows OCP
+version, operator count, and disk warnings — but only when disk space is
+tight.  The user has no idea how large the operation will be when free space
+is ample (e.g. "~23 GB needed" is useful even with 200 GB free).
+
+**Root cause:** `mirror-status.sh --shell` already computes `estimate_bytes`
+(via `estimate-isc-size.sh`) but only exposes it in the `disk_*_summary`
+fields, which are suppressed when the disk level is `ok`.
+
+**Proposed fix:** Add an `estimate_size` output field to `mirror-status.sh
+--shell` (always emitted, human-formatted e.g. "23 GB").  Have
+`_mirror_op_confirm` always display an "Estimated size: ~23 GB" line in the
+summary, with neutral styling when OK and red when tight/short.
+
+---
+
+## Viewing oc-mirror logs after sync/save/load (idea)
+
+**Severity:** LOW
+**Status:** Idea
+**Added:** 2026-10-31
+
+**Problem:** After sync/save/load, scrolling back through terminal output
+is garbled — oc-mirror uses `\r` carriage returns and ANSI escape codes
+for dynamic progress bars which render as garbage in scrollback / `less`.
+
+**Root cause:** Terminal scrollback records every `\r` overwrite as raw
+bytes.  `less` and terminal scrollback replay them as truncated/overlapping
+lines.  oc-mirror already writes a clean structured log to
+`mirror/data/working-dir/logs/oc-mirror-YYYYMMDD_HHMMSS.log` with all
+INFO/WARN/ERROR messages, results, and timing — but users don't know it
+exists.
+
+**Workaround:** `less -R` renders ANSI colors natively:
+`less -R mirror/data/working-dir/logs/oc-mirror-*.log`
+
+**Possible idea (Phase 1):** Add `aba mirror log` Make target to open the
+latest log in `less -R`.  May not be needed if the workaround is sufficient.
+
+**Proposed fix (Phase 2 — moderate risk):** Wrap oc-mirror execution with
+`script -q` to capture full terminal output (including per-image progress)
+to a file while preserving TTY behavior.  Post-process the capture: split
+on `\r`, strip ANSI, keep only the last version of each progress line.
+Risks: signal handling, exit code masking, PTY allocation quirks.  Requires
+E2E testing across sync/save/load before release.
+
+**What Phase 1 gives:** All INFO messages, results, timings, errors.
+**What Phase 2 adds:** Per-image `✓`/`↑` progress lines.
+
+---
+
+## Multiple ABA repos on same host: shared state conflict
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** When two ABA repositories exist on the same host (e.g. `~/aba`
+and a bundle-extracted repo), they share state via `~/.aba/mirror/`.  If
+repo A installs the registry, repo B sees `.available` / `state.sh` but
+lacks the `omr/mirror-registry` binary.  Uninstall from repo B fails with
+a confusing "omr binary not found" error.
+
+**Root cause:** `regcreds/state.sh` is shared (symlinked to `~/.aba/`), but
+binaries and marker files are per-repo.  No mechanism tracks which repo
+performed the install.
+
+**Proposed fix:** Add `reg_installed_from=<path>` to `state.sh` during
+install.  On uninstall/stop/start, compare with `$PWD` and abort with a
+clear message: "Registry was installed from `<path>`. Run the operation
+from that directory."  Alternatively, copy the OMR binary to a shared
+location under `~/.aba/mirror/bin/`.
+
+**Workaround:** Run install/uninstall from the same ABA repo that originally
+installed the registry.  Or manually delete `~/.aba/mirror/mirror/state.sh`
+to clear stale state.
+
+---
+
+## Prepare Upgrade: toggle candidate channel versions on/off
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** The "Prepare Upgrade for Transfer" dialog shows candidate-channel
+versions with `[switch to candidate]` labels alongside stable/fast versions.
+Candidate versions are pre-release and less tested — showing them by default
+risks users accidentally selecting a candidate upgrade, especially for z-stream
+bumps that are only marginally newer than the latest stable.
+
+**Proposed fix:** Add a toggle option in the menu (e.g.
+`f  Show candidate versions: off`) that controls whether candidate-channel
+versions are displayed. Off by default. Versions from fast or stable channels
+should still show normally with their `[switch to ...]` labels — only candidate
+is hidden behind the toggle.
+
+**Workaround:** Ignore items marked `[switch to candidate]`, or use `h`
+(Change channel) to switch to candidate explicitly.
+
+---
+
+## Add operator/cluster checks to "aba status" command
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** Pre-flight checks like "is the Cincinnati operator available on
+the cluster?" or "is kubevirt-hyperconverged mirrored?" are currently only
+done inline in the TUI Day-2 flow. Users running CLI workflows have no way to
+check readiness before running Day-2 operations.
+
+**Design principle:** TUI is dumb, `aba` is smart. All complex logic lives
+in `aba status`; the TUI just calls `aba status --shell` and displays results.
+
+**Fast checks (default, instant — read config/marker files):**
+- OCP version, channel, platform (from aba.conf)
+- Mirror registry type + state: installed/running/stopped (marker files)
+- Last sync version + date (mirror metadata)
+- Clusters: list with install state (marker files)
+- CLI tool versions: oc, oc-mirror, openshift-install
+- ISC: configured operator count + names (parse yaml)
+
+**Slow checks (behind `--full` flag — needs cluster API, 5s+ timeout):**
+- Cluster health: node status, cluster operators (degraded/progressing)
+- Operator availability on the cluster (packagemanifests)
+- Installed operators (CSVs) — OSUS, virt, etc.
+- Internet connectivity (already cached by run_once)
+
+**Interface:** `aba status --shell` outputs key=value pairs for the TUI to
+eval. `aba status` (no flag) prints human-readable summary. `aba status --full`
+includes slow cluster checks. Per-cluster: `aba status --dir <cluster>`.
+
+---
+
+## Audit progress dialogs for "next steps" advice on error paths
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-30
+
+**Problem:** When a long-running TUI operation fails (sync, save, load, bundle,
+day2, install mirror, etc.), the progress dialog shows "Stopped before all
+steps finished" or a generic error, but gives no guidance on what to do next.
+Users are left guessing whether to retry, check logs, fix config, or ask for
+help.
+
+**Proposed fix:** Audit every `_exec_with_progress` / progress-tracked workflow
+and ensure each error/stopped outcome includes actionable "next steps" advice,
+e.g. "Check the TUI log at ~/.aba/tui.log", "Run 'aba mirror sync' to retry",
+"Verify your pull secret is valid", etc. The advice should be context-specific
+to the operation that failed, not a one-size-fits-all message.
+
+---
+
+## Guard ISC generation helpers against incomplete config
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-30
+
+**Problem:** The `tui_ensure_isconf()` and `tui_wait_isconf()` helpers trigger
+ISC generation (`make -sC mirror isconf`) which depends on `aba.conf` having
+`ocp_version`, `ocp_channel`, `platform`, and a valid `pull_secret_file`. If
+called before the setup wizard completes (config incomplete), the generation
+fails and `run_once` stores the error exit code. This stale error can cascade
+into the Payload menu, showing a confusing error dialog on first entry.
+
+**Root cause:** The helpers assume config is complete. The startup call site in
+`abatui2.sh` is currently guarded with `_direct_config_complete`, but the guard
+is external — other call sites rely on being structurally unreachable before
+the wizard runs, which is fragile if new call sites are added.
+
+**Proposed fix:** Move the `_direct_config_complete` guard into the helpers
+themselves (silent no-op when config is incomplete). Remove the external guard
+from `abatui2.sh`. This provides defense-in-depth: no caller can accidentally
+trigger ISC generation with incomplete config, even if new call sites are added
+later.
+
+**Workaround:** None needed — current code works because post-wizard call sites
+are structurally safe, and the startup site is already guarded.
+
+---
+
+## TUI "Install Cluster" auto-detect picks already-installed cluster
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-10-30
+
+**Problem:** When the user selects "Install Cluster" in the TUI, the wizard
+auto-detects the most recently modified `cluster.conf` as the default cluster
+name. If that cluster is already installed (e.g. shut down), the user is
+immediately shown a "Cluster Already Installed — create a new cluster instead?"
+dialog. This is confusing — the user expected to go straight to the cluster
+wizard, not be questioned about an existing cluster they didn't choose.
+
+**Root cause:** `cluster_install_flow()` picks the latest `cluster.conf` by
+mtime (`ls -t */cluster.conf | head -1`) and then checks `.install-complete`.
+There is no intermediate cluster-picker step.
+
+**Proposed fix:** When multiple cluster dirs exist and the auto-detected one is
+already installed, show a cluster picker listing all dirs with their status
+(installed / shut down / not installed) so the user can choose which cluster to
+work with, or create a new one. Only skip straight to the wizard when there is
+a single un-installed cluster or no clusters at all.
+
+**Workaround:** Select "New Cluster" in the dialog, then type the desired
+cluster name on the first wizard page.
+
+---
+
+## Multi-value image_source for multi-mirror clusters
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-10-30
+**ADR:** `devel/adr/017-multi-value-image-source.md`
+
+**Problem:** To integrate multiple mirrors with one cluster, the user must
+create a separate cluster directory per mirror (via `aba import` or manual
+copy), making it look like multiple clusters when it's really one.  This is
+confusing and fragile.
+
+**Root cause:** `image_source` in `cluster.conf` is a scalar value.
+`day2.sh` reads it to determine which mirror's CatalogSources, IDMS, CA,
+and pull-secret to apply.  Only one mirror per cluster directory is possible.
+
+**Proposed fix:** Allow `image_source` to be a comma-separated list
+(e.g. `image_source=mirror,mm2,enclave3`).  `day2` would loop over all
+mirrors.  `--mirror-name mm2` on an existing cluster would append to the
+list.  See ADR-017 for the full design.
+
+**Workaround:** Create a second cluster directory pointing at the second
+mirror: `aba import --kubeconfig <cluster>/auth/kubeconfig --name mm2-test
+--image-source mm2 --force` then `aba --dir mm2-test day2`.
+
+---
+
 ## oc-mirror v2 load: stale .history causes "manifest unknown" on retry
 
 **Severity:** HIGH
@@ -2811,6 +3090,39 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 ---
 
+## Operator search should show all catalog matches (cross-catalog dedup)
+
+**Severity:** MEDIUM — UX limitation
+**Status:** Needs design
+**Added:** 2026-10-28
+
+**Problem:** When the user searches for an operator in the TUI (e.g. "healthcheck"), only one result is shown even when the same operator name exists in multiple catalogs (redhat and community). The `_operator_search()` function in `tui-mirror.sh` deduplicates by operator name (`_seen_ops[$op_name]`), so the first catalog match (redhat) wins and the community version is silently hidden.
+
+**Why it matters:** The user expects search to show all matches. The two versions are different operators with different maintainers and images (e.g. "Node Health Check Operator" vs "Node Health Check Operator - Community Edition").
+
+**Why it's not a simple fix:** The problem runs deeper than the search display:
+1. `OP_BASKET` is an associative array keyed by operator name only — no catalog info.
+2. `_persist_operator_basket()` writes operator names to `aba.conf` (via op_sets files) without catalog context.
+3. `_resolve_op()` in `reg-create-imageset-config.sh` independently looks up the catalog with redhat-first priority — so even if the user "selected" the community version, the ISC would place it under the redhat catalog.
+4. The `ops=` and `op_sets=` values in `aba.conf` are flat operator name lists.
+
+**To fix properly, all of these need catalog awareness:**
+- `OP_BASKET` → store `op_name:catalog` pairs (or a separate catalog map)
+- `aba.conf` serialization → encode catalog preference (e.g. `ops=node-healthcheck-operator@community`)
+- `_resolve_op()` → honor the stored catalog instead of doing its own lookup
+- Search display → show all matches with catalog labels
+- View basket → show which catalog each operator comes from
+
+**Current behavior is at least honest:** showing one result accurately reflects that only one version ends up in the ISC regardless of selection. Showing both without honoring the choice would be worse.
+
+**Design questions:**
+- What syntax for catalog-qualified operator names in `aba.conf`? (e.g. `@community` suffix, or separate config key)
+- Should the basket allow the same operator from multiple catalogs? (oc-mirror would mirror both)
+- How does this interact with operator sets (`templates/operator-set-*`) which are just name lists?
+- Should `_resolve_op()` keep its fallback priority when no catalog is specified (backward compat)?
+
+---
+
 ## Should `reg_host` derive its domain from the global `domain`?
 
 **Severity:** LOW — design question
@@ -2822,4 +3134,18 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 **Question:** Should `mirror.conf` store only the hostname part (e.g. `reg_hostname=registry`) and derive the FQDN as `${reg_hostname}.${domain}` at runtime from the global `domain` in `aba.conf`? This would keep the domain consistent across all configs. But it would break the use case where the registry intentionally lives in a different domain than the clusters (e.g. registry in the corporate domain, clusters in a lab domain).
 
 **Alternative:** Keep `reg_host` as a full FQDN but add a validation check that warns if its domain suffix doesn't match `domain` from `aba.conf`.
+
+## `vmw-delete.sh` should fall back to `cluster.conf` when agent config files are missing
+
+**Severity:** LOW — only affects `aba delete` on an already-deleted cluster
+**Status:** Planned
+**Added:** 2026-10-31
+
+**Problem:** `vmw-delete.sh` gets `CLUSTER_NAME` from `install-config.yaml` / `agent-config.yaml`. After a first `aba delete`, those files are correctly removed by `make clean`. If `aba delete` is called again (e.g. by accident), `vmw-delete.sh` says "Cluster config files missing -- nothing to delete" because it has no fallback.
+
+This is a minor robustness issue — the first delete already destroys VMs and cleans files, so the second delete is a no-op. Callers should check `.install-complete` before calling `aba delete`.
+
+**Proposed fix:** In `vmw-delete.sh`, fall back to `cluster.conf` (via `normalize-cluster-conf`) when `CLUSTER_NAME` is empty and agent config files are gone. `cluster.conf` has `cluster_name`, `num_masters`, `num_workers` — enough to derive VM names via `vm_name()`.
+
+**Workaround:** Only call `aba delete` when `.install-complete` exists.
 

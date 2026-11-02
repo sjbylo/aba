@@ -11,19 +11,11 @@ echo "=== TUI Cluster Wizard Page Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # ============================================================================
 # 1. Enter cluster install flow
@@ -34,8 +26,43 @@ tui_select_item "Install Cluster"
 sleep 3
 tui_screenshot "cp-01-entry"
 
-# Handle gates: "Mirror Required", "Cluster Already Installed"
+# Handle gates: "Mirror Required", "Mirror Stopped", "Cluster Already Installed"
 _scr=$(tui_capture)
+
+# Mirror stopped — dismiss and start it via Advanced menu
+if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped"; then
+	echo "  Mirror is stopped — starting it first..."
+	tui_keys Enter; sleep 2  # dismiss the dialog
+	tui_back_to "Actions" 3
+	tui_select_item "Advanced"
+	sleep 1
+	tui_select_item "Start.*Mirror\|Start.*Registry\|Start"
+	sleep 5
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "started\|Running\|Success\|OK"; then
+		tui_keys Enter; sleep 1
+	fi
+	tui_back_to "Actions" 3
+	# Retry Install Cluster
+	tui_select_item "Install Cluster"
+	sleep 3
+	_scr=$(tui_capture)
+fi
+
+# Release Image Missing — mirror is installed but empty (no images synced yet)
+if echo "$_scr" | grep -qi "Release Image Missing\|no release images\|release.*missing"; then
+	echo "  ✓ PASS: Release Image Missing gate appeared (mirror has no images)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_press_button "Back" 2>/dev/null || tui_keys Escape
+	sleep 1
+	echo "  ~ SKIP: Cluster wizard pages require synced images in the mirror"
+	echo ""
+	echo "--- Cleanup ---"
+	tui_cleanup
+	tui_summary
+	exit 0
+fi
+
 if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*required"; then
 	echo "  ✓ PASS: Mirror Required gate appeared (mirror not installed)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
@@ -46,21 +73,7 @@ if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*requi
 	echo "  ~ SKIP: Run this test on a host with an installed mirror, or in DIRECT mode"
 	echo ""
 	echo "--- Cleanup ---"
-	for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-	sleep 2
-	if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-		tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-	fi
-	_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-	if [ -z "$_strays" ]; then
-		echo "  ✓ PASS: No stray processes"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Stray processes"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-	fi
-	tui_stop 2>/dev/null
+	tui_cleanup
 	tui_summary
 	exit 0
 fi
@@ -96,6 +109,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
 	echo "  ✓ PASS: Basics page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Basics" "Basics page title"
 
 	# Check basics page fields
 	tui_assert_contains "Cluster Name\|Name" "Cluster Name field"
@@ -141,6 +155,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Network\|CIDR\|Subnet\|DNS\|Gateway\|API VIP\|Starting IP"; then
 	echo "  ✓ PASS: Network page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Networking" "Networking page title"
 
 	# Check network page fields
 	tui_assert_contains "Subnet\|CIDR\|Machine Network" "Subnet/CIDR field"
@@ -181,6 +196,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Interface\|Port\|MAC\|NIC\|ens\|enp"; then
 	echo "  ✓ PASS: Interfaces page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Interfaces" "Interfaces page title"
 
 	# Check interface fields
 	tui_assert_contains "NIC\|Port\|Interface\|ens\|enp" "NIC/Port field"
@@ -215,6 +231,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "VM Resources\|CPU\|Memory\|Disk\|vCPU\|RAM"; then
 	echo "  ✓ PASS: VM Resources page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "VM Resources" "VM Resources page title"
 
 	# Check VM resource fields
 	tui_assert_contains "CPU\|vCPU" "CPU field"
@@ -251,6 +268,7 @@ _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm\|cluster.conf"; then
 	echo "  ✓ PASS: Review page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_assert_title "Install Cluster" "Review page title"
 
 	# Check review contains key config items
 	if echo "$_scr" | grep -qi "cluster_name\|Cluster Name\|Name:"; then
@@ -318,20 +336,5 @@ tui_assert_contains "Actions" "Back at main menu after wizard cancel"
 # ============================================================================
 echo ""
 echo "--- 9. Cleanup ---"
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

@@ -1,5 +1,11 @@
 #!/bin/bash -e
 # Phase 07: Upload bundle to cloud directory
+#
+# The 06a background trickle-copy should have moved tar chunks to NAS already.
+# This step is the idempotency safety net: it finishes the copy for any chunks
+# still on local disk (handles interrupted/dead BG process), assembles the
+# README and helper files on NAS, then renames the temp dir to the final
+# cloud location (instant -- same CIFS mount).
 
 set -x
 
@@ -11,6 +17,40 @@ source "$(cd "$(dirname "$0")/.." && pwd)/common.sh"
 int_down
 
 cd "$WORK_TEST_INSTALL/aba"
+
+# --- Wait for background trickle-copy, then safety-net any remaining chunks ---
+
+_bg_pid=$(cat "$WORK_BUNDLE_DIR_BUILD/.bg-copy-pid" 2>/dev/null) || true
+if [ -n "$_bg_pid" ] && kill -0 "$_bg_pid" 2>/dev/null; then
+	echo_step "Waiting for background NAS copy (PID $_bg_pid) ..."
+	wait "$_bg_pid" || true
+fi
+
+# Safety net: copy any chunks still on local disk (handles interrupted BG)
+mkdir -p "$NAS_TEMP_DIR/$BUNDLE_NAME"
+if ls "$WORK_BUNDLE_DIR"/ocp_* &>/dev/null; then
+	echo_step "Copying remaining local chunks to NAS (BG was incomplete) ..."
+	(
+		set -o pipefail
+		cd "$WORK_BUNDLE_DIR"
+		for f in ocp_*; do
+			until < "$f" tee "$NAS_TEMP_DIR/$BUNDLE_NAME/$f" \
+				| cksum | awk -v f="$f" '{print $1, $2, f}' >> "$NAS_TEMP_DIR/$BUNDLE_NAME/CHECKSUM.txt"
+			do
+				echo "ERROR: copy failed for $f -- retrying in 10s ..." >&2
+				rm -f "$NAS_TEMP_DIR/$BUNDLE_NAME/$f"
+				sleep 10
+			done
+			rm -f "$f"
+			echo "Copied remaining chunk $f to NAS"
+		done
+	)
+fi
+
+# Verify NAS has chunks
+_nas_count=$(ls "$NAS_TEMP_DIR/$BUNDLE_NAME"/ocp_* 2>/dev/null | wc -l)
+echo "Chunks on NAS: $_nas_count"
+[ "$_nas_count" -gt 0 ] || { echo "ERROR: No ocp_* files on NAS!"; exit 1; }
 
 # --- Assemble test log ---
 {
@@ -25,8 +65,11 @@ cd "$WORK_TEST_INSTALL/aba"
 s_primary=$(cd cli && echo $({ ls -1d openshift-install-*.gz 2>/dev/null; ls -1d openshift-client-*.gz 2>/dev/null; ls -1d oc-mirror*.gz 2>/dev/null; }) | sed "s/ /\\\n    - /g")
 s_secondary=$(cd cli && echo $(ls -1d *.gz | grep -v '^openshift-' | grep -v '^oc-mirror') | sed "s/ /\\\n    - /g")
 d=$(date -u)
-bundle_size=$(du -shc "$WORK_BUNDLE_DIR"/ocp_* 2>/dev/null | tail -1 | awk '{print $1}')
+
+# Bundle size was saved by step 04 (chunks are gone from local disk by now)
+bundle_size=$(cat "$WORK_BUNDLE_DIR_BUILD/bundle-size.txt" 2>/dev/null)
 [ -z "$bundle_size" ] && bundle_size="unknown"
+
 # Compute ~3x disk needed (e.g. "106G" → "318G")
 if _num=$(echo "$bundle_size" | grep -oE '^[0-9]+'); then
 	_unit=$(echo "$bundle_size" | grep -oE '[A-Za-z]+$')
@@ -46,12 +89,17 @@ case "${BUNDLE_VENDOR:-omr}" in
 esac
 
 op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
-[ ! "$op_list" ] && op_list="  - No Operators!"
+if [ "$op_list" ]; then
+	op_count=$(echo "$op_list" | wc -l)
+else
+	op_list="  (none)"
+	op_count="No"
+fi
 
-sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" -e "s/<VENDOR>/$vendor_display/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
+sed -e "s/<VERSION>/$VER/g" -e "s/<PRIMARY_CLIS>/$s_primary/g" -e "s/<SECONDARY_CLIS>/$s_secondary/g" -e "s/<DATETIME>/$d/g" -e "s/<SIZE>/$bundle_size/g" -e "s/<DISK_NEEDED>/$disk_needed/g" -e "s/<ABA_VERSION>/$aba_ver/g" -e "s/<VENDOR>/$vendor_display/g" -e "s/<OP_COUNT>/$op_count/g" < "$TEMPLATES_DIR/README.txt" > "$WORK_BUNDLE_DIR/README.txt"
 
-# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
-test_body=$(grep -v '^## ' "$WORK_TEST_LOG")
+# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header, leading blank lines, and prepend "  - " to each line to match the doc style)
+test_body=$(grep -v '^## ' "$WORK_TEST_LOG" | sed '/./,$!d' | sed 's/^/  - /')
 awk -v results="$test_body" '{
 	if ($0 == "<TEST_RESULTS>") print results
 	else print
@@ -61,7 +109,7 @@ awk -v results="$test_body" '{
 # Append operator list and imageset-config to README
 (
 	echo
-	echo "## List of Operators included in this install bundle:"
+	echo "## $op_count operators included in this install bundle:"
 	echo
 	echo "$op_list"
 	echo
@@ -107,50 +155,28 @@ ls -l "$CLOUD_DIR"
 
 [ ! "$todel" ] && echo "No older install bundles to delete" || echo "Install bundles to delete: $todel"
 
-echo_step "Create the install bundle dir and copy the files ..."
+echo_step "Assemble bundle on NAS and publish ..."
 
-# Clean slate for idempotent retry (stale partial uploads from interrupted runs)
-rm -rf "$CLOUD_DIR_BUNDLE"
-mkdir -p "$CLOUD_DIR_BUNDLE"
+# Copy small files (README, helpers, build artifacts) to NAS temp dir
+cp -v "$WORK_BUNDLE_DIR/README.txt"  "$NAS_TEMP_DIR/$BUNDLE_NAME/"
+cp -v "$WORK_BUNDLE_DIR/VERIFY.sh"   "$NAS_TEMP_DIR/$BUNDLE_NAME/"
+cp -v "$WORK_BUNDLE_DIR/UNPACK.sh"   "$NAS_TEMP_DIR/$BUNDLE_NAME/"
+cp -rpv "$WORK_BUNDLE_DIR_BUILD"     "$NAS_TEMP_DIR/$BUNDLE_NAME/"
 
-# Mark it as incomplete
-{
-	echo "========================================================================================"
-	echo
-	echo "THIS ARCHIVE IS INCOMPLETE OR IT'S STILL UPLOADING.  PLEASE WAIT FOR UPLOAD TO COMPLETE!"
-	echo
-	echo "========================================================================================"
-} > "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING"
-mypause 60
-
-ls -l "$WORK_BUNDLE_DIR"/ocp_*
-
-# Copy all bundle files (split archives, README, helpers, checksum) to cloud dir
-cp -v "$WORK_BUNDLE_DIR"/ocp_*		"$CLOUD_DIR_BUNDLE"
-cp -v "$WORK_BUNDLE_DIR/CHECKSUM.txt"	"$CLOUD_DIR_BUNDLE"
-cp -v "$WORK_BUNDLE_DIR/README.txt"	"$CLOUD_DIR_BUNDLE"
-cp -v "$WORK_BUNDLE_DIR/VERIFY.sh"	"$CLOUD_DIR_BUNDLE"
-cp -v "$WORK_BUNDLE_DIR/UNPACK.sh"	"$CLOUD_DIR_BUNDLE"
+# Tidy the build dir on NAS: combine logs, remove build artifacts
+_cloud_build="$NAS_TEMP_DIR/$BUNDLE_NAME/build"
+cat "$_cloud_build"/log-*.log > "$_cloud_build/build.log" 2>/dev/null && rm -f "$_cloud_build"/log-*.log
+rm -f "$_cloud_build"/.done-* "$_cloud_build"/.bg-copy-pid
+rm -f "$_cloud_build"/tests-06*.txt "$_cloud_build"/*-test.sh
+rm -f "$NAS_TEMP_DIR/$BUNDLE_NAME/.copy-complete"
 
 echo
 echo "BUNDLE COMPLETE!"
 echo
 
-echo "Copy build artifact dir from $WORK_BUNDLE_DIR_BUILD to $CLOUD_DIR_BUNDLE"
-ls -la "$WORK_BUNDLE_DIR_BUILD"
-cp -rpv "$WORK_BUNDLE_DIR_BUILD"	"$CLOUD_DIR_BUNDLE"
-
-# Tidy the cloud build dir: combine logs, remove build artifacts
-_cloud_build="$CLOUD_DIR_BUNDLE/build"
-cat "$_cloud_build"/log-*.log > "$_cloud_build/build.log" 2>/dev/null && rm -f "$_cloud_build"/log-*.log
-rm -f "$_cloud_build"/.done-*
-rm -f "$_cloud_build"/tests-06*.txt "$_cloud_build"/*-test.sh
-
-# Remove the warning file (marks upload as complete)
-rm -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING"
-
-# Only remove source tarballs after upload is fully committed
-rm -fv "$WORK_BUNDLE_DIR"/ocp_*
+# Rename NAS temp dir to final cloud location (instant — same CIFS mount)
+rm -rf "$CLOUD_DIR_BUNDLE"
+mv "$NAS_TEMP_DIR/$BUNDLE_NAME" "$CLOUD_DIR_BUNDLE"
 
 echo_step "Show content of new bundle in cloud dir $CLOUD_DIR_BUNDLE:"
 

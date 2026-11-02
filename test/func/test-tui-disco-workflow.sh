@@ -24,9 +24,8 @@ source test/func/tui-test-lib.sh
 _CONNO="conno.example.com"
 _DISCO="${TUI_TEST_HOST:-disco.example.com}"
 _CLUSTER="${TUI_CLUSTER_NAME:-sno}"
-_ssh_cfg="$HOME/.aba/ssh.conf"
-_SSH_CONNO="ssh -F $_ssh_cfg $_CONNO"
-_SSH_DISCO="ssh -F $_ssh_cfg $_DISCO"
+_SSH_CONNO="ssh -F $_TUI_SSH_CFG $_CONNO"
+_SSH_DISCO="ssh -F $_TUI_SSH_CFG $_DISCO"
 _BUNDLE_PATH="${TUI_BUNDLE_PATH:-}"
 _BUNDLE_DEST="/tmp/disco-test-bundle.tar"
 
@@ -98,7 +97,7 @@ fi
 # Skip infrastructure setup if disco is already set up (TUI_SKIP_SETUP=1)
 _SKIP_SETUP="${TUI_SKIP_SETUP:-0}"
 if [[ "$_SKIP_SETUP" == "1" ]] && $_SSH_DISCO "test -f ~/aba/.bundle && test -f ~/aba/mirror/.available" 2>/dev/null; then
-	echo "  SKIP: Phases 2-3 (disco already has bundle + mirror)"
+	echo "  (TUI_SKIP_SETUP=1) Phases 2-3 skipped — disco already has bundle + mirror"
 	# Just clean up any existing test cluster
 	if $_SSH_DISCO "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
 		echo "  Cleaning up leftover '$_CLUSTER' cluster..."
@@ -145,9 +144,9 @@ $_SSH_DISCO "
   rm -f ~/.config/containers/systemd/quay.container 2>/dev/null
   systemctl --user daemon-reload 2>/dev/null
 
-  # Remove mirror data
+  # Remove mirror data (sudo needed for container-owned files in quay-storage)
   sudo rm -rf /opt/quay 2>/dev/null
-  rm -rf ~/quay-install 2>/dev/null
+  sudo rm -rf ~/quay-install 2>/dev/null
 
   # Remove ABA installation and state
   rm -rf ~/aba
@@ -176,7 +175,7 @@ if [[ "$_BUNDLE_DEST" == /tmp/* ]]; then
 	_BUNDLE_ON_DISCO="/tmp/disco-test-bundle.tar"
 else
 	# Bundle is local on bastion
-	scp -F "$_ssh_cfg" "$_BUNDLE_DEST" "$_DISCO:/tmp/disco-test-bundle.tar"
+	scp -F "$_TUI_SSH_CFG" "$_BUNDLE_DEST" "$_DISCO:/tmp/disco-test-bundle.tar"
 	_BUNDLE_ON_DISCO="/tmp/disco-test-bundle.tar"
 fi
 
@@ -231,9 +230,11 @@ echo "================================================================"
 echo ""
 
 # Deploy latest TUI code
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_DISCO:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_DISCO:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
+
+# Ensure disco host has no internet access (must be fully air-gapped)
+echo "  Ensuring internet is down on disco host..."
+$_SSH_DISCO "internet.sh down 2>&1" || true
 
 # Launch TUI
 tui_start
@@ -310,6 +311,7 @@ while true; do
 
 	# "Bundle on connected host" dialog — select Fully Disconnected (first button)
 	if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
+		tui_screenshot "disco-wf-gate-mode-select"
 		tui_keys Enter; sleep 5
 		continue
 	fi
@@ -325,12 +327,14 @@ while true; do
 
 	# Mirror install location dialog — select "Install locally"
 	if echo "$_scr" | grep -qi "Install locally\|Install on remote"; then
+		tui_screenshot "disco-wf-gate-mirror-location"
 		tui_keys Enter; sleep 3
 		continue
 	fi
 
 	# Mirror config review — press Next
 	if echo "$_scr" | grep -qi "Hostname\|Image path\|Vendor\|Data dir" && echo "$_scr" | grep -qi "Next"; then
+		tui_screenshot "disco-wf-gate-mirror-config"
 		tui_press_button "Next" 2>/dev/null || tui_keys Enter
 		sleep 3
 		continue
@@ -338,25 +342,24 @@ while true; do
 
 	# Handle execution mode dialog
 	if echo "$_scr" | grep -qi "Terminal\|Execution\|Run in"; then
+		tui_screenshot "disco-wf-gate-exec-mode"
 		tui_keys Enter; sleep 2
 		continue
 	fi
 
-	# Handle "Press R to retry, ENTER to return" after command completion
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-		continue
-	fi
+	tui_dismiss_result && continue
 
 	# "Load images to mirror" confirmation dialog
 	if echo "$_scr" | grep -qi "Load images to mirror" && echo "$_scr" | grep -qi "Continue"; then
 		echo "  Load images confirmation — pressing Continue"
+		tui_screenshot "disco-wf-gate-load-confirm"
 		tui_keys Enter; sleep 10
 		continue
 	fi
 
 	# Handle confirmation dialogs (load, sync, etc.)
 	if echo "$_scr" | grep -qi "Confirm\|Continue\|Proceed" && echo "$_scr" | grep -qi "Yes\|OK"; then
+		tui_screenshot "disco-wf-gate-confirm-${_elapsed}s"
 		tui_keys Enter; sleep 3
 		continue
 	fi
@@ -367,9 +370,19 @@ while true; do
 		continue
 	fi
 
+	# Error dialog — dismiss and let the wizard retry
+	if echo "$_scr" | grep -qi "Error\|Failed\|failed"; then
+		echo "  Error dialog detected — dismissing (will retry)"
+		tui_screenshot "disco-wf-gate-error-${_elapsed}s"
+		tui_dismiss_error
+		sleep 5
+		continue
+	fi
+
 	# Completion dialog with "Done" button (after mirror install/load)
 	if echo "$_scr" | grep -qi "All steps completed\|Done.*Output\|Mirror Updated\|updated successfully"; then
 		echo "  Completion dialog — dismissing"
+		tui_screenshot "disco-wf-gate-complete"
 		tui_keys Enter; sleep 5
 		continue
 	fi
@@ -396,25 +409,29 @@ if [[ "$_mirror_ok" == "yes" ]]; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
 	echo "  Mirror not installed yet — attempting via TUI menu..."
-	# Navigate to Install Registry
-	tui_select_item "Install Registry\|Registry"
-	sleep 3
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-		tui_keys Enter; sleep 2
+
+	_nav_reg_install() {
+		tui_back_to "Actions" 5
+		tui_select_item "Install Registry\|Registry"
+		sleep 3
+		tui_screenshot "disco-wf-04-reg-install"
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
+			tui_screenshot "disco-wf-04-reg-exec-mode"
+			tui_keys Enter; sleep 2
+		fi
+	}
+
+	if tui_run_operation "reg-install" _nav_reg_install 3 1200; then
+		tui_dismiss_result
+		_mirror_ok=$($_SSH_DISCO "test -f ~/aba/mirror/.available && echo yes || echo no")
 	fi
-	# Wait for install to complete
-	tui_wait_for "Actions\|Registry\|Load\|Install Cluster\|Press R\|ENTER to return" 1200
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-	fi
-	_mirror_ok=$($_SSH_DISCO "test -f ~/aba/mirror/.available && echo yes || echo no")
+
 	if [[ "$_mirror_ok" == "yes" ]]; then
 		echo "  ✓ PASS: Mirror registry installed via TUI"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Mirror registry install failed"
+		echo "  ✗ FAIL: Mirror registry install failed after retries"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 fi
@@ -428,38 +445,34 @@ if [[ "$_loaded" == "yes" ]]; then
 	echo "  ✓ PASS: Images already loaded in mirror"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  Loading images via TUI..."
-	tui_select_item "Load images"
-	sleep 5
-	tui_screenshot "disco-wf-04-load"
+	_nav_load_images() {
+		tui_back_to "Actions" 5
+		tui_select_item "Load images"
+		sleep 5
+		tui_screenshot "disco-wf-04c-load-dialog"
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Confirm\|Load\|OCP\|Continue\|Yes"; then
+			tui_screenshot "disco-wf-04c-load-confirm"
+			tui_keys Enter; sleep 3
+		fi
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Terminal\|Execution"; then
+			tui_screenshot "disco-wf-04c-load-exec-mode"
+			tui_keys Enter; sleep 2
+		fi
+	}
 
-	_scr=$(tui_capture)
-	# Handle confirmation dialog
-	if echo "$_scr" | grep -qi "Confirm\|Load\|OCP\|Continue\|Yes"; then
-		tui_keys Enter; sleep 3
+	if tui_run_operation "image-load" _nav_load_images 3 2700; then
+		tui_screenshot "disco-wf-04b-load-done"
+		tui_dismiss_result
+		_loaded=$($_SSH_DISCO "grep -q 'last_action=load\|last_action=sync' ~/.aba/mirror/*/state.sh 2>/dev/null && echo yes || echo no" 2>/dev/null || echo "no")
 	fi
 
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Terminal\|Execution"; then
-		tui_keys Enter; sleep 2
-	fi
-
-	# Wait for load to complete (can take 20-30 min)
-	echo "  Waiting for image load (up to 45 min)..."
-	tui_wait_for "Actions\|Registry\|Load\|Install Cluster\|loaded\|Press R\|ENTER to return" 2700
-	tui_screenshot "disco-wf-04b-load-done"
-
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-	fi
-
-	_loaded=$($_SSH_DISCO "grep -q 'last_action=load\|last_action=sync' ~/.aba/mirror/*/state.sh 2>/dev/null && echo yes || echo no" 2>/dev/null || echo "no")
 	if [[ "$_loaded" == "yes" ]]; then
 		echo "  ✓ PASS: Images loaded into mirror"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Image load failed or incomplete"
+		echo "  ✗ FAIL: Image load failed after retries"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 fi
@@ -473,14 +486,12 @@ echo "  Phase 5: Cluster install on disco"
 echo "================================================================"
 echo ""
 
-# Pre-install cleanup: destroy any leftover cluster on disco AND conno
-# Both hosts share the same DNS/IP space, so a running cluster on conno
-# with the same name/IP will cause arping IP conflicts on disco.
-if $_SSH_DISCO "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
-	echo "  Cleaning up leftover '$_CLUSTER' cluster on disco..."
-	$_SSH_DISCO "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; rm -rf ~/aba/$_CLUSTER; true"
-	sleep 5
-fi
+# Pre-install cleanup: delete any leftover cluster via the TUI (disco host).
+# The TUI handles VM destruction through the hypervisor, freeing the IP.
+tui_delete_cluster "$_CLUSTER"
+
+# Also clean up any cluster with the same name on conno — both hosts share
+# the same DNS/IP space, so a running cluster on conno causes IP conflicts.
 if $_SSH_CONNO "test -d ~/aba/$_CLUSTER" 2>/dev/null; then
 	echo "  Cleaning up '$_CLUSTER' cluster on conno (IP conflict prevention)..."
 	$_SSH_CONNO "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; rm -rf ~/aba/$_CLUSTER; true"
@@ -504,28 +515,33 @@ tui_screenshot "disco-wf-05-cluster-start"
 echo ""
 echo "--- 5b. Cluster wizard page 1: Basics ---"
 tui_wait_for "Cluster Basics\|Cluster name\|Platform\|cluster.*name" 15
+tui_assert_title "Basics" "Basics page title"
 tui_screenshot "disco-wf-05b-basics"
 
 tui_assert_contains "Cluster name\|cluster name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 
-# Set cluster name
+# Set cluster name — open inputbox, type name, confirm
 tui_select_item "Cluster name\|name" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05b-name-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "DNS label" 10
+sleep 1
 tui_screenshot "disco-wf-05b-name-set"
 echo "  Set cluster name to: $_CLUSTER"
 
-# Press Next
+# Press Next — must Tab once from menu to first button, then Tab to Next
 tui_press_button "Next"
-sleep 3
+sleep 2
 
 echo ""
 echo "--- 5c. Cluster wizard page 2: Networking ---"
-tui_wait_for "Network\|Machine\|Starting\|DNS\|Gateway" 10
+tui_wait_for "Network\|Machine\|Starting\|DNS\|Gateway" 15
+tui_assert_title "Networking" "Networking page title"
 tui_screenshot "disco-wf-05c-network"
 
 tui_assert_contains "Machine\|machine" "Machine network field"
@@ -535,36 +551,46 @@ tui_assert_contains "Starting\|starting" "Starting IP field"
 echo "  Setting machine network=$_machine_network, starting IP=$_api_ip, gateway=$_gateway"
 tui_select_item "Machine" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05c-machine-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "CIDR notation" 10
+sleep 1
 
 # Set starting IP
 tui_select_item "Starting" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05c-startip-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "First IP for cluster" 10
+sleep 1
 
 # Set gateway
 tui_select_item "Gateway" 2>/dev/null || true
 sleep 1
+tui_screenshot "disco-wf-05c-gateway-input"
 tui_keys C-u; sleep 0.3
 $_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
-sleep 0.3
-tui_keys Tab Enter; sleep 1
+sleep 0.5
+tui_keys Enter
+tui_wait_gone "Default gateway IP" 10
+sleep 1
 
 tui_screenshot "disco-wf-05c-network-done"
 
 # Press Next
 tui_press_button "Next"
-sleep 3
+sleep 2
 
 echo ""
 echo "--- 5d. Cluster wizard page 3: Interfaces ---"
 tui_wait_for "Interface\|Ports\|Port\|VLAN\|Image source\|ens" 10
+tui_assert_title "Interfaces" "Interfaces page title"
 tui_screenshot "disco-wf-05d-iface"
 tui_assert_contains "Port\|port\|ens" "Port names field"
 
@@ -575,6 +601,7 @@ sleep 3
 echo ""
 echo "--- 5e. Cluster wizard page 4: VM Resources ---"
 tui_wait_for "CPU\|Memory\|Resources\|VM" 10
+tui_assert_title "VM Resources\|Resources" "VM Resources page title"
 tui_screenshot "disco-wf-05e-vm"
 tui_assert_contains "CPU\|cpu\|Core" "CPU field"
 
@@ -585,6 +612,7 @@ sleep 3
 echo ""
 echo "--- 5f. Review page ---"
 tui_wait_for "Review\|Install\|Summary" 10
+tui_assert_title "Install Cluster\|Review" "Review page title"
 tui_screenshot "disco-wf-05f-review"
 tui_assert_contains "$_CLUSTER" "Review shows cluster name"
 tui_assert_contains "Install\|install" "Install button present"
@@ -596,73 +624,29 @@ tui_keys Enter
 sleep 3
 tui_screenshot "disco-wf-05g-install-start"
 
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Terminal\|Execution\|execution"; then
-	echo "  Execution mode dialog appeared"
-	tui_keys Enter
-	sleep 2
-fi
+tui_screenshot "disco-wf-05g-exec-mode"
+tui_dismiss_exec_mode
 
 # Wait for install to complete (SNO ~30-45 min)
 echo "  Waiting for cluster install (up to 60 min)..."
-_install_timeout=3600
-_start_time=$(date +%s)
-_last_ss=0
-while true; do
-	_elapsed=$(( $(date +%s) - _start_time ))
-	[[ $_elapsed -ge $_install_timeout ]] && {
-		echo "  TIMEOUT: cluster install did not complete in 60 min"
-		break
-	}
+if tui_wait_for_progress "disco-wf-install" 3600; then
+	echo "  ✓ PASS: Cluster install completed"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Cluster install failed"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
 
-	if ! tui_session_alive; then
-		echo "  SESSION DEAD during cluster install"
-		break
-	fi
-	_scr=$(tui_capture)
-
-	# Periodic screenshots
-	if (( _elapsed - _last_ss >= 300 )); then
-		tui_screenshot "disco-wf-install-${_elapsed}s"
-		_last_ss=$_elapsed
-	fi
-
-	# Check for actual install completion
-	if echo "$_scr" | grep -qi "Cluster is installed\|Install complete\|install completed.*marker\|Login to the console"; then
-		echo "  ✓ PASS: Cluster install completed (${_elapsed}s)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		break
-	fi
-
-	# Check for fatal error
-	if echo "$_scr" | grep -qi "FAILED\|fatal\|timed out.*bootstrap"; then
-		echo "  ✗ FAIL: Cluster install failed"
-		tui_screenshot "disco-wf-install-fail"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		break
-	fi
-
-	# Check if back at menu (install finished)
-	if echo "$_scr" | grep -qi "Press R to retry\|ENTER to return"; then
-		tui_keys Enter; sleep 3
-		_scr=$(tui_capture)
-	fi
-
-	if echo "$_scr" | grep -q "Install Cluster\|Registry\|Load"; then
-		echo "  Returned to DISCO menu — checking cluster state..."
-		_inst=$($_SSH_DISCO "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
-		if [[ "$_inst" == "yes" ]]; then
-			echo "  ✓ PASS: Cluster install completed (marker file, ${_elapsed}s)"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
-		else
-			echo "  ~ NOTE: Back at menu but .install-complete not found"
-		fi
-		break
-	fi
-
-	sleep 30
-done
-
+# Handle post-install "Configure OperatorHub" dialog — press "No, later"
+# to skip Day-2 during the test (we just want to verify the install)
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Configure OperatorHub\|installed successfully\|apply now"; then
+	echo "  Dismissing OperatorHub dialog (pressing No, later)"
+	tui_screenshot "disco-wf-05g-operatorhub"
+	tui_press_button "No" 2>/dev/null || tui_keys Tab Enter 2>/dev/null
+	sleep 3
+fi
+tui_dismiss_result
 tui_screenshot "disco-wf-05g-install-final"
 
 # ============================================================================
@@ -707,28 +691,11 @@ echo "  Phase 7: Cleanup"
 echo "================================================================"
 echo ""
 
-# Dismiss any dialog and return to menu
-tui_keys Enter; sleep 2
-tui_keys Escape; sleep 1
-tui_back_to "Registry\|Install\|Load\|Actions" 5
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_SSH_DISCO "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-
-_strays=$($_SSH_DISCO "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_SSH_DISCO "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
+# Dismiss any lingering dialog before cleanup
+tui_dismiss_result
+tui_cleanup
 
 # Clean up bundle on conno
 $_SSH_CONNO "rm -f $_BUNDLE_DEST 2>/dev/null" || true
 
-tui_stop 2>/dev/null
 tui_summary
