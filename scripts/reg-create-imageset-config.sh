@@ -340,7 +340,9 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 		if [ "${tgt_major:-}" ] && [ "$tgt_major" != "$ocp_ver_major" ]; then
 			aba_debug "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major"
 		fi
-		json_operators_data=$(_resolve_operators_json "$_op_catalog_ver")
+		if ! json_operators_data=$(_resolve_operators_json "$_op_catalog_ver"); then
+			aba_abort "Operator resolution failed (see errors above)."
+		fi
 		has_operators=true
 	else
 		aba_info "No operators to add to the image-set config file since values ops or op_sets not defined in aba.conf or mirror.conf."

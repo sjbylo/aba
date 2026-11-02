@@ -200,8 +200,28 @@ e2e_run "Set bad cluster_name" "sed -i 's/^cluster_name=.*/cluster_name=-invalid
 e2e_run_must_fail "Bad cluster_name rejected" "$_CLUSTER_VERIFY"
 e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
 
-e2e_run "Set bad base_domain" "sed -i 's/^base_domain=.*/base_domain=not_a_domain/' e2etmp/cluster.conf"
-e2e_run_must_fail "Bad base_domain rejected" "$_CLUSTER_VERIFY"
+e2e_run "Set bad base_domain (leading hyphen)" "sed -i 's/^base_domain=.*/base_domain=-invalid/' e2etmp/cluster.conf"
+e2e_run_must_fail "Leading-hyphen base_domain rejected" "$_CLUSTER_VERIFY"
+e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
+
+e2e_run "Set bad base_domain (leading dot)" "sed -i 's/^base_domain=.*/base_domain=.invalid/' e2etmp/cluster.conf"
+e2e_run_must_fail "Leading-dot base_domain rejected" "$_CLUSTER_VERIFY"
+e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
+
+e2e_run "Set bad base_domain (trailing dot)" "sed -i 's/^base_domain=.*/base_domain=invalid./' e2etmp/cluster.conf"
+e2e_run_must_fail "Trailing-dot base_domain rejected" "$_CLUSTER_VERIFY"
+e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
+
+e2e_run "Set bad base_domain (double dot)" "sed -i 's/^base_domain=.*/base_domain=double..dot/' e2etmp/cluster.conf"
+e2e_run_must_fail "Double-dot base_domain rejected" "$_CLUSTER_VERIFY"
+e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
+
+e2e_run "Set bad base_domain (empty)" "sed -i 's/^base_domain=.*/base_domain=/' e2etmp/cluster.conf"
+e2e_run_must_fail "Empty base_domain rejected" "$_CLUSTER_VERIFY"
+e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
+
+e2e_run "Verify underscore base_domain accepted" "sed -i 's/^base_domain=.*/base_domain=my_lab/' e2etmp/cluster.conf"
+e2e_run "Underscore base_domain passes validation" "$_CLUSTER_VERIFY"
 e2e_run "Restore cluster.conf" "cp e2etmp/cluster.conf.good e2etmp/cluster.conf"
 
 e2e_run "Set bad machine_network" "sed -i 's|^machine_network=.*|machine_network=999.999.999.999/99|' e2etmp/cluster.conf"

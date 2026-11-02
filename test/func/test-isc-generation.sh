@@ -182,6 +182,16 @@ if [ ! -d "$MIRROR_DIR/.index" ]; then
 	exit 2
 fi
 
+# Ensure all 3 catalog indexes exist for the target version.
+# Prior tests (e.g. test-aba-root-cleanup) may have wiped .index/.
+# Copy from shipped catalogs/ (no network needed).
+for _cat in redhat-operator certified-operator community-operator; do
+	if [ ! -s "$MIRROR_DIR/.index/${_cat}-index-v4.22" ] && [ -s "$ABA_ROOT/catalogs/${_cat}-index-v4.22" ]; then
+		mkdir -p "$MIRROR_DIR/.index"
+		cp "$ABA_ROOT/catalogs/${_cat}-index-v4.22" "$MIRROR_DIR/.index/"
+	fi
+done
+
 OCP_VER="4.22.3"
 OCP_MAJOR="4.22"
 # Fall back to the latest available version if 4.22 index is missing
@@ -204,7 +214,7 @@ echo ""
 # ============================================================================
 echo "=== Test 1: Basic ISC — no operators ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "No duplicate operators keys" "$_isc"
 assert_contains "Has platform channel" "$_isc" "name: stable-${OCP_MAJOR}"
@@ -219,7 +229,7 @@ assert_contains "Has commented operators hint" "$_isc" "^#  operators:"
 echo ""
 echo "=== Test 2: ISC with op_sets=ocp ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 assert_contains "Has operators section" "$_isc" "^  operators:"
@@ -248,7 +258,7 @@ assert_eq "kubernetes-nmstate appears once" "1" "$_nmstate_count"
 echo ""
 echo "=== Test 3: ISC with individual ops ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal,cincinnati-operator" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal,cincinnati-operator" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 assert_contains "Has web-terminal" "$_isc" "web-terminal"
@@ -262,7 +272,7 @@ assert_eq "Individual ops has 2 operators" "2" "$_op_count"
 echo ""
 echo "=== Test 4: Dedup — op_sets + ops with overlap ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=web-terminal,3scale-operator" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=web-terminal,3scale-operator" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 
@@ -280,7 +290,7 @@ assert_eq "Combined has 11 operators" "11" "$_op_count"
 echo ""
 echo "=== Test 5: excl_platform comments out platform section ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=true"
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=true" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 assert_not_contains "Platform channels commented out" "$_isc" "^    channels:"
@@ -294,7 +304,7 @@ assert_contains "Has kubernetes-nmstate" "$_isc" "kubernetes-nmstate-operator"
 echo ""
 echo "=== Test 6: Upgrade mode (same minor) ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=4.22.5"
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=4.22.5" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 assert_contains "Has minVersion (source)" "$_isc" "minVersion: ${OCP_VER}"
@@ -311,7 +321,7 @@ echo "=== Test 7: Cross-catalog operators ==="
 _cert_op=$(head -1 "$MIRROR_DIR/.index/certified-operator-index-v${OCP_MAJOR}" | awk '{print $1}')
 _comm_op=$(head -1 "$MIRROR_DIR/.index/community-operator-index-v${OCP_MAJOR}" | awk '{print $1}')
 
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal,${_cert_op},${_comm_op}" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal,${_cert_op},${_comm_op}" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 
@@ -330,7 +340,7 @@ assert_eq "3 operators total" "3" "$_op_count"
 echo ""
 echo "=== Test 8: Unknown operator gracefully skipped ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal,nonexistent-bogus-operator-xyz" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal,nonexistent-bogus-operator-xyz" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
 assert_contains "Has web-terminal" "$_isc" "web-terminal"
@@ -342,7 +352,7 @@ assert_eq "Only valid operator present" "1" "$_op_count"
 echo ""
 echo "=== Test 9: Display name comments ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=cincinnati-operator" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=cincinnati-operator" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_contains "Display name comment for cincinnati" "$_isc" "# OpenShift Update Service"
 
@@ -352,7 +362,7 @@ assert_contains "Display name comment for cincinnati" "$_isc" "# OpenShift Updat
 echo ""
 echo "=== Test 10: Channel name varies by version ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=candidate" "op_sets=" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=candidate" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_contains "Channel is candidate-${OCP_MAJOR}" "$_isc" "name: candidate-${OCP_MAJOR}"
 
@@ -360,7 +370,7 @@ assert_contains "Channel is candidate-${OCP_MAJOR}" "$_isc" "name: candidate-${O
 echo ""
 echo "=== Test 11: ISC file header and structure ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_contains "Has 'File generated by ABA' header" "$_isc" "^# File generated by ABA"
 assert_not_contains "No ownership invitation in freshly generated ISC" "$_isc" "ownership transfers to you"
@@ -373,10 +383,10 @@ assert_contains "Has platform: key" "$_isc" "^  platform:"
 echo ""
 echo "=== Test 12: Idempotent — same input produces same output ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 _first=$(md5sum "$_isc" | awk '{print $1}')
 
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 _second=$(md5sum "$_isc" | awk '{print $1}')
 
 assert_eq "Identical output on regeneration" "$_first" "$_second"
@@ -385,7 +395,7 @@ assert_eq "Identical output on regeneration" "$_first" "$_second"
 echo ""
 echo "=== Test 13: Operator channels match catalog index ==="
 # ============================================================================
-generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
 
 assert_contains "web-terminal has fast channel" "$_isc" 'name: "fast"'
 assert_contains "cincinnati has v1 channel" "$_isc" 'name: "v1"'

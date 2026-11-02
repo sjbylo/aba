@@ -123,7 +123,13 @@ fi
 [ ! "$worker_prefix" ]		&& export worker_prefix=worker
 [ ! "$ssh_key_file" ]		&& export ssh_key_file='~/.ssh/id_rsa'
 [ ! "$image_source" ]		&& export image_source=mirror
-[ ! "$ports" ]			&& export ports=ens160
+if [ ! "$ports" ]; then
+	case "${platform:-}" in
+		kvm) export ports=enp1s0 ;;
+		bm)  export ports=eno1 ;;
+		*)   export ports=ens160 ;;
+	esac
+fi
 [ ! "$vlan" ]			&& export vlan=
 [ ! "$disk_hint" ]		&& export disk_hint=
 [ ! "$bond_mode" ]		&& export bond_mode=
@@ -170,6 +176,11 @@ if [ "$type" = "sno" ]; then
 	replace-value-conf -q -n api_vip -v "" -f cluster.conf
 	replace-value-conf -q -n ingress_vip -v "" -f cluster.conf
 fi
+
+# Append per-role overrides passed via CLI (not in the template, only when set)
+for _var in disk_hint_master disk_hint_worker bond_mode_master bond_mode_worker; do
+	[ -n "${!_var}" ] && replace-value-conf -q -n "$_var" -v "${!_var}" -f cluster.conf
+done
 
 edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift installation" #### don't want error here, just stop || exit 1
 

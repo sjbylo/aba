@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.4.2
+ABA_VERSION=1.4.3
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20261026222322
+ABA_BUILD=20261102085904
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -235,7 +235,7 @@ if [ "$(basename "$0")" = "abatui" ]; then
 	exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
 fi
 
-source $ABA_ROOT/scripts/include_all.sh
+source "$ABA_ROOT/scripts/include_all.sh"
 
 # Redact sensitive flags (--reg-password) from argument strings before logging.
 _redact_args() {
@@ -308,7 +308,7 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	# Create images.conf from template (if not already present)
 	[ ! -f "$ABA_ROOT/images.conf" ] && cp "$ABA_ROOT/templates/images.conf" "$ABA_ROOT/images.conf"
 else
-	source <(cd $ABA_ROOT && normalize-aba-conf)
+	source <(cd "$ABA_ROOT" && normalize-aba-conf)
 	# Only auto-fill empty network values in bundle mode (on internal/disconnected network).
 	# For pre-created bundles, aba.conf will exist but network values will be empty ... so attempt to fill them in.
 	if [ -f "$ABA_ROOT/.bundle" ]; then
@@ -327,7 +327,7 @@ else
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
-source <(cd $ABA_ROOT && normalize-aba-conf)
+source <(cd "$ABA_ROOT" && normalize-aba-conf)
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
@@ -480,7 +480,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "image" ]; then
 		shift
 		_img_action="${1:-}"
-		[ -z "$_img_action" ] && aba_abort "Usage: aba image {add|remove|list} [<image:tag> ...]"
+		[ -z "$_img_action" ] && aba_abort "Usage: aba image {add|remove|list|set} [<image:tag> ...]"
 		shift
 
 		# Resolve which images.conf to edit
@@ -491,6 +491,50 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		fi
 
 		case "$_img_action" in
+			set)
+				_set_action="${1:-}"
+				[ -z "$_set_action" ] && aba_abort "Usage: aba image set {add|remove|list} [<set-name>]"
+				shift
+				cd "$ABA_ROOT"
+				case "$_set_action" in
+					add)
+						[ $# -eq 0 ] && aba_abort "Usage: aba image set add <set-name> [version]" \
+							"Available sets: ocp, virt, ai"
+						_set_name="$1"
+						_set_ver="${2:-}"
+						_count=$(image_set_add "$_set_name" "$_set_ver") || \
+							aba_abort "Failed to add image set '$_set_name'"
+						if [ "$_count" -eq 0 ] 2>/dev/null; then
+							aba_warn "Image set '$_set_name' has no images (published list is empty)"
+						else
+							aba_success "Image set '$_set_name' added ($_count images) to images.conf"
+						fi
+						;;
+					remove|rm)
+						[ $# -eq 0 ] && aba_abort "Usage: aba image set remove <set-name>"
+						_set_name="$1"
+						image_set_remove "$_set_name" || \
+							aba_abort "Image set '$_set_name' not found in images.conf"
+						aba_success "Image set '$_set_name' removed from images.conf"
+						;;
+					list|ls)
+						_output=$(image_set_list)
+						if [ -z "$_output" ]; then
+							echo "No image sets available."
+						else
+							printf '%-8s  %-35s  %-10s  %5s  %s\n' "SET" "DESCRIPTION" "STATUS" "IMAGES" "DETAIL"
+							printf '%-8s  %-35s  %-10s  %5s  %s\n' "---" "-----------" "------" "------" "------"
+							echo "$_output" | while IFS=$'\t' read -r name display status count detail; do
+								printf '%-8s  %-35s  %-10s  %5s  %s\n' "$name" "$display" "$status" "$count" "$detail"
+							done
+						fi
+						;;
+					*)
+						aba_abort "Unknown action '$_set_action'. Usage: aba image set {add|remove|list}"
+						;;
+				esac
+				exit 0
+				;;
 			add)
 				[ $# -eq 0 ] && aba_abort "Usage: aba image add <image:tag> [<image:tag> ...]"
 				# Validate all images before creating/modifying files (#1169, #1170)
@@ -563,7 +607,7 @@ for i in imgs:
 				exit 0
 				;;
 			*)
-				aba_abort "Unknown image action '$_img_action'. Usage: aba image {add|remove|list}"
+				aba_abort "Unknown image action '$_img_action'. Usage: aba image {add|remove|list|set}"
 				;;
 		esac
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
@@ -575,7 +619,7 @@ for i in imgs:
 			opt_out="--out -"
 		else
 			echo "$1" | grep -q "^-" && aba_abort "in parsing --out path argument"
-			[ "$1" ] && [ ! -d $(dirname $1) ] && aba_abort "directory: [$(dirname $1)] incorrect or missing!"
+			[ "$1" ] && [ ! -d "$(dirname "$1")" ] && aba_abort "directory: [$(dirname "$1")] incorrect or missing!"
 			[ -f "$1.tar" ] && aba_abort "install bundle file [$1.tar] already exists!"
 
 			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
@@ -1047,6 +1091,27 @@ for i in imgs:
 		_set_cluster_conf starting_ip "$2" "$1"
 		shift 2
 
+	elif [ "$1" = "--disk-hint" -o "$1" = "--disk-hint-master" -o "$1" = "--disk-hint-worker" ]; then
+		_flag="$1"
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $_flag"
+		_parse_disk_hint "$2" >/dev/null || aba_abort "invalid disk hint '$2' after option $_flag"
+		case "$_flag" in
+			--disk-hint)         _set_cluster_conf disk_hint "$2" "$_flag" ;;
+			--disk-hint-master)  _set_cluster_conf disk_hint_master "$2" "$_flag" ;;
+			--disk-hint-worker)  _set_cluster_conf disk_hint_worker "$2" "$_flag" ;;
+		esac
+		shift 2
+	elif [ "$1" = "--bond-mode" -o "$1" = "--bond-mode-master" -o "$1" = "--bond-mode-worker" ]; then
+		_flag="$1"
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $_flag"
+		_validate_bond_mode "$2" || aba_abort "invalid bond mode '$2' after option $_flag — valid: balance-rr active-backup balance-xor broadcast 802.3ad balance-tlb balance-alb"
+		case "$_flag" in
+			--bond-mode)         _set_cluster_conf bond_mode "$2" "$_flag" ;;
+			--bond-mode-master)  _set_cluster_conf bond_mode_master "$2" "$_flag" ;;
+			--bond-mode-worker)  _set_cluster_conf bond_mode_worker "$2" "$_flag" ;;
+		esac
+		shift 2
+
 	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			_set_cluster_conf data_disk "$2" "$1"
@@ -1303,14 +1368,17 @@ done
 
 # Guard for VM lifecycle targets: validate platform + hypervisor config
 _ensure_hv_ready() {
-	source <(normalize-aba-conf)
+	source <(cd "$ABA_ROOT" && normalize-aba-conf)
 	case "$platform" in
 		vmw)
+			# Remove dangling symlink so ln can recreate it
+			[ -L vmware.conf ] && [ ! -e vmware.conf ] && rm -f vmware.conf
 			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
 			[ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first."
 			ensure_govc
 			;;
 		kvm)
+			[ -L kvm.conf ] && [ ! -e kvm.conf ] && rm -f kvm.conf
 			[ ! -s kvm.conf ] && [ -f ../kvm.conf ] && ln -s ../kvm.conf
 			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
 			ensure_virsh
@@ -1609,10 +1677,12 @@ if [ "$cur_target" ]; then
 			# init may fail on corrupted state — non-fatal for delete
 			make -s init 2>/dev/null || aba_warn "Cluster .init failed — proceeding with best-effort delete."
 
-			source <(normalize-aba-conf)
+			source <(cd "$ABA_ROOT" && normalize-aba-conf)
 			case "$platform" in
 				vmw|kvm)
-					_ensure_hv_ready
+					# Best-effort: missing vmware.conf/kvm.conf must not block cleanup —
+					# vmw-delete.sh / kvm-delete.sh handle missing config gracefully.
+					( _ensure_hv_ready ) 2>/dev/null || aba_warn "vmware.conf/kvm.conf not found — proceeding with best-effort delete."
 					$ABA_ROOT/scripts/${platform}-delete.sh || exit $?
 					;;
 				bm)
@@ -1658,6 +1728,22 @@ if [ "$cur_target" ]; then
 			# without invoking make (avoids cascading dependency rebuilds
 			# that could recreate VMs on an already-running cluster).
 			if [ -f .install-complete ]; then
+				# On VM platforms, verify VMs still exist. If they were
+				# deleted outside ABA, the markers are stale and the user
+				# would otherwise be sent in circles (install→startup→install).
+				_install_vms_gone=
+				case "${platform:-}" in
+					vmw|kvm)
+						_vm_rc=0
+						$ABA_ROOT/scripts/${platform}-exists.sh 2>/dev/null || _vm_rc=$?
+						[ "$_vm_rc" -eq 1 ] && _install_vms_gone=1
+						;;
+				esac
+				if [ "$_install_vms_gone" ]; then
+					aba_warn "Cluster was installed but VMs no longer exist (deleted outside ABA?)."
+					aba_info "To re-install: 'aba -d $(basename "$PWD") clean' then 'aba -d $(basename "$PWD") install'."
+					exit 0
+				fi
 				if [ -f .shutdown.log ]; then
 					aba_info "Cluster is installed but shut down. Run 'aba -d $(basename "$PWD") startup' to power it on."
 				else
@@ -1751,7 +1837,7 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 # Change to the top level repo directory
-cd $ABA_ROOT
+cd "$ABA_ROOT"
 
 aba_debug "Running aba interactive mode ..."
 

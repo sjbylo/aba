@@ -76,7 +76,7 @@ echo "--- Post-cleanup verification ---"
 _clean=1
 echo "Containers:"
 _containers=$($SSH "podman ps -a --format '{{.Names}}'" 2>&1 || true)
-if echo "$_containers" | grep -qE 'quay-app|quay-redis|quay-postgres|^registry$'; then
+if echo "$_containers" | grep -qE 'quay-app|quay-redis|quay-postgres|^registry(-[0-9]+)?$'; then
 	echo "  WARNING: registry containers still present!"
 	echo "$_containers"
 	_clean=""

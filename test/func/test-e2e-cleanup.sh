@@ -110,7 +110,7 @@ else
 		_ok "Docker registry installed"
 
 		_assert "Docker registry container running" \
-			_con "podman ps --format '{{.Names}}' | grep -q '^registry$'"
+			_con "podman ps --format '{{.Names}}' | grep -qE '^registry(-[0-9]+)?$'"
 
 		echo "  Step 3: Write .mirror-cleanup file (simulating crash) ..."
 		_con "echo '${_CON_TARGET} /home/${_USER}/aba/mirror' > ~/aba/test/e2e/logs/cleanup-test.mirror-cleanup"
@@ -125,7 +125,7 @@ else
 		sleep 2
 
 		_assert_not "Docker registry container removed" \
-			_con "podman ps --format '{{.Names}}' | grep -q '^registry$'"
+			_con "podman ps --format '{{.Names}}' | grep -qE '^registry(-[0-9]+)?$'"
 
 		_assert_not ".mirror-cleanup file cleaned up" \
 			_con "test -f ~/aba/test/e2e/logs/cleanup-test.mirror-cleanup"

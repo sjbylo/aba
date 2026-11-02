@@ -11,32 +11,23 @@ echo "=== TUI Day-2 Deep Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # Pre-check: does an installed cluster exist?
 _installed=$($_TUI_SSH "ls ~/aba/*/.install-complete 2>/dev/null" || true)
 if [ -z "$_installed" ]; then
-	echo "  SKIP: No installed cluster on $_TUI_HOST — skipping Day-2 deep tests"
+	echo "  ✗ FAIL: No installed cluster on $_TUI_HOST — cannot run Day-2 deep tests"
 	echo ""
-	echo "  ✓ PASS: (skipped — no cluster)"
-	_TUI_PASS=1
+	_TUI_FAIL=1
 	tui_summary
-	exit 0
+	exit 1
 fi
 echo "  Installed cluster(s): $(echo "$_installed" | sed 's|.*/\(.*\)/.install-complete|\1|' | paste -sd, -)"
 echo ""
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # ============================================================================
 # 1. Enter Day-2 menu
@@ -47,6 +38,7 @@ tui_select_item "Day-2"
 sleep 2
 tui_screenshot "d2d-01-day2"
 
+tui_assert_title "Day-2\|Cluster Management" "Day-2 menu dialog title"
 tui_assert_contains "Day-2\|Cluster Management" "Day-2 menu title"
 tui_assert_contains "OperatorHub" "OperatorHub item"
 tui_assert_contains "NTP\|Network Time" "NTP item"
@@ -67,7 +59,7 @@ tui_assert_contains "Virtualization\|Boot Sources" "Virtualization item"
 echo ""
 echo "--- 2. Cluster Status ---"
 # Select status
-tui_keys S; sleep 0.3; tui_keys Enter
+tui_select_item "status"
 sleep 3
 tui_screenshot "d2d-02a-cluster-select"
 
@@ -123,7 +115,7 @@ echo "--- 3. OSUS check ---"
 # Back to Day-2 menu
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys O; sleep 0.3; tui_keys Enter
+tui_select_item "OSUS\|Update Service"
 sleep 3
 tui_screenshot "d2d-03-osus"
 
@@ -159,7 +151,7 @@ echo ""
 echo "--- 4. Virtualization Boot Sources ---"
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys V; sleep 0.3; tui_keys Enter
+tui_select_item "Virtualization\|Boot Source"
 sleep 3
 tui_screenshot "d2d-04-virt"
 
@@ -185,7 +177,7 @@ echo ""
 echo "--- 5. Upgrade version picker ---"
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys U; sleep 0.3; tui_keys Enter
+tui_select_item "Upgrade"
 sleep 3
 tui_screenshot "d2d-05a-upgrade-cluster"
 
@@ -256,7 +248,7 @@ echo ""
 echo "--- 6. Shutdown confirmation ---"
 tui_wait_for "Day-2\|Cluster Management" 5
 
-tui_keys G; sleep 0.3; tui_keys Enter
+tui_select_item "shutdown\|Shutdown"
 sleep 3
 tui_screenshot "d2d-06-shutdown"
 
@@ -287,7 +279,7 @@ if ! tui_capture | grep -qi "Day-2\|Cluster Management"; then
 	tui_wait_for "Day-2\|Cluster Management" 10
 fi
 
-tui_keys D; sleep 0.3; tui_keys Enter
+tui_select_item "Delete"
 sleep 3
 tui_screenshot "d2d-07-delete"
 
@@ -311,17 +303,20 @@ fi
 echo ""
 echo "--- 8. Day-2 Help ---"
 # Ensure we're in the Day-2 menu (may have fallen back to main menu)
+# Need extra wait — prior Escape may leave dialog mid-transition
+sleep 2
 if ! tui_capture | grep -qi "Day-2\|Cluster Management"; then
 	tui_back_to "Actions" 5
 	tui_select_item "Day-2"
-	tui_wait_for "Day-2\|Cluster Management" 10
 fi
+tui_wait_for "Day-2\|Cluster Management" 10
 
 tui_press_button "Help"
-sleep 2
+sleep 3
 tui_screenshot "d2d-08-help"
 
-tui_assert_contains "Configuration\|configuration" "Day-2 help has Configuration section"
+# Verify help actually appeared before asserting content
+tui_assert_appears "Configuration" "Day-2 help appeared" 10
 tui_assert_contains "Lifecycle\|lifecycle" "Day-2 help has Lifecycle section"
 tui_assert_contains "Cleanup\|cleanup\|Clean" "Day-2 help has Cleanup section"
 tui_assert_contains "Upgrade" "Day-2 help mentions upgrade"
@@ -338,21 +333,5 @@ tui_keys Enter; sleep 1
 # ============================================================================
 echo ""
 echo "--- 9. Cleanup ---"
-tui_back_to "Actions" 5
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

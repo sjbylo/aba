@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# Phase 04: Create bundle tar archives + checksums
+# Phase 04: Create bundle tar archives
 
 set -x
 
@@ -39,16 +39,14 @@ make --no-print-directory tar out=- | split -b 10G - "$WORK_BUNDLE_DIR/ocp_${VER
 # Restore aba.conf for potential later use
 cp ~/aba.conf.bk aba.conf
 
-echo "Calculating the checksums in the background ..."
+# Save bundle size while all chunks are on local disk (step 07 needs this
+# for the README, but by then the chunks have been trickle-copied to NAS).
+du -shc "$WORK_BUNDLE_DIR"/ocp_* | tail -1 | awk '{print $1}' > "$WORK_BUNDLE_DIR_BUILD/bundle-size.txt"
+echo "Bundle size: $(cat "$WORK_BUNDLE_DIR_BUILD/bundle-size.txt")"
 
-(
-	cd "$WORK_BUNDLE_DIR" && cksum ocp_* > CHECKSUM.txt
-) &
-CKSUM_PID=$!
+# Checksums are computed per-chunk during the background trickle-copy in
+# step 06a (via tee + cksum), not here.
 
 echo_step "Removing unneeded aba repo at $WORK_DIR/aba"
 
 rm -rf "$WORK_DIR/aba"
-
-# Wait for checksum to finish
-wait $CKSUM_PID

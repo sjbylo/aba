@@ -56,7 +56,7 @@ kernel-module-management Kernel Module Management stable
 kiali-ossm Kiali Operator stable
 kubernetes-nmstate-operator Kubernetes NMState Operator stable
 kubevirt-hyperconverged OpenShift Virtualization stable
-kueue-operator Red Hat build of Kueue stable-v1.4
+kueue-operator Red Hat build of Kueue stable-v1.5
 leader-worker-set Leader Worker Set Operator stable-v1.0
 lifecycle-agent Lifecycle Agent stable
 lightspeed-operator OpenShift Lightspeed Operator stable

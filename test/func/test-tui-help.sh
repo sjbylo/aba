@@ -10,10 +10,7 @@ echo "=== TUI Help Text Consistency Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # Cross-check: every keyword must appear in BOTH menu and help captures.
@@ -178,7 +175,12 @@ sleep 2
 tui_capture > /tmp/_hc_day2_menu.txt
 tui_screenshot "hc-05-day2-menu"
 
-if grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
+if grep -qi "No clusters configured" /tmp/_hc_day2_menu.txt; then
+	echo "  ✓ PASS: Day-2 shows 'No clusters configured' (no cluster installed)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_keys Enter; sleep 1
+	tui_back_to "Actions"
+elif grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
 	tui_press_button "Help"
 	sleep 2
 	tui_capture > /tmp/_hc_day2_help.txt
@@ -208,7 +210,8 @@ if grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
 	tui_keys Enter; sleep 1
 	tui_back_to "Actions"
 else
-	echo "  ~ SKIP: Day-2 menu not reached"
+	echo "  ✗ FAIL: Day-2 menu not reached"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -232,24 +235,5 @@ done
 # ============================================================================
 echo ""
 echo "--- 7. Cleanup ---"
-for i in 1 2 3 4 5; do
-	tui_keys Escape; sleep 1
-done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	echo "$_strays" | sed 's/^/      /'
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

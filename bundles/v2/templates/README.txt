@@ -18,7 +18,7 @@
       mirror/omr-image.tgz          (OMR v3)
   - Supporting tools:
     - <SECONDARY_CLIS>
-  - Operators included in this bundle (see list below)
+  - <OP_COUNT> operators included in this bundle (see list below)
   - Image set config: imageset-config.yaml (see below)
 
 ─── TEST RESULTS ──────────────────────────────────────────────────────

@@ -3,8 +3,9 @@
 # Usage:
 #   make VER=4.18.0 NAME=release
 #   make VER=4.18.0 NAME=virt OP_SETS="ocp odf virt" TESTS="odf virt mtv"
-#   make clean VER=4.18.0 NAME=release   # clean one bundle
-#   make clean                            # clean all bundles
+#   make clean VER=4.18.0 NAME=release   # clean one bundle's markers
+#   make clean                            # clean all markers (re-run from top)
+#   make reset                            # full reset: uninstall registry, remove all state
 #   make cleanwork                        # remove large tarballs + test-install dirs
 
 VER      ?=
@@ -15,7 +16,7 @@ TESTS    ?=
 WORK_DIR    := $(shell bash -c 'source bundle.conf 2>/dev/null && echo $$WORK_DIR')
 
 # Validate required variables only for targets that need them (not clean-all)
-ifeq ($(filter clean cleanwork,$(MAKECMDGOALS)),)
+ifeq ($(filter clean cleanwork reset,$(MAKECMDGOALS)),)
 ifeq ($(VER),)
 $(error VER is required. Example: make VER=4.18.0 NAME=release)
 endif
@@ -34,7 +35,7 @@ M            = $(WORK_DIR)/$(BUNDLE_NAME)/build
 
 export VER NAME OP_SETS TESTS BUNDLE_VENDOR
 
-.PHONY: all clean cleanwork
+.PHONY: all clean cleanwork reset
 
 all: $(M)/.done-08-cleanup
 
@@ -98,12 +99,49 @@ clean:
 ifeq ($(VER),)
 	@echo "Cleaning all bundle build markers in $(WORK_DIR)/ ..."
 	find $(WORK_DIR)/ -name '.done-*' -delete 2>/dev/null || true
-	@echo "Removing installed CLI tools and ABA state ..."
-	rm -vf $(HOME)/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
-	rm -rf $(HOME)/.aba
 else
 	rm -f $(M)/.done-*
 endif
+
+# Full reset: uninstall registry via aba, remove all state, work dirs, tools — true fresh start.
+reset:
+	@echo ""
+	@echo "WARNING: This will uninstall any mirror registry, remove ~/.aba, ~/bin tools,"
+	@echo "         work dirs, and registry data. Everything will be rebuilt from scratch."
+	@echo ""
+	@read -p "Continue? (Y/n): " ans; \
+	case "$$ans" in [nN]*) echo "Aborted."; exit 1;; esac
+	@echo "Uninstalling mirror registry via aba ..."
+	@aba_dir=$$(ls -d $(WORK_DIR)/test-install-*/aba 2>/dev/null | head -1); \
+	if [ -n "$$aba_dir" ] && [ -d "$$aba_dir/mirror" ]; then \
+		echo "  Using: $$aba_dir"; \
+		(cd "$$aba_dir" && ./install 2>/dev/null; aba -d mirror uninstall -y) || \
+			echo "  WARNING: aba uninstall failed — continuing with cleanup"; \
+	elif command -v aba >/dev/null 2>&1; then \
+		aba -d mirror uninstall -y 2>/dev/null || \
+			echo "  WARNING: aba uninstall failed — continuing with cleanup"; \
+	else \
+		echo "  No aba installation found — skipping registry uninstall"; \
+	fi
+	@echo "Cleaning up residual registry state ..."
+	@rm -f $(HOME)/.config/containers/systemd/quay.* 2>/dev/null || true
+	@for svc in $$(systemctl --user list-unit-files --no-legend 'quay-*' 2>/dev/null | awk '{print $$1}'); do \
+		echo "  Removing orphaned service: $$svc"; \
+		systemctl --user stop "$$svc" 2>/dev/null || true; \
+		systemctl --user disable "$$svc" 2>/dev/null || true; \
+		rm -f "$(HOME)/.config/systemd/user/$$svc"; \
+	done
+	@systemctl --user daemon-reload 2>/dev/null || true
+	@echo "Removing registry data dirs ..."
+	rm -rf $(HOME)/quay-install $(HOME)/docker-reg $(HOME)/quay-mirror $(HOME)/omr
+	@echo "Removing ABA state and CLI tools ..."
+	rm -rf $(HOME)/.aba
+	rm -vf $(HOME)/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
+	@echo "Cleaning build markers ..."
+	find $(WORK_DIR)/ -name '.done-*' -delete 2>/dev/null || true
+	@echo "Removing work dirs ..."
+	rm -rf $(WORK_DIR)/test-install-* $(WORK_DIR)/aba
+	@echo "Reset complete. Run 'make VER=... NAME=...' to start fresh."
 
 # Emergency cleanup: remove large tarballs and test-install dirs to reclaim disk space
 # Deletes test cluster VMs on vSphere before removing local dirs.

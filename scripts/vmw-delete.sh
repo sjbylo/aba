@@ -22,7 +22,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
-source <(normalize-aba-conf)  # Fetch the 'ask' param
+source <(cd "$ABA_ROOT" && normalize-aba-conf)  # Fetch the 'ask' param from top-level aba.conf
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 

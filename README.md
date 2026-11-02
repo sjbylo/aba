@@ -253,9 +253,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.2.tar.gz
-tar xzf v1.4.2.tar.gz
-cd aba-1.4.2
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.3.tar.gz
+tar xzf v1.4.3.tar.gz
+cd aba-1.4.3
 ./install
 aba
 ```
@@ -263,7 +263,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.4.2 https://github.com/sjbylo/aba.git
+git clone --branch v1.4.3 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1236,6 +1236,40 @@ aba image remove <image:tag>           # Remove an image
 Images are stored in `images.conf` (next to `aba.conf`). You can also create a per-mirror `mirror/images.conf` for overrides — both files are merged at ISC generation time. Edit the files directly or use the `aba image` commands above.
 
 After adding images, run `aba -d mirror sync` (or `save`/`load`) to mirror them.
+
+### Image Sets (Curated Image Groups)
+
+ABA ships curated image sets — predefined groups of related images that can be added or removed as a unit via the TUI or by editing `images.conf`.
+
+| Set | Description | Type |
+| --- | ----------- | ---- |
+| **ocp** | General-purpose utility images (UBI, `support-tools`) | Static |
+| **virt** | OpenShift Virtualization VM boot-source images (RHEL, CentOS, Fedora guest images). After mirroring, run `aba day2-virt` to configure boot sources. | Static |
+| **ai** | Red Hat OpenShift AI (RHOAI) companion images required for disconnected RHOAI deployment. ABA auto-detects the RHOAI version from the operator catalog and fetches the matching image list from [GitHub](https://github.com/red-hat-data-services/rhoai-disconnected-install-helper). | Dynamic |
+
+Use the CLI or TUI to manage image sets:
+
+```bash
+aba image set list                     # Show available sets and their status
+aba image set add virt                 # Add the Virtualization image set
+aba image set add ai                   # Add RHOAI images (auto-detects version)
+aba image set add ocp                  # Add general-purpose utility images
+aba image set remove virt              # Remove the virt image set
+```
+
+The TUI (`abatui`) also provides a guided experience. Image sets are stored as marked blocks in `images.conf`:
+
+```
+# image-set: virt
+registry.redhat.io/rhel9/rhel-guest-image:latest
+registry.redhat.io/rhel10/rhel-guest-image:latest
+quay.io/containerdisks/centos-stream:10
+quay.io/containerdisks/centos-stream:9
+quay.io/containerdisks/fedora:latest
+# end-image-set: virt
+```
+
+After adding an image set, mirror the images with `aba -d mirror sync` (or `save`/`load`).
 
 ### Excluding Image Categories (`excl_*`)
 

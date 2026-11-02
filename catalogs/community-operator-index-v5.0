@@ -97,7 +97,7 @@ beegfs-csi-driver-operator BeeGFS CSI Driver stable
 bpfman-operator Bpfman Operator alpha
 camel-karavan-operator Camel Karavan Operator alpha
 camel-k Camel K Operator stable-v2
-camel-monitor-operator Camel Monitor Operator stable-v0
+camel-monitor-operator Camel Monitor Operator stable-v1
 cass-operator-community DataStax Kubernetes Operator for Apache Cassandra stable
 cert-manager cert-manager stable
 cert-utils-operator Cert Utils Operator alpha
@@ -196,6 +196,7 @@ ndmspc-operator NdmSpc operator alpha
 neuvector-community-operator NeuVector Operator beta
 nexus-operator EDP Nexus Operator alpha
 nexus-operator-m88i Nexus Operator alpha
+nfs-provisioner-operator NFS Provisioner Operator alpha
 nlp-server nlp-server alpha
 node-discovery-operator node-discovery-operator alpha
 node-healthcheck-operator Node Health Check Operator - Community Edition stable
@@ -204,6 +205,7 @@ nsm-operator nsm-operator alpha
 oadp-operator OADP Operator stable
 observability-operator Observability Operator stable
 oci-ccm-operator oci-ccm-operator alpha
+oc-mirror oc-mirror Operator candidate-v0.1
 ocp-kea-dhcp Kea DHCP Operator alpha
 odoo-operator Odoo Operator alpha
 openclaw-operator OpenClaw Operator stable

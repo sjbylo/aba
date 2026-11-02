@@ -414,6 +414,7 @@ mirror_install() {
 "A mirror registry stores OpenShift container images locally.
 
 • Local: installs on this host (Docker, Quay, or OMR)
+
 • Remote: installs on another host via SSH
 
 After installation, use 'Save', 'Sync', or 'Load' to populate it with images."
@@ -454,8 +455,9 @@ _mirror_install_remote() {
 # Stdout of mirror-status.sh --shell for the TUI to eval.
 # Provides mirror state, upgrade path validation, risks, etc.
 # Caller must eval the output to set local variables.
+# Optional args (e.g. --skip-release-check) are forwarded to mirror-status.sh.
 _tui_mirror_status_shell() {
-	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/mirror-status.sh" --shell) 2>/dev/null || true
+	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/mirror-status.sh" --shell "$@") 2>/dev/null || true
 }
 
 # Stdout of transfer-info.sh --shell for the TUI to eval.
@@ -514,6 +516,9 @@ _mirror_op_confirm() {
 		source <(normalize-aba-conf) 2>/dev/null
 		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
 
+		# Ensure ISC generation is running (ready by the time user clicks View Config)
+		tui_ensure_isconf
+
 		local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
 		local transfer_upgrade_to="" transfer_operator_count="" transfer_operators=""
 		eval "$(_tui_transfer_info_shell --local)"  # --local: yaml on disk, not aba-transfer.tar
@@ -547,11 +552,12 @@ _mirror_op_confirm() {
 
 	# Mirror status (ISC operator count, disk, upgrade path) — single source of truth.
 	# operator_count/operators from ISC override stale OP_BASKET when available.
+	# --skip-release-check: confirm dialog doesn't need the live registry probe.
 	local disk_save_summary="" disk_sync_summary="" disk_load_summary=""
 	local disk_save_short=false disk_sync_short=false disk_load_short=false
 	local upgrade_path_exists="" upgrade_path_conditional="" upgrade_risks=""
 	local operator_count="" operators=""
-	eval "$(_tui_mirror_status_shell)"
+	eval "$(_tui_mirror_status_shell --skip-release-check)"
 
 	if [[ $_op_count -ne -1 ]]; then
 		if [[ -n "$operator_count" && "$operator_count" -gt 0 ]]; then
@@ -636,7 +642,7 @@ _mirror_op_confirm() {
 		_summary+="\n\\Z1Additional images configured but excluded — they won't be mirrored\\Zn"
 	fi
 
-	_summary+="\n\nContinue?"
+	_summary+="\nContinue?"
 
 	# For "View ISC": show the ISC from the transfer tar if available
 	_isc_for_view="$ABA_ROOT/mirror/data/imageset-config.yaml"
@@ -661,17 +667,15 @@ _mirror_op_confirm() {
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Could not read the ImageSet Configuration." 0 0
 				fi
 				rm -f "$_tmp_isc"
-			elif [[ -f "$_isc_for_view" ]]; then
-				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"$TUI2_MSG_ISC_GENERATING" 0 0
-					run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-				fi
-				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
-					--exit-label "OK" --textbox "$_isc_for_view" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config not yet generated." 0 0
+				# Wait for ISC generation (triggered when this dialog opened)
+				tui_wait_isconf
+				if [[ -f "$_isc_for_view" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+						--exit-label "OK" --textbox "$_isc_for_view" 0 0
+				else
+					dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config could not be generated.\n\nCheck the TUI log for details." 0 0
+				fi
 			fi
 			continue
 		fi
@@ -830,7 +834,7 @@ mirror_prep_upgrade() {
 	local _existing_target="${ocp_upgrade_to:-}"
 
 	# Fetch upgrade targets reachable from the current version
-	local _channel="${ocp_channel:-fast}"
+	local _channel="${ocp_channel:-stable}"
 	local _zstream="" _next="" _next1=""
 	local _task_id="aba:upgrade-targets:${_current_ver}"
 
@@ -843,8 +847,9 @@ mirror_prep_upgrade() {
 	fi
 
 	# Read combined output: CHANNEL\tLABEL\tVERSION
+	# Filter: only lines with tab-separated fields (discard error messages from log)
 	local _all_targets
-	_all_targets=$(run_once -o -i "$_task_id" 2>/dev/null)
+	_all_targets=$(run_once -o -i "$_task_id" 2>/dev/null | grep $'^\t*[a-z].*\t')
 
 	# Parse own-channel targets
 	while IFS=$'\t' read -r _ch _label _ver; do
@@ -934,7 +939,7 @@ change your channel when selected." 0 0
 	if [[ -n "$_next1" && "$_next1" != "$_existing_target" && "$_next1" != "$_current_ver" ]]; then
 		_ver_entries+=("${_next1}	Minor $(_ver_minor "$_next1")  (latest: $_next1)	")
 	fi
-	# Fallback channel items
+	# Fallback channel items (from other channels)
 	for _item in "${_fb_items[@]}"; do
 		local _fb_tag="${_item%%|*}"
 		local _rest="${_item#*|}"
@@ -990,7 +995,7 @@ change your channel when selected." 0 0
 			--default-item "$_default_tag" \
 			--ok-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_CANCEL" \
-			--menu "Select target upgrade version ($_channel channel):\n\n\\ZbBase version (aba.conf): ${_current_ver}\\Zn\n\nNote: target versions are based on the base version in aba.conf,\nnot any live cluster. If all your clusters have been upgraded\npast this version, update the base version (b)." 0 0 0 \
+			--menu "Select target upgrade version ($_channel channel):\n\n\\ZbBase version (aba.conf): ${_current_ver}\\Zn\n\nSet the base version (b) to match the current version of\nthe cluster you plan to upgrade. If all clusters have been\nupgraded past the base version, change the base version\nto match." 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
@@ -1260,7 +1265,7 @@ _OP_BASKET_DIRTY=false
 _persist_operator_basket() {
 	# If basket hasn't changed, just ensure ISC generation is running/done
 	if [[ "$_OP_BASKET_DIRTY" != "true" ]]; then
-		(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
+		tui_ensure_isconf
 		return
 	fi
 
@@ -1508,7 +1513,7 @@ mirror_payload_menu() {
 			--ok-label "Select" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "${_payload_summary}\n" 0 0 0 \
+			--menu "${_payload_summary}" 0 0 0 \
 				"${_payload_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
@@ -1617,12 +1622,34 @@ _mirror_isc_advanced() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_ISC_ADVANCED" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
+			--help-button \
 			--default-item "$default_item" \
-			--menu "\n" 0 0 0 \
+			--menu "View, edit, or reset the generated ImageSet configuration." 0 0 0 \
 				"${_adv_items[@]}" \
 				2>"$_TUI_TMP"
 		local rc=$?
 		case "$rc" in
+			2)
+				show_help "$TUI2_TITLE_CONNO_ISC_ADVANCED" \
+"The imageset-config.yaml (ISC) controls which container images
+are mirrored — OCP release images, operators, and additional images.
+
+ABA generates and manages this file automatically based on your
+settings in aba.conf and mirror.conf. In most cases you should
+use the Mirror Payload menu to change what gets mirrored.
+
+• View — inspect the current ISC (read-only)
+
+• Edit — open the ISC in an editor. ABA preserves your manual
+  edits on subsequent regenerations. Only edit if you need
+  fine-grained control not available through the menu
+  (e.g. pinning a specific operator channel or version).
+
+• Reset — discard all manual edits and regenerate the ISC
+  based on aba.conf + mirror.conf settings.
+  Use this if the file is corrupted or you want a clean start."
+				continue
+				;;
 			0) ;;
 			*) return 0 ;;
 		esac
@@ -1635,12 +1662,7 @@ _mirror_isc_advanced() {
 		case "$choice" in
 			V|E)
 				# Wait for any in-flight ISC regeneration to finish
-				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"$TUI2_MSG_ISC_GENERATING" 0 0
-					run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-				fi
+				tui_wait_isconf
 				;;&
 			V)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
@@ -1747,7 +1769,8 @@ _operator_menu() {
 			else
 				printf -v _line "  %-22s %s" "${_cat}s:" "(downloading)"
 			fi
-			_cat_stats="${_cat_stats}${_line}\n"
+			[[ -n "$_cat_stats" ]] && _cat_stats="${_cat_stats}\n"
+			_cat_stats="${_cat_stats}${_line}"
 		done
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_OPERATORS" \
@@ -1770,8 +1793,11 @@ _operator_menu() {
 "Choose operators to include in your mirror/bundle.
 
 • Operator Sets: pre-defined groups (ocp, odf, virt, acm, quay...)
+
 • Search: find operators by name in the catalog
+
 • View/Edit Selection: see and modify your current selection
+
 • Clear: remove all operators from the selection
 
 Selected operators will be included in the ImageSet config."
@@ -2455,7 +2481,7 @@ mirror_manage_images() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "Extra container images included in the mirror payload.\nCurrently: $_count $( (( _count == 1 )) && echo image || echo images) in images.conf\n" 0 0 0 \
+			--menu "Extra container images included in the mirror payload.\nCurrently: $_count $( (( _count == 1 )) && echo image || echo images) in images.conf" 0 0 0 \
 			"${_menu_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -2472,11 +2498,14 @@ and will be mirrored alongside OpenShift platform and operator images.
 • Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
 • Remove: remove a previously added image
 • Delete all: clear all additional images from images.conf
+
 • Recommended Images: add or remove curated image sets (AI, Virt, OCP)
   that complement selected operator sets
+
 • Additional Images: toggle whether additional images are included in the
   ImageSet configuration. When excluded, images.conf is kept intact but
   the images are not mirrored. Toggle back on to re-include them.
+
 • Edit: open images.conf directly in the editor
 
 Images are stored in images.conf (next to aba.conf).
@@ -2678,6 +2707,9 @@ _ensure_offline_prereqs() {
 mirror_create_bundle() {
 	tui_log "Action: Create Install Bundle"
 
+	# Ensure ISC generation is running early (ready by View Config)
+	tui_ensure_isconf
+
 	# OCP line from local yaml (Save/Sync/bundle), not from a leftover transfer tar.
 	source <(normalize-aba-conf) 2>/dev/null
 	local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
@@ -2689,8 +2721,9 @@ mirror_create_bundle() {
 		_ver="${_ver} → ${transfer_upgrade_to}"
 	fi
 	# Operator count and transfer warnings from aba core (mirror-status.sh)
+	# --skip-release-check: bundle dialog doesn't need the live registry probe.
 	local transfer_excl_release="" operator_count="" operators="" isc_user_managed=""
-	eval "$(_tui_mirror_status_shell)"
+	eval "$(_tui_mirror_status_shell --skip-release-check)"
 
 	local _op_count _op_preview=""
 	if [[ "$isc_user_managed" == "true" ]]; then
@@ -2742,17 +2775,12 @@ mirror_create_bundle() {
 		if [[ $rc -eq 2 ]]; then
 			# Help button = View ISC
 			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+			tui_wait_isconf
 			if [[ -f "$_isc" ]]; then
-				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"$TUI2_MSG_ISC_GENERATING" 0 0
-					run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-				fi
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config not yet generated." 0 0
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config could not be generated.\n\nCheck the TUI log for details." 0 0
 			fi
 			continue
 		fi

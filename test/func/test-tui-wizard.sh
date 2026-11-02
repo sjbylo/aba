@@ -10,19 +10,11 @@ echo "=== TUI Wizard Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-_ssh_cfg="$HOME/.aba/ssh.conf"
-scp -q -F "$_ssh_cfg" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-scp -q -F "$_ssh_cfg" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-echo "  Code deployed"
+tui_deploy_code
 echo ""
 
 # ============================================================================
-tui_start
-tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
-}
-tui_keys Enter  # past splash
-tui_assert_appears "Actions" "Main menu" 10
+tui_start_to_menu || { tui_summary; exit 1; }
 
 # ============================================================================
 # 1. Enter the wizard via "Rerun Wizard"
@@ -62,6 +54,7 @@ fi
 echo ""
 echo "--- 2. Channel selection ---"
 tui_wait_for "Channel\|channel" 10
+tui_assert_title "Channel" "Channel dialog title"
 tui_screenshot "wiz-02-channel"
 tui_assert_contains "stable" "stable channel option"
 tui_assert_contains "fast" "fast channel option"
@@ -87,6 +80,7 @@ fi
 echo ""
 echo "--- 3. Version selection ---"
 tui_wait_for "Version\|version" 15
+tui_assert_title "Version" "Version dialog title"
 tui_screenshot "wiz-03-version"
 # Should show Latest, Previous, Older, Manual options
 tui_assert_contains "Latest\|latest" "Latest version option"
@@ -117,6 +111,7 @@ fi
 echo ""
 echo "--- 4. Platform selection ---"
 tui_wait_for "Platform\|platform\|Bare\|metal\|VMware\|KVM" 10
+tui_assert_title "Platform" "Platform dialog title"
 tui_screenshot "wiz-04-platform"
 tui_assert_contains "Bare\|bare" "Bare metal option"
 tui_assert_contains "VMware\|vSphere\|vmw" "VMware option"
@@ -143,6 +138,7 @@ echo ""
 echo "--- 5. Operator selection ---"
 # This page may take time (catalog indexes)
 tui_wait_for "Operator\|operator" 30
+tui_assert_title "Select Operators" "Operator selection dialog title"
 tui_screenshot "wiz-05-operators"
 
 # Should show operator sets, search, view options
@@ -176,20 +172,5 @@ tui_screenshot "wiz-06-back"
 # ============================================================================
 echo ""
 echo "--- 7. Cleanup ---"
-for i in 1 2 3 4 5; do tui_keys Escape; sleep 1; done
-sleep 2
-if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
-	tui_keys Enter; sleep 1; tui_keys Escape; sleep 1; tui_keys Enter; sleep 2
-fi
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep" 2>/dev/null || true)
-if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	echo "  ✗ FAIL: Stray processes"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -f abatui 2>/dev/null; pkill -f 'dialog --' 2>/dev/null; true"
-fi
-
-tui_stop 2>/dev/null
+tui_cleanup
 tui_summary

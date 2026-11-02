@@ -16,6 +16,9 @@ umask 077
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+# TODO(ADR-017): image_source is a scalar today — only one mirror per cluster dir.
+# Planned: comma-separated list so day2 loops over all mirrors in one pass.
+# See BACKLOG "Multi-value image_source" and devel/adr/017-multi-value-image-source.md
 export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 export regcreds_display="${image_source:-mirror}/regcreds"
 source <(normalize-mirror-conf)

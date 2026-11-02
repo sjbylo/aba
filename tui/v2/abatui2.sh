@@ -561,34 +561,47 @@ _conno_main() {
 			fi
 			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
+			# Refresh registry vendor (may have changed during mirror install)
+			if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+				_TUI_REG_VENDOR="${reg_vendor:-auto}"
+			fi
 		fi
 
 		# Refresh mirror labels from cached state (non-blocking).
 		# "(synced)" follows last_action, not the release-image probe: an
 		# operators-only sync (excl_platform=true) is still a successful sync.
+		# Version is included so stale labels are self-evident after a
+		# version change (Bug #945).
+		local _mirror_ver="" _last_act=""
+		if mirror_available; then
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			_mirror_ver="${mirror_ocp_version:-}"
+			_last_act="${last_action:-}"
+		fi
 		if mirror_available && _mirror_has_release_image; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
 			if [[ "$sync_avail" == "true" ]]; then
-				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+				sync_label="$TUI2_LABEL_SYNC \Z2(synced${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		elif mirror_available && [[ "$_TUI_REG_STATE" == "stopped" ]]; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_STOPPED"
-			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
-				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			if [[ "$sync_avail" == "true" && "$_last_act" == "sync" ]]; then
+				sync_label="$TUI2_LABEL_SYNC \Z2(synced${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		elif mirror_available; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
-			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
-				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			if [[ "$sync_avail" == "true" && "$_last_act" == "sync" ]]; then
+				sync_label="$TUI2_LABEL_SYNC \Z2(synced${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		fi
 
 		# Save status: tar archives exist in mirror/data/
 		if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
-			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
+			save_label="$TUI2_LABEL_SAVE \Z2(saved${_mirror_ver:+ $_mirror_ver})\Zn"
 		fi
 
 		# Cluster flags (instant — marker file checks only)
@@ -726,7 +739,10 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && mirror_install
+					_exec_with_progress "aba --dir mirror uninstall --yes" "Uninstall Existing Mirror" _invalidate_mirror_cache
+					local _urc=$?
+					[[ $_urc -eq 2 ]] && confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && _urc=0
+					[[ $_urc -eq 0 ]] && mirror_install
 				fi
 			else
 				mirror_install
@@ -892,7 +908,8 @@ done
 
 # --- First-run: let the user verify/change the auto-detected base domain ---
 if [[ "$_TUI_FIRST_RUN" ]]; then
-	_cur_domain=$(source <(normalize-aba-conf) && echo "$domain")
+	source <(normalize-aba-conf) 2>/dev/null || true
+	_cur_domain="${domain:-}"
 	_user_domain=""
 	if dlg --backtitle "$(ui_backtitle)" --title "Base Domain" \
 		--inputbox "\nDetected base domain: ${_cur_domain:-example.com}\n\nThis domain is used for all cluster FQDNs,\ne.g. mycluster.${_cur_domain:-example.com}\n\nVerify and adjust if needed." \
@@ -922,9 +939,12 @@ tui_log "Final mode: $_TUI_MODE"
 
 # Background ISC generation (so it's ready before user opens Mirror Payload)
 # Only in connected modes — in DISCO the ISC is already baked into the bundle
-if [[ "$_TUI_MODE" != "DISCO" && -f "$ABA_ROOT/aba.conf" ]]; then
+# Guard: skip if config is incomplete (wizard hasn't run yet) — triggering
+# ISC generation without ocp_version/channel/platform would fail and store
+# a stale error in run_once metadata, confusing the Payload menu later.
+if [[ "$_TUI_MODE" != "DISCO" && -f "$ABA_ROOT/aba.conf" ]] && _direct_config_complete; then
 	tui_log "Kicking off background ISC generation"
-	aba_isconf_generate_start
+	tui_ensure_isconf
 fi
 
 while :; do

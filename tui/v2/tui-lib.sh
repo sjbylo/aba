@@ -161,7 +161,7 @@ _valid_port_names() {
 _TUI_TMP=$(mktemp)
 
 _tui_cleanup() {
-	rm -f "$_TUI_TMP" "${_TUI_TMP}.edit" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
+	rm -f "$_TUI_TMP" "${_TUI_TMP}.edit" "${_TUI_TMP}.macs" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
 	tui_log "TUI v2 exited"
 }
 trap '_tui_cleanup' EXIT
@@ -297,8 +297,10 @@ dlg() {
 			next_is_text=true; _add_trailing=true ;;
 		--inputbox)
 			next_is_text=true; _add_trailing=true; _needs_tab_hint=true ;;
-		--mixedform|--editbox)
+		--mixedform)
 			next_is_text=true; _needs_tab_hint=true ;;
+		--editbox)
+			_needs_tab_hint=true ;;
 		esac
 		args+=("$arg")
 	done
@@ -428,7 +430,7 @@ show_help() {
 	local body="$2"
 	_tui_redirect_restore
 	dialog --no-shadow --colors --backtitle "$(ui_backtitle)" \
-		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 {ABA_TUI_FLOCK_FD}>&- || true
+		--title " $title " --cr-wrap --msgbox "\n$body\n " 0 0 {ABA_TUI_FLOCK_FD}>&- || true
 	_tui_redirect_activate
 }
 
@@ -744,7 +746,10 @@ _exec_in_terminal() {
 		return 1
 	fi
 
-	# When auto-answer is ON, append --yes (same as _exec_in_tui)
+	# Suppress aba's own interactive prompts: the TUI already provides its own
+	# confirmation dialogs before reaching this point, so the underlying aba
+	# command should not double-prompt.  ask=true in aba.conf means "interactive
+	# mode" — we override it here because the TUI handles user confirmation.
 	if [[ "$(_tui_abaconf_raw_ask)" == "true" ]]; then
 		[[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]] && cmd="$cmd --yes"
 	fi
@@ -816,8 +821,8 @@ mirror_available() {
 # chain from delaying PLAN events past the 5-second progress timeout.
 # Returns 0 on success, non-zero on failure or user cancel.
 _tui_install_mirror() {
-	local _vendor
-	_vendor=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) && echo "${reg_vendor:-auto}")
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+	local _vendor="${reg_vendor:-auto}"
 	local _label="Install ${_vendor} Mirror"
 	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
 	local rc=$?
@@ -833,7 +838,7 @@ _tui_read_mirror_state() {
 		return
 	fi
 	local reg_state=""
-	eval "$(aba_mirror_runtime_read)"
+	eval "$(aba_mirror_runtime_read | grep '^[a-z_]*=')"
 	_TUI_REG_STATE="${reg_state:-unknown}"
 }
 
@@ -1167,9 +1172,8 @@ _tui_abaconf_raw_ask() {
 		echo ""
 		return
 	fi
-	local _ask_val
-	_ask_val=$(source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null && echo "$ask")
-	echo "$_ask_val"
+	source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+	echo "${ask:-}"
 }
 
 
@@ -1526,6 +1530,28 @@ tui_kick_isconf_regen() {
 	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
 	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
 	_TUI_ISC_UPDATED=true
+}
+
+# Ensure ISC generation is running (non-blocking).
+# If the file is missing but run_once has stale "completed" state, resets first.
+# Call early (e.g. on dialog entry) so the ISC is ready before the user needs it.
+tui_ensure_isconf() {
+	local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+	if [[ ! -f "$_isc" ]] && run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+		run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+	fi
+	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
+}
+
+# Wait for ISC generation to complete (blocking).
+# Shows a "Generating..." infobox if the task is still in progress.
+tui_wait_isconf() {
+	if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"$TUI2_MSG_ISC_GENERATING" 0 0
+		run_once -q -w -i "aba:isconf:generate" -- \
+			make -sC "$ABA_ROOT/mirror" isconf >>"${_TUI_LOG_FILE:-/dev/null}" 2>&1 || true
+	fi
 }
 
 # Gate Install Cluster menu action: prompts for mirror/registry prep when needed.

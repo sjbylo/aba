@@ -166,7 +166,7 @@ _E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
-_E2E_STALE_FW_PORTS="${POOL_REG_PORT}/tcp 8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
+_E2E_STALE_FW_PORTS="${POOL_REG_PORT}/tcp 8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 5222/tcp 80/tcp"
 
 # Print filesystem snapshot of conN (local) and disN (remote) for debug diagnostics.
 _print_fs_snapshot() {
@@ -844,6 +844,13 @@ _pre_suite_cleanup() {
 		if _essh "$INTERNAL_BASTION" "grep -q '^allow ' /etc/chrony.conf" 2>/dev/null; then
 			echo "  Cleaning up leftover ABA NTP on disN ..."
 			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove ntp -y" 2>/dev/null || true
+			# Restore infra-level NTP serving that _vm_setup_time() wrote to
+			# the golden image.  "aba remove ntp" strips ALL allow lines,
+			# including the infra one needed for preflight NTP checks.
+			echo "  Restoring infra NTP allow on disN ..."
+			_essh "$INTERNAL_BASTION" \
+				"grep -q '^allow ' /etc/chrony.conf || { echo 'allow 10.0.0.0/20' | sudo tee -a /etc/chrony.conf >/dev/null && sudo systemctl restart chronyd; }" \
+				2>/dev/null || true
 		fi
 	fi
 

@@ -165,13 +165,22 @@ disco_main() {
 			fi
 			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false
+			# Refresh registry vendor (may have changed during mirror install)
+			if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+				_TUI_REG_VENDOR="${reg_vendor:-auto}"
+			fi
 		fi
 
 		# Refresh registry/load labels from cached state (non-blocking).
 		# "(loaded)" follows last_action, not the release-image probe: an
 		# operators-only archive (excl_platform=true) is a successful load
 		# even when the registry has no release image.
+		# Version is included so stale labels are self-evident after a
+		# version change (Bug #945).
 		if mirror_available; then
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			local _mirror_ver="${mirror_ocp_version:-}"
 			if _mirror_has_release_image; then
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
 			elif [[ "$_TUI_REG_STATE" == "stopped" ]]; then
@@ -180,10 +189,8 @@ disco_main() {
 				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_NOT_VERIFIED"
 			fi
 			reg_avail=false
-			local _last_action=""
-			_last_action="$(_mirror_last_action)"
-			if _mirror_has_release_image || [[ "$_last_action" == "load" ]]; then
-				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
+			if _mirror_has_release_image || [[ "${last_action:-}" == "load" ]]; then
+				load_label="$TUI2_LABEL_LOAD \Z2(loaded${_mirror_ver:+ $_mirror_ver})\Zn"
 			fi
 		else
 			load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
@@ -292,7 +299,10 @@ Navigation:
 					dlg --backtitle "$(ui_backtitle)" --defaultno --yesno \
 						"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 					if [[ $? -eq 0 ]]; then
-						confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" _invalidate_mirror_cache && disco_install_reg
+						_exec_with_progress "aba --dir mirror uninstall --yes" "Uninstall Existing Registry" _invalidate_mirror_cache
+						local _urc=$?
+						[[ $_urc -eq 2 ]] && confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" _invalidate_mirror_cache && _urc=0
+						[[ $_urc -eq 0 ]] && disco_install_reg
 					fi
 				else
 					disco_install_reg
@@ -330,23 +340,23 @@ Navigation:
 					cluster_day2_menu
 				fi
 				;;
-	"$TUI2_DISCO_TAG_SETTINGS")
-		_tui_settings_menu
-		;;
-	"$TUI2_DISCO_TAG_FEEDBACK")
-		_tui_feedback
-		;;
-	"$TUI2_DISCO_TAG_ADVANCED")
-		tui_advanced_menu
-		local _adv_rc=$?
-		[[ $_adv_rc -eq 2 ]] && return 2
-		[[ "$_TUI_MODE" != "DISCO" ]] && return 0
-		;;
+			"$TUI2_DISCO_TAG_SETTINGS")
+				_tui_settings_menu
+				;;
+			"$TUI2_DISCO_TAG_FEEDBACK")
+				_tui_feedback
+				;;
+			"$TUI2_DISCO_TAG_ADVANCED")
+				tui_advanced_menu
+				local _adv_rc=$?
+				[[ $_adv_rc -eq 2 ]] && return 2
+				[[ "$_TUI_MODE" != "DISCO" ]] && return 0
+				;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_payload_menu "true"
 				;;
-	esac
-done
+		esac
+	done
 }
 
 # =============================================================================
