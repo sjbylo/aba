@@ -160,6 +160,10 @@ tui_confirm_yes() {
 tui_dismiss_result() {
 	local _scr
 	_scr=$(tui_capture)
+	# Skip yesno dialogs (Yes/No buttons) — caller must handle those explicitly
+	if echo "$_scr" | grep -qi "Yes.*No\|apply now.*later"; then
+		return 1
+	fi
 	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded\|Success"; then
 		tui_keys Enter
 		sleep 2
@@ -528,13 +532,27 @@ tui_require_internet() {
 
 # --- Common patterns (DRY helpers) ---
 
-# Deploy latest TUI + script code to the test host.
-# Replaces the 3-line scp block repeated in every test file.
+# Deploy ALL ABA core + TUI code to the test host.
+# Uses git ls-files to build a tarball of tracked (+ untracked-not-ignored)
+# files, matching the same approach as the e2e deploy framework.
+# Copies: scripts/, templates/, tools/, others/, tui/, Makefile, aba, abatui,
+#         install, mirror/Makefile — everything needed for a working ABA.
 # Usage: tui_deploy_code
 tui_deploy_code() {
-	scp -q -F "$_TUI_SSH_CFG" tui/v2/*.sh "$_TUI_HOST:aba/tui/v2/" 2>/dev/null
-	scp -q -F "$_TUI_SSH_CFG" scripts/include_all.sh scripts/aba.sh "$_TUI_HOST:aba/scripts/" 2>/dev/null
-	echo "  Code deployed"
+	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile)
+	local _tar
+	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
+
+	# Build tarball from disk using git ls-files (respects .gitignore)
+	git ls-files --cached --others --exclude-standard -- "${_paths[@]}" \
+		| tar czf "$_tar" -T - 2>/dev/null
+
+	# Upload and extract on remote host (overlay, never wipe)
+	scp -q -F "$_TUI_SSH_CFG" "$_tar" "$_TUI_HOST:/tmp/tui-deploy.tar.gz" 2>/dev/null
+	$_TUI_SSH "tar xzf /tmp/tui-deploy.tar.gz -C ~/aba && rm -f /tmp/tui-deploy.tar.gz" 2>/dev/null
+
+	rm -f "$_tar"
+	echo "  Code deployed ($(git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | wc -l) files)"
 }
 
 # Start TUI, dismiss startup dialogs, detect mode, land on main menu.

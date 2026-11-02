@@ -467,7 +467,7 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		fi
 	fi
 
-	cs_pids=()
+	cs_applied=()
 
 	# Pre-scan: detect multi-mirror scenario and collect existing CS images.
 	# If any existing CatalogSource (not managed by marketplace-operator)
@@ -538,49 +538,55 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		aba_debug "Running: oc patch CatalogSource $cs_name -n $ns --type merge (pollInterval)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 
-		# Start a sub-process to wait for CatalogSource 'ready'
-		( 
-			sleep 1
-
-			until oc -n "$ns" get catalogsource "$cs_name" >/dev/null; do sleep 1; done
-
-			#aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... (note that a state of 'TRANSIENT_FAILURE' usually resolves itself within a few moments!)"
-			aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... "
-
-			for _ in {1..99}; do
-				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
-
-				if [ "$state" = "READY" ]; then
-					echo
-					aba_success "CatalogSource $cs_name is ready!"
-
-					exit 0  # exit the process
-				fi
-
-				#[ "$state" ] && aba_info "$cs_name state: $state (working on it!)"
-				if [ "$state" = "IDLE" ]; then
-					echo -n "-"
-				elif [ "$state" = "CONNECTING" ]; then
-					echo -n "*"
-				elif [ "$state" = "TRANSIENT_FAILURE" ]; then
-					echo -n "#"
-				elif [ "$state" ]; then
-					echo -n "[$state]"
-				fi
-
-				sleep 5
-			done
-
-			# It's ok to abort from this background process 
-			aba_abort "catalog source $cs_name failed to become 'ready' in time.  Ensure the cluster is stable and try again."
-		) &
-		cs_pids+=($!)
+		cs_applied+=("$cs_name")
 	done
 
-	# Wait for each CatalogSource subprocess individually so no failure is lost
+	# Wait for each applied CatalogSource to become READY, sequentially.
+	# Order: fastest (smallest image) to slowest (largest image):
+	#   certified-operators ~1.1 GB, community-operators ~1.2 GB, redhat-operators ~1.8 GB
+	# By the time the slower ones are checked, they've had extra time to start.
+	_cs_wait_order=(certified-operators community-operators redhat-operators)
 	cs_failed=0
-	for pid in "${cs_pids[@]}"; do
-		if ! wait "$pid"; then
+	for cs_name in "${_cs_wait_order[@]}"; do
+		# Skip catalogs that were not applied in this run
+		_applied=false
+		for _a in "${cs_applied[@]}"; do
+			[[ "$_a" == "$cs_name" ]] && _applied=true && break
+		done
+		[[ "$_applied" == "false" ]] && continue
+
+		# Already READY? Announce and move on
+		_state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null) || _state=""
+		if [ "$_state" = "READY" ]; then
+			aba_success "CatalogSource $cs_name is ready!"
+			continue
+		fi
+
+		# Wait with spinner (5s poll, ~8 min timeout)
+		if aba_wait_show "Waiting for CatalogSource $cs_name" 5 495 \
+			"[ \"\$(oc -n $ns get catalogsource $cs_name -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null)\" = READY ]"; then
+			aba_success "CatalogSource $cs_name is ready!"
+		else
+			echo_red "Error: CatalogSource $cs_name failed to become READY in time." >&2
+			cs_failed=1
+		fi
+	done
+
+	# Also wait for any non-standard catalogs (e.g. multi-mirror suffixed names)
+	for cs_name in "${cs_applied[@]}"; do
+		case "$cs_name" in
+			certified-operators|community-operators|redhat-operators) continue ;;
+		esac
+		_state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null) || _state=""
+		if [ "$_state" = "READY" ]; then
+			aba_success "CatalogSource $cs_name is ready!"
+			continue
+		fi
+		if aba_wait_show "Waiting for CatalogSource $cs_name" 5 495 \
+			"[ \"\$(oc -n $ns get catalogsource $cs_name -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null)\" = READY ]"; then
+			aba_success "CatalogSource $cs_name is ready!"
+		else
+			echo_red "Error: CatalogSource $cs_name failed to become READY in time." >&2
 			cs_failed=1
 		fi
 	done

@@ -206,7 +206,7 @@ _vm_flags() {
 		f+=" --reg-port ${_DPORT[$v]}"
 		[ -n "$pw" ] && f+=" --reg-password '$pw'"
 	fi
-	f+=" --data-dir '~/sa-vm-data-${dn}'"
+	f+=" --data-dir '~/sa-vm-data/${dn}'"
 
 	echo "$f"
 }
@@ -251,7 +251,7 @@ _vm_check_data_dir() {
 	esac
 
 	# Always under isolated data dir (never default ~/<suffix>)
-	local path="~/sa-vm-data-${dn}/${suffix}"
+	local path="~/sa-vm-data/${dn}/${suffix}"
 
 	if [ "$m" = "remote" ]; then
 		echo "ssh -i ${_SSHKEY[$u]} -F $SSH_CONF ${u}@${DIS_HOST} '$test_op $path'"
@@ -500,7 +500,7 @@ for _hardpw in "${_HARD_PASSWORDS[@]}"; do
 	_assert_port_free "$CON_HOST" "$_pw_port"
 	run "Create mirror dir (pw-edge-${_pw_idx})" "aba mirror --name $_pw_dn"
 	run "Install docker with pw='${_hardpw}' (#${_pw_idx})" \
-		"aba -d $_pw_dn install --vendor docker -H $CON_HOST --reg-port $_pw_port --reg-password '${_hardpw}' --data-dir '~/sa-vm-data-${_pw_dn}'"
+		"aba -d $_pw_dn install --vendor docker -H $CON_HOST --reg-port $_pw_port --reg-password '${_hardpw}' --data-dir '~/sa-vm-data/${_pw_dn}'"
 	run "Verify registry (pw-edge-${_pw_idx})" "aba -d $_pw_dn verify"
 	run "Push test image (pw-edge-${_pw_idx})" "$(_vm_push "$_pw_dn" "sa-pw-test/img:v${_pw_idx}")"
 	run "Assert test image (pw-edge-${_pw_idx})" "$(_vm_check "$_pw_dn" "sa-pw-test/img:v${_pw_idx}")"
@@ -520,7 +520,7 @@ _REG_PW=$(_gen_password)
 
 run "Create install mirror dir" "aba mirror --name $_REG_INSTALL_DN"
 run "Install Docker registry" \
-	"aba -d $_REG_INSTALL_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6401 --reg-password '$_REG_PW' --data-dir '~/sa-vm-data-${_REG_INSTALL_DN}'"
+	"aba -d $_REG_INSTALL_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6401 --reg-password '$_REG_PW' --data-dir '~/sa-vm-data/${_REG_INSTALL_DN}'"
 run "Verify installed registry" "aba -d $_REG_INSTALL_DN verify"
 
 run "Create register mirror dir" "aba mirror --name $_REG_REGISTER_DN"
@@ -550,19 +550,19 @@ _VS_PW=$(_gen_password)
 run "Create mirror dir" "aba mirror --name $_VS_DN"
 
 run "Install Docker" \
-	"aba -d $_VS_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --reg-password '$_VS_PW' --data-dir '~/sa-vm-data-${_VS_DN}'"
+	"aba -d $_VS_DN install --vendor docker -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --reg-password '$_VS_PW' --data-dir '~/sa-vm-data/${_VS_DN}'"
 run "Verify Docker" "aba -d $_VS_DN verify"
 run "Push image (docker)" "$(_vm_push "$_VS_DN" "sa-vswitch/img:docker")"
 run "Uninstall Docker (keep data)" "aba -d $_VS_DN uninstall"
 
 run "Install Quay (vendor switch)" \
-	"aba -d $_VS_DN install --vendor quay -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --data-dir '~/sa-vm-data-${_VS_DN}'"
+	"aba -d $_VS_DN install --vendor quay -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --data-dir '~/sa-vm-data/${_VS_DN}'"
 run "Verify Quay" "aba -d $_VS_DN verify"
 run "Push image (quay)" "$(_vm_push "$_VS_DN" "sa-vswitch/img:quay")"
 run "Uninstall Quay (keep data)" "aba -d $_VS_DN uninstall"
 
 run "Install omr (vendor switch)" \
-	"aba -d $_VS_DN install --vendor omr -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --reg-password '$_VS_PW' --data-dir '~/sa-vm-data-${_VS_DN}'"
+	"aba -d $_VS_DN install --vendor omr -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port 6501 --reg-password '$_VS_PW' --data-dir '~/sa-vm-data/${_VS_DN}'"
 run "Verify omr" "aba -d $_VS_DN verify"
 run "Push image (omr)" "$(_vm_push "$_VS_DN" "sa-vswitch/img:omr")"
 run "Uninstall omr (delete data)" "aba -d $_VS_DN uninstall --delete-data"
@@ -584,7 +584,7 @@ for _pr_vendor in docker quay omr; do
 
 	run "Create mirror dir (${_pr_vendor})" "aba mirror --name $_PR_DN"
 	run "Install ${_pr_vendor} on :${_PR_PORT}" \
-		"aba -d $_PR_DN install --vendor ${_pr_vendor} -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port $_PR_PORT --reg-password '$_PR_PW' --data-dir '~/sa-vm-data-${_PR_DN}'"
+		"aba -d $_PR_DN install --vendor ${_pr_vendor} -H $DIS_HOST -k ~/.ssh/id_rsa --reg-ssh-user steve --reg-port $_PR_PORT --reg-password '$_PR_PW' --data-dir '~/sa-vm-data/${_PR_DN}'"
 	run "Verify ${_pr_vendor} on :${_PR_PORT}" "aba -d $_PR_DN verify"
 	run "Push image (${_pr_vendor})" "$(_vm_push "$_PR_DN" "sa-portreuse/img:${_pr_vendor}")"
 	run "Uninstall ${_pr_vendor} (delete data)" "aba -d $_PR_DN uninstall --delete-data"
@@ -606,9 +606,9 @@ run "Create mirror dir 1" "aba mirror --name $_CC_DN1"
 run "Create mirror dir 2" "aba mirror --name $_CC_DN2"
 
 run "Install docker on :6701" \
-	"aba -d $_CC_DN1 install --vendor docker -H $CON_HOST --reg-port 6701 --reg-password '$_CC_PW1' --data-dir '~/sa-vm-data-${_CC_DN1}'"
+	"aba -d $_CC_DN1 install --vendor docker -H $CON_HOST --reg-port 6701 --reg-password '$_CC_PW1' --data-dir '~/sa-vm-data/${_CC_DN1}'"
 run "Install docker on :6702" \
-	"aba -d $_CC_DN2 install --vendor docker -H $CON_HOST --reg-port 6702 --reg-password '$_CC_PW2' --data-dir '~/sa-vm-data-${_CC_DN2}'"
+	"aba -d $_CC_DN2 install --vendor docker -H $CON_HOST --reg-port 6702 --reg-password '$_CC_PW2' --data-dir '~/sa-vm-data/${_CC_DN2}'"
 
 run "Verify registry 1" "aba -d $_CC_DN1 verify"
 run "Verify registry 2" "aba -d $_CC_DN2 verify"
@@ -647,7 +647,7 @@ if [ -n "$_leftover_dirs" ]; then
 fi
 
 # Assert: no leftover local data dirs
-_leftover_data=$(ls -d ~/sa-vm-data-sa-vm-* 2>/dev/null)
+_leftover_data=$(ls -d ~/sa-vm-data/sa-vm-* 2>/dev/null)
 if [ -n "$_leftover_data" ]; then
 	_log "$(_red "FAIL: leftover local data dirs found:")"
 	_log "$_leftover_data"
@@ -656,7 +656,7 @@ fi
 
 # Assert: no leftover remote data dirs
 for _fau in root steve testy; do
-	_remote_leftover=$(ssh -F "$SSH_CONF" "$_fau@$DIS_HOST" "ls -d ~/sa-vm-data-sa-vm-* 2>/dev/null" 2>/dev/null)
+	_remote_leftover=$(ssh -F "$SSH_CONF" "$_fau@$DIS_HOST" "ls -d ~/sa-vm-data/sa-vm-* 2>/dev/null" 2>/dev/null)
 	if [ -n "$_remote_leftover" ]; then
 		_log "$(_red "FAIL: leftover data dirs on $DIS_HOST as $_fau:")"
 		_log "$_remote_leftover"

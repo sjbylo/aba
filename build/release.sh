@@ -258,7 +258,10 @@ fi
 if ! $HOTFIX && [ -z "$REF_COMMIT" ]; then
     echo -e "${YELLOW}Checking for merge conflicts with main...${NC}"
     _current=$(git branch --show-current)
-    if git stash -q 2>/dev/null; then _had_stash=1; else _had_stash=0; fi
+    # Named stash so we never accidentally pop an unrelated entry.
+    _stash_name="aba-release-preflight"
+    git stash push -q -m "$_stash_name" 2>/dev/null || true
+    if git stash list 2>/dev/null | head -1 | grep -qF "$_stash_name"; then _had_stash=1; else _had_stash=0; fi
     git checkout main -q 2>/dev/null || git checkout -b main origin/main -q
     git pull --rebase -q origin main 2>/dev/null || true
     if git merge --no-commit --no-ff dev >/dev/null 2>&1; then

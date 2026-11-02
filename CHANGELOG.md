@@ -20,6 +20,17 @@ TUI reliability, CLI enhancements, and fixes
 - **TUI version in status labels** — Sync/Save/Load menu labels now show the OCP version so stale labels are self-evident after a version change (Bug #945).
 - **Removed misleading operator count** — The install confirmation summary no longer shows the operator basket count (which reflected config, not actual mirror content).
 - **TUI ISC run_once patterns DRY refactor** — Extracted repeated ISC trigger/wait patterns into `tui_ensure_isconf()` (non-blocking ensure+trigger) and `tui_wait_isconf()` (blocking poll+wait with infobox), replacing 7 inline call sites.
+- **TUI confirm dialogs faster** — Release-image probe skipped in confirm dialogs (`--skip-release-check`), removing multi-second latency when the mirror is remote or slow.
+- **TUI Day-2 pre-checks query actual cluster** — Day-2 menu OSUS/Virt availability checks now query the live cluster instead of relying on cached or config-derived state. Upgrade dialog wording improved.
+- **TUI run_once output filtering** — `run_once -o` output cleaned up; progress dialog handles No-op correctly; dead code removed (legacy `scripts/tui-mirror.sh` and `scripts/tui-progress.sh` deleted).
+- **DRY: centralize OMR binary extraction** — Repeated OMR binary extraction logic consolidated into `_omr_ensure_binary()` in `reg-common.sh`, shared by local and remote install paths.
+- **Bundle trickle-copy to NAS** — Tar chunks are now copied to NAS in the background as they are created, reducing the final transfer time.
+- **Bundle README improvements** — Bundle README template now includes operator count and fixed test result formatting.
+- **Catalog indexes refreshed** — All 24 operator catalog indexes updated for latest OCP 4.17–5.0 content.
+
+### Removed
+
+- **Operator set: mesh2** — Removed the obsolete `mesh2` operator set template.
 
 ### Fixed
 
@@ -38,6 +49,11 @@ TUI reliability, CLI enhancements, and fixes
 - **TUI bare-metal port default missing** — KVM (`enp1s0`) and VMware (`ens160`) had port defaults but bare-metal did not. Added `eno1` as the default for bare-metal in both the config generator and TUI platform toggle.
 - **TUI ISC "View Config" shows "not yet generated"** — Clicking View Config in Sync/Save/Load/Bundle dialogs failed when the ISC hadn't been generated yet. Generation is now triggered at dialog entry (non-blocking) and waited on at View Config click, with stale `run_once` state detection and reset.
 - **TUI startup ISC trigger without config guard** — Background ISC generation at TUI startup could fire before the setup wizard completed, failing on missing `ocp_version`/`ocp_channel` and storing a stale error in `run_once` metadata. Now guarded by `_direct_config_complete`.
+- **Dangling symlinks in `_ensure_hv_ready`** — Dangling symlinks under the hypervisor directory caused `aba` to fail with a confusing error. Now handled with best-effort delete.
+- **`aba.conf` not read from `ABA_ROOT` in delete path** — `kvm-delete.sh` and `vmw-delete.sh` read `aba.conf` from the wrong directory, falling back to `ask=true` and prompting unexpectedly.
+- **Operator resolution failure swallowed in ISC generation** — If operator resolution failed inside the subshell in `reg-create-imageset-config.sh`, the error was silently lost. Now propagated correctly.
+- **Bundle CHECKSUM.txt missing filenames** — `sed`-based checksum extraction dropped filenames from the checksum file. Replaced with `awk`.
+- **Tilde not resolved on remote host** — `~` in `data_dir` was not expanded on the remote host during fallback uninstall, causing path resolution failures.
 
 ---
 

@@ -637,10 +637,14 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-# Handle post-install "Configure OperatorHub" dialog — press "No, later"
-# to skip Day-2 during the test (we just want to verify the install)
+# Dismiss terminal output screen ("Press ENTER to continue")
+tui_dismiss_result
+sleep 2
+
+# Handle post-install "Configure OperatorHub" yesno dialog.
+# Press "No, later" — we just want to verify the install, not run Day-2.
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Configure OperatorHub\|installed successfully\|apply now"; then
+if echo "$_scr" | grep -qi "Configure OperatorHub"; then
 	echo "  Dismissing OperatorHub dialog (pressing No, later)"
 	tui_screenshot "disco-wf-05g-operatorhub"
 	tui_press_button "No" 2>/dev/null || tui_keys Tab Enter 2>/dev/null
