@@ -121,10 +121,11 @@ fi
 # Safety net: remove orphaned quay-* services that 'aba uninstall' missed
 cleanup_orphaned_quay_services
 
-# Clean stale NAS temp-content from a previous failed run
-if [ -d "$NAS_TEMP_DIR/$BUNDLE_NAME" ]; then
-	echo "Removing stale NAS temp dir: $NAS_TEMP_DIR/$BUNDLE_NAME"
-	rm -rf "$NAS_TEMP_DIR/$BUNDLE_NAME"
+# Clean ALL stale NAS temp-content from any previous failed run.
+# temp-content/ is exclusively a staging area — anything there is leftover.
+if [ -d "$NAS_TEMP_DIR" ] && ls "$NAS_TEMP_DIR"/ >/dev/null 2>&1; then
+	echo "Cleaning stale NAS temp dir: $NAS_TEMP_DIR/*"
+	rm -rf "$NAS_TEMP_DIR"/*
 fi
 
 # Verify cloud dir is available
