@@ -472,9 +472,15 @@ _verify_dis_vm() {
 		done
 		echo "  PASS: lab server ${_ntp} reachable"
 
-		# --- Time ---
+		# --- Time / NTP server ---
 		systemctl is-active --quiet chronyd || _fail "chronyd not active"
 		echo "  PASS: chronyd active"
+
+		grep -q "^allow 10.0.0.0/20" /etc/chrony.conf || _fail "chrony.conf missing allow 10.0.0.0/20"
+		echo "  PASS: chrony.conf allows 10.0.0.0/20"
+
+		firewall-cmd --query-service=ntp > /dev/null || _fail "NTP service not in firewall"
+		echo "  PASS: firewall NTP service open"
 
 		# --- SSH keys ---
 		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || _fail "sshd ClientAliveInterval"
