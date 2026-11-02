@@ -1,5 +1,25 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.3...HEAD)
 
+### Added
+
+- **`aba show-op-sets <name>`** — Show the operators in a specific set (e.g. `aba show-op-sets acm`). Without a name, lists all available sets as before.
+- **TUI bundle dialog: OMR detection** — The "ABA Install Bundle" summary dialog now detects OMR registry installers alongside Quay and Docker.
+- **Catalog extraction diagnostics** — `download-catalog-index.sh` now retries `podman cp` on empty extraction and dumps container diagnostics (filesystem listing, image inspect, disk space) on persistent failure.
+
+### Changed
+
+- **Day-2 CatalogSource spinner** — Replaced `#########` progress characters with `aba_wait_show` spinner. Catalogs are waited on sequentially in fast-to-slow order (certified → community → redhat). Already-ready catalogs are skipped.
+- **DRY catalog code** — `list-operators.sh` now delegates to `download-catalog-index.sh` instead of duplicating container management (pull/create/cp/cleanup).
+- **TUI progress dialog improvements** — Improved progress step rendering and post-command hook timing.
+- **Vendor matrix test updated** — `test-mirror-vendor-matrix.sh` updated with correct per-architecture vendor availability.
+- **TUI disco workflow test** — `test-tui-disco-workflow.sh` updated for OMR detection in bundle dialog.
+- **TUI test library** — `tui-test-lib.sh` improvements for test reliability.
+
+### Fixed
+
+- **TUI podman preflight blank error** — When `run_once` cannot write error logs (e.g. disk full), the podman preflight dialog now shows a fallback message instead of a blank.
+- **Release script stash leak** — `build/release.sh` pre-flight merge check now counts stashes before/after to avoid popping unrelated stashes.
+
 ---
 
 ## [1.4.3](https://github.com/sjbylo/aba/releases/tag/v1.4.3) - 2026-11-02
