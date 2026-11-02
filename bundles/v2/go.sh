@@ -115,7 +115,7 @@ if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
 	fi
 fi
 
-vers_track="22 21"
+vers_track="5.0 4.22"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
@@ -151,9 +151,10 @@ versions=()
 for v in $vers_track
 do
 	ver=
-	echo "Checking for version stable-4.$v ..."
-	ver=$(curl -f --retry 8 -sSL "https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable-4.$v/release.txt" | grep ^Name: | awk '{print $NF}')
-	[ ! "$ver" ] && echo "Cannot find release for $v" >&2 && continue
+	major=${v%%.*}
+	echo "Checking for version stable-$v ..."
+	ver=$(curl -f --retry 8 -sSL "https://mirror.openshift.com/pub/openshift-v${major}/amd64/clients/ocp/stable-$v/release.txt" | grep ^Name: | awk '{print $NF}')
+	[ ! "$ver" ] && echo "No stable release for $v yet -- skipping" >&2 && continue
 	versions+=("$ver")
 done
 
@@ -247,7 +248,7 @@ done
 
 {
 	date
-	for d in "$CLOUD_DIR"/4*; do
+	for d in "$CLOUD_DIR"/[0-9]*; do
 		[ -d "$d" ] && du -h -s "$d"
 	done
 	echo

@@ -222,6 +222,39 @@ fi
 # when many parallel download-catalog-index.sh processes all do podman create/cp
 # simultaneously. Serializing the critical section with flock prevents this.
 _podman_lock="/tmp/.aba-podman-catalog.lock"
+
+# _configs_has_dirs: return 0 if $tmp_dir/configs has at least one subdirectory
+_configs_has_dirs() {
+	local _count
+	_count=$(find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+	[[ "$_count" -gt 0 ]]
+}
+
+# _dump_diagnostics: capture state for RCA when podman cp produces empty /configs
+_dump_diagnostics() {
+	local _cname="$1" _diag_file="$tmp_dir/.diagnostics"
+	{
+		echo "=== DIAGNOSTIC: empty /configs after podman cp ==="
+		echo "catalog=$catalog_name version=$ocp_ver_major container=$_cname"
+		echo "timestamp=$(date -Iseconds)"
+		echo "podman_version=$(podman --version 2>&1)"
+		echo "--- ls -la $tmp_dir/configs ---"
+		ls -la "$tmp_dir/configs" 2>&1 || echo "(directory missing)"
+		echo "--- podman inspect container mount ---"
+		podman inspect --format '{{.GraphDriver.Data.MergedDir}}' "$_cname" 2>&1 || echo "(inspect failed)"
+		echo "--- container /configs listing (via podman exec) ---"
+		podman start "$_cname" >/dev/null 2>&1
+		podman exec "$_cname" ls -la /configs 2>&1 || echo "(exec failed)"
+		podman exec "$_cname" find /configs -maxdepth 1 -type d 2>&1 | head -20 || echo "(find failed)"
+		podman stop "$_cname" >/dev/null 2>&1
+		echo "--- disk space ---"
+		df -h "$tmp_dir" 2>&1
+		echo "=== END DIAGNOSTIC ==="
+	} > "$_diag_file" 2>&1
+	# Append to stderr log so run_once captures it
+	cat "$_diag_file" >&2
+}
+
 _extract_catalog() {
 	local _cname="$1"
 	# Serialize create+cp+rm — podman's BoltDB can't handle many concurrent writers.
@@ -238,6 +271,25 @@ _extract_catalog() {
 		if ! podman cp "$_cname:/configs" "$tmp_dir/configs" 2>"$_err_file"; then
 			exit 1
 		fi
+		# Validate: podman cp can exit 0 but copy an empty directory.
+		# Root cause unknown — observed ~15% of concurrent catalog downloads in E2E.
+		# Retry just the cp on the same container before giving up.
+		if ! _configs_has_dirs; then
+			echo "podman cp returned empty /configs — retrying cp on same container" > "$_err_file"
+			cat "$_err_file" >&2
+			rm -rf "$tmp_dir/configs"
+			sleep 1
+			if ! podman cp "$_cname:/configs" "$tmp_dir/configs" 2>>"$_err_file"; then
+				exit 1
+			fi
+			if ! _configs_has_dirs; then
+				echo "podman cp still empty after retry on same container" >> "$_err_file"
+				cat "$_err_file" >&2
+				_dump_diagnostics "$_cname"
+				exit 1
+			fi
+			echo "podman cp retry succeeded" >&2
+		fi
 		podman rm -f "$_cname" >/dev/null 2>&1 || true
 	) 9>"$_podman_lock"
 	local _rc=$?
@@ -251,7 +303,7 @@ _extract_catalog() {
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
 _extract_err=""
 if ! _extract_err=$(_extract_catalog "$container_name"); then
-	aba_warn "Extraction failed (retrying): $_extract_err"
+	aba_warn "Extraction failed (retrying with fresh container): $_extract_err"
 	podman rm -f "$container_name" >/dev/null 2>&1 || true
 	rm -rf "$tmp_dir/configs"
 	sleep 2
@@ -282,6 +334,24 @@ expected_count_file=".index/.${catalog_name}-index-v${ocp_ver_major}.expected-co
 find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | wc -l > "$expected_count_file"
 
 if [ ! -s "$tmp_file" ]; then
+	# Parser produced empty output despite non-empty /configs — dump sample for RCA
+	{
+		echo "=== DIAGNOSTIC: parser produced empty index ==="
+		echo "catalog=$catalog_name version=$ocp_ver_major"
+		echo "configs_dir=$tmp_dir/configs"
+		echo "--- configs top-level dirs (first 10) ---"
+		find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -10
+		echo "--- sample dir contents ---"
+		_sample_dir=$(find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | head -1)
+		if [[ -n "$_sample_dir" ]]; then
+			echo "sample: $_sample_dir"
+			ls -la "$_sample_dir" 2>&1
+		else
+			echo "(no non-underscore dirs found)"
+		fi
+		echo "--- catalog-extract-functions.sh loaded: $(type -t _extract_catalog_dir 2>/dev/null || echo 'NOT LOADED') ---"
+		echo "=== END DIAGNOSTIC ==="
+	} >&2
 	aba_abort "Catalog extraction produced empty index for $catalog_name v$ocp_ver_major"
 fi
 

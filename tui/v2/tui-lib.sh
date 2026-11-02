@@ -1668,6 +1668,7 @@ _require_podman() {
 
 	if ! aba_podman_check_wait; then
 		local _err="${PODMAN_CHECK_ERROR//$'\n'/\\n}"
+		[[ -z "$_err" ]] && _err="Unable to determine the error. Check disk space and try:\\n  podman pull quay.io/podman/hello"
 		dlg --backtitle "$(ui_backtitle)" --title "Podman Preflight Warning" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--no-tags \

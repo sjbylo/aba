@@ -3,7 +3,7 @@
 #
 # Sourced by:
 #   scripts/download-catalog-index.sh   (local catalog extraction)
-#   scripts/list-operators.sh           (aba list-operators / TUI browser)
+#   tools/refresh-catalog-indexes.sh    (catalog refresh verification)
 #
 # No ABA-specific dependencies (no include_all.sh). Safe to source from
 # any bash environment with jq, awk, grep, find, and base64 available.

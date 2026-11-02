@@ -4326,6 +4326,7 @@ wait_for_all_catalogs() {
 # Gives the TUI instant operator browsing before background downloads complete.
 _populate_shipped_indexes() {
 	local f target
+	mkdir -p .index
 	for f in catalogs/*-operator-index-v*; do
 		[[ -s "$f" ]] || continue
 		target=".index/$(basename "$f")"

@@ -459,6 +459,18 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		exit 0
 	elif [ "$1" = "show-op-sets" -o "$1" = "op-sets" ]; then
 		shift
+		if [ "${1:-}" ]; then
+			# Show contents of a specific operator set
+			_set_name="$1"
+			_set_file="$ABA_ROOT/templates/operator-set-$_set_name"
+			[ -f "$_set_file" ] || aba_abort "Unknown operator set: $_set_name. Use 'aba show-op-sets' to list available sets."
+			_desc=$(grep "^# Name:" "$_set_file" | head -1 | sed 's/^# Name: *//')
+			echo_yellow "Operator set '$_set_name': $_desc"
+			echo
+			# Show non-comment, non-empty lines (operator names)
+			grep -v '^[[:space:]]*#' "$_set_file" | grep -v '^[[:space:]]*$' | sed 's/#.*//' | awk '{$1=$1; print "  " $0}'
+			exit 0
+		fi
 		echo_yellow "Available operator sets:"
 		echo
 		printf "  %-16s %s\n" "SET" "DESCRIPTION"

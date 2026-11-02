@@ -2,8 +2,8 @@
 # list-operators.sh -- List all operators in a Red Hat operator catalog
 #
 # INTENT:    Replacement for "oc-mirror list operators --catalog <url>".
-#            Pulls the catalog image, extracts FBC metadata, and lists operators
-#            with display names and default channels. No oc-mirror dependency.
+#            Delegates to download-catalog-index.sh for the heavy lifting (pull,
+#            extract, parse, cache) and outputs the resulting index to stdout.
 # CALLED BY: make list-operators, aba list-operators, TUI operator browser
 # CWD:       ABA repo root
 # REQUIRES:  podman, jq; container auth for registry.redhat.io
@@ -12,8 +12,8 @@
 #            catalog_name:  redhat-operator (default) | certified-operator | community-operator
 # PRODUCES:  stdout -- whitespace-separated records:
 #              PACKAGE_NAME DISPLAY_NAME DEFAULT_CHANNEL
-# SIDE EFFECTS: Catalog image remains in podman graph storage (cache for future runs).
-# IDEMPOTENT: Yes (read-only extraction, no state files)
+# SIDE EFFECTS: Catalog image remains cached in podman storage; index cached in .index/.
+# IDEMPOTENT: Yes (cached: ~2s content-layer probe; fresh: full download)
 #
 # Usage: list-operators.sh <version> [catalog]
 # Example:
@@ -22,7 +22,6 @@
 #   list-operators.sh 4.21 community-operator
 
 set -eo pipefail
-source scripts/include_all.sh
 
 # ── Local output helpers (tool-specific [INFO]/[OK]/[ERROR] style) ────
 if [ -t 1 ]; then
@@ -45,36 +44,20 @@ usage() {
 ocp_ver="${1:?$(usage)}"
 echo "$ocp_ver" | grep -qE '^[0-9]+\.[0-9]+$' || { echo "Error: version must be X.Y (e.g. 4.21)" >&2; usage; }
 catalog="${2:-redhat-operator}"
-catalog_url="registry.redhat.io/redhat/${catalog}-index:v${ocp_ver}"
 
-# ── Prerequisites ────────────────────────────────────────────────────
-command -v podman >/dev/null 2>&1 || die "podman is required"
-command -v jq     >/dev/null 2>&1 || die "jq is required"
+# ── Delegate to the central catalog download script ──────────────────
+# download-catalog-index.sh handles: pull, flock serialization, podman cp
+# retry, diagnostics, content-layer caching, FBC parsing, and validation.
+# If the index is already cached and upstream hasn't changed, this is a
+# ~2s no-op (content-layer probe only).
+info "Fetching $catalog v$ocp_ver ..."
+scripts/download-catalog-index.sh "$catalog" "$ocp_ver" \
+	|| die "Failed to download catalog index for $catalog v$ocp_ver"
 
-# ── Setup ────────────────────────────────────────────────────────────
-container_name="list-ops-${catalog}-v${ocp_ver}-$$"
-tmp_dir=$(mktemp -d "$ABA_TMP/list-ops-XXXXXX")
-trap 'podman rm -f "$container_name" >/dev/null 2>&1; rm -rf "$tmp_dir"' EXIT INT TERM
+# ── Output the cached index ─────────────────────────────────────────
+index_file=".index/${catalog}-index-v${ocp_ver}"
+[ -s "$index_file" ] || die "Index file missing after download: $index_file"
 
-# ── Pull image ───────────────────────────────────────────────────────
-if ! try_cmd -n 3 -d 10 -D 5 -m "Pull $catalog_url" -- \
-	podman pull -q "$catalog_url"; then
-	die "Failed to pull $catalog_url — check credentials / network"
-fi
+cat "$index_file"
 
-# ── Extract /configs ─────────────────────────────────────────────────
-info "Extracting catalog data ..."
-podman create -q --name "$container_name" "$catalog_url" >/dev/null 2>&1 \
-	|| die "Failed to create container"
-podman cp "$container_name:/configs" "$tmp_dir/configs" 2>/dev/null \
-	|| die "Failed to copy /configs from container"
-podman rm -f "$container_name" >/dev/null 2>&1
-
-# ── Parse each operator directory (same extract as download-catalog-index) ──
-info "Parsing operators from $catalog v$ocp_ver ..."
-
-source scripts/catalog-extract-functions.sh
-_extract_catalog_dir "$tmp_dir/configs" "$tmp_dir/index"
-cat "$tmp_dir/index"
-
-success "Done. Catalog: $catalog v$ocp_ver"
+success "Done. Catalog: $catalog v$ocp_ver ($(wc -l < "$index_file") operators)"

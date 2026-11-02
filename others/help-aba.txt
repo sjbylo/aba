@@ -45,6 +45,7 @@ Other commands:
   aba show-operators --certified        # List certified operators (or --community/--all)
   aba show-operators --refresh          # Re-download catalogs if stale, then list
   aba show-op-sets                      # List available operator sets
+  aba show-op-sets <set>                # Show operators in a specific set (e.g. acm, odf, virt)
   aba help                              # See help for all steps/targets
 
 Options:

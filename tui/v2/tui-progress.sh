@@ -375,23 +375,33 @@ _tp_show_output() {
 			printf '\n\n\033[0;30;43m ↑/↓/PgUp/PgDn to scroll.  Press Q to quit. \033[0m\n\n' >> "$_tp_output_log"
 			_tp_less_hint_added=1
 		fi
-		# Clean PTY output for readable paging:
-		#   1. Collapse \r overwrites (oc-mirror progress ticks)
-		#   2. Strip SI/SO (^O/^N) — oc-mirror emits after every ANSI reset
-		#   3. Strip cursor-up (ESC[nA) and erase-to-end (ESC[J) — block redraws
-		#   4. Strip progress bar lines (NNN / NNN ...)
-		#   5. Remove duplicate lines from block redraws (awk dedup)
-		#   6. Squeeze consecutive blank lines
 		# -R: render ANSI color codes natively (safer than -r)
 		# smcup/rmcup: preserve the dialog screen behind less
 		tput smcup 2>/dev/null
-		sed $'s/.*\r\\(.\\)/\\1/' "$_tp_output_log" |
-			tr -d $'\r\017\016' |
-			sed $'s/\033\\[[0-9]*A//g; s/\033\\[J//g' |
-			grep -v '^ *[0-9]\{1,\} / [0-9]\{1,\} (' |
-			awk '!seen[$0]++' |
-			cat -s |
-			less -Rf +G 2>/dev/null || true
+		# oc-mirror emits SI/SO bytes (\016/\017), cursor-up, \r overwrites and
+		# progress bars that need heavy filtering.  Detect by checking for SI/SO
+		# in the output — other commands (Ansible, oc, podman) never emit these.
+		if grep -qP '\x0E|\x0F' "$_tp_output_log" 2>/dev/null; then
+			# oc-mirror PTY cleanup:
+			#   1. Collapse \r overwrites (progress ticks)
+			#   2. Strip SI/SO (^O/^N) — emitted after every ANSI reset
+			#   3. Strip cursor-up (ESC[nA) and erase-to-end (ESC[J)
+			#   4. Strip progress bar lines (NNN / NNN ...)
+			#   5. Strip spinner ticks (Braille chars) and blank-spinner lines
+			#      — keeps only ✓ (completed) lines from the progress block
+			#   6. Remove duplicate lines from block redraws
+			#   7. Squeeze consecutive blank lines
+			sed $'s/.*\r\\(.\\)/\\1/' "$_tp_output_log" |
+				tr -d $'\r\017\016' |
+				sed $'s/\033\\[[0-9]*A//g; s/\033\\[J//g' |
+				grep -v '^ *[0-9]\{1,\} / [0-9]\{1,\} (' |
+				grep -v '[⠏⠋⠙⠹⠸⠼⠴⠦⠧⠇]\|^     (' |
+				awk '!seen[$0]++' |
+				cat -s |
+				less -Rf +G 2>/dev/null || true
+		else
+			less -Rf +G "$_tp_output_log" 2>/dev/null || true
+		fi
 		tput rmcup 2>/dev/null
 		# Clear screen so dialog redraws cleanly (fixes terminals without
 		# alternate-screen support, e.g. nested tmux over SSH)
@@ -410,7 +420,21 @@ _tp_show_output() {
 		cat "$_tp_output_log" 2>/dev/null
 		tail -n 0 -f "$_tp_output_log" 2>/dev/null &
 		_tp_tail_pid=$!
-		read -rsn1 || true
+		# Poll for keypress or command completion — no background processes needed.
+		# When the command finishes, print a hint (header may have scrolled off).
+		local _tp_hint_shown=0
+		while true; do
+			if IFS= read -rsn1 -t 1 _key 2>/dev/null; then
+				break
+			fi
+			if [[ "$_tp_hint_shown" -eq 0 ]] && ! kill -0 "$_tp_script_pid" 2>/dev/null; then
+				sleep 0.3
+				printf '\n\033[1;33m  ── Command finished. Press any key to return ──\033[0m\n'
+				_tp_hint_shown=1
+				read -rsn1 || true
+				break
+			fi
+		done
 		kill "$_tp_tail_pid" 2>/dev/null || true
 		wait "$_tp_tail_pid" 2>/dev/null || true
 		_tp_tail_pid=""
@@ -675,6 +699,14 @@ _exec_with_progress() {
 			sleep 0.5
 
 			_tp_draw "$title"
+
+			# Kick off the post-command hook early (e.g. mirror cache
+			# invalidation) so it runs in the background while the user
+			# reads the outcome dialog.  The hook is idempotent.
+			if [[ -n "$post_cmd_hook" ]]; then
+				"$post_cmd_hook"
+			fi
+
 			case "$(_tp_finish_outcome)" in
 				error)   _tp_show_error "$title"; _rc=1 ;;
 				abort)   _tp_show_abort "$title"; _rc=1 ;;
