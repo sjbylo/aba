@@ -844,6 +844,13 @@ _pre_suite_cleanup() {
 		if _essh "$INTERNAL_BASTION" "grep -q '^allow ' /etc/chrony.conf" 2>/dev/null; then
 			echo "  Cleaning up leftover ABA NTP on disN ..."
 			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove ntp -y" 2>/dev/null || true
+			# Restore infra-level NTP serving that _vm_setup_time() wrote to
+			# the golden image.  "aba remove ntp" strips ALL allow lines,
+			# including the infra one needed for preflight NTP checks.
+			echo "  Restoring infra NTP allow on disN ..."
+			_essh "$INTERNAL_BASTION" \
+				"grep -q '^allow ' /etc/chrony.conf || { echo 'allow 10.0.0.0/20' | sudo tee -a /etc/chrony.conf >/dev/null && sudo systemctl restart chronyd; }" \
+				2>/dev/null || true
 		fi
 	fi
 
