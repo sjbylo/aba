@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.3...HEAD)
+
+---
+
+## [1.4.3](https://github.com/sjbylo/aba/releases/tag/v1.4.3) - 2026-11-02
+
+TUI reliability, CLI enhancements, and fixes
+
 
 ### Added
 
