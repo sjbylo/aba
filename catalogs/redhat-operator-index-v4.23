@@ -64,6 +64,7 @@ openshift-secondary-scheduler-operator Secondary Scheduler Operator for Red Hat 
 opentelemetry-product Red Hat build of OpenTelemetry stable
 recipe Recipe stable-4.22
 red-hat-hawtio-operator HawtIO Operator v2
+redhat-oadp-operator OADP Operator stable
 rhpam-kogito-operator RHPAM Kogito Operator 7.x
 rh-service-binding-operator Service Binding Operator stable
 rhsso-operator Red Hat Single Sign-On Operator stable
