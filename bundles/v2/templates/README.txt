@@ -16,7 +16,7 @@
       mirror/mirror-registry.tar.gz  (Quay)
       mirror/docker-reg-image.tgz   (Docker)
       mirror/omr-image.tgz          (OMR v3)
-  - Supporting tools:
+  - Supplementary tools:
     - <SECONDARY_CLIS>
   - <OP_COUNT> operators included in this bundle (see list below)
   - Image set config: imageset-config.yaml (see below)
