@@ -3050,6 +3050,7 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 - The TUI already handles this more smoothly; this improvement is for the CLI/Makefile path.
 - The `ask` function already exists in ABA and supports "press Enter to continue" style prompts.
 - Must still work correctly if the process is interrupted (Ctrl-C) at any phase — re-running should resume from the right point.
+- **Gate (2026-11-03):** Do not start this until e2e + func + TUI are green again **and** a new ABA release is cut.
 
 ---
 
@@ -3149,17 +3150,23 @@ This is a minor robustness issue — the first delete already destroys VMs and c
 
 **Workaround:** Only call `aba delete` when `.install-complete` exists.
 
-## #B86: Remove `podman cp` diagnostics from `download-catalog-index.sh` once root cause is found
+## #B86: Remove extract diagnostics from `download-catalog-index.sh` once stable
 
 **Severity:** LOW — diagnostics only, no functional impact
-**Status:** Planned
+**Status:** Planned (partially mitigated 2026-11-03)
 **Added:** 2026-11-02
+**Updated:** 2026-11-03
 
-**Problem:** `scripts/download-catalog-index.sh` contains diagnostic functions (`_configs_has_dirs`, `_dump_diagnostics`) and a `podman cp` retry loop added to investigate an intermittent bug where `podman cp` returns exit 0 but copies an empty `/configs` directory (~15% of concurrent catalog downloads in E2E on podman 5.8.2). Not reproducible on bastion (podman 5.4.0).
+**Problem:** On podman 5.8.2 (E2E pools), `podman cp` can exit 0 while leaving operator
+directory stubs under `/configs` with **no regular files** (no `catalog.json` /
+`package.json`). That failed as "parser produced empty index". Bastion (5.4.0) does
+not reproduce it.
 
-**Proposed fix:** Once the root cause is identified and fixed (or the podman version is updated), remove `_configs_has_dirs()`, `_dump_diagnostics()`, and the retry loop. Keep only the actual fix.
+**Mitigation (2026-11-03):** Prefer `podman unshare` + `mount` + `cp -a`; fall back to
+`podman cp`. Validate with `find … -type f` (not just subdirs) and retry on empty.
 
-**Workaround:** None needed — the retry loop is already a functional workaround.
+**Proposed cleanup:** Once the mount path proves stable in E2E (no empty-index
+flakes for a few weeks), remove `_dump_diagnostics()` and simplify the retry loop.
 
 ## #B87: Revisit `resolved_reg_vendor()` auto-resolution once OMR is GA
 

@@ -223,29 +223,66 @@ fi
 # simultaneously. Serializing the critical section with flock prevents this.
 _podman_lock="/tmp/.aba-podman-catalog.lock"
 
-# _configs_has_dirs: return 0 if $tmp_dir/configs has at least one subdirectory
-_configs_has_dirs() {
-	local _count
-	_count=$(find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
-	[[ "$_count" -gt 0 ]]
+# _configs_has_content: return 0 if $tmp_dir/configs has at least one regular file.
+# Directory stubs alone are NOT enough — on podman 5.8.2, `podman cp` can exit 0
+# with operator dirs present but empty (no package.json/catalog.json). That passed
+# the old "has subdirs" check and failed later as "parser produced empty index".
+_configs_has_content() {
+	[[ -d "$tmp_dir/configs" ]] || return 1
+	# Stop at first file — catalogs have hundreds of FBC files when healthy.
+	[[ -n "$(find "$tmp_dir/configs" -type f -print -quit 2>/dev/null)" ]]
 }
 
-# _dump_diagnostics: capture state for RCA when podman cp produces empty /configs
+# _copy_configs: prefer rootless-safe mount+cp -a; fall back to podman cp.
+# `podman mount` in rootless mode requires `podman unshare`. Mount+cp avoids the
+# intermittent empty-stub copies seen with `podman cp` on pool hosts (5.8.2).
+_copy_configs() {
+	local _cname="$1"
+	rm -rf "$tmp_dir/configs"
+	mkdir -p "$tmp_dir/configs"
+
+	# Preferred path: mount the container graph and copy from the host filesystem.
+	if podman unshare bash -c "
+		m=\$(podman mount '$_cname') || exit 1
+		cp -a \"\$m/configs/.\" '$tmp_dir/configs/'
+		_rc=\$?
+		podman umount '$_cname' >/dev/null 2>&1 || true
+		exit \$_rc
+	" 2>"$_err_file"; then
+		echo "mount" 
+		return 0
+	fi
+
+	# Fallback: classic podman cp (works when unshare/mount unavailable)
+	echo "podman unshare/mount failed — falling back to podman cp" >&2
+	rm -rf "$tmp_dir/configs"
+	if podman cp "$_cname:/configs" "$tmp_dir/configs" 2>>"$_err_file"; then
+		echo "cp"
+		return 0
+	fi
+	return 1
+}
+
+# _dump_diagnostics: capture state for RCA when extract produces empty /configs
 _dump_diagnostics() {
 	local _cname="$1" _diag_file="$tmp_dir/.diagnostics"
 	{
-		echo "=== DIAGNOSTIC: empty /configs after podman cp ==="
+		echo "=== DIAGNOSTIC: empty /configs after extract ==="
 		echo "catalog=$catalog_name version=$ocp_ver_major container=$_cname"
 		echo "timestamp=$(date -Iseconds)"
 		echo "podman_version=$(podman --version 2>&1)"
 		echo "--- ls -la $tmp_dir/configs ---"
 		ls -la "$tmp_dir/configs" 2>&1 || echo "(directory missing)"
+		echo "--- find -type f (first 10) ---"
+		find "$tmp_dir/configs" -type f 2>/dev/null | head -10 || echo "(no files)"
+		echo "--- find -type d maxdepth 2 (first 15) ---"
+		find "$tmp_dir/configs" -maxdepth 2 -type d 2>/dev/null | head -15 || echo "(no dirs)"
 		echo "--- podman inspect container mount ---"
 		podman inspect --format '{{.GraphDriver.Data.MergedDir}}' "$_cname" 2>&1 || echo "(inspect failed)"
 		echo "--- container /configs listing (via podman exec) ---"
 		podman start "$_cname" >/dev/null 2>&1
 		podman exec "$_cname" ls -la /configs 2>&1 || echo "(exec failed)"
-		podman exec "$_cname" find /configs -maxdepth 1 -type d 2>&1 | head -20 || echo "(find failed)"
+		podman exec "$_cname" find /configs -maxdepth 2 -type f 2>&1 | head -20 || echo "(find failed)"
 		podman stop "$_cname" >/dev/null 2>&1
 		echo "--- disk space ---"
 		df -h "$tmp_dir" 2>&1
@@ -257,9 +294,9 @@ _dump_diagnostics() {
 
 _extract_catalog() {
 	local _cname="$1"
-	# Serialize create+cp+rm — podman's BoltDB can't handle many concurrent writers.
+	# Serialize create+copy+rm — podman's BoltDB can't handle many concurrent writers.
 	# Multiple download-catalog-index.sh processes run in parallel (one per catalog
-	# per OCP version); without serialization, concurrent podman create/cp causes
+	# per OCP version); without serialization, concurrent create/copy causes
 	# "no container with ID ... found in database" errors.
 	local _err_file="$tmp_dir/.extract-err"
 	(
@@ -268,27 +305,26 @@ _extract_catalog() {
 		if ! podman create -q --name "$_cname" "$catalog_url" >/dev/null 2>"$_err_file"; then
 			exit 1
 		fi
-		if ! podman cp "$_cname:/configs" "$tmp_dir/configs" 2>"$_err_file"; then
+		_method=""
+		if ! _method=$(_copy_configs "$_cname"); then
 			exit 1
 		fi
-		# Validate: podman cp can exit 0 but copy an empty directory.
-		# Root cause unknown — observed ~15% of concurrent catalog downloads in E2E.
-		# Retry just the cp on the same container before giving up.
-		if ! _configs_has_dirs; then
-			echo "podman cp returned empty /configs — retrying cp on same container" > "$_err_file"
+		# Validate: extract can exit 0 with empty dir stubs (no FBC files).
+		# Observed on podman 5.8.2 in E2E — retry on the same container once.
+		if ! _configs_has_content; then
+			echo "extract ($_method) returned empty /configs (no regular files) — retrying" > "$_err_file"
 			cat "$_err_file" >&2
-			rm -rf "$tmp_dir/configs"
 			sleep 1
-			if ! podman cp "$_cname:/configs" "$tmp_dir/configs" 2>>"$_err_file"; then
+			if ! _method=$(_copy_configs "$_cname"); then
 				exit 1
 			fi
-			if ! _configs_has_dirs; then
-				echo "podman cp still empty after retry on same container" >> "$_err_file"
+			if ! _configs_has_content; then
+				echo "extract still empty after retry on same container (method=$_method)" >> "$_err_file"
 				cat "$_err_file" >&2
 				_dump_diagnostics "$_cname"
 				exit 1
 			fi
-			echo "podman cp retry succeeded" >&2
+			echo "extract retry succeeded (method=$_method)" >&2
 		fi
 		podman rm -f "$_cname" >/dev/null 2>&1 || true
 	) 9>"$_podman_lock"
