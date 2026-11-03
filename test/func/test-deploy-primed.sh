@@ -90,6 +90,33 @@ echo "Test 7: transfer-primed listed in main help"
 output=$(cd "$ABA_ROOT" && bash scripts/aba.sh --help 2>/dev/null || true)
 assert_contains "transfer-primed in main help" "$output" "transfer-primed"
 
+# --- Test 8: missing cluster.conf aborts ---
+# Place the temp cluster under ABA_ROOT so ../mirror exists; mirror is checked
+# before cluster.conf, so we need a valid mirror path to reach the conf guard.
+echo "Test 8: deploy-primed without cluster.conf aborts"
+TMP_ERR="$ABA_ROOT/.test-deploy-primed-err-$$"
+mkdir -p "$TMP_ERR"
+ln -sfn "$ABA_ROOT/scripts" "$TMP_ERR/scripts"
+err_out=$(cd "$TMP_ERR" && bash "$ABA_ROOT/scripts/deploy-primed.sh" 2>&1) && rc=0 || rc=$?
+if [ "$rc" -ne 0 ]; then
+	assert_pass "missing cluster.conf exits non-zero"
+else
+	assert_fail "missing cluster.conf exits non-zero (got exit 0)"
+fi
+assert_contains "missing cluster.conf message" "$err_out" "Not in a cluster directory"
+
+# --- Test 9: missing mirror dir aborts ---
+echo "Test 9: deploy-primed with missing mirror dir aborts"
+echo "image_source=no-such-mirror-dir-$$" > "$TMP_ERR/cluster.conf"
+err_out=$(cd "$TMP_ERR" && bash "$ABA_ROOT/scripts/deploy-primed.sh" 2>&1) && rc=0 || rc=$?
+if [ "$rc" -ne 0 ]; then
+	assert_pass "missing mirror dir exits non-zero"
+else
+	assert_fail "missing mirror dir exits non-zero (got exit 0)"
+fi
+assert_contains "missing mirror dir message" "$err_out" "Mirror directory not found"
+rm -rf "$TMP_ERR"
+
 # --- Summary ---
 echo
 echo "Results: $PASS passed, $FAIL failed"

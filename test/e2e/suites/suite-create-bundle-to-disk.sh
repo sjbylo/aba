@@ -678,11 +678,16 @@ e2e_run_remote "Config-only load: aba -d mirror load (no images)" \
 e2e_run_remote "Verify cluster dir extracted on disco" \
     "test -f ~/aba/cfg-test/cluster.conf"
 
+e2e_run_remote "Verify configs tar renamed to .tar.done after extract" \
+    "test -f ~/aba/mirror/data/aba-transfer-configs.tar.done && \
+     test ! -f ~/aba/mirror/data/aba-transfer-configs.tar"
+
 e2e_run -q "Cleanup config-only test" \
-    "rm -rf cfg-test mirror/data/aba-transfer-configs.tar"
+    "rm -rf cfg-test mirror/data/aba-transfer-configs.tar mirror/data/aba-transfer-configs.tar.done"
 
 e2e_run_remote -q "Cleanup config-only on disco" \
-    "rm -rf ~/aba/cfg-test ~/aba/mirror/data/aba-transfer-configs.tar"
+    "rm -rf ~/aba/cfg-test ~/aba/mirror/data/aba-transfer-configs.tar \
+            ~/aba/mirror/data/aba-transfer-configs.tar.done"
 
 test_end 0
 

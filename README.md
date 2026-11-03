@@ -701,7 +701,7 @@ cp mirror/data/aba-transfer-configs.tar /media/usb/
 
 # Disconnected side:
 cp /media/usb/aba-transfer-configs.tar mirror/data/
-aba -d mirror load                     # Extracts configs (no images = no-op on load)
+aba -d mirror load                     # Extracts configs; renames tar to .tar.done
 aba -d edge1 deploy-primed             # Deploy the new cluster
 ```
 
