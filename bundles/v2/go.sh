@@ -36,6 +36,7 @@ source bundle.conf
 # --dev flag: build bundle from dev branch (for testing dev-branch features).
 # Dev bundles are NEVER uploaded to NAS — only used for local validation.
 BUNDLE_NAME_FILTER=""
+BUNDLE_REPLACE=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -51,6 +52,11 @@ while [[ $# -gt 0 ]]; do
 			echo "*** FILTER: building only bundle type '$BUNDLE_NAME_FILTER' ***"
 			shift 2
 			;;
+		--replace)
+			export BUNDLE_REPLACE=1
+			echo "*** REPLACE: rebuild even if NAS bundle exists; old dir renamed to .replacing-* at publish ***"
+			shift
+			;;
 		--vendor)
 			export BUNDLE_VENDOR="$2"
 			echo "*** VENDOR: using mirror registry vendor '$BUNDLE_VENDOR' ***"
@@ -58,13 +64,14 @@ while [[ $# -gt 0 ]]; do
 			;;
 		-h|--help)
 			cat <<-EOF
-			Usage: $(basename "$0") [--dev] [--name <type>] [--vendor <vendor>]
+			Usage: $(basename "$0") [--dev] [--name <type>] [--replace] [--vendor <vendor>]
 
 			Build ABA install bundles for multiple OCP versions.
 
 			Options:
 			  --dev              Build from dev branch (NAS upload disabled)
 			  --name <type>      Build only the specified bundle type
+			  --replace          Rebuild even if NAS bundle exists (old dir → *.replacing-* at publish)
 			  --vendor <vendor>  Mirror registry vendor: omr (default), quay, docker
 			  -h, --help         Show this help
 
@@ -80,6 +87,8 @@ while [[ $# -gt 0 ]]; do
 			  $(basename "$0")                        # build all bundles (production)
 			  $(basename "$0") --dev                  # build all from dev branch
 			  $(basename "$0") --dev --name ai        # build only AI bundle from dev
+			  $(basename "$0") --replace              # rebuild all (swap old aside at publish)
+			  $(basename "$0") --replace --name ai    # rebuild only AI (swap old aside at publish)
 			  $(basename "$0") --vendor quay           # build all using Quay registry
 			EOF
 			exit 0
@@ -206,13 +215,18 @@ do
 		fi
 
 		echo
-		# Skip if bundle already exists and is complete in cloud dir
-		# (To force a rebuild, delete or rename the cloud dir first)
+		# Skip if bundle already exists and is complete in cloud dir.
+		# --replace: do not skip; keep the old NAS dir until 07-upload swaps it
+		# aside as *.replacing-* at the last moment.
 		# In dev mode, always rebuild — we're testing dev features, not NAS state.
 		cloud_bundle="$CLOUD_DIR/$bundle_name"
-		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
+		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ "${BUNDLE_REPLACE:-}" != "1" ] && \
+		   [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
 			echo "Install bundle already exists: $cloud_bundle -- skipping"
 			continue
+		fi
+		if [ "${BUNDLE_REPLACE:-}" = "1" ] && [ -d "$cloud_bundle" ] && [ -f "$cloud_bundle/README.txt" ]; then
+			echo "REPLACE: will rebuild $bundle_name (existing NAS dir kept until publish)"
 		fi
 
 		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\" TESTS=\"$tests\" BUNDLE_VENDOR=$BUNDLE_VENDOR"
