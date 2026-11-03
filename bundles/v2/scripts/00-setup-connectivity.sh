@@ -17,13 +17,18 @@ curl -sfkIL google.com >/dev/null
 
 # Check if bundle already exists and is complete in CLOUD_DIR
 # README.txt is created by step 07 only after all files are copied and the UPLOADING marker removed
+# --replace (BUNDLE_REPLACE=1): keep the existing dir until 07-upload swaps it aside
 if [ -d "$CLOUD_DIR_BUNDLE" ] && [ ! -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING" ] && [ -f "$CLOUD_DIR_BUNDLE/README.txt" ]; then
-	echo "Install bundle dir already exists: $CLOUD_DIR_BUNDLE" >&2
-	# Touch all markers so Make sees everything as complete
-	for m in 00-setup 01-install-aba 02-configure 03-image-save 04-bundle-tar 05-offline 06a-unpacked 06b-registry-installed 06c-registry-loaded 06d-tests-passed 07-upload 08-cleanup; do
-		touch "$WORK_BUNDLE_DIR_BUILD/.done-$m"
-	done
-	exit 0
+	if [ "${BUNDLE_REPLACE:-}" = "1" ]; then
+		echo "REPLACE: existing complete bundle $CLOUD_DIR_BUNDLE will be swapped aside at publish" >&2
+	else
+		echo "Install bundle dir already exists: $CLOUD_DIR_BUNDLE" >&2
+		# Touch all markers so Make sees everything as complete
+		for m in 00-setup 01-install-aba 02-configure 03-image-save 04-bundle-tar 05-offline 06a-unpacked 06b-registry-installed 06c-registry-loaded 06d-tests-passed 07-upload 08-cleanup; do
+			touch "$WORK_BUNDLE_DIR_BUILD/.done-$m"
+		done
+		exit 0
+	fi
 fi
 
 [ "$NOTIFY" ] && echo "Working on bundle: $BUNDLE_NAME ..." | notify.sh
@@ -134,9 +139,14 @@ fi
 echo_step "Processing: $CLOUD_DIR_BUNDLE"
 mypause 2
 
-# If the cloud dir exists but is incomplete, remove it
+# If the cloud dir exists but is incomplete, remove it.
+# With --replace, a complete existing dir must stay until 07-upload swaps it.
 if [ -d "$CLOUD_DIR_BUNDLE" ]; then
-	rm -rf "$CLOUD_DIR_BUNDLE"
+	if [ "${BUNDLE_REPLACE:-}" = "1" ] && [ -f "$CLOUD_DIR_BUNDLE/README.txt" ] && [ ! -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING" ]; then
+		echo "REPLACE: preserving $CLOUD_DIR_BUNDLE until publish swap"
+	else
+		rm -rf "$CLOUD_DIR_BUNDLE"
+	fi
 fi
 
 # Create work directories

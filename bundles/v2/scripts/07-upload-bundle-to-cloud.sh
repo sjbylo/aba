@@ -149,7 +149,11 @@ echo_step "Determine older bundles ... to delete later"
 MAJOR_VER=$(echo "$VER" | cut -d\. -f1,2)
 todel=
 for d in "$CLOUD_DIR/$MAJOR_VER".[0-9]*-"$NAME" "$CLOUD_DIR/$MAJOR_VER".[0-9]*-"$NAME"-*; do
-	[ -d "$d" ] && todel="$todel $d"
+	[ -d "$d" ] || continue
+	# Never delete the current bundle path (same-version --replace) or *.replacing-* backups
+	[ "$d" = "$CLOUD_DIR_BUNDLE" ] && continue
+	[[ "$(basename "$d")" == *.replacing-* ]] && continue
+	todel="$todel $d"
 done
 ls -l "$CLOUD_DIR"
 
@@ -174,8 +178,13 @@ echo
 echo "BUNDLE COMPLETE!"
 echo
 
-# Rename NAS temp dir to final cloud location (instant — same CIFS mount)
-rm -rf "$CLOUD_DIR_BUNDLE"
+# Publish: move NAS temp dir to final cloud location (instant — same CIFS mount).
+# With --replace, keep the previous complete dir as *.replacing-* until this moment.
+if [ -d "$CLOUD_DIR_BUNDLE" ]; then
+	_bak="${CLOUD_DIR_BUNDLE}.replacing-$(date +%Y%m%d-%H%M%S)"
+	echo "REPLACE: moving $CLOUD_DIR_BUNDLE -> $_bak"
+	mv "$CLOUD_DIR_BUNDLE" "$_bak"
+fi
 mv "$NAS_TEMP_DIR/$BUNDLE_NAME" "$CLOUD_DIR_BUNDLE"
 
 echo_step "Show content of new bundle in cloud dir $CLOUD_DIR_BUNDLE:"
