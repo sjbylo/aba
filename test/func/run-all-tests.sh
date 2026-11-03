@@ -129,10 +129,12 @@ unit_tests=(
 	test/func/test-bundle-sort-order.sh
 	test/func/test-transfer-primed.sh
 	test/func/test-deploy-primed.sh
+	test/func/test-load-skip-marker.sh
 
 	# Day2 / operators
 	test/func/test-day2-connected-cluster.sh
 	test/func/test-day2-waves.sh
+	test/func/test-day2-wait-gate-abort.sh
 	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
 	test/func/test-estimate-isc-size.sh

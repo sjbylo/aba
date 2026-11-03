@@ -8,6 +8,8 @@
 # PRODUCES:    Images pushed to registry; data/working-dir/ populated by oc-mirror
 # SIDE EFFECTS:
 #   - After successful load: touches data/.created (unlocks ISC) unless data/.isc-pinned exists
+#   - After successful image load: touches data/.images-loaded (Make skip marker)
+#   - After successful configs extract: renames aba-transfer-configs.tar → .tar.done
 #   - Removes ../.bundle and data/.isc-pinned (bundle phase complete, repo becomes normal)
 #   - Sets TMPDIR and OC_MIRROR_CACHE to data_dir if configured
 #   - Auto-updates aba.conf ocp_version/ocp_channel if ISC version differs (Bug #956)
@@ -69,6 +71,19 @@ _backup_configs() {
 	done
 }
 
+# Extract aba-transfer-configs.tar (cluster dirs) and rename so Make does not
+# re-trigger load on every subsequent run. Rename (not delete) keeps the
+# artifact recoverable: mv ...tar.done ...tar && aba -d mirror load
+_extract_configs_tar() {
+	[ -f "data/aba-transfer-configs.tar" ] || return 0
+	aba_info "Found config transfer: data/aba-transfer-configs.tar"
+	if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
+		aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
+	fi
+	mv -f data/aba-transfer-configs.tar data/aba-transfer-configs.tar.done
+	aba_info "Config transfer extracted (cluster directories updated)."
+}
+
 # --- Guard: archive files must be present ---
 # Config-only transfers (aba-transfer-configs.tar without mirror_*.tar) are valid.
 # Extract configs and exit gracefully if no images to load.
@@ -80,13 +95,7 @@ if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 	if [ "$_has_configs" ]; then
 		_backup_configs
 		# Extract transfer tars (configs only, no images)
-		if [ -f "data/aba-transfer-configs.tar" ]; then
-			aba_info "Found config-only transfer: data/aba-transfer-configs.tar"
-			if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
-				aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
-			fi
-			aba_info "Config transfer extracted (cluster directories updated)."
-		fi
+		_extract_configs_tar
 		if [ -f "$_transfer_tar" ]; then
 			aba_debug "Found transfer config: $_transfer_tar"
 			rm -f data/aba-transfer-metadata.json \
@@ -174,13 +183,7 @@ fi
 # Extract configs transfer tar if present (cluster dirs for day-N updates).
 # Only runs in the normal flow (mirror_*.tar exists); the early-exit path
 # above already handles the config-only case.
-if [ -f "data/aba-transfer-configs.tar" ]; then
-	aba_info "Found config transfer: data/aba-transfer-configs.tar"
-	if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
-		aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
-	fi
-	aba_info "Config transfer extracted (cluster directories updated)."
-fi
+_extract_configs_tar
 
 aba_debug "Ensuring oc-mirror is available"
 if ! ensure_oc_mirror; then
@@ -357,6 +360,11 @@ if [ ! -f data/.isc-pinned ]; then
 	touch data/.created
 fi
 rm -f ../.bundle data/.isc-pinned
+
+# Mark that images have been loaded into the registry. The Makefile uses this
+# marker to skip re-loading when no new archives have arrived. Written only
+# after a real image load (config-only early-exit returns before this point).
+touch data/.images-loaded
 
 aba_progress "DONE|ld_finalize"
 
