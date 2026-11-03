@@ -545,8 +545,31 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	# Order: fastest (smallest image) to slowest (largest image):
 	#   certified-operators ~1.1 GB, community-operators ~1.2 GB, redhat-operators ~1.8 GB
 	# By the time the slower ones are checked, they've had extra time to start.
+	# One shared budget for ALL catalogs (not per-catalog) — failing catalogs must
+	# not multiply wall-clock wait (3× budget would be terrible UX).
+	_cs_budget=480   # 8 minutes shared across all CatalogSources
+	_cs_deadline=$(( $(date +%s) + _cs_budget ))
 	_cs_wait_order=(certified-operators community-operators redhat-operators)
 	cs_failed=0
+
+	_cs_wait_one() {
+		local cs_name="$1"
+		local _remain=$(( _cs_deadline - $(date +%s) ))
+		if [ "$_remain" -le 0 ]; then
+			echo_red "Error: CatalogSource wait budget (${_cs_budget}s) exhausted; $cs_name still not READY." >&2
+			cs_failed=1
+			return 1
+		fi
+		if aba_wait_show "Waiting for CatalogSource $cs_name" 5 "$_remain" \
+			"[ \"\$(oc -n $ns get catalogsource $cs_name -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null)\" = READY ]"; then
+			aba_success "CatalogSource $cs_name is ready!"
+			return 0
+		fi
+		echo_red "Error: CatalogSource $cs_name failed to become READY in time." >&2
+		cs_failed=1
+		return 1
+	}
+
 	for cs_name in "${_cs_wait_order[@]}"; do
 		# Skip catalogs that were not applied in this run
 		_applied=false
@@ -562,14 +585,7 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			continue
 		fi
 
-		# Wait with spinner (5s poll, ~8 min timeout)
-		if aba_wait_show "Waiting for CatalogSource $cs_name" 5 495 \
-			"[ \"\$(oc -n $ns get catalogsource $cs_name -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null)\" = READY ]"; then
-			aba_success "CatalogSource $cs_name is ready!"
-		else
-			echo_red "Error: CatalogSource $cs_name failed to become READY in time." >&2
-			cs_failed=1
-		fi
+		_cs_wait_one "$cs_name"
 	done
 
 	# Also wait for any non-standard catalogs (e.g. multi-mirror suffixed names)
@@ -582,13 +598,7 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			aba_success "CatalogSource $cs_name is ready!"
 			continue
 		fi
-		if aba_wait_show "Waiting for CatalogSource $cs_name" 5 495 \
-			"[ \"\$(oc -n $ns get catalogsource $cs_name -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null)\" = READY ]"; then
-			aba_success "CatalogSource $cs_name is ready!"
-		else
-			echo_red "Error: CatalogSource $cs_name failed to become READY in time." >&2
-			cs_failed=1
-		fi
+		_cs_wait_one "$cs_name"
 	done
 
 	[ "$cs_failed" = "1" ] && aba_progress "FAIL|catalogs" && aba_abort "One or more CatalogSources failed to become READY. Check the errors above."

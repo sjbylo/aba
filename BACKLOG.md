@@ -3295,3 +3295,55 @@ If the metadata image doesn't exist in the registry (first-time setup, older con
 
 **Conclusion:** The main startup bottleneck is the internet connectivity check (~1–5s depending on network). This is inherently I/O-bound and already runs in background from the earliest possible point (line ~160). The only actionable item is #2 (RPM check caching) for ~0.5–3s savings.
 
+---
+
+## #B90: Day-2 / cluster picker UX — stale same-FQDN dirs and install-only validation
+
+**Severity:** LOW–MEDIUM — rare for a single-bastion production user; common when bouncing between bastions/hosts with same cluster names during testing
+**Status:** Planned (capture / remember)
+**Added:** 2026-11-03
+
+**Problem:** On bastion, Day-2 offered `ocp.example.com` from a local stub `ocp/` dir (TUI draft, empty `mac_prefix`, wrong topology). The real cluster was installed on disco with a full `cluster.conf`. Day-2 failed with `mac_prefix is required for platform=vmw`, and because verify runs before PLAN, the progress dialog silently fell back to “Choose execution mode”.
+
+**Context:** Unlikely when a user runs one ABA instance on one bastion. Easy to hit when testing across connected + disconnected hosts that reuse short names (`ocp`, `sno`, …).
+
+**Note:** ADR-018 (VM ownership / `.cluster-id`) is **orthogonal** — it protects VM check/delete on the hypervisor; it would not stop Day-2 from selecting a wrong/stale local cluster dir.
+
+**Ideas to remember (by value even for single-bastion):**
+
+1. **Relax day2 validation (HIGH value, single-bastion too)** — Day-2 / upgrade / status should not require install-only fields (`mac_prefix`, CPU/mem, …). An already-installed cluster path should not fail on empty VM-create config.
+2. **Don’t silently fall back from progress dialog (HIGH value)** — If PLAN never arrives because verify/abort failed fast, surface that error immediately instead of waiting ~10s then showing the execution-mode chooser.
+3. **Richer Day-2 picker labels (MEDIUM; more useful multi-host)** — Show type + provenance from `state.sh` (`cluster_type`, `installed_on`, `installed_from`). Flag or hide dirs with `.install-complete` but empty/missing `state.sh`.
+4. **Reachability gate (MEDIUM)** — Prefer offering clusters whose API/kubeconfig answers; label unreachable/stale otherwise.
+5. **Draft vs installed (MEDIUM)** — TUI draft persist should not leave a dir looking installed. Label `(draft)` and keep drafts out of Day-2 until real install state exists.
+
+**Workaround:** Run Day-2 on the host that owns the real cluster dir (or copy that host’s `cluster.conf` / state). Don’t reuse a TUI draft dir that only shares the FQDN.
+
+**Related:** ADR-018 (VM ownership tag); #B74 (cluster state cache for TUI); #B72 (interactive cluster checklist after sync/load).
+
+---
+
+## #B91: Silent long `curl --connect-timeout N --retry M` probes before first user message
+
+**Severity:** MEDIUM — looks like a hang in TUI Live Output / CLI
+**Status:** Planned
+**Added:** 2026-11-03
+
+**Problem:** Commands such as `aba startup` can sit for ~15–33s with only `Executing: …` (or after a brief line) before any wait/spinner message. Users perceive a hang.
+
+**Root cause:** “Quick check if already up” probes use `curl --connect-timeout 10 --retry 2` (or higher retry counts) **before** printing “Waiting for…”. When the API is down, curl burns the full connect-timeout × retries with no output. Measured: `--connect-timeout 10 --retry 2` ≈ **33s** silence against an unreachable host.
+
+**Known call sites to review:**
+
+- `scripts/cluster-startup.sh` — API “quick check” before `Waiting for cluster API…` (`--connect-timeout 10 --retry 2`, two places); similar console curl
+- `scripts/cluster-graceful-shutdown.sh` — `curl --connect-timeout 10 --retry 8` (potentially ~80s+ silent)
+- Other cluster lifecycle paths (`aba ls`, status, day2 access probes) — audit for the same pattern: long silent connect before the first `aba_info` / `aba_wait_show`
+
+**Proposed fix:**
+
+1. Print intent **before** any connect that can block (`aba_info "Checking whether cluster API is already up…"` or go straight to `aba_wait_show`).
+2. For “already up?” probes: single attempt, short timeout (e.g. `--connect-timeout 2 --max-time 3`, no multi-retry).
+3. Retries belong inside `aba_wait_show` (visible spinner + elapsed/max), not in a silent pre-check curl.
+
+**Related:** #B90 item 2 (don’t leave the user with silent waits).
+
