@@ -249,7 +249,7 @@ _copy_configs() {
 		podman umount '$_cname' >/dev/null 2>&1 || true
 		exit \$_rc
 	" 2>"$_err_file"; then
-		echo "mount" 
+		echo "mount"
 		return 0
 	fi
 
