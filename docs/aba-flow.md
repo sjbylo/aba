@@ -48,7 +48,7 @@ flowchart TD
 
     %% Bare-metal branch
     Q5 -->|No| BareMetal["Install OCP on bare-metal"]
-    BareMetal --> AgentConf["Run: aba iso / agentconf<br/>Edit install-config.yaml &amp;<br/>agent-config.yaml<br/>(add MAC addresses;<br/>optional disk hints / bond mode)"]
+    BareMetal --> AgentConf["Run: aba iso / agentconf<br/>Set macs.conf;<br/>optional disk_hint / bond_mode<br/>in cluster.conf (or CLI);<br/>review generated YAML if needed"]
     AgentConf --> Boot["Boot server(s) with ISO"]
     Boot --> Mon["Run: aba mon"]
 

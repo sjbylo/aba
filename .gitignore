@@ -118,6 +118,7 @@ test/e2e/.config.env.deploy
 test/e2e/.e2e-last-run
 test/e2e/.pool-os/
 test/e2e/logs/
+test/func/logs/
 e2e-parallel.log.*
 
 

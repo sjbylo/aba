@@ -37,13 +37,22 @@ echo
 echo "=== Test: Make regenerates install-config.yaml on int_connection change ==="
 echo
 
-# Skip network checks (DNS doesn't resolve for test cluster names)
-_orig_verify=$(grep '^verify_conf=' "$PWD/aba.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//')
-replace-value-conf -q -n verify_conf -v "" -f aba.conf
+# Skip release-image probe (local mirror may not hold current ocp_version).
+# verify_conf=off skips connectivity check in verify-release-image.sh; empty does not.
+_orig_verify=$(grep '^verify_conf=' "$PWD/aba.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+replace-value-conf -q -n verify_conf -v off -f aba.conf
 
 # Create a minimal cluster directory
-aba cluster --name "$CLUSTER_DIR" --type sno -Y 2>/dev/null || true
-cd "$CLUSTER_DIR"
+if ! aba cluster --name "$CLUSTER_DIR" --type sno -Y 2>/dev/null; then
+	test_fail "aba cluster failed to create $CLUSTER_DIR"
+	echo -e "\n=== Results: $pass pass, $fail fail ==="
+	exit 1
+fi
+cd "$CLUSTER_DIR" || {
+	test_fail "cluster dir $CLUSTER_DIR missing after aba cluster"
+	echo -e "\n=== Results: $pass pass, $fail fail ==="
+	exit 1
+}
 
 # Ensure network fields are consistent (cross-validation catches mismatches)
 replace-value-conf -q -n machine_network -v 10.0.1.0 -f cluster.conf
@@ -57,7 +66,11 @@ rm -f install-config.yaml agent-config.yaml
 
 # --- Test 1: Generate with image_source=direct ---
 replace-value-conf -n image_source -v direct -f cluster.conf
-make -s install-config.yaml 2>/dev/null
+if ! make -s install-config.yaml; then
+	test_fail "make install-config.yaml failed (direct mode)"
+	echo -e "\n=== Results: $pass pass, $fail fail ==="
+	exit 1
+fi
 
 if [ ! -f install-config.yaml ]; then
 	test_fail "install-config.yaml not generated (direct mode)"
@@ -76,8 +89,23 @@ fi
 sleep 1  # ensure filesystem timestamp advances
 replace-value-conf -n image_source -v mirror -f cluster.conf
 
+# Mirror install-config runs verify-release-image.sh, which extracts
+# openshift-install from the registry. Stub that binary so the test does
+# not require the current aba.conf ocp_version to be loaded in the mirror.
+_reg_host=$(grep '^reg_host=' ../mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+_reg_port=$(grep '^reg_port=' ../mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+_ocp_ver=$(grep '^ocp_version=' ../aba.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+if [ -n "$_reg_host" ] && [ -n "$_reg_port" ] && [ -n "$_ocp_ver" ]; then
+	_stub="./openshift-install-mirror-${_ocp_ver}-${_reg_host}-${_reg_port}"
+	touch "$_stub" && chmod +x "$_stub"
+fi
+
 # Do NOT manually rm install-config.yaml — Make should detect cluster.conf is newer
-make -s install-config.yaml 2>/dev/null
+if ! make -s install-config.yaml; then
+	test_fail "make install-config.yaml failed (mirror mode)"
+	echo -e "\n=== Results: $pass pass, $fail fail ==="
+	exit 1
+fi
 
 # mirror mode: must have additionalTrustBundle or ImageDigestSources
 if grep -q "additionalTrustBundle\|ImageDigestSources\|imageContentSources" install-config.yaml; then
@@ -89,7 +117,11 @@ fi
 # --- Test 3: Change back to direct, confirm regeneration again ---
 sleep 1
 replace-value-conf -n image_source -v direct -f cluster.conf
-make -s install-config.yaml 2>/dev/null
+if ! make -s install-config.yaml; then
+	test_fail "make install-config.yaml failed (direct mode round 2)"
+	echo -e "\n=== Results: $pass pass, $fail fail ==="
+	exit 1
+fi
 
 if grep -q "additionalTrustBundle\|ImageDigestSources\|imageContentSources" install-config.yaml; then
 	test_fail "direct mode (round 2): still has mirror artifacts — stale"
