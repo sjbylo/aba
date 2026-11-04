@@ -274,6 +274,7 @@ resource-locker-operator Resource Locker Operator alpha
 rhoas-operator OpenShift Application Services (RHOAS) beta
 ripsaw benchmark-operator alpha
 rsct-operator RSCT Operator for IBM Power Systems alpha
+ruptura-operator Ruptura Operator stable
 sailoperator Sail Operator stable
 sap-commerce-operator SAP Commerce Operator alpha
 sap-data-intelligence-observer-operator SAP Data Intelligence 3 - Observer Operator stable
@@ -281,6 +282,7 @@ sap-hana-express-operator SAP Hana Express Operator stable
 seldon-operator Seldon Operator stable
 self-node-remediation Self Node Remediation Operator - Community Edition stable
 service-binding-operator Service Binding Operator stable
+shellwarden-operator Denegra Shellwarden for NVIDIA OpenShell alpha
 sigstore-helm-operator sigstore alpha
 silicom-sts-operator Silicom STS Operator alpha
 simplyblock-operator Simplyblock Operator alpha
