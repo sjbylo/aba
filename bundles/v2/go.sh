@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--replace)
 			export BUNDLE_REPLACE=1
-			echo "*** REPLACE: rebuild even if NAS bundle exists; old dir renamed to .replacing-* at publish ***"
+			echo "*** REPLACE: rebuild even if NAS bundle exists; old dir renamed to .replaced-* at publish ***"
 			shift
 			;;
 		--vendor)
@@ -71,12 +71,12 @@ while [[ $# -gt 0 ]]; do
 			Options:
 			  --dev              Build from dev branch (NAS upload disabled)
 			  --name <type>      Build only the specified bundle type
-			  --replace          Rebuild even if NAS bundle exists (old dir → *.replacing-* at publish)
+			  --replace          Rebuild even if NAS bundle exists (old dir → *.replaced-* at publish)
 			  --vendor <vendor>  Mirror registry vendor: omr (default), quay, docker
 			  -h, --help         Show this help
 
-			Stale *.replacing-* NAS backups (from prior --replace) are removed at
-			startup when older than BUNDLE_REPLACING_TTL_HOURS (default: 24).
+			Stale *.replaced-* NAS backups (from prior --replace) are removed at
+			startup when older than BUNDLE_REPLACED_TTL_HOURS (default: 24).
 			This keeps a download grace window after publish without leaving
 			backups forever. Skip with --dev (no NAS).
 
@@ -106,11 +106,12 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-# Remove stale --replace backups on NAS. Publish keeps *.replacing-* so active
-# downloaders are not cut off; the next go.sh run cleans them after a TTL.
-# Override: BUNDLE_REPLACING_TTL_HOURS=48 ./go.sh ...
-_cleanup_stale_replacing() {
-	local ttl_h="${BUNDLE_REPLACING_TTL_HOURS:-24}"
+# Remove stale --replace backups on NAS. Publish renames the previous complete
+# dir to *.replaced-* immediately before the new dir is published; the next
+# go.sh run cleans them after a TTL. Also matches legacy *.replacing-*.
+# Override: BUNDLE_REPLACED_TTL_HOURS=48 ./go.sh ...
+_cleanup_stale_replaced() {
+	local ttl_h="${BUNDLE_REPLACED_TTL_HOURS:-${BUNDLE_REPLACING_TTL_HOURS:-24}}"
 	local ttl_m=$(( ttl_h * 60 ))
 	local cloud_dir="${CLOUD_DIR:-}"
 	local d age_m removed=0 kept=0
@@ -119,7 +120,7 @@ _cleanup_stale_replacing() {
 	[[ -n "$cloud_dir" && -d "$cloud_dir" ]] || return 0
 
 	shopt -s nullglob
-	for d in "$cloud_dir"/*.replacing-*; do
+	for d in "$cloud_dir"/*.replaced-* "$cloud_dir"/*.replacing-*; do
 		[[ -d "$d" ]] || continue
 		age_m=$(( ( $(date +%s) - $(stat -c %Y "$d") ) / 60 ))
 		if (( age_m >= ttl_m )); then
@@ -137,7 +138,7 @@ _cleanup_stale_replacing() {
 		echo "REPLACE: stale cleanup done (removed=$removed kept=$kept TTL=${ttl_h}h)"
 	fi
 }
-_cleanup_stale_replacing
+_cleanup_stale_replaced
 
 if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
 
@@ -254,8 +255,8 @@ do
 
 		echo
 		# Skip if bundle already exists and is complete in cloud dir.
-		# --replace: do not skip; keep the old NAS dir until 07-upload swaps it
-		# aside as *.replacing-* at the last moment.
+		# --replace: do not skip; keep the old NAS dir until 07-upload renames
+		# it to *.replaced-* immediately before publishing the new dir.
 		# In dev mode, always rebuild — we're testing dev features, not NAS state.
 		cloud_bundle="$CLOUD_DIR/$bundle_name"
 		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ "${BUNDLE_REPLACE:-}" != "1" ] && \
