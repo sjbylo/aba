@@ -2192,13 +2192,15 @@ aba_wait_show() (
 		# parent kill), the check tree is still destroyed.
 		remaining=$(( max - elapsed ))
 		cmd_rc=0
-		_wait_show_pid=$$
+		# BASHPID = this wait_show subshell ($$ would be the parent shell)
+		_wait_show_pid=$BASHPID
 		set -m 2>/dev/null || true
 		(
+			_check_pgid=$BASHPID
 			( while kill -0 "$_wait_show_pid" 2>/dev/null; do sleep 0.2; done
-			  # Parent gone — kill this process group (check + children)
-			  kill -TERM -$$ 2>/dev/null || true
-			  kill -KILL -$$ 2>/dev/null || true ) &
+			  # Parent wait_show gone — kill this check process group
+			  kill -TERM -"$_check_pgid" 2>/dev/null || true
+			  kill -KILL -"$_check_pgid" 2>/dev/null || true ) &
 			eval "$check_cmd"
 		) >> "$_wait_log" 2>&1 &
 		_cmd_pid=$!

@@ -316,12 +316,14 @@ rm -f "$marker12"
 # and does NOT inherit SIG_IGN for SIGINT (which non-interactive shells
 # with set +m apply to background jobs).  This matches real Ctrl+C on a
 # terminal where the foreground process group receives SIGINT.
-# setsid: own session/PGID even when suite job-control is odd
-setsid bash -c "
+# Non-interactive bash -c has WCE that suppresses INT traps; real Ctrl+C is
+# on a TTY.  Run under script(1) so SIGINT trapping matches production.
+# setsid: own session/PGID for group signaling.
+setsid script -qefc "bash -c \"
 	. '$ABA_ROOT/scripts/include_all.sh' 2>/dev/null || true
 	trap - ERR
 	aba_wait_show sigint-test 1 30 'sleep 10 && touch $marker12'
-" > "$TMPDIR_TEST/t12.out" 2>&1 &
+\"" /dev/null > "$TMPDIR_TEST/t12.out" 2>&1 &
 sub_pid=$!
 sleep 2
 # Signal the entire process group (simulates real Ctrl+C)
