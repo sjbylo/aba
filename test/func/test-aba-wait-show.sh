@@ -316,14 +316,13 @@ rm -f "$marker12"
 # and does NOT inherit SIG_IGN for SIGINT (which non-interactive shells
 # with set +m apply to background jobs).  This matches real Ctrl+C on a
 # terminal where the foreground process group receives SIGINT.
-set -m 2>/dev/null || true
-bash -c "
+# setsid: own session/PGID even when suite job-control is odd
+setsid bash -c "
 	. '$ABA_ROOT/scripts/include_all.sh' 2>/dev/null || true
 	trap - ERR
 	aba_wait_show sigint-test 1 30 'sleep 10 && touch $marker12'
 " > "$TMPDIR_TEST/t12.out" 2>&1 &
 sub_pid=$!
-set +m 2>/dev/null || true
 sleep 2
 # Signal the entire process group (simulates real Ctrl+C)
 kill -INT -- -"$sub_pid" 2>/dev/null || kill -INT "$sub_pid" 2>/dev/null || true
@@ -347,14 +346,12 @@ rm -f "$marker13"
 
 # Process-group TERM (supervised kill / service stop). Single-PID TERM to
 # the outer bash alone is covered as a known limitation in 13b-style cases.
-set -m 2>/dev/null || true
-bash -c "
+setsid bash -c "
 	. '$ABA_ROOT/scripts/include_all.sh' 2>/dev/null || true
 	trap - ERR
 	aba_wait_show sigterm-test 1 30 'sleep 10 && touch $marker13'
 " > "$TMPDIR_TEST/t13.out" 2>&1 &
 sub_pid=$!
-set +m 2>/dev/null || true
 sleep 2
 kill -TERM -- -"$sub_pid" 2>/dev/null || kill -TERM "$sub_pid" 2>/dev/null || true
 wait "$sub_pid" 2>/dev/null || true
