@@ -5,7 +5,7 @@
 - **`aba show-op-sets <name>`** — Show the operators in a specific set (e.g. `aba show-op-sets acm`). Without a name, lists all available sets as before.
 - **TUI bundle dialog: OMR detection** — The "ABA Install Bundle" summary dialog now detects OMR registry installers alongside Quay and Docker.
 - **Catalog extraction diagnostics** — `download-catalog-index.sh` now retries on empty extraction and dumps container diagnostics (filesystem listing, image inspect, disk space) on persistent failure.
-- **`aba bundle --replace`** — Rebuild an existing NAS install bundle for the same version; keeps the previous complete cloud dir until publish, then moves it aside as `*.replacing-*`.
+- **`aba bundle --replace`** — Rebuild an existing NAS install bundle for the same version; at publish, renames the previous complete cloud dir to `*.replaced-*` immediately before the new dir is published.
 - **OCP version tip tests** — `test-ocp-version-tips.sh` (unit), `test-ocp-version-tips-live.sh` (stable/fast/candidate invariants), `test-tui-version-tips-spot.sh` (TUI menu vs `fetch_*`).
 - **Cluster clean gate test** — `test-cluster-clean-gate.sh` covers refuse-while-installed and `force=1` post-delete cleanup.
 
