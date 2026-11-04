@@ -1716,8 +1716,9 @@ if [ "$cur_target" ]; then
 				aba_info "Cluster state removed"
 				aba_debug "State dir: $_del_sd"
 			fi
-			# Clean generated artifacts so next install starts fresh from current config
-			make -s clean || true
+			# Clean generated artifacts so next install starts fresh from current config.
+			# force=1: .install-complete may still exist until clean removes it; VMs are already gone.
+			make -s clean force=1 || true
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
@@ -1753,7 +1754,7 @@ if [ "$cur_target" ]; then
 				esac
 				if [ "$_install_vms_gone" ]; then
 					aba_warn "Cluster was installed but VMs no longer exist (deleted outside ABA?)."
-					aba_info "To re-install: 'aba -d $(basename "$PWD") clean' then 'aba -d $(basename "$PWD") install'."
+					aba_info "To re-install: 'aba -d $(basename "$PWD") delete' then 'aba -d $(basename "$PWD") install'."
 					exit 0
 				fi
 				if [ -f .shutdown.log ]; then
@@ -1953,15 +1954,9 @@ fi
 #else
 
 	aba_debug "Fetching OpenShift version data in background ..."
-	# Start: fetch OCP versions in background. 'bash -lc' needed because can't setsid a function.
-	# Wait: ~80 lines below (run_once -w ocp:$channel:latest_version*)
-	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable'
-	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable'
-	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast'
-	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast'
-	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
-	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
-	run_once -i ocp:candidate:latest_version_older		-- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate'
+	# Start: shared tip tasks (same cmd strings as TUI — see aba_version_fetch_start).
+	# Wait: ~80 lines below via aba_version_fetch_wait.
+	aba_version_fetch_start
 
 	# Start: download+install oc-mirror in background. Wait: ensure_oc_mirror()
 	aba_debug "Installing oc-mirror in the background ..."
@@ -2038,19 +2033,11 @@ fi
 #else
 
 	echo_white -n "Fetching available versions ..."
-	# Wait: block for version data started ~80 lines above (run_once -i ocp:$channel:*)
-	if ! run_once -w -q -i ocp:$ocp_channel:latest_version; then
-		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version)
-		aba_abort "Failed to fetch latest OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
-	fi
-	
-	if ! run_once -w -q -i ocp:$ocp_channel:latest_version_previous; then
-		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version_previous)
-		aba_abort "Failed to fetch previous OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
-	fi
-	# Older is a third choice. A miss here leaves the prompt without it.
-	if [ "$ocp_channel" = "candidate" ]; then
-		run_once -w -q -i ocp:candidate:latest_version_older || true
+	# Wait: tip tasks started above via aba_version_fetch_start
+	if ! aba_version_fetch_wait "$ocp_channel"; then
+		error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version")
+		[ -z "$error_msg" ] && error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version_previous")
+		aba_abort "Failed to fetch OCP versions from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi
 #	if [ "$ocp_channel" = "stable" ]; then
 #		run_once -w -i ocp:stable:latest_version

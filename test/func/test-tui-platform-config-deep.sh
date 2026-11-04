@@ -318,6 +318,9 @@ echo ""
 echo "--- 6. Restore originals ---"
 $_TUI_SSH "cp ~/aba/vmware.conf.test-backup ~/aba/vmware.conf 2>/dev/null; rm -f ~/aba/vmware.conf.test-backup" 2>/dev/null
 $_TUI_SSH "cp ~/aba/kvm.conf.test-backup ~/aba/kvm.conf 2>/dev/null; rm -f ~/aba/kvm.conf.test-backup" 2>/dev/null
+# Persistence check writes a fake DC (test-dc-01). If the backup itself was
+# already poisoned, ensure_install_prereqs rewrites to a real govc DC.
+tui_ensure_install_prereqs
 echo "  ✓ PASS: Original configs restored"
 _TUI_PASS=$(( _TUI_PASS + 1 ))
 

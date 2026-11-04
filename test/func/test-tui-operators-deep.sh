@@ -454,8 +454,10 @@ tui_keys Enter 2>/dev/null; tui_keys Escape; sleep 1
 # ============================================================================
 echo ""
 echo "--- 10. Restore original operators ---"
-$_TUI_SSH "cd ~/aba && sed -i 's/^op_sets=.*/op_sets=$_orig_op_sets/' aba.conf" 2>/dev/null
-echo "  Restored op_sets='$_orig_op_sets'"
+# Write original back, then drop any entries whose set files are gone.
+tui_set_aba_conf op_sets "$_orig_op_sets"
+tui_sanitize_op_sets
+echo "  Restored op_sets='$(tui_get_aba_conf op_sets)' (after sanitize)"
 
 # ============================================================================
 # 11. Cleanup

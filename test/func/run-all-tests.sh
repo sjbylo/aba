@@ -100,7 +100,9 @@ unit_tests=(
 	test/func/test-auth-backup.sh
 	test/func/test-install-stamp.sh
 	test/func/test-install-guard-stale-vms.sh
+	test/func/test-cluster-clean-gate.sh
 	test/func/test-oc-mirror-url.sh
+	test/func/test-ocp-version-tips.sh
 	test/func/test-container-auth-merge.sh
 	test/func/test-image-digest.sh
 	test/func/test-reg-port.sh
@@ -170,6 +172,9 @@ integration_tests=(
 	test/func/test-isc-generation.sh
 	test/func/test-show-ops.sh
 
+	# OCP version tips (live Cincinnati/CDN invariants)
+	test/func/test-ocp-version-tips-live.sh
+
 	# BMC (offline; uses test/func/lib/bmc-redfish-stub.sh)
 	test/func/test-preflight-check-bm.sh
 	test/func/test-bmc-mac-discovery.sh
@@ -201,6 +206,7 @@ env_tests=(
 	test/func/test-linuxone.sh             # Must run on s390x LinuxONE host
 	test/func/test-mirror-stop-start.sh    # Needs running mirror registry
 	test/func/test-catalog-helpers.sh      # Downloads real catalogs from registry.redhat.io
+	test/func/test-tui-version-tips-spot.sh  # TUI version menu vs fetch_* tips (tmux)
 )
 
 passed=0

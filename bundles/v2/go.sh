@@ -75,6 +75,11 @@ while [[ $# -gt 0 ]]; do
 			  --vendor <vendor>  Mirror registry vendor: omr (default), quay, docker
 			  -h, --help         Show this help
 
+			Stale *.replacing-* NAS backups (from prior --replace) are removed at
+			startup when older than BUNDLE_REPLACING_TTL_HOURS (default: 24).
+			This keeps a download grace window after publish without leaving
+			backups forever. Skip with --dev (no NAS).
+
 			Bundle types:
 			  release   OCP release images only (no operators)
 			  ocp       OCP + common operators
@@ -100,6 +105,39 @@ while [[ $# -gt 0 ]]; do
 			;;
 	esac
 done
+
+# Remove stale --replace backups on NAS. Publish keeps *.replacing-* so active
+# downloaders are not cut off; the next go.sh run cleans them after a TTL.
+# Override: BUNDLE_REPLACING_TTL_HOURS=48 ./go.sh ...
+_cleanup_stale_replacing() {
+	local ttl_h="${BUNDLE_REPLACING_TTL_HOURS:-24}"
+	local ttl_m=$(( ttl_h * 60 ))
+	local cloud_dir="${CLOUD_DIR:-}"
+	local d age_m removed=0 kept=0
+
+	[[ "${BUNDLE_DEV_MODE:-}" == "1" ]] && return 0
+	[[ -n "$cloud_dir" && -d "$cloud_dir" ]] || return 0
+
+	shopt -s nullglob
+	for d in "$cloud_dir"/*.replacing-*; do
+		[[ -d "$d" ]] || continue
+		age_m=$(( ( $(date +%s) - $(stat -c %Y "$d") ) / 60 ))
+		if (( age_m >= ttl_m )); then
+			echo "REPLACE: removing stale backup (${age_m}m >= ${ttl_m}m TTL): $d"
+			rm -rf "$d"
+			removed=$(( removed + 1 ))
+		else
+			echo "REPLACE: keeping recent backup (${age_m}m < ${ttl_m}m TTL): $d"
+			kept=$(( kept + 1 ))
+		fi
+	done
+	shopt -u nullglob
+
+	if (( removed > 0 || kept > 0 )); then
+		echo "REPLACE: stale cleanup done (removed=$removed kept=$kept TTL=${ttl_h}h)"
+	fi
+}
+_cleanup_stale_replacing
 
 if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
 

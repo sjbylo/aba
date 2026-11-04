@@ -15,6 +15,175 @@ _TUI_FAIL=0
 _TUI_WIDTH=160
 _TUI_HEIGHT=45
 
+# ---------------------------------------------------------------------------
+# Throwaway-cluster lab defaults
+# Source of truth: .cursor/skills/throwaway-cluster/SKILL.md
+# ---------------------------------------------------------------------------
+TUI_LAB_DOMAIN="example.com"
+TUI_LAB_DNS_NTP="10.0.1.8"		# cluster-node DNS+NTP (NOT bastion 192.168.2.38)
+TUI_LAB_MACHINE_NETWORK="10.0.0.0/20"
+TUI_LAB_GATEWAY="10.0.0.1"
+TUI_LAB_PORTS="ens160"
+
+# Resolve IPs for a throwaway cluster name (10.0.1.0/24 allocation).
+# Sets: _lab_starting_ip _lab_api_ip _lab_apps_ip _lab_type
+# Usage: tui_lab_cluster_ips sno || exit 1
+tui_lab_cluster_ips() {
+	local name="$1"
+	case "$name" in
+		sno)      _lab_starting_ip=10.0.1.201; _lab_api_ip=10.0.1.201; _lab_apps_ip=10.0.1.201; _lab_type=sno ;;
+		sno2)     _lab_starting_ip=10.0.1.202; _lab_api_ip=10.0.1.202; _lab_apps_ip=10.0.1.202; _lab_type=sno ;;
+		sno3)     _lab_starting_ip=10.0.1.203; _lab_api_ip=10.0.1.203; _lab_apps_ip=10.0.1.203; _lab_type=sno ;;
+		sno4)     _lab_starting_ip=10.0.1.204; _lab_api_ip=10.0.1.204; _lab_apps_ip=10.0.1.204; _lab_type=sno ;;
+		compact)  _lab_starting_ip=10.0.1.71;  _lab_api_ip=10.0.1.216; _lab_apps_ip=10.0.1.226; _lab_type=compact ;;
+		compact2) _lab_starting_ip=10.0.1.91;  _lab_api_ip=10.0.1.212; _lab_apps_ip=10.0.1.222; _lab_type=compact ;;
+		standard) _lab_starting_ip=10.0.1.81;  _lab_api_ip=10.0.1.217; _lab_apps_ip=10.0.1.227; _lab_type=standard ;;
+		ocp)      _lab_starting_ip=10.0.1.100; _lab_api_ip=10.0.1.100; _lab_apps_ip=10.0.1.100; _lab_type=sno ;;
+		*)
+			echo "  ERROR: unknown throwaway cluster '$name' (see throwaway-cluster skill)" >&2
+			echo "  Valid: sno sno2 sno3 sno4 compact compact2 standard ocp" >&2
+			return 1
+			;;
+	esac
+	return 0
+}
+
+# Verify lab DNS A record for api.<name> matches the skill API column.
+# Usage: tui_lab_verify_api_dns sno 10.0.1.201
+tui_lab_verify_api_dns() {
+	local name="$1" expect="$2"
+	local got
+	got=$(dig +short "api.${name}.${TUI_LAB_DOMAIN}" "@${TUI_LAB_DNS_NTP}" 2>/dev/null | head -1)
+	if [[ -z "$got" ]]; then
+		echo "  ERROR: No DNS A record for api.${name}.${TUI_LAB_DOMAIN} on ${TUI_LAB_DNS_NTP}" >&2
+		return 1
+	fi
+	if [[ "$got" != "$expect" ]]; then
+		echo "  ERROR: api.${name}.${TUI_LAB_DOMAIN} is $got (expected $expect per throwaway-cluster skill)" >&2
+		return 1
+	fi
+	return 0
+}
+
+# Resolve + verify throwaway-cluster lab IPs for TUI_CLUSTER_NAME.
+# Sets: _lab_starting_ip _lab_api_ip _lab_apps_ip _lab_type
+# Plus aliases used by older tests: _api_ip _starting_ip _machine_network _gateway _cluster_dns
+# Usage: tui_lab_resolve_cluster "${TUI_CLUSTER_NAME:-sno}" || exit 1
+tui_lab_resolve_cluster() {
+	local name="${1:?cluster name required}"
+	tui_lab_cluster_ips "$name" || return 1
+	tui_lab_verify_api_dns "$name" "$_lab_api_ip" || return 1
+	_starting_ip="$_lab_starting_ip"
+	_api_ip="$_lab_api_ip"
+	_apps_ip="$_lab_apps_ip"
+	_machine_network="$TUI_LAB_MACHINE_NETWORK"
+	_gateway="$TUI_LAB_GATEWAY"
+	_cluster_dns="$TUI_LAB_DNS_NTP"
+	_cluster_ntp="$TUI_LAB_DNS_NTP"
+	_ports="$TUI_LAB_PORTS"
+	_domain="$TUI_LAB_DOMAIN"
+	echo "  Lab IPs ($name): type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip apps=$_lab_apps_ip dns/ntp=$TUI_LAB_DNS_NTP"
+	return 0
+}
+
+# Set a networking-page field via hotkey → clear → type → Enter.
+# Usage: tui_set_net_field S 10.0.1.201
+tui_set_net_field() {
+	local key="$1" value="$2"
+	tui_keys "$key"; sleep 0.4
+	tui_keys Enter; sleep 0.5
+	tui_keys C-u; sleep 0.3
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$value'" 2>/dev/null
+	sleep 0.3
+	tui_keys Enter; sleep 1
+}
+
+# Apply throwaway-cluster skill network values on Install Cluster page 2.
+# Requires _lab_* vars from tui_lab_resolve_cluster / tui_lab_cluster_ips.
+# Usage: tui_apply_lab_network
+tui_apply_lab_network() {
+	local pane
+	pane=$(tui_capture)
+
+	if ! echo "$pane" | grep -qE "Machine network:[[:space:]]*${TUI_LAB_MACHINE_NETWORK}"; then
+		echo "  Setting machine network to ${TUI_LAB_MACHINE_NETWORK}"
+		tui_set_net_field M "$TUI_LAB_MACHINE_NETWORK"
+		pane=$(tui_capture)
+	fi
+
+	if ! echo "$pane" | grep -qE "Starting IP:[[:space:]]*${_lab_starting_ip}"; then
+		echo "  Setting starting IP to ${_lab_starting_ip}"
+		tui_set_net_field S "$_lab_starting_ip"
+		pane=$(tui_capture)
+	fi
+
+	# compact/standard: set VIPs explicitly (SNO has no VIP fields)
+	if [[ "${_lab_type:-sno}" != "sno" ]]; then
+		if ! echo "$pane" | grep -qE "API VIP:[[:space:]]*${_lab_api_ip}"; then
+			echo "  Setting API VIP to ${_lab_api_ip}"
+			tui_set_net_field A "$_lab_api_ip"
+			pane=$(tui_capture)
+		fi
+		if ! echo "$pane" | grep -qE "Ingress VIP:[[:space:]]*${_lab_apps_ip}"; then
+			echo "  Setting Ingress VIP to ${_lab_apps_ip}"
+			tui_set_net_field I "$_lab_apps_ip"
+			pane=$(tui_capture)
+		fi
+	fi
+
+	if ! echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
+		echo "  Setting DNS servers to ${TUI_LAB_DNS_NTP}"
+		tui_set_net_field D "$TUI_LAB_DNS_NTP"
+		pane=$(tui_capture)
+	fi
+
+	if ! echo "$pane" | grep -qE "Gateway:[[:space:]]*${TUI_LAB_GATEWAY}"; then
+		echo "  Setting gateway to ${TUI_LAB_GATEWAY}"
+		tui_set_net_field G "$TUI_LAB_GATEWAY"
+		pane=$(tui_capture)
+	fi
+
+	if ! echo "$pane" | grep -qiE "NTP servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
+		echo "  Setting NTP servers to ${TUI_LAB_DNS_NTP}"
+		tui_set_net_field N "$TUI_LAB_DNS_NTP"
+		pane=$(tui_capture)
+	fi
+
+	# Assert critical fields
+	pane=$(tui_capture)
+	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
+		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS_NTP}"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS_NTP} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+	if echo "$pane" | grep -qE "Starting IP:[[:space:]]*${_lab_starting_ip}"; then
+		echo "  ✓ PASS: Starting IP set to ${_lab_starting_ip}"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: Starting IP not ${_lab_starting_ip}"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+}
+
+# Ensure Interfaces page ports match skill (ens160 for VMware).
+# Usage: tui_apply_lab_ports
+tui_apply_lab_ports() {
+	local pane
+	pane=$(tui_capture)
+	if echo "$pane" | grep -qE "Ports:[[:space:]]*${TUI_LAB_PORTS}"; then
+		return 0
+	fi
+	echo "  Setting ports to ${TUI_LAB_PORTS}"
+	tui_keys P; sleep 0.4
+	tui_keys Enter; sleep 0.5
+	tui_keys C-u; sleep 0.3
+	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$TUI_LAB_PORTS'" 2>/dev/null
+	sleep 0.3
+	tui_keys Enter; sleep 1
+}
+
 # Per-run screenshot directory: /tmp/tui-test/<testname>-<timestamp>/
 _TUI_TEST_NAME="$(basename "${BASH_SOURCE[1]:-unknown}" .sh)"
 _TUI_RUN_DIR="/tmp/tui-test/${_TUI_TEST_NAME}-$(date +%Y%m%d-%H%M%S)"
@@ -539,7 +708,9 @@ tui_require_internet() {
 #         install, mirror/Makefile — everything needed for a working ABA.
 # Usage: tui_deploy_code
 tui_deploy_code() {
-	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile)
+	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
+	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
+		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
 	local _tar
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
 
@@ -553,6 +724,216 @@ tui_deploy_code() {
 
 	rm -f "$_tar"
 	echo "  Code deployed ($(git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | wc -l) files)"
+
+	# Host leftovers that poison later suites (stale op_sets, bad DC, dead NTP).
+	tui_sanitize_op_sets
+	tui_ensure_install_prereqs
+}
+
+# --- Conf helpers (keep callers thin; edit these when ABA conf shape changes) ---
+
+# Set key=value in remote ~/aba/aba.conf (create the key if missing).
+# Usage: tui_set_aba_conf excl_additional false
+tui_set_aba_conf() {
+	local key="$1" val="$2"
+	$_TUI_SSH "cd ~/aba || exit 1
+		if grep -q '^${key}=' aba.conf 2>/dev/null; then
+			sed -i 's/^${key}=.*/${key}=${val}/' aba.conf
+		else
+			echo '${key}=${val}' >> aba.conf
+		fi
+	" 2>/dev/null
+}
+
+# Read first token of key= from remote ~/aba/aba.conf (empty if unset).
+# Usage: _v=$(tui_get_aba_conf excl_additional)
+tui_get_aba_conf() {
+	local key="$1"
+	$_TUI_SSH "grep '^${key}=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || true
+}
+
+# Set key=value in a remote ~/aba/<file> (quoted values preserved as-is).
+# Usage: tui_set_conf_file vmware.conf GOVC_DATACENTER Datacenter
+tui_set_conf_file() {
+	local file="$1" key="$2" val="$3"
+	$_TUI_SSH "cd ~/aba || exit 1
+		[ -f '$file' ] || exit 0
+		if grep -q '^${key}=' '$file' 2>/dev/null; then
+			sed -i \"s|^${key}=.*|${key}='${val}'\\t\\t#|\" '$file'
+		else
+			echo \"${key}='${val}'\" >> '$file'
+		fi
+	" 2>/dev/null
+}
+
+# Drop op_sets entries whose templates/operator-set-* files are missing.
+# Keeps valid entries; clears the key only when nothing remains.
+# Does NOT delete template files (callers that create custom sets own cleanup).
+tui_sanitize_op_sets() {
+	local _out
+	_out=$($_TUI_SSH 'cd ~/aba || exit 0
+		[ -f aba.conf ] || exit 0
+		_sets=$(grep "^op_sets=" aba.conf 2>/dev/null | cut -d= -f2 | sed "s/#.*//;s/[[:space:]]//g")
+		[ -n "$_sets" ] || exit 0
+		_keep=""
+		_bad=""
+		_IFS="$IFS"; IFS=,
+		for _s in $_sets; do
+			[ -n "$_s" ] || continue
+			if [ -f "templates/operator-set-$_s" ]; then
+				[ -n "$_keep" ] && _keep="$_keep,$_s" || _keep="$_s"
+			else
+				_bad="$_bad $_s"
+			fi
+		done
+		IFS="$_IFS"
+		[ -z "$_bad" ] && exit 0
+		sed -i "s/^op_sets=.*/op_sets=$_keep/" aba.conf
+		echo "FIX:$_bad -> ${_keep:-(cleared)}"
+	' 2>/dev/null) || true
+	if [[ "$_out" == FIX:* ]]; then
+		echo "  Sanitized stale op_sets:${_out#FIX:}"
+	fi
+}
+
+# Make the test host installable: valid vSphere DC + reachable NTP.
+# Safe to call on every deploy — only rewrites when current values fail checks.
+tui_ensure_install_prereqs() {
+	local _out
+	_out=$($_TUI_SSH 'cd ~/aba || exit 0
+		# --- vSphere datacenter ---
+		# A bad GOVC_DATACENTER makes ALL govc ls/find calls fail, so probe with
+		# GOVC_DATACENTER unset, then rewrite conf if the configured DC is wrong.
+		if [ -f vmware.conf ]; then
+			# shellcheck disable=SC1091
+			set -a; source vmware.conf 2>/dev/null; set +a
+			_dc=$(echo "$GOVC_DATACENTER" | tr -d "\"'\''")
+			if [ -n "$GOVC_URL" ] && command -v govc >/dev/null 2>&1; then
+				export GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_INSECURE
+				_real=$(GOVC_DATACENTER= govc ls / 2>/dev/null | head -1 | sed "s|^/||")
+				_dc_ok=
+				if [ -n "$_dc" ] && [ -n "$_real" ]; then
+					GOVC_DATACENTER=$_dc govc ls / >/dev/null 2>&1 && _dc_ok=1
+				fi
+				if [ -n "$_real" ] && [ -z "$_dc_ok" ]; then
+					sed -i "s|^GOVC_DATACENTER=.*|GOVC_DATACENTER='\''$_real'\''\\t\\t#|" vmware.conf
+					[ -f "$HOME/.vmware.conf" ] && \
+						sed -i "s|^GOVC_DATACENTER=.*|GOVC_DATACENTER='\''$_real'\''\\t\\t#|" "$HOME/.vmware.conf"
+					echo "DC:${_dc:-empty}->$_real"
+				fi
+			fi
+		fi
+		# --- NTP: prefer a chronyd-reachable server ---
+		_ntp=$(grep "^ntp_servers=" aba.conf 2>/dev/null | cut -d= -f2 | sed "s/#.*//;s/[[:space:]]//g")
+		_ok=
+		if [ -n "$_ntp" ] && command -v chronyd >/dev/null 2>&1; then
+			_IFS="$IFS"; IFS=,
+			for _h in $_ntp; do
+				[ -n "$_h" ] || continue
+				timeout 5 chronyd -Q "server $_h iburst" >/dev/null 2>&1 && { _ok=1; break; }
+			done
+			IFS="$_IFS"
+		fi
+		if [ -z "$_ok" ]; then
+			# Lab DNS (10.0.1.8) is also a working chrony source on conno
+			_fallback=10.0.1.8
+			if timeout 5 chronyd -Q "server $_fallback iburst" >/dev/null 2>&1 \
+				|| timeout 3 bash -c "echo >/dev/udp/$_fallback/123" 2>/dev/null; then
+				if grep -q "^ntp_servers=" aba.conf; then
+					sed -i "s/^ntp_servers=.*/ntp_servers=$_fallback\\t\\t#/" aba.conf
+				else
+					echo "ntp_servers=$_fallback" >> aba.conf
+				fi
+				echo "NTP:${_ntp:-empty}->$_fallback"
+			fi
+		fi
+		# --- DNS for cluster nodes (not bastion) ---
+		# Bastion may auto-detect dns_servers on a secondary NIC (e.g. 192.168.2.38
+		# via ens192). VMs on Lab Network (10.0.0.0/20) cannot reach that DNS —
+		# agent then fails: "lookup disco.example.com on 192.168.2.38:53: i/o timeout".
+		# Force lab DNS on the machine network when configured DNS is off-net.
+		_lab_dns=10.0.1.8
+		_dns=$(grep "^dns_servers=" aba.conf 2>/dev/null | cut -d= -f2 | sed "s/#.*//;s/[[:space:]]//g")
+		_dns_ok=
+		case ",$_dns," in
+			*,10.0.*) _dns_ok=1 ;;
+		esac
+		if [ -z "$_dns_ok" ] && dig +time=1 +tries=1 +short disco.example.com "@$_lab_dns" 2>/dev/null | grep -q .
+		then
+			if grep -q "^dns_servers=" aba.conf; then
+				sed -i "s/^dns_servers=.*/dns_servers=$_lab_dns\\t\\t#/" aba.conf
+			else
+				echo "dns_servers=$_lab_dns" >> aba.conf
+			fi
+			echo "DNS:${_dns:-empty}->$_lab_dns"
+		fi
+	' 2>/dev/null) || true
+	if [[ -n "$_out" ]]; then
+		echo "  Ensured install prereqs: $_out"
+	fi
+}
+
+# Mirror is installed when mirror/.available exists on the test host.
+tui_mirror_available() {
+	$_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null
+}
+
+# Fallback when TUI delete cannot run: aba -d <cluster> delete --yes.
+# Requires the cluster directory (cluster.conf + agent-config). Never rm -rf
+# that dir before delete — that orphans VMs from ABA/TUI.
+# Usage: tui_aba_delete_cluster sno
+tui_aba_delete_cluster() {
+	local cluster="$1"
+	if ! $_TUI_SSH "test -d ~/aba/$cluster" 2>/dev/null; then
+		echo "  Pre-cleanup: no ~/aba/$cluster — cannot aba delete"
+		return 1
+	fi
+	echo "  Pre-cleanup: aba -d $cluster delete --yes (fallback)"
+	$_TUI_SSH "cd ~/aba && aba -d $cluster delete --yes" 2>&1 | tail -20
+	return 0
+}
+
+# Wait until IP stops answering arping (VM destroy settling).
+# Usage: tui_ensure_ip_free 10.0.1.201
+# Returns 0 if free, 1 if still held.
+tui_ensure_ip_free() {
+	local ip="$1"
+	local _try
+	for _try in $(seq 1 30); do
+		if ! $_TUI_SSH "arping -c 1 -w 2 $ip 2>&1" | grep -qi "reply"; then
+			echo "  Pre-cleanup: IP $ip is free"
+			return 0
+		fi
+		echo "  Pre-cleanup: IP $ip still in use, waiting... ($_try/30)"
+		sleep 10
+	done
+	echo "  ERROR: IP $ip still in use after delete/wait"
+	return 1
+}
+
+# Cycle Cluster Basics Type toggle until Type matches $1 (T + Select).
+# Returns 0 on match, 1 otherwise. Does not touch pass/fail counters.
+# Usage: tui_force_type sno|compact|standard
+tui_force_type() {
+	local want="${1:-sno}"
+	local _scr _try
+	_scr=$(tui_capture)
+	echo "$_scr" | grep -qiE "Type:[[:space:]]*${want}\\b" && return 0
+	for _try in 1 2 3 4 5 6; do
+		tui_keys T; sleep 0.4
+		tui_keys Enter; sleep 0.8
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qiE "Type:[[:space:]]*${want}\\b"; then
+			echo "  Type set to $want (attempt $_try)"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Convenience wrapper — prefer tui_force_type "$_lab_type".
+tui_force_type_sno() {
+	tui_force_type sno
 }
 
 # Start TUI, dismiss startup dialogs, detect mode, land on main menu.
@@ -742,73 +1123,87 @@ tui_screenshot() {
 	echo "  [screenshot: $file]"
 }
 
-# Delete a cluster via the TUI if it was installed.
-# Only runs when .install-complete exists — that means VMs and state files
-# are present and need cleaning up. Without it, there are no VMs to destroy
-# and no agent config files for vmw-delete.sh to work with.
-# Navigates: Actions → Day-2 → Delete → select cluster → confirm → wait.
-# Returns 0 if cluster was deleted or wasn't installed, 1 on error.
+# Delete a test cluster. ALWAYS prefer the TUI; fall back to
+# `aba -d <cluster> delete --yes` only if TUI cannot complete.
+#
+# Important: do NOT rm -rf the cluster dir before delete — ABA/TUI need
+# cluster.conf + agent-config.yaml to find and destroy VMs. Removing the
+# dir first is what orphans powered-on VMs.
+#
+# For sno/compact (and any named test cluster): always attempt delete when
+# the cluster directory exists — installed OR in-progress OR failed.
+#
+# Navigates: Actions → Day-2 → Delete → select → confirm → wait.
 # Usage: tui_delete_cluster "sno"
 tui_delete_cluster() {
 	local cluster="$1"
-	echo "  Pre-cleanup: checking for leftover '$cluster'..."
+	local _has_dir _scr _tui_ok=0
 
-	# Only delete if the cluster was actually installed (VMs exist)
-	local _installed
-	_installed=$($_TUI_SSH "test -f ~/aba/$cluster/.install-complete && echo yes || echo no")
-	if [[ "$_installed" != "yes" ]]; then
-		# No .install-complete — VMs should not exist.
-		# Clean up any leftover directory (stale config from a previous run).
-		if $_TUI_SSH "test -d ~/aba/$cluster" 2>/dev/null; then
-			echo "  Pre-cleanup: '$cluster' not installed — removing stale directory"
-			$_TUI_SSH "rm -rf ~/aba/$cluster" 2>/dev/null
-		else
-			echo "  Pre-cleanup: '$cluster' not installed — nothing to delete"
-		fi
+	echo "  Pre-cleanup: deleting leftover '$cluster' (TUI first)..."
+
+	_has_dir=$($_TUI_SSH "test -d ~/aba/$cluster && echo yes || echo no")
+	if [[ "$_has_dir" != "yes" ]]; then
+		echo "  Pre-cleanup: no ~/aba/$cluster directory — nothing for TUI/aba to delete"
 		return 0
 	fi
 
-	# Delete via TUI: Day-2 → Delete → confirm
-	echo "  Deleting '$cluster' via TUI..."
-	tui_back_to "Actions" 5
-	tui_select_item "Day-2"
-	sleep 1
-	tui_select_item "Delete"
-	sleep 1
-	tui_screenshot "pre-delete-start"
-
-	local _scr
-	_scr=$(tui_capture)
-
-	# Handle cluster selection dialog
-	if echo "$_scr" | grep -qi "select.*cluster\|choose.*cluster"; then
-		tui_keys Enter
-		sleep 2
+	# --- Primary: TUI Day-2 → Delete ---
+	if tui_session_alive 2>/dev/null; then
+		tui_back_to "Actions" 5
+		tui_select_item "Day-2"
+		sleep 1
+		tui_select_item "Delete"
+		sleep 1
+		tui_screenshot "pre-delete-start"
 		_scr=$(tui_capture)
-	fi
 
-	# Confirm delete (--defaultno: Cancel is focused, so Left+Enter for Yes)
-	if echo "$_scr" | grep -qi "Delete cluster\|destroy\|sure\|remove\|Are you sure"; then
-		tui_confirm_yes
-		sleep 1
-	fi
+		if echo "$_scr" | grep -qi "No clusters\|no cluster"; then
+			echo "  Pre-cleanup: TUI reports no clusters — will try aba delete"
+			tui_keys Enter 2>/dev/null || true
+			tui_back_to "Actions" 5
+		else
+			# Cluster selection menu (multiple) or straight confirm (single)
+			if echo "$_scr" | grep -qi "select.*cluster\|choose.*cluster\|Select cluster"; then
+				# Prefer the matching cluster name if listed; else first entry
+				if echo "$_scr" | grep -qi "$cluster"; then
+					tui_select_item "$cluster" 2>/dev/null || tui_keys Enter
+				else
+					tui_keys Enter
+				fi
+				sleep 2
+				_scr=$(tui_capture)
+			fi
 
-	# Handle execution mode dialog
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
-		tui_keys Enter
-		sleep 1
-	fi
+			# Confirm: --defaultno, yes-label is "Delete"
+			if echo "$_scr" | grep -qi "Delete cluster\|destroy\|sure\|remove\|Are you sure\|cannot be undone"; then
+				tui_confirm_yes
+				sleep 1
+			fi
 
-	# Wait for delete to complete
-	if tui_wait_for_progress "pre-delete" 300; then
-		echo "  Pre-cleanup: '$cluster' delete completed via TUI"
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
+				tui_keys Enter
+				sleep 1
+			fi
+
+			if tui_wait_for_progress "pre-delete" 300; then
+				echo "  Pre-cleanup: '$cluster' delete completed via TUI"
+				_tui_ok=1
+			else
+				echo "  Pre-cleanup: TUI delete did not complete cleanly"
+			fi
+			tui_dismiss_result 2>/dev/null || true
+			tui_back_to "Actions" 5
+		fi
 	else
-		echo "  Pre-cleanup: '$cluster' delete may have had issues"
+		echo "  Pre-cleanup: TUI session not alive — skipping TUI delete"
 	fi
-	tui_dismiss_result
-	# Navigate back to main menu
-	tui_back_to "Actions" 5
+
+	# --- Fallback: aba delete (keeps cluster dir; destroys VMs) ---
+	if [[ "$_tui_ok" -ne 1 ]]; then
+		tui_aba_delete_cluster "$cluster" || true
+	fi
+
 	return 0
 }
 
@@ -1056,6 +1451,15 @@ tui_wait_for_progress() {
 				sleep 3
 				continue
 			fi
+			return 1
+		fi
+
+		# Explicit stop (user quit / harness interrupted) — exit promptly so
+		# callers can fall back to marker checks instead of waiting full timeout.
+		if echo "$_scr" | grep -qi "Stopped before all steps\|──.*Stopped.*──\|Install.*Stopped\|Sync.*Stopped"; then
+			echo "  Progress '$label' stopped before completion (${_elapsed}s)"
+			tui_screenshot "${label}-stopped"
+			_tui_capture_output "$label"
 			return 1
 		fi
 

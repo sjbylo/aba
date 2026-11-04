@@ -5,6 +5,7 @@
 - **`aba show-op-sets <name>`** — Show the operators in a specific set (e.g. `aba show-op-sets acm`). Without a name, lists all available sets as before.
 - **TUI bundle dialog: OMR detection** — The "ABA Install Bundle" summary dialog now detects OMR registry installers alongside Quay and Docker.
 - **Catalog extraction diagnostics** — `download-catalog-index.sh` now retries `podman cp` on empty extraction and dumps container diagnostics (filesystem listing, image inspect, disk space) on persistent failure.
+- **OCP version tip tests** — `test-ocp-version-tips.sh` (unit), `test-ocp-version-tips-live.sh` (stable/fast/candidate invariants), `test-tui-version-tips-spot.sh` (TUI menu vs `fetch_*`).
 
 ### Changed
 
@@ -17,6 +18,7 @@
 
 ### Fixed
 
+- **OCP version tips miss next-major GA / sticky forever** — `Latest`/`Previous`/`Older` now prefer a GA next-major Cincinnati tip when the CDN floating tip lags (e.g. `5.0.0` while CDN still on 4.22), step Previous/Older across majors at `X.0`, and refresh via `run_once -t` (`ABA_CACHE_TTL`) instead of caching the first successful tip forever. Shared helpers: `_cdn_tip_version`, `_peek_next_major_ga`, `aba_version_fetch_channel`/`_wait`.
 - **TUI podman preflight blank error** — When `run_once` cannot write error logs (e.g. disk full), the podman preflight dialog now shows a fallback message instead of a blank.
 - **Release script stash leak** — `build/release.sh` pre-flight merge check now counts stashes before/after to avoid popping unrelated stashes.
 

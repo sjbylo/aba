@@ -3138,17 +3138,20 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 ## #B85: `vmw-delete.sh` should fall back to `cluster.conf` when agent config files are missing
 
-**Severity:** LOW — only affects `aba delete` on an already-deleted cluster
-**Status:** Planned
+**Severity:** MEDIUM — can leave powered-on VMs when configs were removed first
+**Status:** Planned (deferred seatbelt — do **not** implement yet)
 **Added:** 2026-10-31
+**Updated:** 2026-11-04
 
-**Problem:** `vmw-delete.sh` gets `CLUSTER_NAME` from `install-config.yaml` / `agent-config.yaml`. After a first `aba delete`, those files are correctly removed by `make clean`. If `aba delete` is called again (e.g. by accident), `vmw-delete.sh` says "Cluster config files missing -- nothing to delete" because it has no fallback.
+**Problem:** `vmw-delete.sh` gets `CLUSTER_NAME` from `install-config.yaml` / `agent-config.yaml`. If those files are gone while VMs still exist, delete prints "Cluster config files missing -- nothing to delete" (exit 0) and orphans the VMs / holds the starting IP.
 
-This is a minor robustness issue — the first delete already destroys VMs and cleans files, so the second delete is a no-op. Callers should check `.install-complete` before calling `aba delete`.
+How configs go missing with VMs still up (historical): Day-2 **Clean** while installed removed agent/install-config but left VMs; then Delete could not find them.
 
-**Proposed fix:** In `vmw-delete.sh`, fall back to `cluster.conf` (via `normalize-cluster-conf`) when `CLUSTER_NAME` is empty and agent config files are gone. `cluster.conf` has `cluster_name`, `num_masters`, `num_workers` — enough to derive VM names via `vm_name()`.
+**Primary fix (done 2026-11-04):** Refuse `aba clean` / Day-2 Clean while `.install-complete` exists (`scripts/cluster-clean.sh`). Installed clusters must use `aba delete`. Delete then runs `make clean force=1`.
 
-**Workaround:** Only call `aba delete` when `.install-complete` exists.
+**This item (seatbelt, later):** In `vmw-delete.sh` / `kvm-delete.sh`, fall back to `cluster.conf` (`normalize-cluster-conf` + `vm_name()`) when agent/install-config are missing so delete still destroys VMs in half-cleaned dirs. Band-aid relative to the Clean gate; keep for defense-in-depth if needed.
+
+**Workaround today:** Regenerate agent-config (`make agent-config.yaml`) then `aba delete`, or `govc`/`virsh` as last resort.
 
 ## #B86: Remove extract diagnostics from `download-catalog-index.sh` once stable
 
@@ -3353,4 +3356,82 @@ If the metadata image doesn't exist in the registry (first-time setup, older con
 3. Retries belong inside `aba_wait_show` (visible spinner + elapsed/max), not in a silent pre-check curl.
 
 **Related:** #B90 item 2 (don’t leave the user with silent waits).
+
+---
+
+## #B92: TUI creates `mirror.conf` via Make without `force=yes` → opens `vi`
+
+**Severity:** HIGH — blocks DISCO/first-time TUI mirror install; automation hangs
+**Status:** Done (fix 2026-11-04 — TUI `make … mirror.conf force=yes`; verify on next DISCO wipe run)
+**Added:** 2026-11-04
+**Updated:** 2026-11-04
+
+**Problem:** On a fresh host (typical DISCO after bundle unpack — bundle **excludes**
+`mirror/mirror.conf`), the TUI Install Mirror path can drop into an interactive
+`$editor` (`vi` with stock `editor=vi` + `ask=true`) instead of only showing the TUI
+Mirror Configuration dialog. Screen capture may still look like the “Install locally /
+remote” menu while the process is actually blocked in `vi`, so keystrokes go into vim
+and the wizard appears stuck.
+
+**Root cause:** TUI ensures `mirror.conf` exists with bare Make:
+
+```bash
+make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+```
+
+Make defaults `force=no` → `create-mirror-conf.sh` → `edit_file` → with `ask=true` and
+`editor=vi`, opens vi. The TUI then shows its own config menu afterward (double prompt).
+CLI paths that set registry fields correctly use `force=yes` (e.g. `aba --vendor`,
+`--reg-host`, …) and never open an editor. Bundle/`go.sh` often create conf via those
+CLI flags, so interactive users who configure via CLI first may never see this; pure
+TUI-first after wipe hits it.
+
+**Call sites:**
+
+- `tui/v2/tui-mirror.sh` — `_mirror_config_menu_loop` (missing conf)
+- `tui/v2/tui-lib.sh` — settings / vendor path that creates conf
+
+**Proposed fix:** Always create from TUI with skip-edit, matching CLI:
+
+```bash
+make -sC "$ABA_ROOT/mirror" mirror.conf force=yes
+```
+
+Do **not** change the user’s `editor=` / `ask=` defaults in `aba.conf`. TUI owns the
+review UI after the file exists.
+
+**Reproducer:** Wipe disco ABA state, unpack a full bundle (no `mirror.conf`), launch
+TUI DISCO, proceed through Install Mirror → Install locally. With `ask=true` /
+`editor=vi`, process becomes `vi mirror.conf` before the Mirror Configuration dialog.
+
+**Seen:** 2026-11-04 `test-tui-disco-workflow.sh` gate stuck ~7m; harness Enter keys
+went into vim; `:q!` unblocked → Mirror Configuration → install progress.
+
+---
+
+## #B93: Split heavy DISCO TUI workflow into resumable stage tests
+
+**Severity:** LOW — test harness UX / iterate-on-fail only
+**Status:** Planned (do **after** TUI ALL-WORKING / full green)
+**Added:** 2026-11-04
+
+**Problem:** `test-tui-disco-workflow.sh` is one mega-script (bundle → wipe →
+transfer → registry/load → cluster). A failure late in the run makes it easy to
+re-run from scratch and redo the expensive bundle (~30–60m) even when mirror+load
+already succeeded. Conno is already staged (`cluster` → `day2` → `upgrade` →
+`lifecycle`); disco is not.
+
+**Current partial mitigation:** `TUI_BUNDLE_PATH` (reuse tar) and
+`TUI_SKIP_SETUP=1` (skip wipe/transfer when `.bundle` + `mirror/.available`).
+Works but is easy to forget and still one script.
+
+**Proposed fix (after green):** Split into separate tests that share fixtures via
+env/markers, e.g.:
+
+1. `test-tui-disco-bundle.sh` — create/transfer/unpack (rare, expensive)
+2. `test-tui-disco-load.sh` — registry install + load (medium)
+3. `test-tui-disco-cluster.sh` — cluster wizard + install + verify (usual re-run)
+
+Keep one ordered path in `test-tui-all` / overnight (1→2→3) for release. Does not
+shorten a real install failure (~40m); only avoids redoing earlier stages.
 
