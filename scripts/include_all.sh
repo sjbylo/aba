@@ -2188,10 +2188,19 @@ aba_wait_show() (
 		# remaining wall-clock budget.  Output goes to debug log.
 		# Briefly enable monitor mode so the check gets its own process
 		# group (PGID==PID) and cleanup can kill the whole tree.
+		# Parent-death watchdog: if wait_show exits without reaping (WCE /
+		# parent kill), the check tree is still destroyed.
 		remaining=$(( max - elapsed ))
 		cmd_rc=0
+		_wait_show_pid=$$
 		set -m 2>/dev/null || true
-		( eval "$check_cmd" ) >> "$_wait_log" 2>&1 &
+		(
+			( while kill -0 "$_wait_show_pid" 2>/dev/null; do sleep 0.2; done
+			  # Parent gone — kill this process group (check + children)
+			  kill -TERM -$$ 2>/dev/null || true
+			  kill -KILL -$$ 2>/dev/null || true ) &
+			eval "$check_cmd"
+		) >> "$_wait_log" 2>&1 &
 		_cmd_pid=$!
 		set +m 2>/dev/null || true
 		_deadline=$(( $(date +%s) + remaining ))
