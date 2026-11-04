@@ -269,6 +269,7 @@ resource-locker-operator Resource Locker Operator alpha
 rhoas-operator OpenShift Application Services (RHOAS) beta
 ripsaw benchmark-operator alpha
 rsct-operator RSCT Operator for IBM Power Systems alpha
+ruptura-operator Ruptura Operator stable
 sailoperator Sail Operator stable
 sap-commerce-operator SAP Commerce Operator alpha
 sap-data-intelligence-observer-operator SAP Data Intelligence 3 - Observer Operator stable

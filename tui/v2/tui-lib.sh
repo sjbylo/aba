@@ -1281,7 +1281,8 @@ Toggle a setting by selecting it and pressing Enter."
 				# Persist to file
 				local vf="$ABA_ROOT/mirror/mirror.conf"
 				if [[ ! -f "$vf" ]]; then
-					make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+					# force=yes: skip edit_file/vi — TUI owns config UI (#B92)
+					make -sC "$ABA_ROOT/mirror" mirror.conf force=yes 2>/dev/null || true
 				fi
 				if [[ -f "$vf" ]]; then
 					replace-value-conf -q -n reg_vendor -v "$_TUI_REG_VENDOR" -f "$vf"
@@ -1668,6 +1669,7 @@ _require_podman() {
 
 	if ! aba_podman_check_wait; then
 		local _err="${PODMAN_CHECK_ERROR//$'\n'/\\n}"
+		[[ -z "$_err" ]] && _err="Unable to determine the error. Check disk space and try:\\n  podman pull quay.io/podman/hello"
 		dlg --backtitle "$(ui_backtitle)" --title "Podman Preflight Warning" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--no-tags \

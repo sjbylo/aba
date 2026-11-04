@@ -1,8 +1,11 @@
-Deploy a primed cluster (one-command pipeline on the disconnected side)
+Deploy a primed cluster (one-command pipeline on the disconnected side) — BETA
 
 Usage:
-  aba -d <cluster> deploy-primed       # Full deployment pipeline
+  aba -d <cluster> deploy-primed       # Full deployment pipeline (beta)
   aba -d <cluster> deploy              # Alias for deploy-primed
+
+Beta: primed deploy may change without migration shims; recreate primed/transfer
+artifacts after upgrading ABA.
 
 Pipeline steps:
   1. Mirror registry install/connect    (skipped if already available)

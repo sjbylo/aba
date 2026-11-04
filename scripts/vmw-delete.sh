@@ -22,7 +22,8 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
-source <(cd "$ABA_ROOT" && normalize-aba-conf)  # Fetch the 'ask' param from top-level aba.conf
+# Always invoked from the cluster dir (make / aba -d <cluster> delete) → .. is repo root.
+source <(cd .. && normalize-aba-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 

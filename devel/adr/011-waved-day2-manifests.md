@@ -34,7 +34,7 @@ day2-custom-manifests/
 - Top-level flat files are applied BEFORE any waves.
 - Optional `.wait` file in a wave dir gates the next wave.
 - Each non-comment line in `.wait` is passed as args to `oc wait`.
-- Failed `oc wait` is non-fatal (warning + continue to next wave).
+- Failed `oc wait` aborts the run (see amendment below).
 
 ### Flat mode (no numbered subdirs — legacy behavior preserved)
 

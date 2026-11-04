@@ -35,7 +35,8 @@ _mirror_config_menu_loop() {
 	local -a dlg_items=()
 
 	if [[ ! -f "$mcf" ]]; then
-		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+		# force=yes: skip edit_file/vi — TUI Mirror Configuration dialog is the editor (#B92)
+		make -sC "$ABA_ROOT/mirror" mirror.conf force=yes 2>/dev/null || true
 	fi
 	if [[ -f "$mcf" ]]; then
 		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
@@ -571,19 +572,19 @@ _mirror_op_confirm() {
 			fi
 		elif [[ -z "$operator_count" ]]; then
 			# ISC not available — fall back to OP_BASKET
-			_op_count=${#OP_BASKET[@]}
-			_op_preview=""
-			if [[ $_op_count -gt 0 ]]; then
-				local _shown=() _i=0
-				for _op in "${!OP_BASKET[@]}"; do
-					_shown+=("$_op")
-					_i=$(( _i + 1 ))
-					[[ $_i -ge 5 ]] && break
-				done
-				_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-				if [[ $_op_count -gt 5 ]]; then
-					_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
-				fi
+		_op_count=${#OP_BASKET[@]}
+		_op_preview=""
+		if [[ $_op_count -gt 0 ]]; then
+			local _shown=() _i=0
+			for _op in "${!OP_BASKET[@]}"; do
+				_shown+=("$_op")
+				_i=$(( _i + 1 ))
+				[[ $_i -ge 5 ]] && break
+			done
+			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+			if [[ $_op_count -gt 5 ]]; then
+				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+			fi
 			fi
 		else
 			_op_count=0
@@ -671,9 +672,9 @@ _mirror_op_confirm() {
 				# Wait for ISC generation (triggered when this dialog opened)
 				tui_wait_isconf
 				if [[ -f "$_isc_for_view" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
-						--exit-label "OK" --textbox "$_isc_for_view" 0 0
-				else
+				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+					--exit-label "OK" --textbox "$_isc_for_view" 0 0
+			else
 					dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config could not be generated.\n\nCheck the TUI log for details." 0 0
 				fi
 			fi
@@ -914,13 +915,13 @@ change your channel when selected." 0 0
 	# Existing target from mirror.conf — auto-clear if base version caught up
 	if [[ -n "$_existing_target" ]]; then
 		if is_version_greater "$_existing_target" "$_current_ver"; then
-			local _et_label
-			if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
-				_et_label="Current target ($_existing_target)"
-			else
-				_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
-			fi
-			_ver_entries+=("${_existing_target}	${_et_label}	")
+		local _et_label
+		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
+			_et_label="Current target ($_existing_target)"
+		else
+			_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
+		fi
+		_ver_entries+=("${_existing_target}	${_et_label}	")
 		else
 			replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null
 			_existing_target=""
@@ -1366,7 +1367,7 @@ mirror_payload_menu() {
 		_gen_rc="${_gen_rc:-0}"
 	fi
 	if [[ "${_gen_rc:-0}" -ne 0 ]]; then
-		tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
+			tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
 		local _isconf_err="${_gen_out}"
 		if [[ -z "$_isconf_err" ]]; then
 			_isconf_err=$(run_once -o -i "aba:isconf:generate" 2>/dev/null | tail -12 | tail -c 800)
@@ -1659,53 +1660,53 @@ use the Mirror Payload menu to change what gets mirrored.
 		[[ -z "$choice" ]] && continue
 		default_item="$choice"
 
-		case "$choice" in
-			V|E)
-				# Wait for any in-flight ISC regeneration to finish
+			case "$choice" in
+				V|E)
+					# Wait for any in-flight ISC regeneration to finish
 				tui_wait_isconf
-				;;&
-			V)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
-					--exit-label "OK" --textbox "$isconf_file" 0 0
-				;;
-			E)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
-					--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
-					--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
-				if [[ $? -eq 0 ]]; then
-					if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
-						cp "$_TUI_TMP" "$isconf_file"
+					;;&
+				V)
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
+						--exit-label "OK" --textbox "$isconf_file" 0 0
+					;;
+				E)
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
+						--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
+						--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
+					if [[ $? -eq 0 ]]; then
+						if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
+							cp "$_TUI_TMP" "$isconf_file"
 						tui_kick_isconf_regen
-						tui_log "ISC saved by user"
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"$TUI2_MSG_ISC_SAVED" 0 0 || true
+							tui_log "ISC saved by user"
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"$TUI2_MSG_ISC_SAVED" 0 0 || true
+						fi
 					fi
-				fi
-				;;
-			R)
+					;;
+				R)
 				dlg --backtitle "$(ui_backtitle)" --title "Confirm Reset" \
 					--yes-label "Reset" --no-label "Cancel" \
 					--defaultno --yesno "\nThis will discard any manual edits and regenerate\nimageset-config.yaml from aba.conf + mirror.conf\n(version, channel, operators).\n\nAre you sure?" 0 0
-				if [[ $? -eq 0 ]]; then
-					touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
-					rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
-					run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-					dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating..." 3 20
-					local _regen_out _regen_rc=0
-					_regen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
-						make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _regen_rc=$?
-					tui_log "ISC regeneration output (rc=$_regen_rc): $_regen_out"
-					if [[ $_regen_rc -ne 0 ]]; then
+					if [[ $? -eq 0 ]]; then
+						touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
+						rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
+						run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+						dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating..." 3 20
+						local _regen_out _regen_rc=0
+						_regen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
+							make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _regen_rc=$?
+						tui_log "ISC regeneration output (rc=$_regen_rc): $_regen_out"
+						if [[ $_regen_rc -ne 0 ]]; then
 						dlg --backtitle "$(ui_backtitle)" --title "Reset Failed" \
-							--msgbox "$_regen_out" 0 0
-					else
-						dlg --backtitle "$(ui_backtitle)" --title "Regenerated imageset-config.yaml" \
-							--exit-label "OK" --textbox "$isconf_file" 0 0
+								--msgbox "$_regen_out" 0 0
+						else
+							dlg --backtitle "$(ui_backtitle)" --title "Regenerated imageset-config.yaml" \
+								--exit-label "OK" --textbox "$isconf_file" 0 0
+						fi
 					fi
-				fi
 				;;
 		esac
-	done
+		done
 }
 
 # =============================================================================
@@ -1723,7 +1724,7 @@ mirror_select_operators() {
 	if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
 		version_short=$(_ver_minor "$ocp_upgrade_to")
 	else
-		version_short=$(_ver_minor "$ocp_version")
+	version_short=$(_ver_minor "$ocp_version")
 	fi
 
 	# Ensure catalogs are available
@@ -2059,7 +2060,7 @@ _operator_view_basket() {
 	if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
 		version_short=$(_ver_minor "$ocp_upgrade_to")
 	else
-		version_short=$(_ver_minor "$ocp_version")
+	version_short=$(_ver_minor "$ocp_version")
 	fi
 	local items=()
 	local op display_name line catalog_label
@@ -2731,7 +2732,7 @@ mirror_create_bundle() {
 	elif [[ -n "$operator_count" ]]; then
 		_op_count=$operator_count
 		_op_preview=""
-		if [[ $_op_count -gt 0 ]]; then
+	if [[ $_op_count -gt 0 ]]; then
 			local _first5
 			_first5=$(echo "$operators" | cut -d, -f1-5 | sed 's/,/, /g')
 			_op_preview="$_first5"
@@ -2832,14 +2833,14 @@ mirror_create_bundle() {
 			_free_gb=$(df --output=avail -BG "$output_dir" 2>/dev/null | tail -1 | tr -d ' G')
 			if [[ "${_free_gb:-999}" -lt 50 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "Low Disk Space Warning" \
-					--yes-label "$TUI2_BTN_CONTINUE" \
-					--no-label "$TUI2_BTN_CANCEL" \
+				--yes-label "$TUI2_BTN_CONTINUE" \
+				--no-label "$TUI2_BTN_CANCEL" \
 					--yesno "\n\
 Only ${_free_gb}G free on this filesystem.\n\n\
 A full bundle duplicates the image archives\ninto: $bundle_path\n\n\
 You may run out of disk space.\n\n\
 Continue with full bundle?" 0 0
-				[[ $? -ne 0 ]] && return 1
+			[[ $? -ne 0 ]] && return 1
 			fi
 		fi
 	fi

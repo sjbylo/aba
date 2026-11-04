@@ -1,4 +1,46 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.3...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.4...HEAD)
+
+---
+
+## [1.4.4](https://github.com/sjbylo/aba/releases/tag/v1.4.4) - 2026-11-04
+
+Mainly improvements, fixes and refactoring
+
+
+### Added
+
+- **`aba show-op-sets <name>`** — Show the operators in a specific set (e.g. `aba show-op-sets acm`). Without a name, lists all available sets as before.
+- **TUI bundle dialog: OMR detection** — The "ABA Install Bundle" summary dialog now detects OMR registry installers alongside Quay and Docker.
+- **Catalog extraction diagnostics** — `download-catalog-index.sh` now retries on empty extraction and dumps container diagnostics (filesystem listing, image inspect, disk space) on persistent failure.
+- **`aba bundle --replace`** — Rebuild an existing NAS install bundle for the same version; at publish, renames the previous complete cloud dir to `*.replaced-*` immediately before the new dir is published.
+- **OCP version tip tests** — `test-ocp-version-tips.sh` (unit), `test-ocp-version-tips-live.sh` (stable/fast/candidate invariants), `test-tui-version-tips-spot.sh` (TUI menu vs `fetch_*`).
+- **Cluster clean gate test** — `test-cluster-clean-gate.sh` covers refuse-while-installed and `force=1` post-delete cleanup.
+
+### Changed
+
+- **Primed workflow labeled beta** — `bundle-primed` / `transfer-primed` / `deploy-primed` (and `aba bundle --primed`) are documented as beta in README/help; markers/behavior may change without migration shims.
+- **Day-2 CatalogSource wait** — Shared one 8-minute deadline across all CatalogSources (instead of stacking per-catalog timeouts). Spinner via `aba_wait_show`; wait order certified → community → redhat; already-ready catalogs skipped.
+- **DRY catalog code** — `list-operators.sh` now delegates to `download-catalog-index.sh` instead of duplicating container management (pull/create/cp/cleanup).
+- **Mirror load skip on re-run** — Successful image loads recorded with `data/.images-loaded` and configs tar renamed to `.tar.done` so Day-N / re-load does not redo oc-mirror.
+- **Primed / day2 wait gates** — Failed `.wait` gates are fatal (ADR-011).
+- **TUI DISCO mirror.conf** — Creates `mirror.conf` with `force=yes` so DISCO never drops into `vi`.
+- **Docs: bare-metal disk / MAC guidance** — Prefer `macs.conf` / `bmc.conf` and `disk_hint` over hand-editing `agent-config.yaml`.
+- **Catalog indexes refreshed** — Operator catalog indexes updated for OCP 4.17–5.0 (GA) and 5.1 (pre-release) content.
+- **TUI progress dialog improvements** — Improved progress step rendering and post-command hook timing.
+- **Vendor matrix test updated** — `test-mirror-vendor-matrix.sh` updated with correct per-architecture vendor availability.
+- **TUI disco workflow test** — `test-tui-disco-workflow.sh` updated for OMR detection in bundle dialog.
+- **TUI test library** — `tui-test-lib.sh` improvements for test reliability.
+
+### Fixed
+
+- **OCP version tips miss next-major GA / sticky forever** — `Latest`/`Previous`/`Older` now prefer a GA next-major Cincinnati tip when the CDN floating tip lags (e.g. `5.0.0` while CDN still on 4.22), step Previous/Older across majors at `X.0`, and refresh via `run_once -t` (`ABA_CACHE_TTL`) instead of caching the first successful tip forever. Shared helpers: `_cdn_tip_version`, `_peek_next_major_ga`, `aba_version_fetch_channel`/`_wait`.
+- **Catalog refresh skipped GA next-major** — `tools/refresh-catalog-indexes.sh` now starts from `fetch_latest_version` (peek-aware) and walks with `_channel_prev_minor`, so GA `5.0` is included when CDN still tips `4.22`; prerelease probes reuse `_next_minor` / `_next_major`.
+- **Bundle NAS temp cleanup** — `bundles/v2` startup cleans all stale staging dirs under the NAS temp area (not only the current bundle name), so failed builds of other versions do not linger.
+- **Clean while installed orphans VMs** — `make clean` / `aba clean` now refuse when `.install-complete` exists (use `aba delete` first). `cluster-clean.sh` owns cleanup; delete passes `force=1` after VMs are gone. Stale-VM install guard suggests `delete` then `install`.
+- **Catalog extract empty-index false pass** — Prefer `podman unshare mount` + `cp -a` over `podman cp` (podman 5.8.2 can exit 0 with operator dirs but no FBC files); validate with `find -type f` and retry.
+- **TUI podman preflight blank error** — When `run_once` cannot write error logs (e.g. disk full), the podman preflight dialog now shows a fallback message instead of a blank.
+- **Release script stash leak** — `build/release.sh` pre-flight merge check now counts stashes before/after to avoid popping unrelated stashes.
+- **Make-regen / install-guard func tests** — Align with `cluster-clean.sh` + `verify_conf=off` / stubbed mirror extract so tests do not depend on a leftover custom `op_sets` or the current `ocp_version` being loaded in the local mirror.
 
 ---
 
@@ -20,6 +62,17 @@ TUI reliability, CLI enhancements, and fixes
 - **TUI version in status labels** — Sync/Save/Load menu labels now show the OCP version so stale labels are self-evident after a version change (Bug #945).
 - **Removed misleading operator count** — The install confirmation summary no longer shows the operator basket count (which reflected config, not actual mirror content).
 - **TUI ISC run_once patterns DRY refactor** — Extracted repeated ISC trigger/wait patterns into `tui_ensure_isconf()` (non-blocking ensure+trigger) and `tui_wait_isconf()` (blocking poll+wait with infobox), replacing 7 inline call sites.
+- **TUI confirm dialogs faster** — Release-image probe skipped in confirm dialogs (`--skip-release-check`), removing multi-second latency when the mirror is remote or slow.
+- **TUI Day-2 pre-checks query actual cluster** — Day-2 menu OSUS/Virt availability checks now query the live cluster instead of relying on cached or config-derived state. Upgrade dialog wording improved.
+- **TUI run_once output filtering** — `run_once -o` output cleaned up; progress dialog handles No-op correctly; dead code removed (legacy `scripts/tui-mirror.sh` and `scripts/tui-progress.sh` deleted).
+- **DRY: centralize OMR binary extraction** — Repeated OMR binary extraction logic consolidated into `_omr_ensure_binary()` in `reg-common.sh`, shared by local and remote install paths.
+- **Bundle trickle-copy to NAS** — Tar chunks are now copied to NAS in the background as they are created, reducing the final transfer time.
+- **Bundle README improvements** — Bundle README template now includes operator count and fixed test result formatting.
+- **Catalog indexes refreshed** — All 24 operator catalog indexes updated for latest OCP 4.17–5.0 content.
+
+### Removed
+
+- **Operator set: mesh2** — Removed the obsolete `mesh2` operator set template.
 
 ### Fixed
 
@@ -38,6 +91,11 @@ TUI reliability, CLI enhancements, and fixes
 - **TUI bare-metal port default missing** — KVM (`enp1s0`) and VMware (`ens160`) had port defaults but bare-metal did not. Added `eno1` as the default for bare-metal in both the config generator and TUI platform toggle.
 - **TUI ISC "View Config" shows "not yet generated"** — Clicking View Config in Sync/Save/Load/Bundle dialogs failed when the ISC hadn't been generated yet. Generation is now triggered at dialog entry (non-blocking) and waited on at View Config click, with stale `run_once` state detection and reset.
 - **TUI startup ISC trigger without config guard** — Background ISC generation at TUI startup could fire before the setup wizard completed, failing on missing `ocp_version`/`ocp_channel` and storing a stale error in `run_once` metadata. Now guarded by `_direct_config_complete`.
+- **Dangling symlinks in `_ensure_hv_ready`** — Dangling symlinks under the hypervisor directory caused `aba` to fail with a confusing error. Now handled with best-effort delete.
+- **`aba.conf` not read from `ABA_ROOT` in delete path** — `kvm-delete.sh` and `vmw-delete.sh` read `aba.conf` from the wrong directory, falling back to `ask=true` and prompting unexpectedly.
+- **Operator resolution failure swallowed in ISC generation** — If operator resolution failed inside the subshell in `reg-create-imageset-config.sh`, the error was silently lost. Now propagated correctly.
+- **Bundle CHECKSUM.txt missing filenames** — `sed`-based checksum extraction dropped filenames from the checksum file. Replaced with `awk`.
+- **Tilde not resolved on remote host** — `~` in `data_dir` was not expanded on the remote host during fallback uninstall, causing path resolution failures.
 
 ---
 

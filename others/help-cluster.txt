@@ -127,7 +127,7 @@ Examples:
   Create cluster config only (edit cluster.conf before proceeding):
     aba cluster --name mysno --type sno --starting-ip 10.0.1.100
 
-  Generate agent-based config files (edit install-config.yaml/agent-config.yaml before ISO):
+  Generate agent-based config files (set macs.conf; optional --disk-hint; edit YAML only if needed):
     aba cluster --name mysno --type sno --starting-ip 10.0.1.100 --step agentconf
 
   Create the boot ISO (for bare-metal or manual VM deployment):

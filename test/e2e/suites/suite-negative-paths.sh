@@ -9,6 +9,7 @@
 # What it tests:
 #   - aba.conf validation (bad version, channel, domain, dns, ntp, machine_network)
 #   - aba clean / mirror clean (state removal)
+#   - cluster clean refused while .install-complete (must delete first)
 #   - Version mismatch detection
 #   - Bundle errors (invalid operator, op-set, permissions)
 #   - Registry errors (load without save, sync to unknown host)
@@ -131,6 +132,26 @@ e2e_run "Reconfigure after clean" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Verify aba.conf: version format after clean" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 e2e_run "Re-init mirror dir" "make -sC mirror init"
+
+# Cluster clean must refuse while installed (would orphan VMs). No real VMs needed.
+e2e_run "Create fake installed cluster dir for clean-gate" "
+	rm -rf e2e-clean-gate-sno
+	mkdir -p e2e-clean-gate-sno
+	ln -sfn ../templates/Makefile.cluster e2e-clean-gate-sno/Makefile
+	ln -sfn ../scripts e2e-clean-gate-sno/scripts
+	ln -sfn ../templates e2e-clean-gate-sno/templates
+	touch e2e-clean-gate-sno/cluster.conf e2e-clean-gate-sno/install-config.yaml \
+		e2e-clean-gate-sno/agent-config.yaml e2e-clean-gate-sno/.install-complete
+"
+e2e_run_must_fail "aba -d e2e-clean-gate-sno clean refused while installed" \
+	"aba -d e2e-clean-gate-sno clean"
+e2e_run "Verify artifacts kept after refused clean" \
+	"test -f e2e-clean-gate-sno/.install-complete && test -f e2e-clean-gate-sno/agent-config.yaml"
+e2e_run "force=1 clean after simulated delete allowed" \
+	"make -sC e2e-clean-gate-sno clean force=1"
+e2e_run "Verify force clean removed install marker" \
+	"test ! -f e2e-clean-gate-sno/.install-complete"
+e2e_run "Remove fake clean-gate cluster dir" "rm -rf e2e-clean-gate-sno"
 
 test_end 0
 
