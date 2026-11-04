@@ -2197,7 +2197,12 @@ aba_wait_show() (
 		_deadline=$(( $(date +%s) + remaining ))
 		while kill -0 "$_cmd_pid" 2>/dev/null; do
 			[ "$(date +%s)" -ge "$_deadline" ] && { _kill_check "$_cmd_pid"; break; }
-			sleep 0.2
+			# Background sleep + wait: foreground sleep dying on SIGINT
+			# triggers bash WCE which suppresses the INT trap and leaves
+			# the check orphaned.  Bg sleep ignores SIGINT (set +m); wait
+			# is interrupted and the INT trap runs reliably.
+			sleep 0.2 &
+			wait $! 2>/dev/null || true
 		done
 		wait "$_cmd_pid" 2>/dev/null || cmd_rc=$?
 
@@ -2212,9 +2217,13 @@ aba_wait_show() (
 		fi
 
 		# Sleep for the interval (or remaining budget, whichever is less)
+		# Same bg+wait pattern so SIGINT during interval sleep is trapped.
 		remaining=$(( max - elapsed ))
 		wait_secs=$(( interval < remaining ? interval : remaining ))
-		[ "$wait_secs" -gt 0 ] && sleep "$wait_secs" 2>/dev/null || true
+		if [ "$wait_secs" -gt 0 ]; then
+			sleep "$wait_secs" &
+			wait $! 2>/dev/null || true
+		fi
 	done
 
 	_cleanup
