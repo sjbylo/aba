@@ -4,13 +4,21 @@
 
 - **`aba show-op-sets <name>`** — Show the operators in a specific set (e.g. `aba show-op-sets acm`). Without a name, lists all available sets as before.
 - **TUI bundle dialog: OMR detection** — The "ABA Install Bundle" summary dialog now detects OMR registry installers alongside Quay and Docker.
-- **Catalog extraction diagnostics** — `download-catalog-index.sh` now retries `podman cp` on empty extraction and dumps container diagnostics (filesystem listing, image inspect, disk space) on persistent failure.
+- **Catalog extraction diagnostics** — `download-catalog-index.sh` now retries on empty extraction and dumps container diagnostics (filesystem listing, image inspect, disk space) on persistent failure.
+- **`aba bundle --replace`** — Rebuild an existing NAS install bundle for the same version; keeps the previous complete cloud dir until publish, then moves it aside as `*.replacing-*`.
 - **OCP version tip tests** — `test-ocp-version-tips.sh` (unit), `test-ocp-version-tips-live.sh` (stable/fast/candidate invariants), `test-tui-version-tips-spot.sh` (TUI menu vs `fetch_*`).
+- **Cluster clean gate test** — `test-cluster-clean-gate.sh` covers refuse-while-installed and `force=1` post-delete cleanup.
 
 ### Changed
 
-- **Day-2 CatalogSource spinner** — Replaced `#########` progress characters with `aba_wait_show` spinner. Catalogs are waited on sequentially in fast-to-slow order (certified → community → redhat). Already-ready catalogs are skipped.
+- **Primed workflow labeled beta** — `bundle-primed` / `transfer-primed` / `deploy-primed` (and `aba bundle --primed`) are documented as beta in README/help; markers/behavior may change without migration shims.
+- **Day-2 CatalogSource wait** — Shared one 8-minute deadline across all CatalogSources (instead of stacking per-catalog timeouts). Spinner via `aba_wait_show`; wait order certified → community → redhat; already-ready catalogs skipped.
 - **DRY catalog code** — `list-operators.sh` now delegates to `download-catalog-index.sh` instead of duplicating container management (pull/create/cp/cleanup).
+- **Mirror load skip on re-run** — Successful image loads recorded with `data/.images-loaded` and configs tar renamed to `.tar.done` so Day-N / re-load does not redo oc-mirror.
+- **Primed / day2 wait gates** — Failed `.wait` gates are fatal (ADR-011).
+- **TUI DISCO mirror.conf** — Creates `mirror.conf` with `force=yes` so DISCO never drops into `vi`.
+- **Docs: bare-metal disk / MAC guidance** — Prefer `macs.conf` / `bmc.conf` and `disk_hint` over hand-editing `agent-config.yaml`.
+- **Catalog indexes refreshed** — Operator catalog indexes updated for OCP 4.17–4.23 content.
 - **TUI progress dialog improvements** — Improved progress step rendering and post-command hook timing.
 - **Vendor matrix test updated** — `test-mirror-vendor-matrix.sh` updated with correct per-architecture vendor availability.
 - **TUI disco workflow test** — `test-tui-disco-workflow.sh` updated for OMR detection in bundle dialog.
@@ -19,8 +27,11 @@
 ### Fixed
 
 - **OCP version tips miss next-major GA / sticky forever** — `Latest`/`Previous`/`Older` now prefer a GA next-major Cincinnati tip when the CDN floating tip lags (e.g. `5.0.0` while CDN still on 4.22), step Previous/Older across majors at `X.0`, and refresh via `run_once -t` (`ABA_CACHE_TTL`) instead of caching the first successful tip forever. Shared helpers: `_cdn_tip_version`, `_peek_next_major_ga`, `aba_version_fetch_channel`/`_wait`.
+- **Clean while installed orphans VMs** — `make clean` / `aba clean` now refuse when `.install-complete` exists (use `aba delete` first). `cluster-clean.sh` owns cleanup; delete passes `force=1` after VMs are gone. Stale-VM install guard suggests `delete` then `install`.
+- **Catalog extract empty-index false pass** — Prefer `podman unshare mount` + `cp -a` over `podman cp` (podman 5.8.2 can exit 0 with operator dirs but no FBC files); validate with `find -type f` and retry.
 - **TUI podman preflight blank error** — When `run_once` cannot write error logs (e.g. disk full), the podman preflight dialog now shows a fallback message instead of a blank.
 - **Release script stash leak** — `build/release.sh` pre-flight merge check now counts stashes before/after to avoid popping unrelated stashes.
+- **Make-regen / install-guard func tests** — Align with `cluster-clean.sh` + `verify_conf=off` / stubbed mirror extract so tests do not depend on a leftover custom `op_sets` or the current `ocp_version` being loaded in the local mirror.
 
 ---
 

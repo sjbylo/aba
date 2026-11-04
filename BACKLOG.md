@@ -3435,3 +3435,25 @@ env/markers, e.g.:
 Keep one ordered path in `test-tui-all` / overnight (1→2→3) for release. Does not
 shorten a real install failure (~40m); only avoids redoing earlier stages.
 
+---
+
+## #B94: Drop “beta” label from primed workflow once stable
+
+**Severity:** LOW — docs/UX hygiene (do not leave forever-beta)
+**Status:** Planned (do **after** BM-simplify #B80 lands, e2e/func approve, ~few weeks soak)
+**Added:** 2026-11-04
+
+**Problem:** Primed (`bundle-primed` / `transfer-primed` / `deploy-primed`,
+`aba bundle --primed`) is intentionally labeled **beta** so stamp/BM-simplify
+changes can ship without migration/BC. That label must not linger after the
+workflow is done and approved.
+
+**Proposed fix:** When primed + BM path are stable and approved:
+
+1. Remove “beta” from README (section title, callout, command table) and
+   `others/help-{aba,bundle,transfer,deploy}.txt`.
+2. Note the graduation in CHANGELOG (Unreleased → release notes).
+3. Close this item; keep #B80 related history for context.
+
+**Reminder:** Revisit ~few weeks after #B80 + release soak — do not forget.
+

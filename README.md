@@ -529,7 +529,7 @@ aba -d mycluster install
 ```
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
-For bare metal, the install pauses to let you edit agent-config (MAC addresses, disk hints), then again after ISO generation so you can boot your servers.
+For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. `aba install` pauses so you can review generated config and boot your servers after ISO generation.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
@@ -667,9 +667,12 @@ aba -d <cluster> day2               # Apply updated IDMS/CatalogSource/signature
 
 [Back to top](#quick-start)
 
-## Primed Bundles (DevOps / Hands-Off Deployment)
+<a id="primed-bundles"></a>
+## Primed Bundles (beta) — DevOps / Hands-Off Deployment
 
-Use primed bundles when ALL cluster configuration is prepared in advance on the connected side — ideal for DevOps pipelines, factory imaging, or when you need configs that `cluster.conf` cannot express (per-node rootDeviceHints, custom agent-config.yaml).
+> **Beta:** `bundle-primed` / `transfer-primed` / `deploy-primed` (and `aba bundle --primed`) are **beta**. Behavior and on-disk markers may change without migration shims; recreate primed/transfer artifacts after upgrading ABA.
+
+Use primed bundles when ALL cluster configuration is prepared in advance on the connected side — ideal for DevOps pipelines, factory imaging, or any hands-off deploy where `install-config.yaml` / `agent-config.yaml` are finalized before transfer (including edits beyond what `cluster.conf` can express).
 
 ### Day 0: Create and deploy a primed bundle
 
@@ -705,13 +708,13 @@ aba -d mirror load                     # Extracts configs; renames tar to .tar.d
 aba -d edge1 deploy-primed             # Deploy the new cluster
 ```
 
-### Commands reference
+### Commands reference (beta)
 
 | Command | Alias | Purpose |
 |---------|-------|---------|
-| `aba bundle-primed` | `aba bundle --primed` | Full bundle with pre-configured cluster dirs |
-| `aba transfer-primed` | `aba transfer` | Create configs-only tar for day-N updates |
-| `aba -d <cluster> deploy-primed` | `aba -d <cluster> deploy` | One-command deployment pipeline |
+| `aba bundle-primed` | `aba bundle --primed` | Full bundle with pre-configured cluster dirs **(beta)** |
+| `aba transfer-primed` | `aba transfer` | Create configs-only tar for day-N updates **(beta)** |
+| `aba -d <cluster> deploy-primed` | `aba -d <cluster> deploy` | One-command deployment pipeline **(beta)** |
 
 [Back to top](#quick-start)
 
@@ -817,12 +820,12 @@ Once the cluster directory exists, run `aba -d mycluster install` (or `cd myclus
 
 | Stage         | What it does                                                | What to review / do |
 | -----         | ------------                                                | ------------------- |
-| **agentconf** | Generates `install-config.yaml` and `agent-config.yaml`.    | **MAC addresses** (must match your servers), and optionally: hostnames, rendezvous host, installation disks (`rootDeviceHints`), network interfaces, host roles. |
+| **agentconf** | Generates `install-config.yaml` and `agent-config.yaml` from `cluster.conf` / `macs.conf` / `bmc.conf`. | Confirm **MAC addresses**. Optionally set `disk_hint` if needed (rendered as `rootDeviceHints`). Prefer config/CLI over hand-editing YAML. |
 | **iso**       | Runs pre-flight checks, then builds the bootable Agent ISO. | For bare-metal: write the ISO to your servers' boot media and boot them (see [below](#booting-bare-metal-servers)). For VMware/KVM: nothing — ABA proceeds automatically. |
 | **mon**       | Monitors host discovery, validation, bootstrap, and installation progress. | Observe progress until `Install complete!`. |
 
 For **VMware/KVM**, `aba install` runs all stages end-to-end (creates VMs, attaches the ISO, boots, and monitors).
-For **bare-metal**, `aba install` pauses between stages so you can review agent-config, boot your servers, and then monitor.
+For **bare-metal**, `aba install` pauses between stages so you can review generated config, boot your servers, and then monitor.
 
 You can stop at a specific stage to review and customize before continuing — see [Modifying Agent-based Configuration](#modifying-agent-based-configuration) for the workflow and examples.
 
@@ -1024,17 +1027,13 @@ cd mycluster
 aba install
 ```
 
-**What bare-metal users typically need to change in `agent-config.yaml`:**
+**What bare-metal users typically configure (prefer `cluster.conf` / `macs.conf` over hand-editing YAML):**
 
-- **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory for an easier approach, or edit `agent-config.yaml` directly.
-- **Installation disk** — if the default disk isn't correct, add `rootDeviceHints`:
-  ```
-      rootDeviceHints:
-        deviceName: /dev/sdb
-  ```
+- **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory (or BMC auto-discovery when `bmc.conf` is set).
+- **Installation disk (optional)** — only if the default disk is wrong: set `disk_hint` in `cluster.conf` (or CLI `--disk-hint` / `--disk-hint-master` / `--disk-hint-worker`). Supports a device path or criteria (`path=…,minSizeGigabytes=200`). Per-node overrides: `disk_hint_node_<hostname>=…` (node > role > global). ABA renders these into `rootDeviceHints` in `agent-config.yaml`.
 - **Hostnames** — defaults are generated from the cluster name. If you need different hostnames, update `cluster.conf` and re-run `aba install` (which regenerates `agent-config.yaml`) rather than editing `agent-config.yaml` directly.
 
-For more advanced scenarios — such as per-node disk hints (different disks on different servers) or custom per-node network configuration — edit `agent-config.yaml` directly. ABA detects and preserves your changes across re-runs.
+For scenarios still beyond `cluster.conf` (fully custom NMState, non-standard agent fields), edit `agent-config.yaml` / `install-config.yaml` directly — or use a [primed bundle (beta)](#primed-bundles). ABA detects and preserves your YAML edits across re-runs.
 
 For VMware/KVM, these are typically generated correctly and rarely need editing.
 
