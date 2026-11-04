@@ -156,7 +156,7 @@ direct_wizard() {
 				fi
 				if [[ ! "$_ps_ver" == *.*.* ]]; then
 					# Wait for version fetch started at TUI boot (should be done by now)
-					run_once -q -w -i "ocp:stable:latest_version" 2>/dev/null || true
+					aba_version_fetch_wait stable || true
 					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
 				fi
 				if [[ "$_ps_ver" == *.*.* ]]; then
@@ -410,14 +410,8 @@ _direct_channel() {
 			tui_log "Selected channel: $_PENDING_CH"
 			DIALOG_RC="next"
 
-			# Ensure version fetches are running (already started at TUI boot;
-			# run_once -i is non-blocking and skips if task already completed)
-			run_once -i "ocp:${_PENDING_CH}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_PENDING_CH"
-			run_once -i "ocp:${_PENDING_CH}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_PENDING_CH"
-			run_once -i "ocp:${_PENDING_CH}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_PENDING_CH"
+			# Ensure tip fetches are running (started at TUI boot; idempotent).
+			aba_version_fetch_channel "$_PENDING_CH"
 			;;
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
@@ -454,16 +448,9 @@ _direct_version() {
 	if [[ $need_wait -eq 1 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"$(printf "$TUI2_MSG_VERSION_FETCHING" "$_ch")" 0 0
-		# Wait for background tasks started from channel step (or start them if not yet running)
-		run_once -q -w -S -i "ocp:${_ch}:latest_version" 2>/dev/null || \
-			run_once -i "ocp:${_ch}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
-		run_once -q -w -S -i "ocp:${_ch}:latest_version_previous" 2>/dev/null || \
-			run_once -i "ocp:${_ch}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
-		run_once -q -w -S -i "ocp:${_ch}:latest_version_older" 2>/dev/null || \
-			run_once -i "ocp:${_ch}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
+		# Start if missing, then wait (-S skips cmd validation; -t refreshes expired tips).
+		aba_version_fetch_channel "$_ch"
+		aba_version_fetch_wait "$_ch" -S || true
 	fi
 
 	local latest previous older

@@ -1,9 +1,12 @@
-Create a config-only transfer tar for day-N updates (primed cluster dirs)
+Create a config-only transfer tar for day-N updates (primed cluster dirs) — BETA
 
 Usage:
-  aba transfer-primed                  # Tar all cluster dirs
-  aba -d <cluster> transfer-primed     # Tar a single cluster dir
+  aba transfer-primed                  # Tar all cluster dirs (beta)
+  aba -d <cluster> transfer-primed     # Tar a single cluster dir (beta)
   aba transfer                         # Alias for transfer-primed
+
+Beta: transfer-primed markers/format may change without migration; recreate the
+configs tar after upgrading ABA.
 
 Creates mirror/data/aba-transfer-configs.tar containing primed cluster directories
 (excluding ISOs). This tar is separate from aba-transfer.tar (ISC/CLIs from 'aba save').

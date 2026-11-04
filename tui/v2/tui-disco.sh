@@ -48,15 +48,17 @@ Then restart the TUI." 0 0
 	local _payload_line=""
 
 	local min_size=1000000
-	local has_quay="" has_docker=""
+	local has_quay="" has_docker="" has_omr=""
 	has_quay=$(find "$ABA_ROOT/mirror/" -maxdepth 1 -name "mirror-registry*.tar.gz" -size +${min_size}c 2>/dev/null | head -1)
 	has_docker=$(find "$ABA_ROOT/mirror/" -maxdepth 1 -name "docker-reg-image.tgz" -size +${min_size}c 2>/dev/null | head -1)
-	if [[ -n "$has_quay" && -n "$has_docker" ]]; then
-		_payload_line="Registry installers: Quay tarball + Docker image present."
-	elif [[ -n "$has_quay" ]]; then
-		_payload_line="Registry installers: Quay mirror-registry tarball present."
-	elif [[ -n "$has_docker" ]]; then
-		_payload_line="Registry installers: Docker registry tarball present."
+	has_omr=$(find "$ABA_ROOT/mirror/" -maxdepth 1 -name "omr-image.tgz" -size +${min_size}c 2>/dev/null | head -1)
+	local _found=()
+	[[ -n "$has_quay" ]]   && _found+=("Quay")
+	[[ -n "$has_docker" ]] && _found+=("Docker")
+	[[ -n "$has_omr" ]]    && _found+=("OMR")
+	if [[ ${#_found[@]} -gt 0 ]]; then
+		local IFS=" + "
+		_payload_line="Registry installers: ${_found[*]} present."
 	else
 		_payload_line="Registry installers: (none detected yet — rerun cli/registry prep if needed)."
 	fi

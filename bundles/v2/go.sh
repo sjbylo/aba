@@ -36,6 +36,7 @@ source bundle.conf
 # --dev flag: build bundle from dev branch (for testing dev-branch features).
 # Dev bundles are NEVER uploaded to NAS — only used for local validation.
 BUNDLE_NAME_FILTER=""
+BUNDLE_REPLACE=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -51,6 +52,11 @@ while [[ $# -gt 0 ]]; do
 			echo "*** FILTER: building only bundle type '$BUNDLE_NAME_FILTER' ***"
 			shift 2
 			;;
+		--replace)
+			export BUNDLE_REPLACE=1
+			echo "*** REPLACE: rebuild even if NAS bundle exists; old dir renamed to .replaced-* at publish ***"
+			shift
+			;;
 		--vendor)
 			export BUNDLE_VENDOR="$2"
 			echo "*** VENDOR: using mirror registry vendor '$BUNDLE_VENDOR' ***"
@@ -58,15 +64,21 @@ while [[ $# -gt 0 ]]; do
 			;;
 		-h|--help)
 			cat <<-EOF
-			Usage: $(basename "$0") [--dev] [--name <type>] [--vendor <vendor>]
+			Usage: $(basename "$0") [--dev] [--name <type>] [--replace] [--vendor <vendor>]
 
 			Build ABA install bundles for multiple OCP versions.
 
 			Options:
 			  --dev              Build from dev branch (NAS upload disabled)
 			  --name <type>      Build only the specified bundle type
+			  --replace          Rebuild even if NAS bundle exists (old dir → *.replaced-* at publish)
 			  --vendor <vendor>  Mirror registry vendor: omr (default), quay, docker
 			  -h, --help         Show this help
+
+			Stale *.replaced-* NAS backups (from prior --replace) are removed at
+			startup when older than BUNDLE_REPLACED_TTL_HOURS (default: 24).
+			This keeps a download grace window after publish without leaving
+			backups forever. Skip with --dev (no NAS).
 
 			Bundle types:
 			  release   OCP release images only (no operators)
@@ -80,6 +92,8 @@ while [[ $# -gt 0 ]]; do
 			  $(basename "$0")                        # build all bundles (production)
 			  $(basename "$0") --dev                  # build all from dev branch
 			  $(basename "$0") --dev --name ai        # build only AI bundle from dev
+			  $(basename "$0") --replace              # rebuild all (swap old aside at publish)
+			  $(basename "$0") --replace --name ai    # rebuild only AI (swap old aside at publish)
 			  $(basename "$0") --vendor quay           # build all using Quay registry
 			EOF
 			exit 0
@@ -91,6 +105,40 @@ while [[ $# -gt 0 ]]; do
 			;;
 	esac
 done
+
+# Remove stale --replace backups on NAS. Publish renames the previous complete
+# dir to *.replaced-* immediately before the new dir is published; the next
+# go.sh run cleans them after a TTL. Also matches legacy *.replacing-*.
+# Override: BUNDLE_REPLACED_TTL_HOURS=48 ./go.sh ...
+_cleanup_stale_replaced() {
+	local ttl_h="${BUNDLE_REPLACED_TTL_HOURS:-${BUNDLE_REPLACING_TTL_HOURS:-24}}"
+	local ttl_m=$(( ttl_h * 60 ))
+	local cloud_dir="${CLOUD_DIR:-}"
+	local d age_m removed=0 kept=0
+
+	[[ "${BUNDLE_DEV_MODE:-}" == "1" ]] && return 0
+	[[ -n "$cloud_dir" && -d "$cloud_dir" ]] || return 0
+
+	shopt -s nullglob
+	for d in "$cloud_dir"/*.replaced-* "$cloud_dir"/*.replacing-*; do
+		[[ -d "$d" ]] || continue
+		age_m=$(( ( $(date +%s) - $(stat -c %Y "$d") ) / 60 ))
+		if (( age_m >= ttl_m )); then
+			echo "REPLACE: removing stale backup (${age_m}m >= ${ttl_m}m TTL): $d"
+			rm -rf "$d"
+			removed=$(( removed + 1 ))
+		else
+			echo "REPLACE: keeping recent backup (${age_m}m < ${ttl_m}m TTL): $d"
+			kept=$(( kept + 1 ))
+		fi
+	done
+	shopt -u nullglob
+
+	if (( removed > 0 || kept > 0 )); then
+		echo "REPLACE: stale cleanup done (removed=$removed kept=$kept TTL=${ttl_h}h)"
+	fi
+}
+_cleanup_stale_replaced
 
 if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
 
@@ -115,7 +163,7 @@ if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
 	fi
 fi
 
-vers_track="22 21"
+vers_track="5.0 4.22"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
@@ -151,9 +199,10 @@ versions=()
 for v in $vers_track
 do
 	ver=
-	echo "Checking for version stable-4.$v ..."
-	ver=$(curl -f --retry 8 -sSL "https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable-4.$v/release.txt" | grep ^Name: | awk '{print $NF}')
-	[ ! "$ver" ] && echo "Cannot find release for $v" >&2 && continue
+	major=${v%%.*}
+	echo "Checking for version stable-$v ..."
+	ver=$(curl -f --retry 8 -sSL "https://mirror.openshift.com/pub/openshift-v${major}/amd64/clients/ocp/stable-$v/release.txt" | grep ^Name: | awk '{print $NF}')
+	[ ! "$ver" ] && echo "No stable release for $v yet -- skipping" >&2 && continue
 	versions+=("$ver")
 done
 
@@ -205,13 +254,18 @@ do
 		fi
 
 		echo
-		# Skip if bundle already exists and is complete in cloud dir
-		# (To force a rebuild, delete or rename the cloud dir first)
+		# Skip if bundle already exists and is complete in cloud dir.
+		# --replace: do not skip; keep the old NAS dir until 07-upload renames
+		# it to *.replaced-* immediately before publishing the new dir.
 		# In dev mode, always rebuild — we're testing dev features, not NAS state.
 		cloud_bundle="$CLOUD_DIR/$bundle_name"
-		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
+		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ "${BUNDLE_REPLACE:-}" != "1" ] && \
+		   [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
 			echo "Install bundle already exists: $cloud_bundle -- skipping"
 			continue
+		fi
+		if [ "${BUNDLE_REPLACE:-}" = "1" ] && [ -d "$cloud_bundle" ] && [ -f "$cloud_bundle/README.txt" ]; then
+			echo "REPLACE: will rebuild $bundle_name (existing NAS dir kept until publish)"
 		fi
 
 		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\" TESTS=\"$tests\" BUNDLE_VENDOR=$BUNDLE_VENDOR"
@@ -247,7 +301,7 @@ done
 
 {
 	date
-	for d in "$CLOUD_DIR"/4*; do
+	for d in "$CLOUD_DIR"/[0-9]*; do
 		[ -d "$d" ] && du -h -s "$d"
 	done
 	echo

@@ -33,7 +33,7 @@ Issues or Pull Requests.
 
 ---
 
-## mirror.conf timestamp triggers unnecessary registry reinstall
+## #B0: mirror.conf timestamp triggers unnecessary registry reinstall
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -66,7 +66,7 @@ actually change.  Options:
 
 ---
 
-## TUI confirm dialog: show estimated mirror size
+## #B1: TUI confirm dialog: show estimated mirror size
 
 **Severity:** LOW
 **Status:** Planned
@@ -88,7 +88,7 @@ summary, with neutral styling when OK and red when tight/short.
 
 ---
 
-## Viewing oc-mirror logs after sync/save/load (idea)
+## #B2: Viewing oc-mirror logs after sync/save/load (idea)
 
 **Severity:** LOW
 **Status:** Idea
@@ -123,7 +123,7 @@ E2E testing across sync/save/load before release.
 
 ---
 
-## Multiple ABA repos on same host: shared state conflict
+## #B3: Multiple ABA repos on same host: shared state conflict
 
 **Severity:** LOW
 **Status:** Planned
@@ -151,7 +151,7 @@ to clear stale state.
 
 ---
 
-## Prepare Upgrade: toggle candidate channel versions on/off
+## #B4: Prepare Upgrade: toggle candidate channel versions on/off
 
 **Severity:** LOW
 **Status:** Planned
@@ -174,7 +174,7 @@ is hidden behind the toggle.
 
 ---
 
-## Add operator/cluster checks to "aba status" command
+## #B5: Add operator/cluster checks to "aba status" command
 
 **Severity:** LOW
 **Status:** Planned
@@ -208,7 +208,7 @@ includes slow cluster checks. Per-cluster: `aba status --dir <cluster>`.
 
 ---
 
-## Audit progress dialogs for "next steps" advice on error paths
+## #B6: Audit progress dialogs for "next steps" advice on error paths
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -228,7 +228,7 @@ to the operation that failed, not a one-size-fits-all message.
 
 ---
 
-## Guard ISC generation helpers against incomplete config
+## #B7: Guard ISC generation helpers against incomplete config
 
 **Severity:** LOW
 **Status:** Planned
@@ -257,7 +257,7 @@ are structurally safe, and the startup site is already guarded.
 
 ---
 
-## TUI "Install Cluster" auto-detect picks already-installed cluster
+## #B8: TUI "Install Cluster" auto-detect picks already-installed cluster
 
 **Severity:** LOW
 **Status:** Planned
@@ -285,7 +285,7 @@ cluster name on the first wizard page.
 
 ---
 
-## Multi-value image_source for multi-mirror clusters
+## #B9: Multi-value image_source for multi-mirror clusters
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -312,10 +312,10 @@ mirror: `aba import --kubeconfig <cluster>/auth/kubeconfig --name mm2-test
 
 ---
 
-## oc-mirror v2 load: stale .history causes "manifest unknown" on retry
+## #B10: oc-mirror v2 load: stale .history causes "manifest unknown" on retry
 
 **Severity:** HIGH
-**Status:** In Progress
+**Status:** Done (v1.4.2: `_run_oc_mirror_with_retry` deletes `.history` between retries)
 **Added:** 2026-10-15
 
 **Problem:** When `oc-mirror --v2 ... --from file://. docker://...` (diskToMirror/load)
@@ -344,7 +344,7 @@ internal registry.
 
 ---
 
-## Catalog extraction: content-driven try JSON then YAML (ignore extension)
+## #B11: Catalog extraction: content-driven try JSON then YAML (ignore extension)
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -380,7 +380,7 @@ JSON-in-`.yaml` case (serverless-operator).
 
 ---
 
-## Catalog / operator-index refresh must be best-effort (never abort ABA)
+## #B12: Catalog / operator-index refresh must be best-effort (never abort ABA)
 
 **Severity:** HIGH
 **Status:** Planned
@@ -411,7 +411,7 @@ shipped index under `catalogs/`.
 
 ---
 
-## Suppress output for excluded image categories during sync/save
+## #B13: Suppress output for excluded image categories during sync/save
 
 **Severity:** LOW
 **Status:** Planned
@@ -431,7 +431,7 @@ The `[ABA] Excluded: ...` summary line at the end is sufficient.
 
 ---
 
-## Cross-validate networking values (IPs, CIDRs, collisions)
+## #B14: Cross-validate networking values (IPs, CIDRs, collisions)
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -529,7 +529,7 @@ or at install time, but with less helpful messages.
 
 ---
 
-## Review all aba_progress calls for correctness and completeness
+## #B15: Review all aba_progress calls for correctness and completeness
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -548,7 +548,7 @@ missing for new code paths added since the initial implementation.
 
 ---
 
-## Add TUI progress dialogs to remaining workflows
+## #B16: Add TUI progress dialogs to remaining workflows
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -570,7 +570,7 @@ in the scripts, and TUI integration via `_exec_with_progress`.
 
 ---
 
-## TUI progress: use `less -r` to view output after task completion
+## #B17: TUI progress: use `less -r` to view output after task completion
 
 **Severity:** LOW
 **Status:** Done
@@ -591,7 +591,7 @@ menu item produces multi-page output and opens `less -r` on completion.
 
 ---
 
-## Operator sizing: full redhat-operator catalog, and OpenShift 5.x
+## #B18: Operator sizing: full redhat-operator catalog, and OpenShift 5.x
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -609,7 +609,7 @@ menu item produces multi-page output and opens `less -r` on completion.
 
 ---
 
-## TUI: OpenShift Channel dialog has no Back button and ESC doesn't exit
+## #B19: TUI: OpenShift Channel dialog has no Back button and ESC doesn't exit
 
 **Severity:** MEDIUM
 **Status:** Done
@@ -623,7 +623,7 @@ menu item produces multi-page output and opens `less -r` on completion.
 
 ---
 
-## verify-*-conf: machine_network should validate octet ranges
+## #B20: verify-*-conf: machine_network should validate octet ranges
 
 **Severity:** LOW
 **Status:** Planned
@@ -637,7 +637,7 @@ menu item produces multi-page output and opens `less -r` on completion.
 
 ---
 
-## Uninstall: keep the mirror data directory unless the user asks to delete it
+## #B21: Uninstall: keep the mirror data directory unless the user asks to delete it
 
 **Severity:** HIGH
 **Status:** Planned
@@ -682,7 +682,7 @@ Reinstall then has to honor what is already on disk:
 
 ---
 
-## Bundle without release images: warn the user
+## #B22: Bundle without release images: warn the user
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -711,7 +711,7 @@ Reinstall then has to honor what is already on disk:
 
 ---
 
-## `aba ocp-ver`: deduplicate candidate versions
+## #B23: `aba ocp-ver`: deduplicate candidate versions
 
 **Severity:** LOW
 **Status:** Planned
@@ -726,7 +726,7 @@ Reinstall then has to honor what is already on disk:
 
 ---
 
-## TUI: Sync/Save confirm dialog shows OP_BASKET count, not actual ISC operator count
+## #B24: TUI: Sync/Save confirm dialog shows OP_BASKET count, not actual ISC operator count
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -742,7 +742,7 @@ Reinstall then has to honor what is already on disk:
 
 ---
 
-## Validate SSH key files (private vs public)
+## #B25: Validate SSH key files (private vs public)
 
 **Severity:** LOW
 **Status:** Planned
@@ -762,7 +762,7 @@ cluster.conf). SSH fails with a cryptic "error in libcrypto" message.
 
 ---
 
-## ISC upgrade mode broken by state.sh ocp_version override
+## #B26: ISC upgrade mode broken by state.sh ocp_version override
 
 **Severity:** HIGH — produces wrong ISC, upgrade sync downloads wrong images
 **Status:** Mostly Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact; mirror_ocp_upgrade_from tracked in state.sh). ISC template not yet updated to use mirror_ocp_upgrade_from.
@@ -864,7 +864,7 @@ confusion that caused this bug.
 
 ---
 
-## Mirror reinstall: stale cluster association and cert mismatch
+## #B27: Mirror reinstall: stale cluster association and cert mismatch
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -889,7 +889,7 @@ the post-load dialog. ~5 line change in the dialog logic.
 
 ---
 
-## TUI: "Upgrade Images Ready" should offer to run Day-2 inline
+## #B28: TUI: "Upgrade Images Ready" should offer to run Day-2 inline
 
 **Severity:** LOW
 **Status:** Planned
@@ -906,7 +906,7 @@ selection first, or run on all installed clusters using this mirror.
 
 ---
 
-## day2-osus: channel set fails after cross-minor upgrade
+## #B29: day2-osus: channel set fails after cross-minor upgrade
 
 **Severity:** HIGH — `aba day2-osus` errors out on upgraded clusters
 **Status:** Done (day2-config-osus.sh now derives channel from cluster's actual version)
@@ -969,7 +969,7 @@ scripts would catch any remaining instances.
 
 ---
 
-## Upgrade: review --force flag granularity
+## #B30: Upgrade: review --force flag granularity
 
 **Severity:** LOW — UX design question, not a functional bug
 **Status:** Planned
@@ -994,7 +994,7 @@ operators. These are distinct concerns — a user might want one without the oth
 
 ---
 
-## Upgrade UX: pre-flight and monitoring improvements
+## #B31: Upgrade UX: pre-flight and monitoring improvements
 
 **Severity:** MEDIUM — UX gaps that cause confusion during upgrades
 **Status:** Partially Done (A: --allow-upgrade-with-warnings auto-added with --force; B/C/D still open)
@@ -1070,7 +1070,7 @@ channel bug earlier.
 
 ---
 
-## Cluster stability: wait after install and before day2
+## #B32: Cluster stability: wait after install and before day2
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -1115,7 +1115,7 @@ helper (e.g. `require_cluster_stable`) could be extracted for reuse.
 
 ---
 
-## `oc-mirror`: check port 55000 before invoking
+## #B33: `oc-mirror`: check port 55000 before invoking
 
 **Severity:** LOW
 **Status:** Planned
@@ -1149,7 +1149,7 @@ done
 
 ---
 
-## day2-osus: auto-run day2 if CatalogSources not yet applied
+## #B34: day2-osus: auto-run day2 if CatalogSources not yet applied
 
 **Severity:** LOW — UX improvement, reduces manual steps
 **Status:** Planned
@@ -1187,7 +1187,7 @@ run `day2` automatically without prompting.
 
 ---
 
-## TUI Day-2: "Open Cluster Login Terminal" in all Day-2 menus
+## #B35: TUI Day-2: "Open Cluster Login Terminal" in all Day-2 menus
 
 **Severity:** LOW — UX convenience
 **Status:** Done (v1.1.6: "L" menu item in Day-2 menu)
@@ -1217,7 +1217,7 @@ which terminal to run it in) and runs:
 
 ---
 
-## day2-ntp: apply NTP config without node reboot where possible
+## #B36: day2-ntp: apply NTP config without node reboot where possible
 
 **Severity:** MEDIUM — reduces downtime during NTP configuration
 **Status:** Done (v1.2.5: NodeDisruptionPolicy for OCP 4.17+ — chronyd restart instead of reboot)
@@ -1296,7 +1296,7 @@ MCO rebootless updates are 4.14+. NodeDisruptionPolicy is 4.16+.
 
 ---
 
-## Catalog prefetch: download next minor in background
+## #B37: Catalog prefetch: download next minor in background
 
 **Severity:** LOW — UX improvement, reduces wait time
 **Status:** Mostly Done (prefetch now downloads upgrade-target minors from Cincinnati graph, which includes the next minor when available). Previous minor is still fetched too — could be dropped.
@@ -1344,7 +1344,7 @@ download the next minor line in the background:
 
 ---
 
-## Automated infrastructure services (`aba setup dns/ntp`)
+## #B38: Automated infrastructure services (`aba setup dns/ntp`)
 
 **Severity:** MEDIUM — major UX improvement for new users
 **Status:** Done (v1.1.5: `aba setup dns`, `aba setup ntp`, `aba remove dns`, `aba remove ntp`; per-cluster DNS hooks in Makefile)
@@ -1363,7 +1363,7 @@ in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 ---
 
-## omr: transition to GA (mirror-registry v3.0)
+## #B39: omr: transition to GA (mirror-registry v3.0)
 
 **Severity:** LOW — tracking item, no action until upstream ships GA
 **Status:** Waiting on upstream
@@ -1384,13 +1384,13 @@ will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
 
 ---
 
-## Refactors
+## #B40: Refactors
 
 - **ARCH variable normalization**: `include_all.sh` normalizes ARCH to the Go/OCI convention (`amd64`), but ISO filenames and Makefiles use `uname -m` (`x86_64`). Scripts like `vmw-upload.sh`, `kvm-upload.sh`, and `cluster-write-usb.sh` must override ARCH after sourcing `include_all.sh`. Provide both `ARCH` (Go: `amd64`) and `ARCH_UNAME` (kernel: `x86_64`) from `include_all.sh` so scripts don't need per-file overrides.
 
 ---
 
-## Feature: Merge int_connection and mirror_name into a single config value
+## #B41: Feature: Merge int_connection and mirror_name into a single config value
 
 **Status:** Done (v1.2.3)
 **Added:** 2026-07-10
@@ -1427,7 +1427,7 @@ and direct become reserved dir names. The key name itself might deserve a rename
 
 ---
 
-## Multi-version operator catalogs: day2 applies wrong catalog after upgrade sync
+## #B42: Multi-version operator catalogs: day2 applies wrong catalog after upgrade sync
 
 **Severity:** LOW — theoretical; operator catalogs are backwards-compatible in practice
 **Status:** REVERTED (2026-09-10) — version-aware logic removed; see below
@@ -1515,7 +1515,7 @@ must run a separate sync for the old version to refresh its operator catalog.
 
 ---
 
-## E2E: operator set installation smoke tests
+## #B43: E2E: operator set installation smoke tests
 
 **Severity:** MEDIUM — missing operator dependencies silently break bundle builds
 **Status:** Planned
@@ -1555,7 +1555,7 @@ to catch new dependencies early. Could also run on any change to
 
 ---
 
-## Bundle additional CLI tools (virtctl, etc.)
+## #B44: Bundle additional CLI tools (virtctl, etc.)
 
 **Severity:** LOW — UX convenience for air-gapped users
 **Status:** Done
@@ -1571,7 +1571,7 @@ to catch new dependencies early. Could also run on any change to
 
 ---
 
-## Upgrade: Upgradeable=False pre-flight check in CLI
+## #B45: Upgrade: Upgradeable=False pre-flight check in CLI
 
 **Severity:** MEDIUM — CLI silently hits confusing OpenShift errors
 **Status:** Done (cluster-upgrade.sh now checks Upgradeable=False, warns with reason/message, prompts to continue or aborts)
@@ -1601,7 +1601,7 @@ into `cluster-upgrade.sh` itself so both TUI and CLI benefit.
 
 ---
 
-## Feature: Per-node / per-role cluster configuration
+## #B46: Feature: Per-node / per-role cluster configuration
 
 **Severity:** MEDIUM — blocks some bare-metal use cases without `--primed` workaround
 **Status:** Planned
@@ -1632,7 +1632,7 @@ to all nodes of a given role. Some bare-metal deployments need:
 
 ---
 
-## TUI upgrade dialog: show conditional versions inline instead of toggle
+## #B47: TUI upgrade dialog: show conditional versions inline instead of toggle
 
 **Severity:** LOW
 **Status:** Planned
@@ -1655,7 +1655,7 @@ user may not discover, adding unnecessary complexity.
 **Benefit:** Simpler dialog, all options visible at once, user makes an
 informed choice without needing to know about the toggle.
 
-## TUI upgrade dialog: warn when versions cannot be validated without OSUS
+## #B48: TUI upgrade dialog: warn when versions cannot be validated without OSUS
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -1684,7 +1684,7 @@ choosing an upgrade target.
 
 ---
 
-## TUI "Test Connection" should validate vSphere/KVM resources, not just connectivity
+## #B49: TUI "Test Connection" should validate vSphere/KVM resources, not just connectivity
 
 **Severity:** MEDIUM — user discovers misconfigured resources only at install time
 **Status:** Planned
@@ -1730,7 +1730,7 @@ only runs `virsh version`).
 
 ---
 
-## Upgrade: detect stale OSUS graph when cluster version not in graph
+## #B50: Upgrade: detect stale OSUS graph when cluster version not in graph
 
 **Severity:** MEDIUM — user gets confusing "not an available upgrade" error
 **Status:** Partially Done (verify_upgrade_path_exists now does BFS edge validation; remaining: actionable "stale minVersion" diagnostic in cluster-upgrade.sh when source version missing from graph)
@@ -1876,7 +1876,7 @@ mirror sync.
 
 ---
 
-## Upgrade: auto-restart OSUS pod when graph-image content changes
+## #B51: Upgrade: auto-restart OSUS pod when graph-image content changes
 
 **Severity:** MEDIUM — user gets "not an available upgrade" after a successful sync
 **Status:** Done (v1.2.5: `day2.sh` proactively restarts OSUS pod when `updateService.yaml` is newer than running pod)
@@ -1952,7 +1952,7 @@ aba upgrade --to <version>
 
 ---
 
-## Feature: Cluster-mirror auto-actions after sync/load
+## #B52: Feature: Cluster-mirror auto-actions after sync/load
 
 **Severity:** MEDIUM — reduces manual steps, prevents user confusion
 **Status:** Planned
@@ -2041,7 +2041,7 @@ reactive.
 
 ---
 
-## Feature: Auto-update base version when all clusters have upgraded
+## #B53: Feature: Auto-update base version when all clusters have upgraded
 
 **Severity:** MEDIUM — prevents stale base version causing wrong sync behavior
 **Status:** Planned
@@ -2090,7 +2090,7 @@ comparison or `aba.conf` mutation logic in TUI code.
 
 ---
 
-## Feature: Purge unused images from mirror after all clusters upgrade
+## #B54: Feature: Purge unused images from mirror after all clusters upgrade
 
 **Severity:** LOW — UX improvement, reclaims storage on constrained hosts
 **Status:** Planned
@@ -2131,7 +2131,7 @@ version item above), offer to purge unused images:
 
 ---
 
-## Feature: Manage additional images in ISC
+## #B55: Feature: Manage additional images in ISC
 
 **Severity:** MEDIUM — reduces manual YAML editing and ISC regeneration issues
 **Status:** Planned — design in [ADR-013](devel/adr/013-additional-images-conf.md)
@@ -2226,7 +2226,7 @@ no pruning decisions, safety checks, or registry operations in TUI code.
 
 ---
 
-## TUI upgrade dialog: add option to change OCP channel
+## #B56: TUI upgrade dialog: add option to change OCP channel
 
 **Severity:** LOW — UX convenience
 **Status:** Planned
@@ -2252,7 +2252,7 @@ reflect the new channel's available versions.
 
 ---
 
-## TUI upgrade dialog: auto-refresh cached upgrade targets
+## #B57: TUI upgrade dialog: auto-refresh cached upgrade targets
 
 **Severity:** MEDIUM — user must restart TUI to see newly available versions
 **Status:** Planned
@@ -2282,7 +2282,7 @@ in the TUI.
 
 ---
 
-## Makefile: skip mirror-registry tarball extraction when already extracted
+## #B58: Makefile: skip mirror-registry tarball extraction when already extracted
 
 **Severity:** LOW — unnecessary work, adds ~10s to every `aba load`
 **Status:** Planned
@@ -2325,7 +2325,7 @@ pattern, so extraction is skipped once the marker exists.
 
 ---
 
-## Optimization: CLI download --wait should be instant after oc-mirror
+## #B59: Optimization: CLI download --wait should be instant after oc-mirror
 
 **Severity:** LOW — UX improvement, saves ~60s during bundle creation
 **Status:** Planned
@@ -2375,7 +2375,7 @@ overhead (subshell, source scripts, check state files).
 
 ---
 
-## Use FQDN node hostnames in agent-based installs
+## #B60: Use FQDN node hostnames in agent-based installs
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -2426,7 +2426,7 @@ detailed steps.
 
 ---
 
-## Breaking change: Rename CLI commands for clarity
+## #B61: Breaking change: Rename CLI commands for clarity
 
 **Severity:** LOW — cosmetic, but improves discoverability
 **Status:** Planned for v1.3.0 or v2.0
@@ -2469,7 +2469,7 @@ Do NOT mix with other changes.
 
 ---
 
-## Feature: Unified `aba status` command
+## #B62: Feature: Unified `aba status` command
 
 **Severity:** MEDIUM — UX improvement, central diagnostic/preflight tool
 **Status:** Planned
@@ -2520,7 +2520,7 @@ day2 CS version check) into a unified `scripts/aba-status.sh` dispatcher.
 
 ---
 
-## Agent-config / install-config: remove "ownership invitation" comment, add dynamic user-managed notice
+## #B63: Agent-config / install-config: remove "ownership invitation" comment, add dynamic user-managed notice
 
 **Severity:** LOW — UX improvement, consistency with ISC behavior
 **Status:** Planned
@@ -2569,7 +2569,7 @@ the ISC's `data/.created`.
 - `test/` and `test/e2e/examples/`: update all `.example` files
 - `test/func/test-tui-v2-04-isconf.sh`: may need updates for label checks
 
-## Post-sync/load: offer to run day2 on selected clusters
+## #B64: Post-sync/load: offer to run day2 on selected clusters
 
 **Severity:** MEDIUM — reduces manual steps after every sync/load
 **Status:** Planned
@@ -2633,7 +2633,7 @@ With `--yes`: auto-run on all clusters without prompting.
 
 ---
 
-## Clean up cluster install output (like save/sync/load cleanup)
+## #B65: Clean up cluster install output (like save/sync/load cleanup)
 
 The `aba -d <cluster> install` output is ~49 [ABA] lines from ~10 scripts in the Make chain.
 Duplication and noise identified:
@@ -2653,7 +2653,7 @@ Reference: mirror save/sync/load cleanup (commit 55c22607) for the pattern to fo
 
 ---
 
-## Refactor: Docker and Quay vendor files into mirror/<sub-dir>
+## #B66: Refactor: Docker and Quay vendor files into mirror/<sub-dir>
 
 **Severity:** LOW — consistency and cleanliness
 **Status:** Planned
@@ -2699,7 +2699,7 @@ under `mirror/`:
 
 ---
 
-## Audit: Error handling and exit code propagation
+## #B67: Audit: Error handling and exit code propagation
 
 **Severity:** MEDIUM — silent failures lead to partial state
 **Status:** Planned
@@ -2724,7 +2724,7 @@ active or if errors are swallowed by pipes, subshells, or `|| true`.
 
 ---
 
-## Audit: Race conditions and concurrency in run_once / parallel downloads
+## #B68: Audit: Race conditions and concurrency in run_once / parallel downloads
 
 **Severity:** MEDIUM — potential data corruption or stale results
 **Status:** Planned
@@ -2751,7 +2751,7 @@ needs verification.
 
 ---
 
-## Audit: Config migration and backward compatibility
+## #B69: Audit: Config migration and backward compatibility
 
 **Severity:** MEDIUM — upgrades from older ABA versions may break
 **Status:** Planned
@@ -2778,7 +2778,7 @@ keys, partially migrated configs from interrupted upgrades.
 
 ---
 
-## Audit: Security surface — unescaped input, temp files, credential leaks
+## #B70: Audit: Security surface — unescaped input, temp files, credential leaks
 
 **Severity:** HIGH — potential command injection or credential exposure
 **Status:** Planned
@@ -2810,7 +2810,7 @@ passwords, pull secrets) may leak to stdout or log files.
 
 ---
 
-## Audit: TUI edge cases — ESC/Cancel, empty states, corrupt config
+## #B71: Audit: TUI edge cases — ESC/Cancel, empty states, corrupt config
 
 **Severity:** MEDIUM — crashes or undefined behavior on unexpected input
 **Status:** Planned
@@ -2838,7 +2838,7 @@ The TUI should degrade gracefully rather than crash or show raw error output.
 
 ---
 
-## TUI: Interactive cluster checklist after mirror sync/load
+## #B72: TUI: Interactive cluster checklist after mirror sync/load
 
 **Priority:** MEDIUM
 **Effort:** MEDIUM
@@ -2870,7 +2870,7 @@ Day-2 (OperatorHub config) on clusters using that mirror. Currently:
 
 ---
 
-## Cache pre-operation mirror summary (ADR-008)
+## #B73: Cache pre-operation mirror summary (ADR-008)
 
 **Severity:** LOW
 **Status:** Planned
@@ -2891,7 +2891,7 @@ Pre-op dialog reads from cache instead of blocking. See ADR-008.
 
 ---
 
-## Cluster state cache for TUI (ADR-008)
+## #B74: Cluster state cache for TUI (ADR-008)
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -2915,7 +2915,7 @@ cached state only. See ADR-008.
 
 ---
 
-## Config mtime caching to avoid redundant subshell spawns (ADR-008)
+## #B75: Config mtime caching to avoid redundant subshell spawns (ADR-008)
 
 **Severity:** LOW
 **Status:** Planned
@@ -2945,7 +2945,7 @@ _ensure_aba_conf_fresh() {
 - `tui/v2/tui-lib.sh` (new `_ensure_aba_conf_fresh`, `_ensure_mirror_conf_fresh`)
 - All TUI files that call `source <(normalize-*-conf)` (~30 call sites)
 
-## Support AWS IPI (openshift-install) as an infrastructure platform
+## #B76: Support AWS IPI (openshift-install) as an infrastructure platform
 
 **Severity:** LOW
 **Status:** Planned
@@ -2967,7 +2967,7 @@ _ensure_aba_conf_fresh() {
 - AWS credentials would be configured via `~/.aws/credentials` or environment variables (standard AWS SDK approach)
 - Could later extend to other cloud IPI platforms (GCP, Azure) using the same pattern
 
-## OMR health check timeout too short (30s hardcoded)
+## #B77: OMR health check timeout too short (30s hardcoded)
 
 **Severity:** MEDIUM
 **Status:** Planned (ABA workaround landed 2026-10-15 — still need upstream fix)
@@ -2989,7 +2989,7 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 
 ---
 
-## OMR install: remove ABA 30s health-timeout workaround (after re-test)
+## #B78: OMR install: remove ABA 30s health-timeout workaround (after re-test)
 
 **Severity:** LOW
 **Status:** Planned
@@ -3006,7 +3006,7 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 
 ---
 
-## Fully test `aba setup dns` and `aba setup ntp`
+## #B79: Fully test `aba setup dns` and `aba setup ntp`
 
 **Severity:** MEDIUM — these commands modify system config and can break E2E infrastructure
 **Status:** TODO
@@ -3022,7 +3022,7 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 
 ---
 
-## Simplify bare-metal `aba install` into a single continuous process
+## #B80: Simplify bare-metal `aba install` into a single continuous process
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -3050,10 +3050,11 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 - The TUI already handles this more smoothly; this improvement is for the CLI/Makefile path.
 - The `ask` function already exists in ABA and supports "press Enter to continue" style prompts.
 - Must still work correctly if the process is interrupted (Ctrl-C) at any phase — re-running should resume from the right point.
+- **Gate (2026-11-03):** Do not start this until e2e + func + TUI are green again **and** a new ABA release is cut.
 
 ---
 
-## Quay uninstall leaves stale systemd service and quadlet file
+## #B81: Quay uninstall leaves stale systemd service and quadlet file
 
 **Severity:** MEDIUM
 **Status:** Planned
@@ -3076,7 +3077,7 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 ---
 
-## Should `platform` be overridable per cluster in cluster.conf?
+## #B82: Should `platform` be overridable per cluster in cluster.conf?
 
 **Severity:** LOW — design question
 **Status:** Discussion
@@ -3090,7 +3091,7 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 ---
 
-## Operator search should show all catalog matches (cross-catalog dedup)
+## #B83: Operator search should show all catalog matches (cross-catalog dedup)
 
 **Severity:** MEDIUM — UX limitation
 **Status:** Needs design
@@ -3123,7 +3124,7 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 ---
 
-## Should `reg_host` derive its domain from the global `domain`?
+## #B84: Should `reg_host` derive its domain from the global `domain`?
 
 **Severity:** LOW — design question
 **Status:** Discussion
@@ -3135,17 +3136,324 @@ This keeps the same user checkpoints but removes the need to re-run the command.
 
 **Alternative:** Keep `reg_host` as a full FQDN but add a validation check that warns if its domain suffix doesn't match `domain` from `aba.conf`.
 
-## `vmw-delete.sh` should fall back to `cluster.conf` when agent config files are missing
+## #B85: `vmw-delete.sh` should fall back to `cluster.conf` when agent config files are missing
 
-**Severity:** LOW — only affects `aba delete` on an already-deleted cluster
-**Status:** Planned
+**Severity:** MEDIUM — can leave powered-on VMs when configs were removed first
+**Status:** Planned (deferred seatbelt — do **not** implement yet)
 **Added:** 2026-10-31
+**Updated:** 2026-11-04
 
-**Problem:** `vmw-delete.sh` gets `CLUSTER_NAME` from `install-config.yaml` / `agent-config.yaml`. After a first `aba delete`, those files are correctly removed by `make clean`. If `aba delete` is called again (e.g. by accident), `vmw-delete.sh` says "Cluster config files missing -- nothing to delete" because it has no fallback.
+**Problem:** `vmw-delete.sh` gets `CLUSTER_NAME` from `install-config.yaml` / `agent-config.yaml`. If those files are gone while VMs still exist, delete prints "Cluster config files missing -- nothing to delete" (exit 0) and orphans the VMs / holds the starting IP.
 
-This is a minor robustness issue — the first delete already destroys VMs and cleans files, so the second delete is a no-op. Callers should check `.install-complete` before calling `aba delete`.
+How configs go missing with VMs still up (historical): Day-2 **Clean** while installed removed agent/install-config but left VMs; then Delete could not find them.
 
-**Proposed fix:** In `vmw-delete.sh`, fall back to `cluster.conf` (via `normalize-cluster-conf`) when `CLUSTER_NAME` is empty and agent config files are gone. `cluster.conf` has `cluster_name`, `num_masters`, `num_workers` — enough to derive VM names via `vm_name()`.
+**Primary fix (done 2026-11-04):** Refuse `aba clean` / Day-2 Clean while `.install-complete` exists (`scripts/cluster-clean.sh`). Installed clusters must use `aba delete`. Delete then runs `make clean force=1`.
 
-**Workaround:** Only call `aba delete` when `.install-complete` exists.
+**This item (seatbelt, later):** In `vmw-delete.sh` / `kvm-delete.sh`, fall back to `cluster.conf` (`normalize-cluster-conf` + `vm_name()`) when agent/install-config are missing so delete still destroys VMs in half-cleaned dirs. Band-aid relative to the Clean gate; keep for defense-in-depth if needed.
+
+**Workaround today:** Regenerate agent-config (`make agent-config.yaml`) then `aba delete`, or `govc`/`virsh` as last resort.
+
+## #B86: Remove extract diagnostics from `download-catalog-index.sh` once stable
+
+**Severity:** LOW — diagnostics only, no functional impact
+**Status:** Planned (partially mitigated 2026-11-03)
+**Added:** 2026-11-02
+**Updated:** 2026-11-03
+
+**Problem:** On podman 5.8.2 (E2E pools), `podman cp` can exit 0 while leaving operator
+directory stubs under `/configs` with **no regular files** (no `catalog.json` /
+`package.json`). That failed as "parser produced empty index". Bastion (5.4.0) does
+not reproduce it.
+
+**Mitigation (2026-11-03):** Prefer `podman unshare` + `mount` + `cp -a`; fall back to
+`podman cp`. Validate with `find … -type f` (not just subdirs) and retry on empty.
+
+**Proposed cleanup:** Once the mount path proves stable in E2E (no empty-index
+flakes for a few weeks), remove `_dump_diagnostics()` and simplify the retry loop.
+
+## #B87: Revisit `resolved_reg_vendor()` auto-resolution once OMR is GA
+
+**Severity:** LOW — future planning
+**Status:** Planned
+**Added:** 2026-11-02
+
+**Problem:** `resolved_reg_vendor()` in `scripts/include_all.sh` resolves `auto` to `quay` on x86_64/s390x/ppc64le and `docker` on aarch64. This needs revisiting when:
+
+a) **OMR reaches GA** — should `auto` resolve to `omr` instead of `quay` on x86_64 (and potentially other architectures)? OMR may replace Quay as the default registry.
+b) **OMR adds multi-arch support** — check which architectures OMR supports and update the case mapping accordingly.
+
+Current vendor availability by architecture (verified 2026-11-02):
+- quay (mirror-registry): x86_64, s390x, ppc64le (no aarch64)
+- docker: x86_64, aarch64 only
+- omr: x86_64 only (multi-arch planned)
+
+**Proposed fix:** Update the `case` in `resolved_reg_vendor()` to reflect OMR's GA status and supported architectures. Also update the availability comment block above the function.
+
+## #B88: Metadata conduit — use the mirror registry (or file transfer) as a shared channel between connected and disco hosts
+
+**Severity:** LOW — enhancement idea
+**Status:** Idea
+**Added:** 2026-11-02 (expanded same day)
+
+### Scope
+
+This applies to the **partially-connected** use case: both the connected host and the disconnected bastion can reach the mirror registry, but cannot reach each other directly. The registry is the sole shared resource.
+
+For the **fully air-gapped** use case (no shared mirror), the same protocol/data format applies but the transport is file-based (tar file on physical media) instead of registry push/pull. See "Two transports" below.
+
+### Problem
+
+In partially-connected mode, `aba sync` runs on the connected host and produces oc-mirror workspace output files (IDMS/ITMS manifests, catalog sources, update service config, mapping.txt, etc.). When `aba day2` later runs on the disconnected bastion, those workspace files are missing — they live on the connected host. Currently there is no automatic way to transfer them; `aba-transfer.tar` requires physical media.
+
+### Core idea
+
+After `mirror sync`, pack all metadata into an OCI image and push it to the mirror registry. The disco bastion pulls that image to get everything it needs for day2. No physical media, no file copying — the registry is the sole communication channel for ongoing operations.
+
+### What to pack (connected → disco)
+
+- **oc-mirror workspace artifacts:** IDMS/ITMS manifests, catalog sources, update service config, mapping.txt
+- **ABA config metadata:** `ocp_version`, `ocp_channel`, `ocp_upgrade_to`, architecture, imageset-config checksum, timestamp
+- **Transfer bundle data:** ISC files, CLI tarball list, upgrade metadata JSON — everything currently in `aba-transfer.tar`
+
+After the initial setup (which may still use a physical bundle), ALL subsequent metadata flows through the registry. Physical `aba-transfer.tar` transfer becomes unnecessary.
+
+### Image naming / tagging
+
+**Version-tagged (preferred):**
+```
+<registry>/aba/metadata:4.21.40-fast
+```
+The disco side already knows its version + channel from `aba.conf` (configured during initial setup), so it can always construct the correct tag. Multiple versions coexist in the registry (useful during upgrades — both base and target metadata available).
+
+A `latest` tag can additionally point to the newest for discovery/bootstrapping.
+
+### Bidirectional: disco → connected (future)
+
+The disco side pushes a companion image back:
+```
+<registry>/aba/disco-state:latest
+```
+Containing:
+- Lowest OCP version still running across all clusters
+- List of active cluster versions and their day2 status
+- Which operators are deployed
+
+The connected side pulls this before the next `sync` and gains:
+- **Pruning intelligence** — knows which old release images are no longer needed by any cluster
+- **Upgrade readiness** — whether all clusters have been day2'd to the latest mirrored content
+- **Operator drift detection** — whether the disco side has operators the connected side isn't mirroring
+
+Today there is no way for the connected side to know what the disco side still needs, so mirrored images accumulate forever. This closes that feedback loop.
+
+### Flow sketch (partially connected)
+
+```
+Connected host                    Registry                     Disco bastion
+─────────────────────────────────────────────────────────────────────────────
+aba sync               ──push──►  aba/metadata:4.21.40-fast
+                                                         ◄──pull──  aba day2
+                                  aba/disco-state:latest  ◄──push──  (after day2)
+aba sync (next)      ◄──pull──  aba/disco-state:latest
+  → knows lowest ver
+  → can prune old images
+```
+
+### Two transports, one protocol
+
+The metadata payload (manifests, config, state) is identical regardless of transport:
+
+| | Partially connected | Fully air-gapped |
+|---|---|---|
+| **Transport** | OCI image in mirror registry | Tar file on physical media |
+| **Connected → disco** | `podman push aba/metadata:tag` | `cp aba-metadata.tar /media/` |
+| **Disco → connected** | `podman push aba/disco-state:latest` | `cp aba-disco-state.tar /media/` |
+| **Shared resource** | Mirror registry | Physical media / sneakernet |
+
+Same data format, same directory layout inside the image/tar. Code reads from a local directory after extraction — doesn't care how it got there.
+
+### Fallback
+
+If the metadata image doesn't exist in the registry (first-time setup, older connected host, partially-connected mode not configured), day2 falls back to its current behavior — using whatever workspace files are available locally. Zero impact on existing users.
+
+### Benefits
+
+- **No physical media for ongoing syncs** — the registry handles all communication
+- Enables image pruning on the connected side (via disco-state feedback)
+- Self-configuring disco side for routine updates
+- Atomic — metadata image is versioned alongside the mirrored content
+- Same protocol works for both partially-connected and fully air-gapped topologies
+
+## #B89: TUI startup performance — investigated, limited savings available
+
+**Severity:** LOW — note for future reference
+**Status:** Investigated (2026-11-02), no action needed
+**Added:** 2026-11-02
+
+**Investigated:** Whether TUI startup (`abatui2.sh`) can be made faster by reordering or deferring blocking operations.
+
+**Findings:**
+
+1. **Deferring `aba_inet_check_wait` (line ~326):** Cannot save meaningful time. `_detect_mode()` calls `aba_inet_check_wait_status` which also blocks (`run_once -w`). Moving the wait just shifts where the block happens — total wall-clock time is identical. The ~0.5s of code between the two wait points (printf, sleep 0.3, clear, function definitions) is not worth the risk.
+
+2. **`install-rpms.sh external` (line ~174):** Runs synchronously every startup to check for missing RPMs. Could be cached with a marker file (skip on subsequent starts). Potential savings: 0.5–3s. Worth doing if startup time becomes a priority.
+
+3. **`cli-download-all.sh --no-version` (line ~323):** Runs synchronously but starts background `run_once` tasks internally, so it returns quickly when tools are cached. Minimal savings from backgrounding.
+
+4. **`sleep 0.3` (line ~333):** Cosmetic delay for "Ready." message. 0.3s — trivial.
+
+5. **Operator basket grep loop (lines ~240–278):** N×M greps against `.index/` files. Usually fast (few operators). Could be a single awk pass but savings are negligible for typical use.
+
+**Conclusion:** The main startup bottleneck is the internet connectivity check (~1–5s depending on network). This is inherently I/O-bound and already runs in background from the earliest possible point (line ~160). The only actionable item is #2 (RPM check caching) for ~0.5–3s savings.
+
+---
+
+## #B90: Day-2 / cluster picker UX — stale same-FQDN dirs and install-only validation
+
+**Severity:** LOW–MEDIUM — rare for a single-bastion production user; common when bouncing between bastions/hosts with same cluster names during testing
+**Status:** Planned (capture / remember)
+**Added:** 2026-11-03
+
+**Problem:** On bastion, Day-2 offered `ocp.example.com` from a local stub `ocp/` dir (TUI draft, empty `mac_prefix`, wrong topology). The real cluster was installed on disco with a full `cluster.conf`. Day-2 failed with `mac_prefix is required for platform=vmw`, and because verify runs before PLAN, the progress dialog silently fell back to “Choose execution mode”.
+
+**Context:** Unlikely when a user runs one ABA instance on one bastion. Easy to hit when testing across connected + disconnected hosts that reuse short names (`ocp`, `sno`, …).
+
+**Note:** ADR-018 (VM ownership / `.cluster-id`) is **orthogonal** — it protects VM check/delete on the hypervisor; it would not stop Day-2 from selecting a wrong/stale local cluster dir.
+
+**Ideas to remember (by value even for single-bastion):**
+
+1. **Relax day2 validation (HIGH value, single-bastion too)** — Day-2 / upgrade / status should not require install-only fields (`mac_prefix`, CPU/mem, …). An already-installed cluster path should not fail on empty VM-create config.
+2. **Don’t silently fall back from progress dialog (HIGH value)** — If PLAN never arrives because verify/abort failed fast, surface that error immediately instead of waiting ~10s then showing the execution-mode chooser.
+3. **Richer Day-2 picker labels (MEDIUM; more useful multi-host)** — Show type + provenance from `state.sh` (`cluster_type`, `installed_on`, `installed_from`). Flag or hide dirs with `.install-complete` but empty/missing `state.sh`.
+4. **Reachability gate (MEDIUM)** — Prefer offering clusters whose API/kubeconfig answers; label unreachable/stale otherwise.
+5. **Draft vs installed (MEDIUM)** — TUI draft persist should not leave a dir looking installed. Label `(draft)` and keep drafts out of Day-2 until real install state exists.
+
+**Workaround:** Run Day-2 on the host that owns the real cluster dir (or copy that host’s `cluster.conf` / state). Don’t reuse a TUI draft dir that only shares the FQDN.
+
+**Related:** ADR-018 (VM ownership tag); #B74 (cluster state cache for TUI); #B72 (interactive cluster checklist after sync/load).
+
+---
+
+## #B91: Silent long `curl --connect-timeout N --retry M` probes before first user message
+
+**Severity:** MEDIUM — looks like a hang in TUI Live Output / CLI
+**Status:** Planned
+**Added:** 2026-11-03
+
+**Problem:** Commands such as `aba startup` can sit for ~15–33s with only `Executing: …` (or after a brief line) before any wait/spinner message. Users perceive a hang.
+
+**Root cause:** “Quick check if already up” probes use `curl --connect-timeout 10 --retry 2` (or higher retry counts) **before** printing “Waiting for…”. When the API is down, curl burns the full connect-timeout × retries with no output. Measured: `--connect-timeout 10 --retry 2` ≈ **33s** silence against an unreachable host.
+
+**Known call sites to review:**
+
+- `scripts/cluster-startup.sh` — API “quick check” before `Waiting for cluster API…` (`--connect-timeout 10 --retry 2`, two places); similar console curl
+- `scripts/cluster-graceful-shutdown.sh` — `curl --connect-timeout 10 --retry 8` (potentially ~80s+ silent)
+- Other cluster lifecycle paths (`aba ls`, status, day2 access probes) — audit for the same pattern: long silent connect before the first `aba_info` / `aba_wait_show`
+
+**Proposed fix:**
+
+1. Print intent **before** any connect that can block (`aba_info "Checking whether cluster API is already up…"` or go straight to `aba_wait_show`).
+2. For “already up?” probes: single attempt, short timeout (e.g. `--connect-timeout 2 --max-time 3`, no multi-retry).
+3. Retries belong inside `aba_wait_show` (visible spinner + elapsed/max), not in a silent pre-check curl.
+
+**Related:** #B90 item 2 (don’t leave the user with silent waits).
+
+---
+
+## #B92: TUI creates `mirror.conf` via Make without `force=yes` → opens `vi`
+
+**Severity:** HIGH — blocks DISCO/first-time TUI mirror install; automation hangs
+**Status:** Done (fix 2026-11-04 — TUI `make … mirror.conf force=yes`; verify on next DISCO wipe run)
+**Added:** 2026-11-04
+**Updated:** 2026-11-04
+
+**Problem:** On a fresh host (typical DISCO after bundle unpack — bundle **excludes**
+`mirror/mirror.conf`), the TUI Install Mirror path can drop into an interactive
+`$editor` (`vi` with stock `editor=vi` + `ask=true`) instead of only showing the TUI
+Mirror Configuration dialog. Screen capture may still look like the “Install locally /
+remote” menu while the process is actually blocked in `vi`, so keystrokes go into vim
+and the wizard appears stuck.
+
+**Root cause:** TUI ensures `mirror.conf` exists with bare Make:
+
+```bash
+make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+```
+
+Make defaults `force=no` → `create-mirror-conf.sh` → `edit_file` → with `ask=true` and
+`editor=vi`, opens vi. The TUI then shows its own config menu afterward (double prompt).
+CLI paths that set registry fields correctly use `force=yes` (e.g. `aba --vendor`,
+`--reg-host`, …) and never open an editor. Bundle/`go.sh` often create conf via those
+CLI flags, so interactive users who configure via CLI first may never see this; pure
+TUI-first after wipe hits it.
+
+**Call sites:**
+
+- `tui/v2/tui-mirror.sh` — `_mirror_config_menu_loop` (missing conf)
+- `tui/v2/tui-lib.sh` — settings / vendor path that creates conf
+
+**Proposed fix:** Always create from TUI with skip-edit, matching CLI:
+
+```bash
+make -sC "$ABA_ROOT/mirror" mirror.conf force=yes
+```
+
+Do **not** change the user’s `editor=` / `ask=` defaults in `aba.conf`. TUI owns the
+review UI after the file exists.
+
+**Reproducer:** Wipe disco ABA state, unpack a full bundle (no `mirror.conf`), launch
+TUI DISCO, proceed through Install Mirror → Install locally. With `ask=true` /
+`editor=vi`, process becomes `vi mirror.conf` before the Mirror Configuration dialog.
+
+**Seen:** 2026-11-04 `test-tui-disco-workflow.sh` gate stuck ~7m; harness Enter keys
+went into vim; `:q!` unblocked → Mirror Configuration → install progress.
+
+---
+
+## #B93: Split heavy DISCO TUI workflow into resumable stage tests
+
+**Severity:** LOW — test harness UX / iterate-on-fail only
+**Status:** Planned (do **after** TUI ALL-WORKING / full green)
+**Added:** 2026-11-04
+
+**Problem:** `test-tui-disco-workflow.sh` is one mega-script (bundle → wipe →
+transfer → registry/load → cluster). A failure late in the run makes it easy to
+re-run from scratch and redo the expensive bundle (~30–60m) even when mirror+load
+already succeeded. Conno is already staged (`cluster` → `day2` → `upgrade` →
+`lifecycle`); disco is not.
+
+**Current partial mitigation:** `TUI_BUNDLE_PATH` (reuse tar) and
+`TUI_SKIP_SETUP=1` (skip wipe/transfer when `.bundle` + `mirror/.available`).
+Works but is easy to forget and still one script.
+
+**Proposed fix (after green):** Split into separate tests that share fixtures via
+env/markers, e.g.:
+
+1. `test-tui-disco-bundle.sh` — create/transfer/unpack (rare, expensive)
+2. `test-tui-disco-load.sh` — registry install + load (medium)
+3. `test-tui-disco-cluster.sh` — cluster wizard + install + verify (usual re-run)
+
+Keep one ordered path in `test-tui-all` / overnight (1→2→3) for release. Does not
+shorten a real install failure (~40m); only avoids redoing earlier stages.
+
+---
+
+## #B94: Drop “beta” label from primed workflow once stable
+
+**Severity:** LOW — docs/UX hygiene (do not leave forever-beta)
+**Status:** Planned (do **after** BM-simplify #B80 lands, e2e/func approve, ~few weeks soak)
+**Added:** 2026-11-04
+
+**Problem:** Primed (`bundle-primed` / `transfer-primed` / `deploy-primed`,
+`aba bundle --primed`) is intentionally labeled **beta** so stamp/BM-simplify
+changes can ship without migration/BC. That label must not linger after the
+workflow is done and approved.
+
+**Proposed fix:** When primed + BM path are stable and approved:
+
+1. Remove “beta” from README (section title, callout, command table) and
+   `others/help-{aba,bundle,transfer,deploy}.txt`.
+2. Note the graduation in CHANGELOG (Unreleased → release notes).
+3. Close this item; keep #B80 related history for context.
+
+**Reminder:** Revisit ~few weeks after #B80 + release soak — do not forget.
 

@@ -2285,8 +2285,8 @@ Lifecycle:
 • Startup: graceful cluster startup (powers on VMs)
 
 Cleanup:
-• Clean: remove generated artifacts so you can retry install
-• Delete: remove cluster state and resources (VMs destroyed on virt platforms)
+• Clean: remove generated artifacts to retry a failed install (refused if installed)
+• Delete: destroy VMs and remove cluster state (required before re-install)
 
 Navigation:
 • Arrow keys / Tab — move between items and buttons
@@ -2883,18 +2883,18 @@ _day2_clean() {
 	fi
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
-
-	local _clean_warn=""
 	local _cl_path="$ABA_ROOT/$SELECTED_CLUSTER"
+
+	# Installed clusters must be deleted — clean would strip agent-config and orphan VMs.
 	if [ -f "$_cl_path/.install-complete" ]; then
-		_clean_warn="\n\nWARNING: This cluster is installed"
-		[ -f "$_cl_path/.shutdown.log" ] && _clean_warn="$_clean_warn (shut down)"
-		_clean_warn="$_clean_warn. Clean will remove\n.install-complete, kubeconfig, and shutdown state. VMs are NOT removed."
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
+			--msgbox "Cluster '$cl_display' is installed.\n\nClean is refused while .install-complete exists — it would remove install/agent config and leave VMs running.\n\nUse Day-2 → Delete cluster first, then install again." 0 0 || true
+		return 0
 	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
 		--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
-		--defaultno --yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved.$_clean_warn" 0 0
+		--defaultno --yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry a failed/incomplete installation.\n\nCluster configuration (cluster.conf) is preserved.\nVMs are not destroyed (use Delete for that)." 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"

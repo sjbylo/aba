@@ -196,10 +196,17 @@ _progress_plan-save:
 		exit 1; \
 	}
 
-# oc-mirror is idempotent so no need for 'dot' flag files
-.PHONY: load
-load: .init               .rpmsint .check-data-dir install _progress_plan-load  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+# data/.images-loaded tracks the last successful image load. Make skips when the
+# marker is newer than all mirror_*.tar archives (nothing new to load).
+# The marker is written by reg-load.sh (only after a real image load, not config-only).
+# aba-transfer-configs.tar is also a prerequisite so Day N config-only transfers
+# re-run load; reg-load.sh renames it to .tar.done after successful extract.
+# Force re-load: rm mirror/data/.images-loaded && aba -d mirror load
+data/.images-loaded: $(wildcard data/mirror_*.tar) $(wildcard data/aba-transfer-configs.tar)
 	$(SCRIPTS)/reg-load.sh          $(retry)
+
+.PHONY: load
+load: .init               .rpmsint .check-data-dir install _progress_plan-load data/.images-loaded  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 
 .PHONY: _progress_plan-load
 _progress_plan-load:
@@ -377,7 +384,7 @@ _progress_plan-uninstall:
 .unavailable:
 	$(SCRIPTS)/reg-uninstall.sh
 	@$(SCRIPTS)/infra-dns.sh remove-mirror
-	@rm -f .available
+	@rm -f .available data/.images-loaded
 	@touch .unavailable
 
 .PHONY: checkversion
