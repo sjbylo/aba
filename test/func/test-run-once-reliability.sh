@@ -101,23 +101,24 @@ fi
 
 section "Test 2: Idempotency (Cached Results)"
 
-# Start a task and verify it doesn't run twice
-start_time=$(date +%s)
-run_once -i "test:cached" -- bash -c "date +%s > /tmp/test-cached-time && sleep 0.1"
-run_once -w -i "test:cached"
-first_run=$(cat /tmp/test-cached-time)
-
-# Try to run again - should use cached result
-run_once -i "test:cached" -- bash -c "date +%s > /tmp/test-cached-time && sleep 0.1"
-run_once -w -i "test:cached"
-second_run=$(cat /tmp/test-cached-time)
-
-if [[ "$first_run" == "$second_run" ]]; then
-	test_pass "Task result cached (not re-executed)"
+# Assert no second STARTED — not file side-effects. Default -w re-runs the
+# command as self-healing validation (by design), which would rewrite a
+# timestamp file even on a cache hit. Use -S to skip validation here.
+run_once -S -i "test:cached" -- bash -c "sleep 0.1; echo ok"
+run_once -w -S -i "test:cached"
+if [[ ! -f "$RUN_ONCE_DIR/test:cached/exit" ]]; then
+	test_fail "Task exit stamp missing after -w"
 else
-	test_fail "Task re-executed when it should use cache"
+	_starts1=$(grep -c ' STARTED ' "$RUN_ONCE_DIR/test:cached/history" 2>/dev/null || echo 0)
+	run_once -S -i "test:cached" -- bash -c "sleep 0.1; echo ok"
+	run_once -w -S -i "test:cached"
+	_starts2=$(grep -c ' STARTED ' "$RUN_ONCE_DIR/test:cached/history" 2>/dev/null || echo 0)
+	if [[ "$_starts1" -eq 1 && "$_starts2" -eq 1 ]]; then
+		test_pass "Task result cached (not re-executed)"
+	else
+		test_fail "Task re-executed when it should use cache (STARTED $_starts1 -> $_starts2)"
+	fi
 fi
-rm -f /tmp/test-cached-time
 
 section "Test 3: Kill Scenarios (Crash Recovery)"
 

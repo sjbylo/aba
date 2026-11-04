@@ -2130,6 +2130,13 @@ aba_wait_show() (
 		[ -n "$_cleaned" ] && return
 		_cleaned=1
 		_stop_spinner
+		# Kill in-flight check — without this, INT/TERM leave orphans (set +m
+		# makes background checks ignore SIGINT; Ctrl+C must still stop them).
+		if [ -n "${_cmd_pid:-}" ]; then
+			kill "$_cmd_pid" 2>/dev/null || true
+			wait "$_cmd_pid" 2>/dev/null || true
+			_cmd_pid=
+		fi
 		if [ "$use_tty" -eq 1 ]; then
 			_final=$(( $(date +%s) - start_ts ))
 			printf '\r[ABA] %s     %s (max %s)\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")" "$max_fmt"
