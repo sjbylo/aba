@@ -18,7 +18,7 @@
 - **Primed / day2 wait gates** — Failed `.wait` gates are fatal (ADR-011).
 - **TUI DISCO mirror.conf** — Creates `mirror.conf` with `force=yes` so DISCO never drops into `vi`.
 - **Docs: bare-metal disk / MAC guidance** — Prefer `macs.conf` / `bmc.conf` and `disk_hint` over hand-editing `agent-config.yaml`.
-- **Catalog indexes refreshed** — Operator catalog indexes updated for OCP 4.17–4.23 content.
+- **Catalog indexes refreshed** — Operator catalog indexes updated for OCP 4.17–5.0 (GA) and 5.1 (pre-release) content.
 - **TUI progress dialog improvements** — Improved progress step rendering and post-command hook timing.
 - **Vendor matrix test updated** — `test-mirror-vendor-matrix.sh` updated with correct per-architecture vendor availability.
 - **TUI disco workflow test** — `test-tui-disco-workflow.sh` updated for OMR detection in bundle dialog.
@@ -27,6 +27,8 @@
 ### Fixed
 
 - **OCP version tips miss next-major GA / sticky forever** — `Latest`/`Previous`/`Older` now prefer a GA next-major Cincinnati tip when the CDN floating tip lags (e.g. `5.0.0` while CDN still on 4.22), step Previous/Older across majors at `X.0`, and refresh via `run_once -t` (`ABA_CACHE_TTL`) instead of caching the first successful tip forever. Shared helpers: `_cdn_tip_version`, `_peek_next_major_ga`, `aba_version_fetch_channel`/`_wait`.
+- **Catalog refresh skipped GA next-major** — `tools/refresh-catalog-indexes.sh` now starts from `fetch_latest_version` (peek-aware) and walks with `_channel_prev_minor`, so GA `5.0` is included when CDN still tips `4.22`; prerelease probes reuse `_next_minor` / `_next_major`.
+- **Bundle NAS temp cleanup** — `bundles/v2` startup cleans all stale staging dirs under the NAS temp area (not only the current bundle name), so failed builds of other versions do not linger.
 - **Clean while installed orphans VMs** — `make clean` / `aba clean` now refuse when `.install-complete` exists (use `aba delete` first). `cluster-clean.sh` owns cleanup; delete passes `force=1` after VMs are gone. Stale-VM install guard suggests `delete` then `install`.
 - **Catalog extract empty-index false pass** — Prefer `podman unshare mount` + `cp -a` over `podman cp` (podman 5.8.2 can exit 0 with operator dirs but no FBC files); validate with `find -type f` and retry.
 - **TUI podman preflight blank error** — When `run_once` cannot write error logs (e.g. disk full), the podman preflight dialog now shows a fallback message instead of a blank.
