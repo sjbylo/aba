@@ -2374,6 +2374,101 @@ _next_major() {
 	echo "$(( x + 1 )).0"
 }
 
+# Full Version: string from CDN release.txt for channel + major (openshift-vN/...).
+# Cincinnati is channel-tip truth; CDN is only the floating download anchor (can lag).
+_cdn_tip_version() {
+	local channel="${1:-stable}"
+	local major="$2"
+	local url cache_file latest_ver
+
+	[[ "$major" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+
+	url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/${channel}/release.txt"
+	cache_file="${ABA_CACHE_DIR}/release_${channel}_v${major}_${ARCH}.txt"
+
+	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+
+	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
+	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
+	echo "$latest_ver"
+}
+
+# CDN floating-tip minor for a specific major. Rejects cross-contaminated tips
+# (e.g. v5 path still publishing 4.x). Used to step back across majors at X.0.
+_cdn_tip_minor() {
+	local channel="${1:-stable}"
+	local major="$2"
+	local latest_ver tip_minor tip_maj
+
+	latest_ver="$(_cdn_tip_version "$channel" "$major")"
+	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
+
+	tip_minor="$(_ver_minor "$latest_ver")"
+	tip_maj="${tip_minor%%.*}"
+	[[ "$tip_maj" == "$major" ]] || { echo ""; return 0; }
+
+	echo "$tip_minor"
+}
+
+# One channel minor back. Within a major uses _prev_minor; at X.0 jumps to the
+# previous major's CDN tip (5.0 → 4.22, not empty).
+_channel_prev_minor() {
+	local channel="${1:-stable}"
+	local minor="$2"
+	local prev maj
+
+	prev="$(_prev_minor "$minor")"
+	if [[ -n "$prev" ]]; then
+		echo "$prev"
+		return 0
+	fi
+
+	maj="${minor%%.*}"
+	[[ "$maj" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+	[[ "$maj" -gt 1 ]] || { echo ""; return 0; }
+
+	_cdn_tip_minor "$channel" "$(( maj - 1 ))"
+}
+
+# GA tip of next major when it is strictly newer than cdn_tip (CDN lag after major GA).
+# Echoes the newer tip, or empty if none / not GA / not greater.
+# Trust: Cincinnati graph tip wins over a lagging CDN floating tip.
+_peek_next_major_ga() {
+	local channel="$1"
+	local minor="$2"
+	local cdn_tip="${3:-}"
+	local next_maj newer
+
+	next_maj="$(_next_major "$minor")"
+	[[ -n "$next_maj" ]] || return 0
+
+	newer="$(fetch_all_versions "$channel" "$next_maj" 2>/dev/null | tail -n1)"
+	[[ -n "$newer" ]] && ! _is_prerelease "$newer" || return 0
+
+	if [[ -z "$cdn_tip" ]] || is_version_greater "$newer" "$cdn_tip"; then
+		echo "$newer"
+	fi
+}
+
+# CDN floating minor + its Cincinnati tip for this channel.
+# Usage: _channel_cdn_head "$channel" minor_var tip_var
+_channel_cdn_head() {
+	local channel="$1"
+	local -n _cdn_minor_out="$2"
+	local -n _cdn_tip_out="$3"
+
+	_cdn_minor_out="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$_cdn_minor_out" ]] || return 1
+	_cdn_tip_out="$(fetch_all_versions "$channel" "$_cdn_minor_out" | tail -n1)"
+	[[ -n "$_cdn_tip_out" ]] || return 1
+	return 0
+}
+
+# TTL for OCP Latest/Previous/Older run_once tips. Override with ABA_VERSION_CACHE_TTL.
+_ocp_version_ttl() {
+	parse_duration "${ABA_VERSION_CACHE_TTL:-${ABA_CACHE_TTL:-100m}}"
+}
+
 # return 0 if v contains prerelease suffix (has '-') else 1
 _is_prerelease() {
 	[[ "$1" == *-* ]]
@@ -2389,24 +2484,21 @@ _ver_minor() {
 # Fetch latest minor (GA-aware)
 # Returns MAJOR.MINOR (e.g. 4.20)
 # If mirror reports prerelease (e.g. 4.21.0-rc.1), returns previous minor (e.g. 4.20)
+# Note: CDN is the floating download anchor only; channel tips come from Cincinnati.
 ############################################
 fetch_latest_minor_version() {
 	local channel="${1:-stable}"
-	# CDN uses per-major layout: openshift-v4/, openshift-v5/, etc.
-	local url="https://mirror.openshift.com/pub/openshift-v${ocp_major:-4}/${ARCH}/clients/ocp/${channel}/release.txt"
-	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
+	local major="${ocp_major:-4}"
 	local latest_ver minor prev
 
-	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
-
-	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
+	latest_ver="$(_cdn_tip_version "$channel" "$major")"
 	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
 
-	minor="$(echo "$latest_ver" | cut -d. -f1,2)"
+	minor="$(_ver_minor "$latest_ver")"
 
 	# If the "latest" is prerelease, ignore that minor until GA exists
 	if _is_prerelease "$latest_ver"; then
-		prev="$(_prev_minor "$minor")"
+		prev="$(_channel_prev_minor "$channel" "$minor")"
 		[[ -n "$prev" ]] && { echo "$prev"; return 0; }
 	fi
 
@@ -2570,10 +2662,13 @@ _candidate_offer() {
 # Stable and fast come from the channel release file.
 # Candidate uses _candidate_offer when that walk found a version, and
 # otherwise the same release-file path.
+# When CDN tip lags a GA next major (e.g. stable still 4.22 while
+# stable-5.0 has 5.0.0), prefer that GA tip. Previous then becomes
+# the CDN tip via fetch_previous_version.
 ############################################
 fetch_latest_version() {
 	local channel="${1:-stable}"
-	local minor v prev offer
+	local minor v prev offer newer
 
 	if [[ "$channel" = "candidate" ]]; then
 		offer="$(_candidate_offer | sed -n '1p' || true)"
@@ -2583,14 +2678,19 @@ fetch_latest_version() {
 		fi
 	fi
 
-	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || return 1
-
-	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
-	if [[ -z "$v" ]]; then
-		prev="$(_prev_minor "$minor")"
+	if ! _channel_cdn_head "$channel" minor v; then
+		# Head empty: try one minor back (cross-major aware).
+		minor="$(fetch_latest_minor_version "$channel")"
+		[[ -n "$minor" ]] || return 1
+		prev="$(_channel_prev_minor "$channel" "$minor")"
 		[[ -n "$prev" ]] || return 1
 		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
+	fi
+
+	# CDN floating tip can lag Cincinnati after a major GA.
+	if [[ "$channel" = "stable" || "$channel" = "fast" ]]; then
+		newer="$(_peek_next_major_ga "$channel" "$minor" "$v")"
+		[[ -n "$newer" ]] && v="$newer"
 	fi
 
 	_is_version_string "$v" && echo "$v" && return 0
@@ -2614,7 +2714,7 @@ fetch_latest_z_version() {
 
 	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
 	if [[ -z "$v" ]]; then
-		prev="$(_prev_minor "$minor")"
+		prev="$(_channel_prev_minor "$channel" "$minor")"
 		[[ -n "$prev" ]] || return 1
 		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	fi
@@ -2626,11 +2726,14 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
+# When Latest has peeked to a GA next major (CDN tip still on N),
+# Previous is the CDN tip (former Latest), not N-1.
+# At X.0 (CDN already on next major), Previous is previous-major CDN tip.
 # On candidate: line 2 of _candidate_offer (the one before latest). Empty if none.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
-	local minor prev v offer
+	local minor prev v offer newer cdn_tip
 
 	if [[ "$channel" = "candidate" ]]; then
 		offer="$(_candidate_offer | sed -n '2p' || true)"
@@ -2638,10 +2741,16 @@ fetch_previous_version() {
 		return 1
 	fi
 
-	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || return 1
+	_channel_cdn_head "$channel" minor cdn_tip || return 1
 
-	prev="$(_prev_minor "$minor")"
+	# When Latest peeked past CDN, Previous is the CDN tip (former Latest).
+	newer="$(_peek_next_major_ga "$channel" "$minor" "$cdn_tip")"
+	if [[ -n "$newer" ]]; then
+		_is_version_string "$cdn_tip" && echo "$cdn_tip" && return 0
+		return 1
+	fi
+
+	prev="$(_channel_prev_minor "$channel" "$minor")"
 	[[ -n "$prev" ]] || return 1
 
 	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
@@ -2652,11 +2761,13 @@ fetch_previous_version() {
 ############################################
 # Fetch latest version of N-2 minor (older)
 # Example: if latest minor is 4.21 -> return latest 4.19.z
+# When Latest peeked past CDN, Older is one minor behind the CDN tip.
+# Crosses majors at X.0 via _channel_prev_minor.
 # On candidate: line 3 of _candidate_offer. Empty if the walk found fewer than 3.
 ############################################
 fetch_older_version() {
 	local channel="${1:-stable}"
-	local minor prev older v offer
+	local minor prev older v offer newer cdn_tip
 
 	if [[ "$channel" = "candidate" ]]; then
 		offer="$(_candidate_offer | sed -n '3p' || true)"
@@ -2664,13 +2775,17 @@ fetch_older_version() {
 		return 1
 	fi
 
-	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || return 1
+	_channel_cdn_head "$channel" minor cdn_tip || return 1
 
-	prev="$(_prev_minor "$minor")"
-	[[ -n "$prev" ]] || return 1
-
-	older="$(_prev_minor "$prev")"
+	newer="$(_peek_next_major_ga "$channel" "$minor" "$cdn_tip")"
+	if [[ -n "$newer" ]]; then
+		# Latest advanced; Older is one behind the CDN tip (former Previous).
+		older="$(_channel_prev_minor "$channel" "$minor")"
+	else
+		prev="$(_channel_prev_minor "$channel" "$minor")"
+		[[ -n "$prev" ]] || return 1
+		older="$(_channel_prev_minor "$channel" "$prev")"
+	fi
 	[[ -n "$older" ]] || return 1
 
 	v="$(fetch_all_versions "$channel" "$older" | tail -n1)"
@@ -5458,16 +5573,39 @@ aba_inet_check_cached() {
 
 # --- OCP version fetch ---
 
+# Start tip fetches for one channel (idempotent; -t refreshes after ABA_CACHE_TTL).
+# Single cmd string for all callers — avoids run_once cmd.sh drift (ADR 008).
+aba_version_fetch_channel() {
+	local _ch="${1:-stable}"
+	local _ttl
+	_ttl="$(_ocp_version_ttl)"
+	run_once -i "ocp:${_ch}:latest_version"          -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
+	run_once -i "ocp:${_ch}:latest_version_previous" -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
+	run_once -i "ocp:${_ch}:latest_version_older"    -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
+}
+
 # Start version fetches for all channels in background (non-blocking).
 # Stable/stable-channel graph data is warmed early; prefetch uses fetch_latest_z_version
 # (shared Cincinnati cache via _fetch_graph_cached) when aba.conf has no ocp_version yet.
 aba_version_fetch_start() {
 	local _ch
 	for _ch in stable fast candidate; do
-		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
-		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
-		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
+		aba_version_fetch_channel "$_ch"
 	done
+}
+
+# Wait for tip tasks for one channel. Extra run_once flags (e.g. -S) go after channel.
+# Latest + Previous are required; Older is best-effort.
+# Returns 1 if latest or previous wait fails.
+aba_version_fetch_wait() {
+	local _ch="${1:-stable}"
+	local _ttl rc=0
+	shift || true
+	_ttl="$(_ocp_version_ttl)"
+	run_once -q -w "$@" -i "ocp:${_ch}:latest_version" -t "$_ttl" || rc=1
+	run_once -q -w "$@" -i "ocp:${_ch}:latest_version_previous" -t "$_ttl" || rc=1
+	run_once -q -w "$@" -i "ocp:${_ch}:latest_version_older" -t "$_ttl" || true
+	return "$rc"
 }
 
 # --- ISC helpers ---

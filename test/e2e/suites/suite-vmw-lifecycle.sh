@@ -51,6 +51,7 @@ plan_tests \
     "VM lifecycle: kill (force poweroff)" \
     "VM lifecycle: start + cluster health after kill" \
     "Cluster-level: graceful shutdown and startup" \
+    "Clean refused while installed; then delete" \
     "Cleanup: delete clusters and unregister mirror"
 
 suite_begin "vmw-lifecycle"
@@ -322,11 +323,33 @@ e2e_diag "Show cluster operators after shutdown/startup" \
 test_end
 
 # ============================================================================
-# 13. Cleanup: delete clusters and unregister mirror
+# 13. Clean refused while installed; then delete
+# ============================================================================
+# Real installed SNO: clean must fail (would orphan VMs). Delete is the teardown path.
+test_begin "Clean refused while installed; then delete"
+
+e2e_run "Verify SNO still installed before clean gate" \
+	"test -f $SNO/.install-complete"
+e2e_run_must_fail "aba -d $SNO clean refused while installed" \
+	"aba -d $SNO clean"
+e2e_run "Verify .install-complete kept after refused clean" \
+	"test -f $SNO/.install-complete"
+e2e_run "Verify agent-config kept after refused clean" \
+	"test -f $SNO/agent-config.yaml"
+e2e_run "Delete SNO cluster after refused clean" \
+	"aba -y -d $SNO delete"
+e2e_run "Verify .install-complete gone after delete" \
+	"test ! -f $SNO/.install-complete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
+
+test_end
+
+# ============================================================================
+# 14. Cleanup: delete leftover clusters and unregister mirror
 # ============================================================================
 test_begin "Cleanup: delete clusters and unregister mirror"
 
-e2e_run "Delete SNO cluster (removes VMware VMs)" \
+e2e_run "Delete SNO cluster if leftover" \
     "_e2e_delete_leftover_cluster $SNO"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 e2e_run "Delete compact cluster if leftover" \

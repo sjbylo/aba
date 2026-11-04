@@ -29,22 +29,13 @@ _SSH_DISCO="ssh -F $_TUI_SSH_CFG $_DISCO"
 _BUNDLE_PATH="${TUI_BUNDLE_PATH:-}"
 _BUNDLE_DEST="/tmp/disco-test-bundle.tar"
 
-# DNS lookup for cluster
-_dns_server="10.0.1.8"
-_domain="example.com"
-_api_ip=$(dig +short "api.${_CLUSTER}.${_domain}" "@${_dns_server}" 2>/dev/null | head -1)
-if [[ -z "$_api_ip" ]]; then
-	echo "  ERROR: No DNS A record for api.${_CLUSTER}.${_domain} on ${_dns_server}"
-	echo "  Valid cluster names with DNS: sno, compact2, standard, ocp"
-	exit 1
-fi
-_machine_network="10.0.0.0/20"
-_gateway="10.0.0.1"
+# Resolve starting_ip / API / APPS from throwaway-cluster skill and verify DNS.
+tui_lab_resolve_cluster "$_CLUSTER" || exit 1
 
 echo "=== TUI DISCO Workflow Test ==="
 echo "  Connected host: $_CONNO"
 echo "  Disconnected host: $_DISCO"
-echo "  Cluster: $_CLUSTER (api=$_api_ip)"
+echo "  Cluster: $_CLUSTER (type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip)"
 echo ""
 
 # Override TUI_TEST_HOST for the lib functions (they drive disco)
@@ -326,9 +317,10 @@ while true; do
 	fi
 
 	# Mirror install location dialog — select "Install locally"
+	# Hotkey 1 then Enter (Enter alone can no-op if focus is on buttons).
 	if echo "$_scr" | grep -qi "Install locally\|Install on remote"; then
 		tui_screenshot "disco-wf-gate-mirror-location"
-		tui_keys Enter; sleep 3
+		tui_keys 1; sleep 0.3; tui_keys Enter; sleep 3
 		continue
 	fi
 
@@ -534,6 +526,14 @@ sleep 1
 tui_screenshot "disco-wf-05b-name-set"
 echo "  Set cluster name to: $_CLUSTER"
 
+if tui_force_type "$_lab_type"; then
+	echo "  ✓ PASS: Cluster type is $_lab_type"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Cluster type not $_lab_type"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
+
 # Press Next — must Tab once from menu to first button, then Tab to Next
 tui_press_button "Next"
 sleep 2
@@ -547,40 +547,10 @@ tui_screenshot "disco-wf-05c-network"
 tui_assert_contains "Machine\|machine" "Machine network field"
 tui_assert_contains "Starting\|starting" "Starting IP field"
 
-# Set machine network
-echo "  Setting machine network=$_machine_network, starting IP=$_api_ip, gateway=$_gateway"
-tui_select_item "Machine" 2>/dev/null || true
-sleep 1
-tui_screenshot "disco-wf-05c-machine-input"
-tui_keys C-u; sleep 0.3
-$_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
-sleep 0.5
-tui_keys Enter
-tui_wait_gone "CIDR notation" 10
-sleep 1
-
-# Set starting IP
-tui_select_item "Starting" 2>/dev/null || true
-sleep 1
-tui_screenshot "disco-wf-05c-startip-input"
-tui_keys C-u; sleep 0.3
-$_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
-sleep 0.5
-tui_keys Enter
-tui_wait_gone "First IP for cluster" 10
-sleep 1
-
-# Set gateway
-tui_select_item "Gateway" 2>/dev/null || true
-sleep 1
-tui_screenshot "disco-wf-05c-gateway-input"
-tui_keys C-u; sleep 0.3
-$_SSH_DISCO "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
-sleep 0.5
-tui_keys Enter
-tui_wait_gone "Default gateway IP" 10
-sleep 1
-
+# Apply throwaway-cluster skill values (machine/starting/VIPs/DNS/GW/NTP).
+# starting_ip ≠ API for compact/standard — never use dig API as starting_ip.
+echo "  Setting lab network: machine=$TUI_LAB_MACHINE_NETWORK starting=$_lab_starting_ip gateway=$TUI_LAB_GATEWAY dns/ntp=$TUI_LAB_DNS_NTP"
+tui_apply_lab_network
 tui_screenshot "disco-wf-05c-network-done"
 
 # Press Next
@@ -593,6 +563,7 @@ tui_wait_for "Interface\|Ports\|Port\|VLAN\|Image source\|ens" 10
 tui_assert_title "Interfaces" "Interfaces page title"
 tui_screenshot "disco-wf-05d-iface"
 tui_assert_contains "Port\|port\|ens" "Port names field"
+tui_apply_lab_ports
 
 # Press Next
 tui_press_button "Next"

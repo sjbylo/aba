@@ -1,34 +1,25 @@
 #!/bin/bash
 # Test: TUI cluster workflow — wizard pages, review, install, monitor
-# Creates a new SNO cluster via the TUI wizard on VMware.
+# Creates a throwaway cluster via the TUI wizard on VMware.
 # DESTRUCTIVE: creates VMs and installs a real cluster.
 # Prereqs: mirror installed + synced, vmware.conf, pull-secret.
 #
 # Uses cluster name "sno" by default (must have DNS A records).
-# Set TUI_CLUSTER_NAME to override (valid: sno, compact2, standard, ocp).
+# Set TUI_CLUSTER_NAME to override — see throwaway-cluster skill IP table:
+#   sno sno2 sno3 sno4 compact compact2 standard ocp
+# Lab defaults (DNS/NTP/GW/network/ports) come from tui_lab_* helpers.
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
 _CLUSTER="${TUI_CLUSTER_NAME:-sno}"
 
-# Look up the DNS-registered API IP for this cluster name.
-# The starting_ip MUST match the DNS A record for api.<name>.<domain>.
-_dns_server="10.0.1.8"
-_domain="example.com"
-_api_ip=$(dig +short "api.${_CLUSTER}.${_domain}" "@${_dns_server}" 2>/dev/null | head -1)
-if [[ -z "$_api_ip" ]]; then
-	echo "  ERROR: No DNS A record for api.${_CLUSTER}.${_domain} on ${_dns_server}"
-	echo "  Valid cluster names with DNS: sno, compact2, standard, ocp"
-	exit 1
-fi
-# Derive machine network from the API IP (assumes /20 on 10.0.x.x)
-_machine_network="10.0.0.0/20"
-_gateway="10.0.0.1"
+# Resolve starting_ip / API / APPS from throwaway-cluster skill and verify DNS.
+tui_lab_resolve_cluster "$_CLUSTER" || exit 1
 
 echo "=== TUI Cluster Workflow Test ==="
 echo "  Host: $_TUI_HOST"
-echo "  Cluster: $_CLUSTER"
+echo "  Cluster: $_CLUSTER (type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip)"
 echo ""
 
 tui_deploy_code
@@ -38,34 +29,14 @@ echo ""
 # ============================================================================
 tui_start_to_menu || { tui_summary; exit 1; }
 
-# Pre-test cleanup: delete any leftover cluster via the TUI
+# Pre-test cleanup: ALWAYS delete via TUI first (aba delete fallback).
+# Never rm -rf the cluster dir before delete — that orphans VMs.
 tui_delete_cluster "$_CLUSTER"
 
-# Also clean up any cluster directory without .install-complete (leftover from
-# a previous clean+delete cycle where the VM was already destroyed)
-_dir_exists=$($_TUI_SSH "test -d ~/aba/$_CLUSTER && echo yes || echo no")
-_inst_exists=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
-if [[ "$_dir_exists" == "yes" && "$_inst_exists" != "yes" ]]; then
-	echo "  Pre-cleanup: removing leftover cluster directory '$_CLUSTER' (no .install-complete)"
-	$_TUI_SSH "rm -rf ~/aba/$_CLUSTER" 2>/dev/null
-fi
-
-# Wait for the target IP to be free (previous VM may still be powering off)
-echo "  Pre-cleanup: checking IP $_api_ip is free..."
-_ip_free=false
-for _arping_try in $(seq 1 30); do
-	# arping exit code 0 = got replies (IP in use), 1 = no replies (IP free)
-	if ! $_TUI_SSH "arping -c 1 -w 2 $_api_ip 2>&1" | grep -qi "reply"; then
-		echo "  Pre-cleanup: IP $_api_ip is free"
-		_ip_free=true
-		break
-	fi
-	echo "  Pre-cleanup: IP $_api_ip still in use, waiting... ($_arping_try/30)"
-	sleep 10
-done
-if [[ "$_ip_free" != "true" ]]; then
-	echo "  ERROR: IP $_api_ip still in use after 5 minutes — cannot proceed"
-	echo "  A VM or device is holding this IP. Manual cleanup required."
+# Wait for node0 (starting_ip) to be free after delete.
+echo "  Pre-cleanup: ensuring starting IP $_lab_starting_ip is free..."
+if ! tui_ensure_ip_free "$_lab_starting_ip"; then
+	echo "  ERROR: IP $_lab_starting_ip still in use after TUI/aba delete — cannot proceed"
 	tui_stop
 	tui_summary
 	exit 1
@@ -123,6 +94,14 @@ else
 	echo "    Current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
+# Force Type from skill table (SNO leftover "standard" fails VIP validation).
+if tui_force_type "$_lab_type"; then
+	echo "  ✓ PASS: Cluster type is $_lab_type"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	echo "  ✗ FAIL: Cluster type not $_lab_type (got: $(tui_capture | grep -oiE 'Type:[^│]*' | head -1))"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
 tui_assert_contains "sno\|compact\|standard" "Cluster type shown"
 tui_screenshot "cl-01c-basics-detail"
 
@@ -145,30 +124,10 @@ tui_assert_contains "Starting\|starting" "Starting IP field"
 tui_assert_contains "DNS\|dns" "DNS field"
 tui_assert_contains "Gateway\|gateway" "Gateway field"
 
-# Set network values for this cluster (may need to override host defaults)
-_scr=$(tui_capture)
-if ! echo "$_scr" | grep -q "$_machine_network"; then
-	echo "  Setting machine network to $_machine_network"
-	tui_select_item "Machine" 2>/dev/null || true; sleep 0.5
-	tui_keys C-u; sleep 0.3
-	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_machine_network'" 2>/dev/null
-	sleep 0.3; tui_keys Tab Enter; sleep 1
-fi
-if ! echo "$_scr" | grep -q "$_api_ip"; then
-	echo "  Setting starting IP to $_api_ip"
-	tui_select_item "Starting" 2>/dev/null || true; sleep 0.5
-	tui_keys C-u; sleep 0.3
-	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_api_ip'" 2>/dev/null
-	sleep 0.3; tui_keys Tab Enter; sleep 1
-fi
-if ! echo "$_scr" | grep -q "$_gateway"; then
-	echo "  Setting gateway to $_gateway"
-	tui_select_item "Gateway" 2>/dev/null || true; sleep 0.5
-	tui_keys C-u; sleep 0.3
-	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_gateway'" 2>/dev/null
-	sleep 0.3; tui_keys Tab Enter; sleep 1
-fi
-tui_assert_contains "$_machine_network\|$_api_ip" "Network values set correctly"
+# Apply throwaway-cluster skill values (machine/starting/VIPs/DNS/GW/NTP).
+# starting_ip ≠ API for compact/standard — never use dig API as starting_ip.
+tui_apply_lab_network
+tui_assert_contains "${TUI_LAB_MACHINE_NETWORK}\|${_lab_starting_ip}" "Network values set correctly"
 tui_screenshot "cl-02c-network-detail"
 
 # Advance to page 3
@@ -186,8 +145,8 @@ tui_screenshot "cl-03-iface"
 
 tui_assert_contains "Port\|port\|ens" "Port names field"
 tui_assert_contains "Image source\|image source\|mirror\|direct" "Image source field"
+tui_apply_lab_ports
 
-# Check help
 # Advance to page 4
 tui_press_button "Next"
 sleep 1

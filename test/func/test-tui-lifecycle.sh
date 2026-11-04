@@ -166,8 +166,9 @@ if [[ "$_SKIP_DELETE" == "1" ]]; then
 	echo ""
 	echo "--- 5. SKIPPED: Clean/Delete (TUI_SKIP_DELETE=1) ---"
 else
+	# Clean while installed must be refused (would orphan VMs). Then Delete.
 	echo ""
-	echo "--- 5. Clean cluster ---"
+	echo "--- 5. Clean refused while installed ---"
 	tui_back_to "Actions" 5
 	tui_select_item "Day-2"
 	tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
@@ -182,37 +183,25 @@ else
 		_scr=$(tui_capture)
 	fi
 
-	if echo "$_scr" | grep -qi "Clean cluster\|remove\|sure"; then
-		echo "  ✓ PASS: Clean confirmation dialog"
+	# Expect msgbox refusing clean (not a confirm-and-execute progress dialog)
+	if echo "$_scr" | grep -qiE "refused|installed|Delete cluster first|install-complete"; then
+		echo "  ✓ PASS: Clean refused while cluster is installed"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-		tui_confirm_yes; sleep 1
-		tui_screenshot "lc-05c-after-confirm"
-
-		tui_dismiss_exec_mode
-
-		if tui_wait_for_progress "lc-clean" 120; then
-			echo "  ✓ PASS: Clean completed"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
-		else
-			echo "  ✗ FAIL: Clean failed"
-			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		fi
-		tui_screenshot "lc-05b-clean-result"
-		tui_dismiss_result
+		tui_keys Enter; sleep 0.5
+	else
+		echo "  ✗ FAIL: Expected Clean refusal while installed (got dialog without refuse text)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "lc-05-clean-unexpected"
+		# Dismiss whatever dialog appeared
+		tui_keys Enter Escape 2>/dev/null || true
 	fi
 
-	# Verify clean actually removed generated artifacts
 	_still_installed=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
-	_conf_kept=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/cluster.conf && echo yes || echo no")
-	if [[ "$_still_installed" == "no" && "$_conf_kept" == "yes" ]]; then
-		echo "  ✓ PASS: Clean removed .install-complete, kept cluster.conf"
+	if [[ "$_still_installed" == "yes" ]]; then
+		echo "  ✓ PASS: .install-complete still present after refused clean"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	elif [[ "$_still_installed" == "yes" ]]; then
-		echo "  ✗ FAIL: Clean did not remove .install-complete — clean may not have executed"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	elif [[ "$_conf_kept" == "no" ]]; then
-		echo "  ✗ FAIL: Clean removed cluster.conf — too aggressive"
+	else
+		echo "  ✗ FAIL: .install-complete was removed — clean should not have run"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 

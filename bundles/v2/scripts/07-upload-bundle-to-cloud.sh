@@ -150,7 +150,8 @@ MAJOR_VER=$(echo "$VER" | cut -d\. -f1,2)
 todel=
 for d in "$CLOUD_DIR/$MAJOR_VER".[0-9]*-"$NAME" "$CLOUD_DIR/$MAJOR_VER".[0-9]*-"$NAME"-*; do
 	[ -d "$d" ] || continue
-	# Never delete the current bundle path (same-version --replace) or *.replacing-* backups
+	# Never delete the current bundle path (same-version --replace) or *.replacing-*
+	# backups. Stale *.replacing-* dirs are removed on the next go.sh start (TTL).
 	[ "$d" = "$CLOUD_DIR_BUNDLE" ] && continue
 	[[ "$(basename "$d")" == *.replacing-* ]] && continue
 	todel="$todel $d"

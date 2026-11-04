@@ -27,8 +27,13 @@ echo ""
 
 # Save original images.conf for restoration
 $_TUI_SSH "cp ~/aba/images.conf ~/aba/images.conf.test-backup 2>/dev/null; true"
-_orig_excl=$($_TUI_SSH "grep '^excl_additional=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "false")
+_orig_excl=$(tui_get_aba_conf excl_additional)
+_orig_excl=${_orig_excl:-false}
 echo "  Saved original images.conf and excl_additional=$_orig_excl"
+
+# ISC inclusion asserts need excl_additional=false (host may have leftover true).
+tui_set_aba_conf excl_additional false
+echo "  Forced excl_additional=false for ISC inclusion checks"
 
 # ============================================================================
 tui_start_to_menu || { tui_summary; exit 1; }
@@ -206,8 +211,9 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-# ISC round-trip: verify the ISC file contains both images
+# ISC round-trip (tui_assert_isc_* regenerates ISC)
 echo "  Verifying ISC reflects added images..."
+tui_set_aba_conf excl_additional false
 tui_assert_isc_contains "additionalImages:" "additionalImages section in ISC"
 tui_assert_isc_contains "ubi9/ubi" "ubi9/ubi image in ISC"
 tui_assert_isc_contains "support-tools" "support-tools image in ISC"
@@ -262,23 +268,23 @@ tui_assert_contains "Edit images.conf" "Edit item present"
 # ============================================================================
 echo ""
 echo "--- 8. Toggle exclude/include ---"
+# Known start: included (false). Toggle once → excluded (true).
+# Fail-hard on UI toggle: do not sed-paper-over (keeps signal clean).
+tui_set_aba_conf excl_additional false
 _goto_addl
-# Select the exclude toggle (X)
 tui_keys X; sleep 0.3; tui_keys Enter
 sleep 2
 
-_excl=$($_TUI_SSH "grep '^excl_additional=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
+_excl=$(tui_get_aba_conf excl_additional)
 if [[ "$_excl" == "true" ]]; then
 	echo "  ✓ PASS: Toggle set excl_additional=true"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	echo "  Verifying ISC excludes additional images..."
+	tui_assert_isc_not_contains "^  additionalImages:" "active additionalImages (should be excluded)"
 else
-	echo "  ✗ FAIL: Expected excl_additional=true, got '$_excl'"
+	echo "  ✗ FAIL: Expected excl_additional=true, got '$_excl' — skipping ISC exclude asserts"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
-
-# ISC round-trip: when excluded, additionalImages should be commented out or absent
-echo "  Verifying ISC excludes additional images..."
-tui_assert_isc_not_contains "^  additionalImages:" "active additionalImages (should be excluded)"
 
 _goto_addl
 sleep 1
@@ -292,26 +298,25 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-# Toggle back to included — may be at Mirror Payload level (T) or submenu (X)
+# Toggle back to included — Mirror Payload (T) or submenu (X)
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Additional Images:.*excluded"; then
-	# At Mirror Payload level — toggle key is T
 	tui_keys T; sleep 0.3; tui_keys Enter
 elif echo "$_scr" | grep -qi "Exclude\|Include.*toggle\|X.*clude"; then
-	# At submenu level — toggle key is X
 	tui_keys X; sleep 0.3; tui_keys Enter
 else
-	# Fallback: try to find toggle via tui_select_item
 	tui_select_item "Additional Images.*excluded\|excluded" 2>/dev/null || tui_keys T; sleep 0.3; tui_keys Enter
 fi
 sleep 2
-_excl=$($_TUI_SSH "grep '^excl_additional=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
+_excl=$(tui_get_aba_conf excl_additional)
 if [[ "$_excl" == "false" ]]; then
 	echo "  ✓ PASS: Toggle restored excl_additional=false"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
 	echo "  ✗ FAIL: Expected excl_additional=false, got '$_excl'"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	# Restore include so later remove/clear/ISC asserts stay coherent
+	tui_set_aba_conf excl_additional false
 fi
 
 # ============================================================================
@@ -431,7 +436,7 @@ fi
 echo ""
 echo "--- 12. Restore originals ---"
 $_TUI_SSH "cp ~/aba/images.conf.test-backup ~/aba/images.conf 2>/dev/null; rm -f ~/aba/images.conf.test-backup"
-$_TUI_SSH "cd ~/aba && sed -i 's/^excl_additional=.*/excl_additional=$_orig_excl/' aba.conf" 2>/dev/null
+tui_set_aba_conf excl_additional "$_orig_excl"
 echo "  Restored images.conf and excl_additional=$_orig_excl"
 echo "  ✓ PASS: Originals restored"
 _TUI_PASS=$(( _TUI_PASS + 1 ))

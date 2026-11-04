@@ -286,6 +286,9 @@ $_TUI_SSH "cd ~/aba && sed -i 's/^excl_operators=.*/excl_operators=false/' aba.c
 echo ""
 echo "--- 7. Additional images in ISC ---"
 
+# Host may have leftover excl_additional=true — force include before asserting.
+tui_set_aba_conf excl_additional false
+
 # Add a test image
 $_TUI_SSH "cd ~/aba && scripts/aba.sh image add registry.redhat.io/ubi9/ubi:latest 2>/dev/null || true"
 _regen_isc
@@ -313,7 +316,7 @@ fi
 echo ""
 echo "--- 8. Additional images exclusion ---"
 
-$_TUI_SSH "cd ~/aba && sed -i 's/^excl_additional=.*/excl_additional=true/' aba.conf"
+tui_set_aba_conf excl_additional true
 _regen_isc
 _isc_no_img=$(_read_isc)
 
@@ -330,7 +333,7 @@ else
 fi
 
 # Restore
-$_TUI_SSH "cd ~/aba && sed -i 's/^excl_additional=.*/excl_additional=false/' aba.conf"
+tui_set_aba_conf excl_additional false
 
 # ============================================================================
 # 9. Upgrade target in ISC
@@ -460,7 +463,8 @@ $_TUI_SSH "cp ~/aba/aba.conf.isc-backup ~/aba/aba.conf 2>/dev/null; rm -f ~/aba/
 $_TUI_SSH "cp ~/aba/mirror/data/imageset-config.yaml.isc-backup ~/aba/mirror/data/imageset-config.yaml 2>/dev/null; rm -f ~/aba/mirror/data/imageset-config.yaml.isc-backup"
 $_TUI_SSH "cp ~/aba/images.conf.isc-backup ~/aba/images.conf 2>/dev/null; rm -f ~/aba/images.conf.isc-backup"
 $_TUI_SSH "cp ~/aba/mirror/mirror.conf.isc-backup ~/aba/mirror/mirror.conf 2>/dev/null; rm -f ~/aba/mirror/mirror.conf.isc-backup"
-# Restoration is handled by restoring the backup files above
+# Backup may reintroduce a deleted custom op_set — sanitize again.
+tui_sanitize_op_sets
 echo "  ✓ PASS: Originals restored"
 _TUI_PASS=$(( _TUI_PASS + 1 ))
 

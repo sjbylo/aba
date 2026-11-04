@@ -7,6 +7,7 @@ aba_debug "Starting: $0 $*"
 
 [ -f .install-complete ] && \
 	aba_abort "This cluster has already been deployed successfully!" \
-		"Run 'aba clean; aba install' to re-install the cluster or remove the '.install-complete' flag file and try again."
+		"To re-install:  aba -d $(basename "$PWD") delete" \
+		"Then:           aba -d $(basename "$PWD") install"
 
 exit 0

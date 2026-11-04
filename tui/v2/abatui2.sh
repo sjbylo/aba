@@ -295,8 +295,8 @@ if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
 		machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
 			"$ABA_ROOT/scripts/j2" "$ABA_ROOT/templates/aba.conf.j2" > "$ABA_ROOT/aba.conf" 2>>"$_TUI_LOG_FILE"
 		tui_log "Created aba.conf from template (pull_secret_file set)"
-		# Wait for latest stable version and write it to aba.conf
-		run_once -q -w -S -i "ocp:stable:latest_version" 2>>"$_TUI_LOG_FILE" || true
+		# Wait for latest stable tip (-S / -t via helper), then read Cincinnati tip
+		aba_version_fetch_wait stable -S 2>>"$_TUI_LOG_FILE" || true
 		_latest_ver=$(fetch_latest_version stable 2>>"$_TUI_LOG_FILE") || true
 		if [[ -n "$_latest_ver" ]]; then
 			replace-value-conf -q -n ocp_version -v "$_latest_ver" -f "$ABA_ROOT/aba.conf"

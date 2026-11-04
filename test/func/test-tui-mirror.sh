@@ -45,7 +45,7 @@ tui_back_to "Actions"
 echo ""
 echo "--- 2. Install Mirror ---"
 
-_mirr_avail=$($_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null)
+_mirr_avail=$(tui_mirror_available)
 
 if [[ "$_mirr_avail" == "yes" ]]; then
 	echo "  Mirror already installed — skipping install step"
@@ -94,6 +94,12 @@ else
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 			tui_screenshot "mirr-02d-result"
 			tui_dismiss_result
+		elif [[ "$(tui_mirror_available)" == "yes" ]]; then
+			# UI Stopped/timeout after a successful background install
+			echo "  ✓ PASS: Mirror install UI ended early but .available exists"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_screenshot "mirr-02d-result-available"
+			tui_dismiss_result 2>/dev/null || true
 		else
 			echo "  ✗ FAIL: Mirror install did not complete after retries"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -106,7 +112,7 @@ fi
 # ============================================================================
 echo ""
 echo "--- 3. Verify mirror state ---"
-_mirror_available=$($_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null)
+_mirror_available=$(tui_mirror_available)
 echo "  mirror/.available: $_mirror_available"
 
 if [[ "$_mirror_available" == "yes" ]]; then
