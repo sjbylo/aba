@@ -3025,7 +3025,7 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 ## #B80: Simplify bare-metal `aba install` into a single continuous process
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** In Progress (post-1.4.4; branch `bm-install-simplify` — no merge to origin/dev until tests green)
 **Added:** 2026-10-15
 
 **Problem:** Installing a bare-metal cluster with `aba -d <cluster> install` currently requires the user to run the command **three separate times**. The Makefile splits the workflow into three phases with hard stops between them:

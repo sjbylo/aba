@@ -295,7 +295,7 @@ _cleanup_test_artifact_dirs() {
 				_essh "${_check_user}@${_dis_fqdn}" "rm -rf ~/e2e-test-*" 2>&1
 			fi
 			_found=$(_essh "${_check_user}@${_dis_fqdn}" \
-				"for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && echo \"SKIP \$d\" && continue; echo \"\$d\"; done" || true)
+				"for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.vms-ready\" ] || [ -f \"\$d/.iso-uploaded\" ] && echo \"SKIP \$d\" && continue; echo \"\$d\"; done" || true)
 			if [ -n "$_found" ]; then
 				local _skip _clean
 				_skip=$(echo "$_found" | grep '^SKIP ' || true)
@@ -303,7 +303,7 @@ _cleanup_test_artifact_dirs() {
 				[ -n "$_skip" ] && echo "  SKIPPED on $label ($_check_user): $(echo "$_skip" | sed 's/^SKIP //' | tr '\n' ' ')"
 				if [ -n "$_clean" ]; then
 					echo "  WARNING: orphan artifact dirs on $label ($_check_user): $(echo "$_clean" | tr '\n' ' ')"
-					_essh "${_check_user}@${_dis_fqdn}" "for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && continue; rm -rf \"\$d\"; done" 2>&1
+					_essh "${_check_user}@${_dis_fqdn}" "for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.vms-ready\" ] || [ -f \"\$d/.iso-uploaded\" ] && continue; rm -rf \"\$d\"; done" 2>&1
 				fi
 			fi
 		done
@@ -318,11 +318,11 @@ _cleanup_test_artifact_dirs() {
 		fi
 
 		# Also clean ~/aba/e2e-* orphans (cluster, mirror, and test dirs).
-		# Skip any dir that has VM lifecycle markers (.autorefresh or .autoupload)
+		# Skip any dir that has VM lifecycle markers (.vms-ready or .iso-uploaded)
 		# — those may reference live VMs and must be cleaned via aba delete.
 		for _d in "$HOME"/aba/e2e-*; do
 			[ -d "$_d" ] || continue
-			if [ -f "$_d/.autorefresh" ] || [ -f "$_d/.autoupload" ]; then
+			if [ -f "$_d/.vms-ready" ] || [ -f "$_d/.iso-uploaded" ]; then
 				echo "  SKIPPED: $_d (has VM markers -- use aba delete)"
 				continue
 			fi

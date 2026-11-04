@@ -1379,7 +1379,7 @@ for i in imgs:
 done
 
 # Guard for VM lifecycle targets: validate platform + hypervisor config
-_ensure_hv_ready() {
+_ensure_vm_platform_ready() {
 	source <(cd "$ABA_ROOT" && normalize-aba-conf)
 	case "$platform" in
 		vmw)
@@ -1616,16 +1616,16 @@ if [ "$cur_target" ]; then
 		;;
 		create)
 			eval $BUILD_COMMAND
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start || exit $?
 			# Sync Make stamp files: VMs exist, so all prior steps (poweroff, upload,
 			# refresh) are logically complete. Without these, a subsequent 'aba bootstrap'
 			# or 'aba install' would re-run the entire chain and destroy the running VMs.
-			touch .autopoweroff .autoupload .autorefresh
+			touch .vms-stopped .iso-uploaded .vms-ready
 			exit
 		;;
 		ls)
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (ls)"
 			$exec_cmd
@@ -1636,7 +1636,7 @@ if [ "$cur_target" ]; then
 			# Cluster VM start (requires cluster.conf); otherwise fall through to Makefile
 			if [ -f cluster.conf ]; then
 				eval $BUILD_COMMAND
-				_ensure_hv_ready
+				_ensure_vm_platform_ready
 				exec_cmd="make -s init"
 				aba_debug "Running: $exec_cmd (start)"
 				$exec_cmd
@@ -1649,7 +1649,7 @@ if [ "$cur_target" ]; then
 			# Cluster VM stop (requires cluster.conf); otherwise fall through to Makefile
 			if [ -f cluster.conf ]; then
 				eval $BUILD_COMMAND
-				_ensure_hv_ready
+				_ensure_vm_platform_ready
 				exec_cmd="make -s init"
 				aba_debug "Running: $exec_cmd (stop)"
 				$exec_cmd
@@ -1659,7 +1659,7 @@ if [ "$cur_target" ]; then
 			BUILD_COMMAND="stop $BUILD_COMMAND"
 		;;
 		kill|poweroff)
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (kill)"
 			$exec_cmd
@@ -1694,7 +1694,7 @@ if [ "$cur_target" ]; then
 				vmw|kvm)
 					# Best-effort: missing vmware.conf/kvm.conf must not block cleanup —
 					# vmw-delete.sh / kvm-delete.sh handle missing config gracefully.
-					( _ensure_hv_ready ) 2>/dev/null || aba_warn "vmware.conf/kvm.conf not found — proceeding with best-effort delete."
+					( _ensure_vm_platform_ready ) 2>/dev/null || aba_warn "vmware.conf/kvm.conf not found — proceeding with best-effort delete."
 					$ABA_ROOT/scripts/${platform}-delete.sh || exit $?
 					;;
 				bm)
@@ -1770,18 +1770,18 @@ if [ "$cur_target" ]; then
 		;;
 		refresh)
 			eval $BUILD_COMMAND
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (refresh)"
 			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters || exit $?
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
-			touch .autopoweroff .autoupload .autorefresh
+			touch .vms-stopped .iso-uploaded .vms-ready
 			exit
 		;;
 		upload)
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (upload)"
 			$exec_cmd
@@ -1791,7 +1791,7 @@ if [ "$cur_target" ]; then
 			fi
 			$ABA_ROOT/scripts/${HV}-upload.sh || exit $?
 			# Sync Make stamp files: upload implies poweroff already happened.
-			touch .autopoweroff .autoupload
+			touch .vms-stopped .iso-uploaded
 			exit
 		;;
 	esac

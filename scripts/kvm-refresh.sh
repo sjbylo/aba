@@ -19,6 +19,6 @@ elif [ $_exists_rc -eq 0 ]; then
 	scripts/kvm-delete.sh || true
 fi
 
-rm -f .install-complete .autorefresh .auto-agent-up
+rm -f .install-complete .vms-ready
 
 scripts/kvm-create.sh --start --nomaccheck

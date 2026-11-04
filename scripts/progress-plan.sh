@@ -141,6 +141,16 @@ case "$1" in
 		aba_progress "PLAN|virt_verify|Verify configuration|5"
 		;;
 
+	# ── Cluster install (Makefile.cluster _progress_plan-cluster-install) ──
+
+	cluster-install)
+		aba_progress "PLAN|ci_config|Review/generate configs|5"
+		aba_progress "PLAN|ci_iso|Build agent ISO|15"
+		aba_progress "PLAN|ci_vms|Prepare VMs|10"
+		aba_progress "PLAN|ci_boot|Boot nodes|10"
+		aba_progress "PLAN|ci_mon|Monitor installation|70"
+		;;
+
 	# ── Cluster lifecycle (called directly from scripts) ──
 
 	cluster-shutdown)

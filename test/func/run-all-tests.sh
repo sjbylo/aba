@@ -108,6 +108,8 @@ unit_tests=(
 	test/func/test-reg-port.sh
 	test/func/test-day2-ntp-order.sh
 	test/func/test-agent-wait-skip.sh
+	test/func/test-bm-continuous-install.sh
+
 	test/func/test-make-regen-install-config.sh
 	test/func/test-vm-power-helpers.sh
 	test/func/test-vm-provider.sh

@@ -6,7 +6,7 @@
 #
 # Edge case (reviewed, intentionally not fixed):
 # After 'aba refresh', if bootstrap succeeds and the node reboots before
-# the user re-runs 'aba install', port 8090 is gone.  The .auto-agent-up
+# the user re-runs 'aba install', port 8090 is gone.  The agent wait (now folded into monitor-install)
 # marker was removed by refresh, so Make re-runs this script and it waits
 # the full 5-min timeout before falling through to monitor-install.sh.
 # This is harmless — monitor-install picks up the running install fine.

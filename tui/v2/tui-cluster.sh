@@ -1801,11 +1801,8 @@ _cluster_execute() {
 		esac
 	done
 
-	# Bare-metal: create ISO only (user must boot servers manually)
-	# VMware/KVM: full install (ABA automates VM lifecycle)
-	if [[ "$cl_platform" == "bm" ]]; then
-		install_step="iso"
-	fi
+	# Full continuous install for all platforms (BM asks appear via ask()/PROMPT).
+	# Do not force --step iso on bare-metal — that was the old three-stop Make flow.
 	cmd="$cmd --step $install_step"
 
 	tui_log "Installing cluster ($install_step): $cmd"
@@ -1822,46 +1819,21 @@ _cluster_execute() {
 	# Platform config check before executing
 	_check_platform_config "$cl_name" "$cl_platform" || return 1
 
-	# Long operation — use confirm_and_execute (terminal/TUI mode choice)
-	# Always return 0 after command execution so the wizard exits back to the
-	# main menu.  Return 1 is reserved for "Back" on the review page (above).
-	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
-	local rc=$?
-
-	# After successful ISO creation (bare-metal, ISO-only step): show boot guidance
-	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
-		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
-		local _node_count=$total_nodes
-		local _boot_msg
-		if [ "$_node_count" -eq 1 ]; then
-			_boot_msg="Boot your server from this ISO using one of:"
-		else
-			_boot_msg="Boot all $_node_count servers at the same time using one of:"
+	# Long operation. BM must NOT inject --yes so edit/boot ask() gates
+	# surface in the progress dialog (PROMPT). Vmw/kvm keep confirm_and_execute.
+	local rc=0
+	if [[ "$cl_platform" == "bm" ]]; then
+		# Prefer progress UI (PLAN + PROMPT); fall back to interactive terminal.
+		_exec_with_progress "$cmd" "Install Cluster: $fqdn"
+		rc=$?
+		if [[ $rc -eq 2 ]]; then
+			# No PLAN events — interactive terminal so asks still work
+			_exec_in_terminal "$cmd" "Install Cluster: $fqdn"
+			rc=$?
 		fi
-		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Boot Your Servers" \
-			--yes-label "Monitor Installation" \
-			--no-label "Back to Menu" \
-			--yesno "ISO file created:\n\n\
-  $_iso_path\n\n\
-$_boot_msg\n\n\
-  • Virtual media (iLO, iDRAC, BMC) — mount the ISO over\n\
-    the management network (no physical media needed)\n\
-  • USB drive — write in raw/direct mode (byte-for-byte copy):\n\n\
-    sudo dd if=$_iso_path of=/dev/sdX bs=4M conv=fsync status=progress\n\
-    (replace /dev/sdX with your actual USB device, e.g. /dev/sdb)\n\n\
-    Or run: aba --dir $cl_name write-usb\n\n\
-    The ISO must be written as a raw disk image. Any tool that copies\n\
-    byte-for-byte to the entire device (dd, balenaEtcher, Fedora Media\n\
-    Writer) will work. Tools that reformat or extract files will NOT boot.\n\n\
-  • PXE — serve the ISO via your PXE infrastructure\n\n\
-IMPORTANT: The ISO expires 24 hours after creation.\n\
-Boot all servers and complete the install within that window.\n\n\
-Once installation completes, use Day-2 / Cluster Management\n\
-to configure OperatorHub and apply cluster resources.\n\
-ABA auto-detects when the cluster is ready." 0 0
-		if [[ $? -eq 0 ]]; then
-			cluster_monitor
-		fi
+	else
+		confirm_and_execute "$cmd" "Install Cluster: $fqdn"
+		rc=$?
 	fi
 
 	# After successful install in mirror mode, offer to configure OperatorHub

@@ -20,7 +20,7 @@ elif [ $_exists_rc -eq 0 ]; then
 	scripts/vmw-delete.sh || true
 fi
 
-rm -f .install-complete .autorefresh .auto-agent-up
+rm -f .install-complete .vms-ready
 
 scripts/vmw-create.sh --start --nomaccheck  # Do not re-check the mac addresses since we are re-creating the exact same VMs
 

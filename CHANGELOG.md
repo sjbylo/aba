@@ -1,5 +1,9 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.4...HEAD)
 
+### Changed
+
+- **Bare-metal install is continuous (#B80)** — One `aba install` / `make install` for BM (edit + boot `ask()` gates) instead of three Make stops (`.bm-message` / `.bm-nextstep` removed). VM stamps renamed to `.vms-stopped` / `.iso-uploaded` / `.vms-ready`; wait-agent folded into `monitor-install`. TUI BM runs full install with progress prompts (no forced ISO-only step). Primed beta: no `.bm-message` fabrication; recreate primed/transfer artifacts after upgrade. No BC shims for old stamp names.
+
 ---
 
 ## [1.4.4](https://github.com/sjbylo/aba/releases/tag/v1.4.4) - 2026-11-04
