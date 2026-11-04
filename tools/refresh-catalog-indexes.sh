@@ -54,11 +54,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Build version list using ABA's Cincinnati graph functions.
-# Walks backwards from the latest GA minor in the stable channel.
+# Start minor = fetch_latest_version (includes next-major GA peek when CDN
+# lags) → _ver_minor. Walk back with _channel_prev_minor (5.0 → 4.22).
 detect_versions() {
 	local versions=()
-	local minor
-	minor=$(fetch_latest_minor_version "stable")
+	local tip minor
+	tip=$(fetch_latest_version "stable") || tip=
+	minor=$(_ver_minor "$tip")
 	[[ -n "$minor" ]] || { echo "ERROR: cannot determine latest OCP minor" >&2; return 1; }
 
 	local i
@@ -68,46 +70,32 @@ detect_versions() {
 		if fetch_all_versions "stable" "$minor" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' 2>/dev/null; then
 			versions+=("$minor")
 		fi
-		minor=$(_prev_minor "$minor")
+		minor=$(_channel_prev_minor "stable" "$minor")
 	done
 
 	# Return in ascending order
 	printf '%s\n' "${versions[@]}" | sort -V
 }
 
-_next_minor() {
-	local minor="$1"
-	local x y
-	x="${minor%%.*}"
-	y="${minor#*.}"
-	[[ "$y" =~ ^[0-9]+$ ]] || return 1
-	echo "${x}.$((y + 1))"
-}
-
-# Detect pre-release catalog versions by probing the registry for the
-# immediate next minor beyond the latest GA. Checks both the in-sequence
-# next (e.g. 4.23) and the next major (e.g. 5.0) for the boundary case.
+# Detect pre-release catalog versions by probing the registry for tags
+# beyond the latest GA minor (_next_minor and _next_major from include_all).
 detect_prerelease_versions() {
 	local latest_ga="$1"
 	local prerelease=()
 
-	# Candidate 1: in-sequence next minor (e.g. 4.22 → 4.23)
-	local next
+	# Candidates from core: _next_minor (5.0→5.1) and _next_major (4.22→5.0)
+	local next next_major candidate probe_ref
 	next=$(_next_minor "$latest_ga")
+	next_major=$(_next_major "$latest_ga")
 
-	# Candidate 2: next major version .0 (e.g. 4.x → 5.0)
-	local major="${latest_ga%%.*}"
-	local next_major="$((major + 1)).0"
-
-	local candidate
 	for candidate in "$next" "$next_major"; do
 		[[ -n "$candidate" ]] || continue
-		# Skip if it's already a GA version (already covered by detect_versions)
+		# Skip if already GA (covered by detect_versions)
 		if fetch_all_versions "stable" "$candidate" 2>/dev/null | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
 			continue
 		fi
 		# Probe the registry: does the catalog tag exist?
-		local probe_ref="docker://registry.redhat.io/redhat/redhat-operator-index:v${candidate}"
+		probe_ref="docker://registry.redhat.io/redhat/redhat-operator-index:v${candidate}"
 		if skopeo inspect --raw "$probe_ref" &>/dev/null; then
 			prerelease+=("$candidate")
 		fi
