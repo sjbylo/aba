@@ -454,10 +454,8 @@ test_end
 #    because the registry was loaded there and is not reachable from con).
 #    Both tests are kept for defense-in-depth.
 #
-#    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
-#      1st `aba install` -> creates agent configs, prints "Review and edit"
-#      2nd `aba install` -> creates ISO, prints "Boot your servers"
-#      (3rd would monitor cluster -- not tested since no real BM servers)
+#    Continuous BM install (#B80): `aba install --step iso` builds ISO with
+#    edit-ask (ask=false auto-yes). Full install would hit boot-ask --auto-no.
 # ============================================================================
 test_begin "Bare-metal: ISO simulation"
 
@@ -480,18 +478,14 @@ e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
 
-# Phase 1: "aba install" stops after agent configs, shows MAC review instructions
-e2e_run "First aba install (generates configs, stops for MAC review)" \
-    "mkdir -p ~/tmp && aba --dir $STANDARD install 2>&1 | tee ~/tmp/bm-phase1.out && grep -q 'Review and edit' ~/tmp/bm-phase1.out"
-e2e_run "Verify .bm-message exists" "test -f $STANDARD/.bm-message"
-e2e_run "Verify ISO not yet created (still)" "! ls $STANDARD/iso-agent-based/agent.*.iso"
-
-# Phase 2: "aba install" creates ISO, shows boot instructions
-e2e_run "Second aba install (creates ISO, stops for server boot)" \
-    "mkdir -p ~/tmp && aba --dir $STANDARD install 2>&1 | tee ~/tmp/bm-phase2.out && grep -q 'Boot your servers' ~/tmp/bm-phase2.out"
-e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
+# Continuous path through ISO only (avoids boot-ask --auto-no + mon hang)
+e2e_run "aba install --step iso (continuous BM through ISO)" \
+    "mkdir -p ~/tmp && aba --dir $STANDARD install --step iso 2>&1 | tee ~/tmp/bm-iso.out && grep -q 'Review and edit' ~/tmp/bm-iso.out"
+e2e_run "Verify .bm-config-reviewed exists" "test -f $STANDARD/.bm-config-reviewed"
+e2e_run "Verify no legacy .bm-message" "test ! -f $STANDARD/.bm-message"
+e2e_run "Verify no legacy .bm-nextstep" "test ! -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
-e2e_run "Clean standard cluster dir (2-step done)" "rm -rf $STANDARD"
+e2e_run "Clean standard cluster dir (iso-step done)" "rm -rf $STANDARD"
 e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 
 test_end
@@ -502,11 +496,10 @@ test_end
 #    Full BM install using an out-of-band VMware VM to simulate real hardware.
 #    Uses the extracted vmp_* helpers from scripts/vm-vmw.sh for VM lifecycle.
 #
-#    3-step flow:
-#      1st `aba install` -> agent configs + .bm-message
-#      2nd `aba install` -> ISO          + .bm-nextstep
+#    Continuous BM (#B80):
+#      `aba install --step iso` -> configs + ISO (edit ask)
 #      Upload ISO + create OOB VM + boot
-#      3rd `aba install` -> wait-agent-up + monitor-install
+#      `aba mon` -> wait-agent + monitor-install
 # ============================================================================
 test_begin "Bare-metal: full OOB SNO install"
 
@@ -523,14 +516,10 @@ e2e_run "Create SNO-BM cluster.conf (reuses SNO DNS records)" \
 e2e_run "Write BM MAC to macs.conf" \
     "echo '$_BM_MAC' > $SNO_BM/macs.conf"
 
-# Phase 1: agent configs
-e2e_run "BM Phase 1: generate agent configs" \
-    "mkdir -p ~/tmp && aba --dir $SNO_BM install 2>&1 | tee ~/tmp/bm3-phase1.out && grep -q 'Review and edit' ~/tmp/bm3-phase1.out"
-e2e_run "Verify .bm-message exists" "test -f $SNO_BM/.bm-message"
-
-# Phase 2: ISO
-e2e_run "BM Phase 2: generate ISO" \
-    "mkdir -p ~/tmp && aba --dir $SNO_BM install 2>&1 | tee ~/tmp/bm3-phase2.out && grep -q 'Boot your servers' ~/tmp/bm3-phase2.out"
+# Through ISO only (boot ask would --auto-no under ask=false)
+e2e_run "BM: generate ISO (install --step iso)" \
+    "mkdir -p ~/tmp && aba --dir $SNO_BM install --step iso 2>&1 | tee ~/tmp/bm3-iso.out && grep -q 'Review and edit' ~/tmp/bm3-iso.out"
+e2e_run "Verify no legacy .bm-message" "test ! -f $SNO_BM/.bm-message"
 e2e_run "Verify ISO created" "ls -l $SNO_BM/iso-agent-based/agent.*.iso"
 
 # OOB VM creation using extracted helpers.
@@ -562,8 +551,8 @@ e2e_run "Power on OOB VM" \
     "source scripts/include_all.sh && source <(normalize-vmware-conf) && govc vm.power -on '$_bm_vm_name'"
 
 # Phase 3: monitor install
-e2e_run -r 2 30 "BM Phase 3: monitor cluster install" \
-    "aba --dir $SNO_BM install"
+e2e_run -r 2 30 "BM: monitor cluster install" \
+    "aba --dir $SNO_BM mon"
 e2e_run "Show cluster operator status" "aba --dir $SNO_BM run"
 e2e_wait_cluster_available "$SNO_BM"
 e2e_diag "Show cluster operators" "aba --dir $SNO_BM run --cmd 'oc get co'"

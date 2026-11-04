@@ -529,7 +529,7 @@ aba -d mycluster install
 ```
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
-For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. `aba install` pauses so you can review generated config and boot your servers after ISO generation.
+For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted (no need to re-run install three times).
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
@@ -816,7 +816,7 @@ Optionally, add `--step <step>` to continue beyond configuration and into the in
 
 #### Installation stages
 
-Once the cluster directory exists, run `aba -d mycluster install` (or `cd mycluster && aba install`) to proceed through the installation pipeline. ABA processes these stages in order, pausing on bare-metal so you can review and boot your servers:
+Once the cluster directory exists, run `aba -d mycluster install` (or `cd mycluster && aba install`) to proceed through the installation pipeline. ABA processes these stages in order; on bare-metal, interactive asks let you review config and confirm boot without re-running install:
 
 | Stage         | What it does                                                | What to review / do |
 | -----         | ------------                                                | ------------------- |
@@ -825,7 +825,7 @@ Once the cluster directory exists, run `aba -d mycluster install` (or `cd myclus
 | **mon**       | Monitors host discovery, validation, bootstrap, and installation progress. | Observe progress until `Install complete!`. |
 
 For **VMware/KVM**, `aba install` runs all stages end-to-end (creates VMs, attaches the ISO, boots, and monitors).
-For **bare-metal**, `aba install` pauses between stages so you can review generated config, boot your servers, and then monitor.
+For **bare-metal**, one continuous `aba install` asks you to review generated config, then confirms servers are booted (or drives BMC boot), then monitors.
 
 You can stop at a specific stage to review and customize before continuing — see [Modifying Agent-based Configuration](#modifying-agent-based-configuration) for the workflow and examples.
 
@@ -1023,7 +1023,7 @@ aba cluster \
     --starting-ip 10.0.1.100 \
     --step agentconf
 cd mycluster
-# Review and edit install-config.yaml and/or agent-config.yaml
+# Prefer macs.conf / disk_hint; aba install asks once to review before ISO, then again after boot
 aba install
 ```
 

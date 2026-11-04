@@ -1379,7 +1379,7 @@ externalize_cluster_state() {
 
 	# Backup marker/flag files
 	local _flag
-	for _flag in .install-complete .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
+	for _flag in .install-complete .init .preflight-done .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .bootstrap-complete; do
 		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
 	done
 

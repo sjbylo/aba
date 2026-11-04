@@ -148,7 +148,6 @@ if [ "$with_clusters" ]; then
 		# Cluster.conf-only dirs get NO .primed — normal generation on disco.
 		if [ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ]; then
 			touch "$_cdir/.primed"
-			touch "$_cdir/.bm-message"
 		fi
 	done
 fi
@@ -219,11 +218,11 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
 	! -name ".install-complete"					\
-	! -name ".autopoweroff"						\
-	! -name ".autoupload"						\
-	! -name ".autorefresh"						\
-	! -name ".auto-agent-up"					\
-	! -name ".bm-nextstep"						\
+	! -name ".vms-stopped"						\
+	! -name ".iso-uploaded"						\
+	! -name ".vms-ready"						\
+	! -name ".bm-bmc-boot-done"					\
+	! -name ".bm-config-reviewed"						\
 	! -name ".preflight-done"					\
 	! -name ".cli"							\
 	! -name "*.content-layer-digest"				\

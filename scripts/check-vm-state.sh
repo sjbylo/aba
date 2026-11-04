@@ -2,7 +2,7 @@
 # Validate VM state against marker files.
 # Called from the Makefile 'check' target (ifdef HV_PREFIX only).
 #
-# When .autorefresh exists (VMs were supposedly created), verify
+# When .vms-ready exists (VMs were supposedly created), verify
 # that VMs still exist on the hypervisor.  If they're gone, remove
 # stale markers so Make can re-create them.
 #
@@ -12,7 +12,7 @@
 source scripts/include_all.sh
 
 # Nothing to check if VMs were never created
-[ -f .autorefresh ] || exit 0
+[ -f .vms-ready ] || exit 0
 
 # Determine platform from config files (same detection as the Makefile)
 if [ -s vmware.conf ]; then
@@ -45,7 +45,7 @@ case "$_rc" in
 	1)
 		# VMs are gone — remove stale markers to allow re-creation
 		aba_warn "VMs no longer exist — removing stale markers to allow re-creation"
-		rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up
+		rm -f .vms-stopped .iso-uploaded .vms-ready
 		;;
 	*)
 		# Hypervisor unreachable — warn but don't block

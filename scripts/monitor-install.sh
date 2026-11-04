@@ -37,9 +37,15 @@ opts=
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
+# Best-effort wait for agent REST API before openshift-install monitor
+# (folded from former .auto-agent-up Make stamp — see wait-agent-up.sh).
+aba_progress "START|ci_mon"
+scripts/wait-agent-up.sh || true
+
 # Ensure openshift-install is available (wait for background download/install)
 if ! ensure_openshift_install >/dev/null; then
 	error_msg=$(get_task_error "$TASK_INST_OPENSHIFT_INSTALL")
+	aba_progress "FAIL|ci_mon"
 	aba_abort "Failed to install openshift-install:\n$error_msg"
 fi
 
@@ -64,6 +70,7 @@ declare -A wait_for_exit_reasons=(
 # ret = 8 means openshift-install was interrupted (e.g. Ctrl-c). Stay quiet, but
 # exit non-zero so Make does not create .install-complete.
 if ! exit_unless_install_finished "$ret"; then
+	aba_progress "FAIL|ci_mon"
 	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
@@ -74,6 +81,8 @@ if ! exit_unless_install_finished "$ret"; then
 
 	exit $ret
 fi
+
+aba_progress "DONE|ci_mon"
 
 # Phase 6 BMC-06 + BMC-07: post-install cleanup - disable boot override + eject media.
 # Platform-gated; best-effort (scripts/bmc-unmount.sh exits 0 always per D-13).
