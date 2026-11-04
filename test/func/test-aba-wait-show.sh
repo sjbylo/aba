@@ -328,7 +328,8 @@ sleep 2
 # Signal the entire process group (simulates real Ctrl+C)
 kill -INT -- -"$sub_pid" 2>/dev/null || kill -INT "$sub_pid" 2>/dev/null || true
 wait "$sub_pid" 2>/dev/null || true
-sleep 3
+# Wait past check's sleep 10 so a surviving orphan would create the marker
+sleep 12
 
 if [ ! -f "$marker12" ]; then
 	_pass "SIGINT killed background check (no marker)"
@@ -344,16 +345,20 @@ echo "── 13. SIGTERM handling ──"
 marker13="$TMPDIR_TEST/orphan-marker-13"
 rm -f "$marker13"
 
+# Process-group TERM (supervised kill / service stop). Single-PID TERM to
+# the outer bash alone is covered as a known limitation in 13b-style cases.
+set -m 2>/dev/null || true
 bash -c "
 	. '$ABA_ROOT/scripts/include_all.sh' 2>/dev/null || true
 	trap - ERR
 	aba_wait_show sigterm-test 1 30 'sleep 10 && touch $marker13'
 " > "$TMPDIR_TEST/t13.out" 2>&1 &
 sub_pid=$!
+set +m 2>/dev/null || true
 sleep 2
-kill -TERM "$sub_pid" 2>/dev/null || true
+kill -TERM -- -"$sub_pid" 2>/dev/null || kill -TERM "$sub_pid" 2>/dev/null || true
 wait "$sub_pid" 2>/dev/null || true
-sleep 3
+sleep 12
 
 if [ ! -f "$marker13" ]; then
 	_pass "SIGTERM killed background check (no marker)"

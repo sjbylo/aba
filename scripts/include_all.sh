@@ -2125,6 +2125,32 @@ aba_wait_show() (
 		_spinner_pid=
 	}
 
+	# Kill check PID and descendants. Plain kill leaves orphan children
+	# (e.g. sleep) that can still run side-effects after the shell exits.
+	_kill_check() {
+		local pid=${1:-}
+		[ -n "$pid" ] || return 0
+		# Prefer process-group kill when check was launched under set -m
+		# (PGID == PID). Fall back to tree walk for non-group cases.
+		kill -TERM -- -"$pid" 2>/dev/null || true
+		kill -TERM "$pid" 2>/dev/null || true
+		local c
+		for c in $(pgrep -P "$pid" 2>/dev/null); do
+			kill -TERM "$c" 2>/dev/null || true
+			# one more level (sleep under eval subshell)
+			local gc
+			for gc in $(pgrep -P "$c" 2>/dev/null); do
+				kill -TERM "$gc" 2>/dev/null || true
+			done
+		done
+		# Stubborn leftovers (SIGINT-ignored sleep under set +m)
+		kill -KILL -- -"$pid" 2>/dev/null || true
+		kill -KILL "$pid" 2>/dev/null || true
+		for c in $(pgrep -P "$pid" 2>/dev/null); do
+			kill -KILL "$c" 2>/dev/null || true
+		done
+	}
+
 	_cleaned=
 	_cleanup() {
 		[ -n "$_cleaned" ] && return
@@ -2133,7 +2159,7 @@ aba_wait_show() (
 		# Kill in-flight check — without this, INT/TERM leave orphans (set +m
 		# makes background checks ignore SIGINT; Ctrl+C must still stop them).
 		if [ -n "${_cmd_pid:-}" ]; then
-			kill "$_cmd_pid" 2>/dev/null || true
+			_kill_check "$_cmd_pid"
 			wait "$_cmd_pid" 2>/dev/null || true
 			_cmd_pid=
 		fi
@@ -2146,6 +2172,8 @@ aba_wait_show() (
 	}
 	trap '_cleanup; exit 130' INT
 	trap '_cleanup; exit 143' TERM
+	# Always reap check on any exit path (including parent death races)
+	trap '_cleanup' EXIT
 
 	_rc=1
 	_start_spinner
@@ -2158,13 +2186,17 @@ aba_wait_show() (
 		# functions are available (bash -c would start a fresh process
 		# without them).  The subshell is killed if it exceeds the
 		# remaining wall-clock budget.  Output goes to debug log.
+		# Briefly enable monitor mode so the check gets its own process
+		# group (PGID==PID) and cleanup can kill the whole tree.
 		remaining=$(( max - elapsed ))
 		cmd_rc=0
+		set -m 2>/dev/null || true
 		( eval "$check_cmd" ) >> "$_wait_log" 2>&1 &
 		_cmd_pid=$!
+		set +m 2>/dev/null || true
 		_deadline=$(( $(date +%s) + remaining ))
 		while kill -0 "$_cmd_pid" 2>/dev/null; do
-			[ "$(date +%s)" -ge "$_deadline" ] && { kill "$_cmd_pid" 2>/dev/null; break; }
+			[ "$(date +%s)" -ge "$_deadline" ] && { _kill_check "$_cmd_pid"; break; }
 			sleep 0.2
 		done
 		wait "$_cmd_pid" 2>/dev/null || cmd_rc=$?
