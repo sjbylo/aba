@@ -25,6 +25,7 @@ cloudcasa-operator CloudCasa Operator stable
 cloudera-streams-messaging-kubernetes-operator Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 cloudnative-pg CloudNativePG stable-v1
 cloud-native-postgresql EDB Postgres for Kubernetes fast
+cockroachdb-certified CockroachDB Public Operator stable
 coherence-operator Coherence Kubernetes Operator stable
 confluent-for-kubernetes Confluent for Kubernetes 3.4
 conjur-follower-operator Conjur Enterprise Follower Operator stable
@@ -182,9 +183,9 @@ tigera-operator Tigera Operator v1.38 release-v1.42
 trident-operator NetApp Trident stable
 truenas-csi TrueNAS CSI Driver stable
 tvo-operator Trilio for OpenStack 6.0.x
-uma-admin-operator DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy stable
+uma-admin-operator DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy beta
 uma-operator DX Operational Observability Universal Monitoring Agent beta
-uma-team-operator DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy stable
+uma-team-operator DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy beta
 vast-csi-operator VAST CSI driver operator stable
 vault-secrets-operator Vault Secrets Operator stable
 vcp-operator CyberArk Certificate Manager Operator stable
