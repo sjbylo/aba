@@ -22,3 +22,5 @@ fi
 rm -f .install-complete .vms-ready
 
 scripts/kvm-create.sh --start --nomaccheck
+
+aba_progress "DONE|ci_vms" || true

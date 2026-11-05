@@ -4,6 +4,8 @@
 
 source scripts/include_all.sh
 
+aba_progress "START|ci_vms" || true
+
 if [ -s kvm.conf ]; then
 	ensure_virsh
 	source <(normalize-kvm-conf)

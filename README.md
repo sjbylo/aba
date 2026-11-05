@@ -529,7 +529,7 @@ aba -d mycluster install
 ```
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
-For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted (no need to re-run install three times).
+For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)

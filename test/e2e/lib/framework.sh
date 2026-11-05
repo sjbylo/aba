@@ -62,6 +62,13 @@
 #      bundle transfer from conN.  If something is missing on disN, the
 #      bundle creation failed -- never try to fetch from the internet.
 #
+# 10b2. NEVER push the ABA repo/source tree to disN from the e2e harness.
+#      --dev / sync_source / deploy may update ~/aba on conN only.
+#      disN receives ~/aba solely via aba transfer / bundle (product path).
+#      Partial file syncs (e.g. Makefile.cluster alone) are forbidden -- they
+#      drift from scripts/ and mask real airgap bugs. Lab secrets on disN
+#      (~/.vmware.conf, pull-secret) are unrelated and may still be deployed.
+#
 # ===========================  TEST HYGIENE  =================================
 #
 # 10c. Tests MUST NEVER create ABA-internal or ABA-generated files directly.

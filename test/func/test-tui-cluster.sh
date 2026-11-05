@@ -81,7 +81,10 @@ if ! echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
 	tui_keys C-u; sleep 0.3
 	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
 	sleep 0.3
-	tui_keys Enter; sleep 1
+	tui_keys Enter
+	# Wait for input dialog to close before asserting the Basics field
+	# (a premature capture sees the open dialog, not "Cluster name: sno")
+	tui_wait_gone "Enter cluster name" 8 || sleep 2
 	tui_screenshot "cl-01b-name-set"
 fi
 # Verify the name field specifically (not just Type which also contains "sno")
@@ -90,9 +93,17 @@ if echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
 	echo "  ✓ PASS: Cluster name set to $_CLUSTER"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ✗ FAIL: Cluster name not set (expected $_CLUSTER)"
-	echo "    Current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1)"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	# One retry: dialog may still be settling after Enter
+	sleep 1
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+		echo "  ✓ PASS: Cluster name set to $_CLUSTER (after settle)"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: Cluster name not set (expected $_CLUSTER)"
+		echo "    Current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
 fi
 # Force Type from skill table (SNO leftover "standard" fails VIP validation).
 if tui_force_type "$_lab_type"; then

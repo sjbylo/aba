@@ -8,9 +8,13 @@
 # Functions:
 #   sync_harness     -- push test harness to ~/.e2e-harness/ on a conN target
 #   sync_infra_aba   -- push infra-owned aba binary to conN + disN
-#   sync_source      -- push ABA source tarball to ~/aba on a conN target
+#   sync_source      -- push ABA source tarball to ~/aba on a conN target ONLY
 #   sync_extras      -- push notify.sh, vmware.conf, root essentials
 #   deploy_pool      -- full deploy to one pool (source + harness + extras)
+#
+# Rule (framework.sh 10b2): NEVER scp/rsync the ABA repo (~/aba) to disN.
+# disN gets the tree only via aba transfer/bundle. Lab configs (~/.vmware.conf)
+# are not the repo and may still be pushed to disN.
 #
 # Dependencies: remote.sh (for _essh, _escp, _con_target)
 # =============================================================================
@@ -301,18 +305,8 @@ sync_extras() {
 		fi
 	fi
 
-	# Push corrected Makefile + template to disN after snapshot reverts.
-	# Pool-ready snapshots pre-date the cli:download:govc fallback fix;
-	# without --dev the ABA source tree is never re-synced, so we push
-	# just the two files that changed.
-	local _aba_root="${_RUN_DIR%/test/e2e}"
-	local _host="${target#*@}"
-	local _dis_host="${_host/con/dis}"
-	for _dt in "${target/con/dis}" "root@${_dis_host}"; do
-		_essh "$_dt" "[ -d ~/aba/templates ]" || continue
-		_escp "${_aba_root}/templates/Makefile.cluster" "${_dt}:~/aba/templates/Makefile.cluster" || true
-		_escp "${_aba_root}/Makefile"                   "${_dt}:~/aba/Makefile" || true
-	done
+	# ABA repo → conN only (rule 10b2). Never push ~/aba or Makefile/templates
+	# to disN here; airgap suites must transfer/bundle from conN.
 
 	# Root essentials (govc, pull-secret, vmware.conf)
 	_deploy_root_essentials "$target" "$user"

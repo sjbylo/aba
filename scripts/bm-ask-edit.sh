@@ -10,14 +10,13 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-# Resolve platform from aba.conf (cwd is cluster dir)
-_platform=
-[ -f ../aba.conf ] && _platform=$(grep -E '^[[:space:]]*platform=' ../aba.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/#.*//;s/[[:space:]]//g')
-_platform=${_platform:-bm}
+# Cluster dirs symlink aba.conf → ../aba.conf
+source <(normalize-aba-conf)
+platform=${platform:-bm}
 
 # VMware/KVM and primed bundles skip this gate
-if [ "$_platform" != "bm" ] || [ -f .primed ]; then
-	aba_debug "bm-ask-edit: skip (platform=$_platform primed=$([ -f .primed ] && echo yes || echo no))"
+if [ "$platform" != "bm" ] || [ -f .primed ]; then
+	aba_debug "bm-ask-edit: skip (platform=$platform primed=$([ -f .primed ] && echo yes || echo no))"
 	exit 0
 fi
 

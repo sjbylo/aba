@@ -167,9 +167,7 @@ iso: iso-agent-based/agent.$(arch).iso ## Build the agent-based iso file in iso-
 	@echo "[ABA] Warning: The ISO contains certificates that expire 24 hours after creation."
 	@echo "[ABA]          Boot your servers and complete the install within that window."
 iso-agent-based/agent.$(arch).iso: .bm-config-reviewed .preflight-done .infra-dns ~/bin/openshift-install
-	@bash -c 'source $(SCRIPTS)/include_all.sh && aba_progress "START|ci_iso"' || true
 	$(SCRIPTS)/generate-image.sh
-	@bash -c 'source $(SCRIPTS)/include_all.sh && aba_progress "DONE|ci_iso"' || true
 
 # Bare metal: mount the ISO on each node in bmc.conf via its BMC (Redfish) and
 # boot it, before waiting for the agent. bmc-boot.sh writes this stamp itself,
@@ -195,7 +193,6 @@ iso-agent-based/agent.$(arch).iso: .bm-config-reviewed .preflight-done .infra-dn
 	@if [ -z "$(HV_PREFIX)" ]; then \
 		touch .vms-stopped; \
 	else \
-		bash -c 'source $(SCRIPTS)/include_all.sh && aba_progress "START|ci_vms"' || true; \
 		$(SCRIPTS)/$(HV_PREFIX)-kill.sh || true; \
 		touch .vms-stopped; \
 	fi
@@ -216,7 +213,6 @@ upload: .iso-uploaded  ## Upload the ISO to the hypervisor platform.
 	else \
 		$(SCRIPTS)/$(HV_PREFIX)-refresh.sh; \
 		touch .vms-ready; \
-		bash -c 'source $(SCRIPTS)/include_all.sh && aba_progress "DONE|ci_vms"' || true; \
 	fi
 
 .PHONY: refresh
