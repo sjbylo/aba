@@ -2125,30 +2125,12 @@ aba_wait_show() (
 		_spinner_pid=
 	}
 
-	# Kill check PID and descendants. Plain kill leaves orphan children
-	# (e.g. sleep) that can still run side-effects after the shell exits.
+	# Check is launched under set -m so PGID==PID; kill the whole group.
 	_kill_check() {
 		local pid=${1:-}
 		[ -n "$pid" ] || return 0
-		# Prefer process-group kill when check was launched under set -m
-		# (PGID == PID). Fall back to tree walk for non-group cases.
-		kill -TERM -- -"$pid" 2>/dev/null || true
-		kill -TERM "$pid" 2>/dev/null || true
-		local c
-		for c in $(pgrep -P "$pid" 2>/dev/null); do
-			kill -TERM "$c" 2>/dev/null || true
-			# one more level (sleep under eval subshell)
-			local gc
-			for gc in $(pgrep -P "$c" 2>/dev/null); do
-				kill -TERM "$gc" 2>/dev/null || true
-			done
-		done
-		# Stubborn leftovers (SIGINT-ignored sleep under set +m)
-		kill -KILL -- -"$pid" 2>/dev/null || true
-		kill -KILL "$pid" 2>/dev/null || true
-		for c in $(pgrep -P "$pid" 2>/dev/null); do
-			kill -KILL "$c" 2>/dev/null || true
-		done
+		kill -TERM -- -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+		kill -KILL -- -"$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
 	}
 
 	_cleaned=
@@ -2156,8 +2138,6 @@ aba_wait_show() (
 		[ -n "$_cleaned" ] && return
 		_cleaned=1
 		_stop_spinner
-		# Kill in-flight check — without this, INT/TERM leave orphans (set +m
-		# makes background checks ignore SIGINT; Ctrl+C must still stop them).
 		if [ -n "${_cmd_pid:-}" ]; then
 			_kill_check "$_cmd_pid"
 			wait "$_cmd_pid" 2>/dev/null || true
@@ -2172,7 +2152,6 @@ aba_wait_show() (
 	}
 	trap '_cleanup; exit 130' INT
 	trap '_cleanup; exit 143' TERM
-	# Always reap check on any exit path (including parent death races)
 	trap '_cleanup' EXIT
 
 	_rc=1
@@ -2182,36 +2161,19 @@ aba_wait_show() (
 		elapsed=$(( $(date +%s) - start_ts ))
 		[ "$elapsed" -ge "$max" ] && break
 
-		# Run check command via eval in a forked subshell so caller-defined
-		# functions are available (bash -c would start a fresh process
-		# without them).  The subshell is killed if it exceeds the
-		# remaining wall-clock budget.  Output goes to debug log.
-		# Briefly enable monitor mode so the check gets its own process
-		# group (PGID==PID) and cleanup can kill the whole tree.
-		# Parent-death watchdog: if wait_show exits without reaping (WCE /
-		# parent kill), the check tree is still destroyed.
+		# eval in a forked subshell so caller-defined functions are available.
+		# set -m: own process group so _kill_check can reap the whole tree.
 		remaining=$(( max - elapsed ))
 		cmd_rc=0
-		# BASHPID = this wait_show subshell ($$ would be the parent shell)
-		_wait_show_pid=$BASHPID
 		set -m 2>/dev/null || true
-		(
-			_check_pgid=$BASHPID
-			( while kill -0 "$_wait_show_pid" 2>/dev/null; do sleep 0.2; done
-			  # Parent wait_show gone — kill this check process group
-			  kill -TERM -"$_check_pgid" 2>/dev/null || true
-			  kill -KILL -"$_check_pgid" 2>/dev/null || true ) &
-			eval "$check_cmd"
-		) >> "$_wait_log" 2>&1 &
+		( eval "$check_cmd" ) >> "$_wait_log" 2>&1 &
 		_cmd_pid=$!
 		set +m 2>/dev/null || true
 		_deadline=$(( $(date +%s) + remaining ))
 		while kill -0 "$_cmd_pid" 2>/dev/null; do
 			[ "$(date +%s)" -ge "$_deadline" ] && { _kill_check "$_cmd_pid"; break; }
-			# Background sleep + wait: foreground sleep dying on SIGINT
-			# triggers bash WCE which suppresses the INT trap and leaves
-			# the check orphaned.  Bg sleep ignores SIGINT (set +m); wait
-			# is interrupted and the INT trap runs reliably.
+			# Bg sleep + wait: foreground sleep + SIGINT triggers bash WCE
+			# which suppresses the INT trap; this pattern keeps the trap alive.
 			sleep 0.2 &
 			wait $! 2>/dev/null || true
 		done

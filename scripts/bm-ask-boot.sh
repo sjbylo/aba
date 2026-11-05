@@ -12,12 +12,13 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-_platform=
-[ -f ../aba.conf ] && _platform=$(grep -E '^[[:space:]]*platform=' ../aba.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/#.*//;s/[[:space:]]//g')
-_platform=${_platform:-bm}
+# Cluster dirs symlink aba.conf → ../aba.conf
+source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
+platform=${platform:-bm}
 
-if [ "$_platform" != "bm" ]; then
-	aba_debug "bm-ask-boot: skip (platform=$_platform)"
+if [ "$platform" != "bm" ]; then
+	aba_debug "bm-ask-boot: skip (platform=$platform)"
 	exit 0
 fi
 
@@ -26,9 +27,8 @@ aba_progress "START|ci_boot"
 _arch=$(uname -m)
 _iso="$PWD/iso-agent-based/agent.${_arch}.iso"
 _cluster_dir=$(basename "$PWD")
-_nm=$(grep '^num_masters=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
-_nw=$(grep '^num_workers=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
-_total=$(( ${_nm:-1} + ${_nw:-0} ))
+_total=$(( ${num_masters:-1} + ${num_workers:-0} ))
+# Derived count — not a normalize*() output (ADR-005)
 _bmc_nodes=0
 [ -f bmc.conf ] && _bmc_nodes=$(grep -cE '^[[:space:]]*bmc_host_' bmc.conf || true)
 

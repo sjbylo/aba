@@ -24,3 +24,5 @@ rm -f .install-complete .vms-ready
 
 scripts/vmw-create.sh --start --nomaccheck  # Do not re-check the mac addresses since we are re-creating the exact same VMs
 
+aba_progress "DONE|ci_vms" || true
+
