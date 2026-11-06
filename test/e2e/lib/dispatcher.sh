@@ -1179,9 +1179,24 @@ _dispatch_loop() {
 					[ "${_work_queue[$_qi]}" = "$_inj_suite" ] && _already_queued=1 && break
 				done
 				[ -n "$_already_queued" ] && { printf "  [%s] SKIPPED: %s (queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
-				_work_queue+=("$_inj_suite"); suites_to_run+=("$_inj_suite")
+				# Front of the not-yet-dispatched queue. run.sh prepends the
+				# inject file for this reason; appending left the suite behind
+				# whatever was already pending.
+				_wq_new=()
+				_inj_qi=0
+				while [ "$_inj_qi" -lt "$_queue_idx" ]; do
+					_wq_new+=("${_work_queue[$_inj_qi]}")
+					_inj_qi=$(( _inj_qi + 1 ))
+				done
+				_wq_new+=("$_inj_suite")
+				while [ "$_inj_qi" -lt "${#_work_queue[@]}" ]; do
+					_wq_new+=("${_work_queue[$_inj_qi]}")
+					_inj_qi=$(( _inj_qi + 1 ))
+				done
+				_work_queue=("${_wq_new[@]}")
+				suites_to_run+=("$_inj_suite")
 				_inj_count=$(( _inj_count + 1 ))
-				printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				printf "  [%s] INJECTED: %s (front of queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
 			done < "${E2E_INJECT_QUEUE}.processing"
 			rm -f "${E2E_INJECT_QUEUE}.processing"
 			if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
