@@ -6,6 +6,8 @@
 source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
+aba_progress "START|ci_preflight"
+
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -270,6 +272,7 @@ fi
 # Summary
 if [ $_preflight_errors -gt 0 ]; then
 	aba_info "To skip network and vSphere checks, run: aba --verify conf (see aba.conf)"
+	aba_progress "FAIL|ci_preflight"
 	aba_abort "Pre-flight failed: $_preflight_errors error(s), $_preflight_warnings warning(s)"
 fi
 if [ $_preflight_warnings -gt 0 ]; then
@@ -278,5 +281,6 @@ if [ $_preflight_warnings -gt 0 ]; then
 	sleep 2
 fi
 aba_success "Pre-flight validation passed"
+aba_progress "DONE|ci_preflight"
 
 exit 0

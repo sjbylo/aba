@@ -207,7 +207,7 @@ test_plan_count day2-virt 3
 test_plan_count cluster-shutdown 4
 test_plan_count cluster-startup  6
 test_plan_count cluster-upgrade  4
-test_plan_count cluster-install  5
+test_plan_count cluster-install  6
 echo ""
 
 echo "--- PLAN format ---"
@@ -259,8 +259,10 @@ test_plan_id_coverage cluster-startup 6 \
 test_plan_id_coverage cluster-upgrade 4 \
 	scripts/cluster-upgrade.sh
 
-test_plan_id_coverage cluster-install 5 \
+test_plan_id_coverage cluster-install 6 \
 	scripts/bm-ask-edit.sh scripts/bm-ask-boot.sh scripts/monitor-install.sh \
+	scripts/resolve-vips.sh scripts/infra-dns.sh scripts/create-install-config.sh \
+	scripts/create-agent-config.sh scripts/preflight-check.sh \
 	scripts/generate-image.sh \
 	scripts/vmw-kill.sh scripts/vmw-refresh.sh \
 	scripts/kvm-kill.sh scripts/kvm-refresh.sh \

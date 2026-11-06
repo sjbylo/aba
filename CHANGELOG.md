@@ -18,6 +18,7 @@
 - **Warnings are yellow** — `aba_warn` defaults to yellow. Red stays for `aba_error` and `aba_abort`.
 - **Live output is Space only** — Space opens the progress dialog's live output and Space returns to the dialog. Other keys no longer leave that view.
 - **Short or invalid MAC list asks before it replaces macs.conf** — Save anyway / Cancel uses `macs_report` (too few, duplicate, empty, not hex, not a MAC). Save anyway writes the list with blank lines and surrounding spaces removed; an empty list clears the file. Cancel leaves the previous file unchanged.
+- **Cluster install progress starts at config generation** — Generate configs and Preflight checks are their own steps on bare metal, VMware, and KVM. The dialog opens when VIP resolution or DNS starts, instead of staying at 0% through install-config and the vSphere checks. On VMware and KVM, Boot nodes completes when the VMs are powered on.
 - **VM Resources shows the MAC template only** — The row is `mac_prefix`. It no longer adds "(from macs.conf)". That file holds real MAC addresses.
 - **Bare-metal progress asks say when to continue (#B97)** — The TUI MAC ask continues only when every required MAC is a real address. No returns to the Cluster Install wizard. The boot ask's Yes starts monitoring; No stops the run. The error line states the failure. The remedy is listed once under Possible next steps. CLI text is unchanged.
 
