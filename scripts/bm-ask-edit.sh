@@ -38,6 +38,9 @@ platform=${platform:-bm}
 # VMware/KVM and primed bundles skip this gate
 if [ "$platform" != "bm" ] || [ -f .primed ]; then
 	aba_debug "bm-ask-edit: skip (platform=$platform primed=$([ -f .primed ] && echo yes || echo no))"
+	# Config files are already written. Close the step on vmw/kvm and primed,
+	# including when Make skipped the generators because the YAML was current.
+	aba_progress "DONE|ci_config"
 	exit 0
 fi
 

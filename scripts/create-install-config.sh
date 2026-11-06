@@ -38,6 +38,10 @@
 
 source scripts/include_all.sh
 
+# Release-image extract and credential checks happen in this script, before
+# any later step. Repeat START so a skipped resolve-vips/DNS still opens the row.
+aba_progress "START|ci_config"
+
 aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 source <(normalize-aba-conf)

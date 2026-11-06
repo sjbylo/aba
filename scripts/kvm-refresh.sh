@@ -24,3 +24,6 @@ rm -f .install-complete .vms-ready
 scripts/kvm-create.sh --start --nomaccheck
 
 aba_progress "DONE|ci_vms" || true
+# kvm-create.sh --start already powered the VMs on. Same Boot nodes close as vmw.
+aba_progress "START|ci_boot" || true
+aba_progress "DONE|ci_boot" || true

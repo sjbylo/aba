@@ -328,3 +328,8 @@ scripts/j2 templates/$template_file > agent-config.yaml
 
 aba_success "$PWD/agent-config.yaml generated successfully!"
 
+# Bare metal keeps this step open through the review ask in bm-ask-edit.sh.
+if [ "$platform" != "bm" ]; then
+	aba_progress "DONE|ci_config"
+fi
+

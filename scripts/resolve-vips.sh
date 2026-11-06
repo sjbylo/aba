@@ -12,6 +12,10 @@
 
 source scripts/include_all.sh
 
+# First Makefile step of install. Open the config step before VIP lookups so
+# the progress dialog is not stuck at 0% while DNS and YAML generation run.
+aba_progress "START|ci_config"
+
 aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)

@@ -144,7 +144,11 @@ case "$1" in
 	# ── Cluster install (Makefile.cluster _progress_plan-cluster-install) ──
 
 	cluster-install)
-		aba_progress "PLAN|ci_config|Review/generate configs|5"
+		# Same steps on bm, vmw, and kvm. A step that does not apply on this
+		# platform still gets START+DONE where the equivalent work finished
+		# (VM power-on is Boot nodes; the bare-metal ask is that same step).
+		aba_progress "PLAN|ci_config|Generate configs|10"
+		aba_progress "PLAN|ci_preflight|Preflight checks|8"
 		aba_progress "PLAN|ci_iso|Build agent ISO|15"
 		aba_progress "PLAN|ci_vms|Stage nodes (VMs only)|10"
 		aba_progress "PLAN|ci_boot|Boot nodes|10"
