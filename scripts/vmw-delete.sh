@@ -40,7 +40,7 @@ elif [ $_exists_rc -ne 0 ]; then
 	exit 0
 else
 	# Only show list of existing vms if ask=1
-	if [ "$ask" ]; then
+	if ask_is_on; then
 		for name in $CP_NAMES $WORKER_NAMES; do
 			vm=$(vm_name "$CLUSTER_NAME" "$name")
 			[ "$VC" ] && echo $cluster_folder/$vm || echo $vm

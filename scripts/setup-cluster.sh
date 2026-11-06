@@ -112,7 +112,7 @@ msg="Install the cluster with: aba -d $name install  OR  cd $name; aba install"
 [ "$target" ] && msg="Proceed by running: aba -d $name $target  OR  cd $name; aba $target"
 
 # Show "how to install" instructions and exit, unless a target step was given
-if [ "$ask" ] && [ -z "$target" ]; then
+if ask_is_on && [ -z "$target" ]; then
 	echo
 	aba_info "The cluster directory has been created: $name"
 	aba_info "$msg"

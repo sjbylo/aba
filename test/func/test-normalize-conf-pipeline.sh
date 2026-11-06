@@ -229,14 +229,14 @@ _test_aba "aba: verify_conf unset -> defaults to all" "" "verify_conf" "all"
 
 # =========================================================================
 echo
-echo "--- normalize-aba-conf: CIDR split and derived vars ---"
+echo "--- normalize-aba-conf: CIDR left intact (split is apply_cidr_split) ---"
 # =========================================================================
 
-_test_aba "aba: machine_network CIDR -> IP" \
-	"machine_network=10.0.1.0/24" "machine_network" "10.0.1.0"
+_test_aba "aba: machine_network CIDR stays a CIDR" \
+	"machine_network=10.0.1.0/24" "machine_network" "10.0.1.0/24"
 
-_test_aba "aba: machine_network CIDR -> prefix_length" \
-	"machine_network=10.0.1.0/24" "prefix_length" "24"
+_test_aba "aba: machine_network CIDR does not set prefix_length" \
+	"machine_network=10.0.1.0/24" "prefix_length" ""
 
 _test_aba "aba: machine_network no CIDR -> as-is" \
 	"machine_network=10.0.1.0" "machine_network" "10.0.1.0"
@@ -244,11 +244,8 @@ _test_aba "aba: machine_network no CIDR -> as-is" \
 _test_aba "aba: ocp_version=4.21.14" \
 	"ocp_version=4.21.14" "ocp_version" "4.21.14"
 
-_test_aba "aba: ocp_major derived from 4.21.14" \
-	"ocp_version=4.21.14" "ocp_major" "4"
-
-_test_aba "aba: ocp_major derived from 5.0.3" \
-	"ocp_version=5.0.3" "ocp_major" "5"
+_test_aba "aba: ocp_major is not a normalize output" \
+	"ocp_version=4.21.14" "ocp_major" ""
 
 _test_aba "aba: trailing comment on ocp_version" \
 	"ocp_version=4.21.14		# OCP version" "ocp_version" "4.21.14"
@@ -428,17 +425,17 @@ _test_mirror_default "mirror: missing reg_vendor -> auto" "reg_vendor" "auto"
 
 # =========================================================================
 echo
-echo "--- normalize-cluster-conf: CIDR split ---"
+echo "--- normalize-cluster-conf: CIDR left intact ---"
 # =========================================================================
 
-_test_cluster "cluster: machine_network CIDR -> IP" \
-	"machine_network=10.0.1.0/24" "machine_network" "10.0.1.0"
+_test_cluster "cluster: machine_network CIDR stays a CIDR" \
+	"machine_network=10.0.1.0/24" "machine_network" "10.0.1.0/24"
 
-_test_cluster "cluster: machine_network CIDR -> prefix_length" \
-	"machine_network=10.0.1.0/24" "prefix_length" "24"
+_test_cluster "cluster: machine_network CIDR does not set prefix_length" \
+	"machine_network=10.0.1.0/24" "prefix_length" ""
 
-_test_cluster "cluster: machine_network /16 prefix" \
-	"machine_network=172.16.0.0/16" "prefix_length" "16"
+_test_cluster "cluster: machine_network /16 stays a CIDR" \
+	"machine_network=172.16.0.0/16" "machine_network" "172.16.0.0/16"
 
 _test_cluster "cluster: machine_network no CIDR" \
 	"machine_network=10.0.1.0" "machine_network" "10.0.1.0"
@@ -726,6 +723,60 @@ if [ "$result_sip" = "$expected_sip" ]; then
 else
 	test_fail "suggest_starting_ip: non-zero base /24" "expected [$expected_sip], got [$result_sip]"
 fi
+
+# =========================================================================
+echo
+echo "--- helpers: fetch_value, ocp_major_of, apply_cidr_split, cluster_type ---"
+# =========================================================================
+
+d="$_tmp/helpers"
+mkdir -p "$d"
+cat > "$d/aba.conf" <<'EOF'
+# comment
+ocp_version=5.0.3   # tip
+ask=true
+EOF
+cat > "$d/cluster.conf" <<'EOF'
+cluster_name=ocp   # name
+num_masters=1
+EOF
+
+got=$(fetch_value ocp_version "$d/aba.conf") || got=FAIL
+[ "$got" = "5.0.3" ] && test_pass "fetch_value strips comment" || test_fail "fetch_value strips comment" "got [$got]"
+
+if ! fetch_value num_masters "$d/aba.conf" >/dev/null 2>&1; then
+	test_pass "fetch_value missing key returns 1"
+else
+	test_fail "fetch_value missing key returns 1" "returned 0"
+fi
+
+got=$(fetch_value num_masters "$d/cluster.conf") || got=FAIL
+[ "$got" = "1" ] && test_pass "fetch_value cluster.conf" || test_fail "fetch_value cluster.conf" "got [$got]"
+
+got=$(ocp_major_of 4.21.14)
+[ "$got" = "4" ] && test_pass "ocp_major_of 4.21.14" || test_fail "ocp_major_of 4.21.14" "got [$got]"
+got=$(ocp_major_of 5.0.3)
+[ "$got" = "5" ] && test_pass "ocp_major_of 5.0.3" || test_fail "ocp_major_of 5.0.3" "got [$got]"
+
+machine_network=10.0.1.0/24
+prefix_length=
+apply_cidr_split
+if [ "$machine_network" = "10.0.1.0" ] && [ "$prefix_length" = "24" ]; then
+	test_pass "apply_cidr_split /24"
+else
+	test_fail "apply_cidr_split /24" "net=[$machine_network] prefix=[$prefix_length]"
+fi
+
+[ "$(cluster_type 1 0)" = "sno" ] && test_pass "cluster_type sno" || test_fail "cluster_type sno" "$(cluster_type 1 0)"
+[ "$(cluster_type 3 0)" = "compact" ] && test_pass "cluster_type compact" || test_fail "cluster_type compact" "$(cluster_type 3 0)"
+[ "$(cluster_type 3 2)" = "standard" ] && test_pass "cluster_type standard" || test_fail "cluster_type standard" "$(cluster_type 3 2)"
+
+ask=true
+unset ASK_OVERRIDE
+if ask_is_on; then test_pass "ask_is_on when ask=true"; else test_fail "ask_is_on when ask=true" "off"; fi
+ASK_OVERRIDE=1
+if ask_is_on; then test_fail "ask_is_on with -y" "still on"; else test_pass "ask_is_on off under ASK_OVERRIDE"; fi
+unset ASK_OVERRIDE
 
 # =========================================================================
 echo

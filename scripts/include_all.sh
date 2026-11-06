@@ -317,7 +317,7 @@ aba_warn() {
 
         local prefix="Warning"
 	local newline=
-	local col=red
+	local col=yellow
 
 	# Parse optional -p PREFIX
 	while [ $# -gt 0 ]
@@ -479,13 +479,80 @@ _normalize_export() {
 		-e "s/^/export /"
 }
 
+# Read one raw key from a conf file. No coercion, no default, no abort.
+# Same comment/quote/trim rules as _normalize_export.
+# Prints the value (empty if the key is present but blank). Returns 1 if the
+# file or key is missing — the caller decides whether that is fatal.
+# Usage: fetch_value KEY FILE
+fetch_value() {
+	local key="$1" file="$2" line val
+
+	[[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+	[ -f "$file" ] || return 1
+
+	line=$(_normalize_export < "$file" | grep -m1 -E "^export ${key}=") || true
+	[ -n "$line" ] || return 1
+
+	val="${line#export ${key}=}"
+	if [[ "$val" == \'*\' ]]; then
+		val="${val:1:${#val}-2}"
+	elif [[ "$val" == \"*\" ]]; then
+		val="${val:1:${#val}-2}"
+	fi
+	printf '%s\n' "$val"
+}
+
+# Major number from an OCP version ("4.21.14" or "5.0.3" → "4" / "5").
+# Pass a version, or omit to use $ocp_version. Prints nothing if unknown.
+ocp_major_of() {
+	local ver="${1:-${ocp_version:-}}"
+	[ -n "$ver" ] || return 0
+	printf '%s\n' "${ver%%.*}"
+}
+
+# If machine_network is a CIDR (10.0.0.0/20), split it in the current shell
+# into machine_network (address) and prefix_length. No-op when already split.
+# Not a normalize output (ADR-005): callers that validate or use the prefix
+# invoke this after sourcing normalize-*-conf.
+apply_cidr_split() {
+	local cidr="${1:-${machine_network:-}}"
+	[[ "$cidr" == */* ]] || return 0
+	machine_network="${cidr%/*}"
+	prefix_length="${cidr#*/}"
+	export machine_network prefix_length
+}
+
+# sno | compact | standard from replica counts.
+# Args optional; defaults to $num_masters and $num_workers (0 if unset —
+# missing num_masters is verify-cluster-conf's abort, not a silent default).
+cluster_type() {
+	local masters="${1:-${num_masters:-0}}"
+	local workers="${2:-${num_workers:-0}}"
+	if [ "$masters" = "1" ] && [ "$workers" = "0" ]; then
+		echo sno
+	elif [ "$workers" = "0" ] && [ "$masters" -ge 3 ]; then
+		echo compact
+	else
+		echo standard
+	fi
+}
+
+is_sno() {
+	[ "$(cluster_type "$@")" = "sno" ]
+}
+
+# Prompts are on only when ask is set and this run did not pass -y.
+ask_is_on() {
+	[ -z "${ASK_OVERRIDE:-}" ] && [ -n "${ask:-}" ]
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
-	# Derived/computed values belong in the calling script, not here.
+	# Coerce the same key (ask=0/false, domain case). Do not emit derived names
+	# (ocp_major, prefix_length) — those are helpers. See ADR-005.
 	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf is missing, output a safe default, "ask=true"
 
-	# Sanitize config, normalize boolean flags (users may write =0/=1/=true/=false),
-	# and split machine_network CIDR into two vars (machine_network + prefix_length).
+	# Sanitize config and normalize boolean flags (users may write =0/=1/=true/=false).
 	# RFC 1123: domain must be lowercase for Kubernetes.
 	_normalize_export < aba.conf | \
 		sed -E	\
@@ -499,24 +566,10 @@ normalize-aba-conf() {
 			-e "s/excl_additional=1\b/excl_additional=true/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
 			-e 's/^(export domain=)(.*)/\1\L\2/'
-
-	# Resolve derived values immediately — deferred expansion like ${ocp_version%%.*}
-	# breaks when callers use eval "$(normalize-aba-conf)" because the shell expands
-	# the ${} before eval processes the exports.
-	local _ocp_ver
-	_ocp_ver=$(sed -n 's/^[[:space:]]*ocp_version=//p' aba.conf | sed -E 's/[[:space:]]*#.*//; s/[[:space:]]*$//' | head -1)
 
 	# Default verify_conf to "all" if not set or empty in config
 	grep -q '^verify_conf=\S' aba.conf 2>/dev/null || echo "export verify_conf=all"
-
-	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
-	# "true" needed, otherwise this function returns non-zero (error)
-
-	# Derived variable: OCP major version number (e.g. "4" from "4.21.14", "5" from "5.0.3").
-	# Used for CDN paths (openshift-v4/, openshift-v5/), art-dev repos, registry paths, etc.
-	[ "$_ocp_ver" ] && echo "export ocp_major=${_ocp_ver%%.*}"
 }
 
 warn_if_cluster_unstable() {
@@ -642,6 +695,7 @@ auto_complete_install() {
 }
 
 verify-aba-conf() {
+	apply_cidr_split
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f aba.conf ] && [ ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
 	[ ! -s aba.conf ] && return 0
@@ -810,19 +864,18 @@ resolved_reg_vendor() {
 normalize-cluster-conf()
 {
 	# Output only the values from cluster.conf (with defaults).
-	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
+	# CIDR split (prefix_length) is apply_cidr_split(), not an output here.
 
 	if [ ! -s cluster.conf ]; then
 		echo 'export image_source=mirror'
 		return 0
 	fi
 
-	# Sanitize config, then:
-	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
-	#   - RFC 1123: base_domain must be lowercase for Kubernetes
+	# Sanitize config. RFC 1123: base_domain must be lowercase for Kubernetes.
+	# machine_network is left as written (CIDR or address). Call apply_cidr_split
+	# when a caller needs the address and prefix_length separately.
 	_normalize_export < cluster.conf | \
 		sed -E	\
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
 			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
 	# Default image_source if not in cluster.conf
@@ -1655,21 +1708,15 @@ externalize_cluster_state() {
 	# aba.conf values to leak through the Make/aba.sh environment.
 	source <(normalize-aba-conf)
 	source <(normalize-cluster-conf)
+	apply_cidr_split
 
 	[ -z "${cluster_name:-}" ] && aba_warn "externalize_cluster_state: cluster_name not set" && return 1
 	[ -z "${base_domain:-}" ] && aba_warn "externalize_cluster_state: base_domain not set" && return 1
 
 	local _assets_dir="${ASSETS_DIR:-iso-agent-based}"
 
-	# Derive cluster_type from replica counts
 	local _cluster_type
-	if [ "${num_masters:-3}" = "1" ] && [ "${num_workers:-0}" = "0" ]; then
-		_cluster_type=sno
-	elif [ "${num_workers:-0}" = "0" ]; then
-		_cluster_type=compact
-	else
-		_cluster_type=standard
-	fi
+	_cluster_type=$(cluster_type "${num_masters:-3}" "${num_workers:-0}")
 
 	local _state_dir
 	_state_dir=$(cluster_state_dir "$cluster_name" "$base_domain")
@@ -1766,10 +1813,8 @@ show_cluster_summary() {
 	local _masters="${CP_REPLICAS:-${num_masters:-0}}"
 	local _workers="${WORKER_REPLICAS:-${num_workers:-0}}"
 
-	# Derive cluster type from replica counts
-	local _type="standard"
-	[ "$_workers" -eq 0 ] && [ "$_masters" -eq 1 ] && _type="sno"
-	[ "$_workers" -eq 0 ] && [ "$_masters" -ge 3 ] && _type="compact"
+	local _type
+	_type=$(cluster_type "$_masters" "$_workers")
 
 	local _nodes=$(( _masters + _workers ))
 
@@ -1949,6 +1994,7 @@ _valid_mirror_name() {
 }
 
 verify-cluster-conf() {
+	apply_cidr_split
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f cluster.conf ] && [ ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
@@ -1958,7 +2004,7 @@ verify-cluster-conf() {
 
 	_valid_domain "$base_domain" || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
 
-	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
+	# apply_cidr_split (above) separated a CIDR into address + prefix_length.
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
 	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: prefix_length is invalid in cluster.conf [$prefix_length]" >&2; ret=1; }
 
@@ -2386,7 +2432,7 @@ edit_file() {
 	shift
 	msg="$*"
 
-	if [ "$ask" ]; then
+	if ask_is_on; then
 		if [ ! "$editor" -o "$editor" == "none" ]; then
 			echo
 			echo_yellow "The file '$PWD/$conf_file' has been created (editor=none in aba.conf). Please edit it & repeat the same command."
@@ -2924,7 +2970,9 @@ _ver_minor() {
 ############################################
 fetch_latest_minor_version() {
 	local channel="${1:-stable}"
-	local major="${ocp_major:-4}"
+	local major
+	major="$(ocp_major_of "${ocp_version:-}")"
+	[ -n "$major" ] || major=4
 	local latest_ver minor prev
 
 	latest_ver="$(_cdn_tip_version "$channel" "$major")"
