@@ -265,6 +265,34 @@ else
 	test_fail "_recreate_cluster_dir should return 1 for missing state, got rc=$_rc"
 fi
 
+# Installed platform comes from state.sh, not the current aba.conf setting.
+echo "--- cluster_installed_platform ---"
+_plat_dir=$(mktemp -d)
+mkdir -p "$_plat_dir/clusterstate"
+printf 'platform=bm\ncluster_name=plat\n' > "$_plat_dir/clusterstate/state.sh"
+_got=$(bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_platform '$_plat_dir'")
+if [ "$_got" = "bm" ]; then
+	test_pass "cluster_installed_platform reads platform=bm from state.sh"
+else
+	test_fail "cluster_installed_platform expected bm, got '${_got:-empty}'"
+fi
+printf 'platform=vmw   # leftover comment\n' > "$_plat_dir/clusterstate/state.sh"
+_got=$(bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_platform '$_plat_dir'")
+if [ "$_got" = "vmw" ]; then
+	test_pass "cluster_installed_platform strips a trailing comment"
+else
+	test_fail "cluster_installed_platform expected vmw, got '${_got:-empty}'"
+fi
+rm -f "$_plat_dir/clusterstate/state.sh"
+_rc=0
+bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_platform '$_plat_dir'" >/dev/null || _rc=$?
+if [ "$_rc" -eq 1 ]; then
+	test_pass "cluster_installed_platform returns 1 when state.sh is missing"
+else
+	test_fail "cluster_installed_platform should return 1 when state.sh is missing, got rc=$_rc"
+fi
+rm -rf "$_plat_dir"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────

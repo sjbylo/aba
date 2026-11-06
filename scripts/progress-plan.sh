@@ -146,7 +146,7 @@ case "$1" in
 	cluster-install)
 		aba_progress "PLAN|ci_config|Review/generate configs|5"
 		aba_progress "PLAN|ci_iso|Build agent ISO|15"
-		aba_progress "PLAN|ci_vms|Stage nodes|10"
+		aba_progress "PLAN|ci_vms|Stage nodes (VMs only)|10"
 		aba_progress "PLAN|ci_boot|Boot nodes|10"
 		aba_progress "PLAN|ci_mon|Monitor installation|70"
 		;;

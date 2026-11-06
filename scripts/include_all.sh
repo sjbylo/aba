@@ -169,8 +169,31 @@ color_demo() {
     echo_bright_white   "bright white"
 }
 
+# Live Output only reads Space. A "(Ctrl-C to …)" hint there is a dead key.
+# CLI output is unchanged. The terminal Executing screen is a different
+# view, where Ctrl-C does interrupt, so it keeps its own hint.
+_aba_hide_ctrlc() {
+	local s="$1"
+	[ -z "${ABA_PROGRESS_FIFO:-}" ] && { printf '%s' "$s"; return 0; }
+	s=$(printf '%s' "$s" | sed -E \
+		-e 's/[[:space:]]*\(Ctrl-C to [^)]*\)//g' \
+		-e 's/[[:space:]]*Hit Ctrl-C to stop\.?//g')
+	printf '%s' "$s"
+}
+
 aba_info() {
 	[ ! "${INFO_ABA:-}" ] && return 0
+
+	if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
+		local _a _args=()
+		for _a in "$@"; do
+			case "$_a" in
+				-n|-m) _args+=("$_a") ;;
+				*) _args+=("$(_aba_hide_ctrlc "$_a")") ;;
+			esac
+		done
+		set -- "${_args[@]}"
+	fi
 
 	# Append to trace file (terminal output is not tee'd)
 	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $*" >> "$ABA_TRACE_FILE" 2>/dev/null
@@ -1387,6 +1410,27 @@ macs_list_from_text() {
 	grep -oE "$_MAC_ADDR_RE" <<<"$(printf '%s\n' "$1" | tr ',;' ' ')" || true
 }
 
+# Text to store in macs.conf.
+# Blank lines and whitespace at either end of a line are removed.
+# A line that contains valid MAC(s) is stored as those MACs, one per line
+# (comma or semicolon separated paste is accepted). Any other non-empty
+# line is kept, trimmed, so a bad address is not thrown away.
+macs_canonicalize_text() {
+	local text=${1-} line trimmed macs
+	[ -n "$text" ] || return 0
+	while IFS= read -r line || [ -n "$line" ]; do
+		trimmed=${line#"${line%%[![:space:]]*}"}
+		trimmed=${trimmed%"${trimmed##*[![:space:]]}"}
+		[ -n "$trimmed" ] || continue
+		macs=$(printf '%s\n' "$trimmed" | tr ',;' ' ' | grep -oE "$_MAC_ADDR_RE" || true)
+		if [ -n "$macs" ]; then
+			printf '%s\n' "$macs"
+		else
+			printf '%s\n' "$trimmed"
+		fi
+	done <<< "$text"
+}
+
 # Sourceable status for ask gates and TUI (dumb consumer: eval + display).
 #   eval "$(macs_status)"
 #   eval "$(macs_status --text "$cl_macs" --type sno --ports ens1f0)"
@@ -1488,7 +1532,7 @@ cluster_conf_outranks_agent() {
 # Human-readable macs.conf state for ask() / aba_info (compact: ~2–5 lines).
 # Same flags as macs_status, plus optional --agent PATH (default agent-config.yaml).
 # Prints: presence/ready, vs agent-config, content preview (≤3 lines), errors
-# (too few, duplicates, empty file with junk). Intelligence stays here — callers display.
+# (too few, duplicates, empty, not hex, not a MAC). Intelligence stays here — callers display.
 macs_report() {
 	local file=macs.conf text= use_text=0 agent_file=agent-config.yaml
 	local nm=${num_masters:-} nw=${num_workers:-} ports_csv=${ports:-}
@@ -1511,35 +1555,45 @@ macs_report() {
 	# shellcheck disable=SC2086
 	eval "$(macs_status "${status_args[@]}")"
 
+	# Same trim the TUI writes. Whitespace-only input is empty, not corrupt.
+	local raw_text= canon=
+	if [ "$use_text" -eq 1 ]; then
+		raw_text=$text
+	elif [ -f "$file" ]; then
+		raw_text=$(cat "$file" 2>/dev/null || true)
+	fi
+	canon=$(macs_canonicalize_text "$raw_text")
+
 	local list= uniq_count=0 dup_list=
-	if [ "$use_text" -eq 1 ]; then
-		list=$(macs_list_from_text "$text")
-	else
-		list=$(macs_list_from_file "$file")
-	fi
-	if [ -n "$list" ]; then
-		uniq_count=$(printf '%s\n' "$list" | sort -u | wc -l)
-		uniq_count=${uniq_count// /}
-		dup_list=$(printf '%s\n' "$list" | sort | uniq -d | tr '\n' ' ')
-		dup_list=${dup_list%% }
-	fi
-
-	local present=0
-	if [ "$use_text" -eq 1 ]; then
-		[ -n "$text" ] && present=1
-	else
-		[ -s "$file" ] && present=1
-	fi
-
 	local ready_word="NOT READY" vs_agent=""
 	local -a errors=() warns=()
-	if [ "$present" -eq 0 ]; then
+	if [ -z "$canon" ]; then
 		printf 'macs.conf: missing/empty — NOT READY (need %s = %s node(s) × %s port(s))\n' \
 			"$mac_expected" "$mac_nodes" "$mac_ports"
 		return 0
 	fi
 
-	if [ "${mac_count:-0}" -eq 0 ]; then
+	list=$(macs_list_from_text "$canon")
+	if [ -n "$list" ]; then
+		# Case-insensitive: AA:BB:… and aa:bb:… are the same address.
+		uniq_count=$(printf '%s\n' "$list" | tr '[:upper:]' '[:lower:]' | sort -u | wc -l)
+		uniq_count=${uniq_count// /}
+		dup_list=$(printf '%s\n' "$list" | tr '[:upper:]' '[:lower:]' | sort | uniq -d | tr '\n' ' ')
+		dup_list=${dup_list%% }
+	fi
+
+	local _bad
+	while IFS= read -r _bad || [ -n "$_bad" ]; do
+		[ -n "$_bad" ] || continue
+		_valid_mac "$_bad" && continue
+		if [[ "$_bad" == *:* ]]; then
+			errors+=("not hex: $_bad")
+		else
+			errors+=("not a MAC address: $_bad")
+		fi
+	done <<< "$canon"
+
+	if [ "${mac_count:-0}" -eq 0 ] && [ "${#errors[@]}" -eq 0 ]; then
 		errors+=("no valid MAC addresses found (file has content but nothing matched aa:bb:cc:dd:ee:ff)")
 	fi
 	if [ "${mac_count:-0}" -gt 0 ] && [ "${uniq_count:-0}" -ne "${mac_count:-0}" ]; then
@@ -1680,6 +1734,31 @@ cluster_is_installed() {
 	local _sd
 	_sd=$(cluster_state_dir "$@") || return 1
 	[[ -s "$_sd/state.sh" ]]
+}
+
+# Platform this cluster was installed with (bm, vmw, kvm).
+# Recorded in clusterstate/state.sh. aba.conf platform is only the setting
+# for the next install and can change afterwards.
+# Usage: cluster_installed_platform [cluster-dir]
+# Prints the value and returns 0, or returns 1 if state has no platform.
+cluster_installed_platform() {
+	local _dir="${1:-$PWD}" _state _plat
+	if [ -s "$_dir/clusterstate/state.sh" ]; then
+		_state="$_dir/clusterstate/state.sh"
+	elif [ -s "$_dir/state.sh" ]; then
+		_state="$_dir/state.sh"
+	else
+		return 1
+	fi
+	_plat=$(grep '^platform=' "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+	_plat=${_plat%%#*}
+	_plat=${_plat#\'}; _plat=${_plat%\'}
+	_plat=${_plat#\"}; _plat=${_plat%\"}
+	# Trim surrounding whitespace
+	_plat=${_plat#"${_plat%%[![:space:]]*}"}
+	_plat=${_plat%"${_plat##*[![:space:]]}"}
+	[ -n "$_plat" ] || return 1
+	printf '%s\n' "$_plat"
 }
 
 # Quick TCP probe of cluster API (3s timeout).
@@ -2534,7 +2613,7 @@ _aba_format_elapsed() {
 #
 # Uses ( ) function body so job table, traps, and set options are isolated.
 aba_wait_show() (
-	msg=$1
+	msg=$(_aba_hide_ctrlc "$1")
 	interval=$2
 	max=$3
 	shift 3

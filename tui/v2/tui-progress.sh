@@ -247,8 +247,13 @@ _tp_draw() {
 		_subtitle="\n     ⚠  ABA needs input — press < Output (Space) >\n"
 	fi
 
-	# Dynamic height: 10 rows for chrome (title, subtitle, progress bar) + 1 per step, min 18
-	local _height=$(( ${#_tp_order[@]} + 10 ))
+	# Dynamic height: 10 rows for chrome (title, subtitle, progress bar) + 1 per step, min 18.
+	# A longer subtitle (the success hint) needs one more row so the bar is not clipped.
+	local _sub_lines _extra=0
+	_sub_lines=$(printf '%s' "$_subtitle" | wc -l)
+	_sub_lines=${_sub_lines// /}
+	[ "${_sub_lines:-0}" -gt 2 ] && _extra=$(( _sub_lines - 2 ))
+	local _height=$(( ${#_tp_order[@]} + 10 + _extra ))
 	[ "$_height" -lt 18 ] && _height=18
 
 	_tp_dlg --backtitle "$(ui_backtitle)" --title " $_title " \
@@ -339,6 +344,24 @@ _tp_sweep_skipped() {
 # Prompt handling
 # ============================================================
 
+# dialog --colors: whole WARN / ERROR / IMPORTANT lines in red.
+# Applied here so CLI ask() text stays plain.
+_tp_color_alerts() {
+	local _line _out="" _first=1
+	while IFS= read -r _line || [ -n "$_line" ]; do
+		if [[ "$_line" == *WARN:* || "$_line" == *ERROR:* || "$_line" == *IMPORTANT:* ]]; then
+			_line=$'\\Z1'"${_line}"$'\\Zn'
+		fi
+		if [ "$_first" -eq 1 ]; then
+			_out="$_line"
+			_first=0
+		else
+			_out="${_out}"$'\n'"${_line}"
+		fi
+	done <<< "$1"
+	printf '%s' "$_out"
+}
+
 _tp_handle_prompt() {
 	local _raw="$1" rc=0
 	# Extract default from "question|y" or "question|n" format
@@ -354,12 +377,14 @@ _tp_handle_prompt() {
 	# (line-oriented), expanded here for dialog only. CLI ask() never sees
 	# this path — it prints $* with real newlines before read.
 	_prompt="${_prompt//\\n/$'\n'}"
+	_prompt=$(_tp_color_alerts "$_prompt")
 
 	# dialog turns real newlines into spaces unless --cr-wrap. Without it the
 	# boot ask is one paragraph and a long `dd` line breaks mid-token.
 	# --no-collapse keeps the blank line between sections.
+	# --colors makes \Z1 (from _tp_color_alerts) red. dlg() also passes it.
 	_tp_dlg --backtitle "$(ui_backtitle)" --title " ABA " --yes-label "Yes" --no-label "No" $_default_flag \
-		--cr-wrap --no-collapse \
+		--colors --cr-wrap --no-collapse \
 		--yesno "\n$_prompt" 0 0 || rc=$?
 	case "$rc" in
 		0) printf 'y\r' > "$_tp_input_fifo" ;;
@@ -423,25 +448,24 @@ _tp_show_output() {
 		clear 2>/dev/null
 		printf '\033[1;33m'
 		printf '═══════════════════════════════════════════════════════\n'
-		printf '  ABA Live Output         (press any key to return)\n'
+		printf '  ABA Live Output         (press Space to return)\n'
 		printf '═══════════════════════════════════════════════════════\n'
 		printf '\033[0m\n'
 		cat "$_tp_output_log" 2>/dev/null
 		tail -n 0 -f "$_tp_output_log" 2>/dev/null &
 		_tp_tail_pid=$!
-		# Poll for keypress or command completion — no background processes needed.
+		# Only Space leaves this view. Other keys stay here so a stray
+		# keypress cannot drop the user back onto the progress dialog.
 		# When the command finishes, print a hint (header may have scrolled off).
 		local _tp_hint_shown=0
 		while true; do
 			if IFS= read -rsn1 -t 1 _key 2>/dev/null; then
-				break
+				[ "$_key" = ' ' ] && break
 			fi
 			if [[ "$_tp_hint_shown" -eq 0 ]] && ! kill -0 "$_tp_script_pid" 2>/dev/null; then
 				sleep 0.3
-				printf '\n\033[1;33m  ── Command finished. Press any key to return ──\033[0m\n'
+				printf '\n\033[1;33m  ── Command finished. Press Space to return ──\033[0m\n'
 				_tp_hint_shown=1
-				read -rsn1 || true
-				break
 			fi
 		done
 		kill "$_tp_tail_pid" 2>/dev/null || true
@@ -486,11 +510,15 @@ _tp_show_error() {
 	# Show only the first ERROR (the most specific/tailored one).
 	# aba_abort auto-emits ERROR, so duplicates are expected — first wins.
 	[ "${#_tp_errors[@]}" -eq 0 ] && _msg="${_msg}\n  A step failed.\n"
-	[ "${#_tp_errors[@]}" -gt 0 ] && _msg="${_msg}\n  ERROR: ${_tp_errors[0]}\n"
+	[ "${#_tp_errors[@]}" -gt 0 ] && _msg="${_msg}\n  \\Z1ERROR: ${_tp_errors[0]}\\Zn\n"
 	if [ "${#_tp_details[@]}" -gt 0 ]; then
 		_msg="${_msg}\n"
 		for line in "${_tp_details[@]}"; do
-			_msg="${_msg}  ${line}\n"
+			if [[ "$line" == *WARN:* || "$line" == *ERROR:* ]]; then
+				_msg="${_msg}  \\Z1${line}\\Zn\n"
+			else
+				_msg="${_msg}  ${line}\n"
+			fi
 		done
 	fi
 	if [ "${#_tp_nexts[@]}" -gt 0 ]; then
@@ -531,48 +559,57 @@ _tp_show_stopped() {
 		--msgbox "\n  Stopped before all steps finished.\n" 8 56 || true
 }
 
+# Bracket field mixedgauge uses: 14 columns, status centered in the 12-wide gap.
+# "No-op" is our label for status 6 (dialog would say "Skipped").
+_tp_status_bracket() {
+	local _label="$1" _slen _off _left _right
+	_slen=${#_label}
+	_off=$(( (13 - _slen) / 2 ))
+	_left=$(( _off - 1 ))
+	[ "$_left" -lt 0 ] && _left=0
+	_right=$(( 12 - _left - _slen ))
+	[ "$_right" -lt 0 ] && _right=0
+	printf '[%*s%s%*s]' "$_left" '' "$_label" "$_right" ''
+}
+
 _tp_show_success() {
 	local _title="${1:-ABA}"
-	local _body id text status _label _color _pad
-	local _max_len=34
+	local _body id text status _label _bracket _row _height _rc
 
-	# Build colored status text from the step arrays
+	# Same rows as the live mixedgauge (name in a 38-column field, then the
+	# bracket). Literal \n so dialog keeps the line breaks. Height must be
+	# explicit: dialog autosize drops this prompt and draws an empty box.
 	_body="\n"
 	for id in "${_tp_order[@]}"; do
 		text="${_tp_text[$id]:-$id}"
 		status="${_tp_status[$id]:-9}"
+		[ "$status" = "77" ] && status="7"
 		case "$status" in
-			0)  _label=" Succeeded "; _color="\\Z2" ;;
-			1)  _label="  Failed   "; _color="\\Z1" ;;
-			6)  _label="   No-op   "; _color="\\Z2" ;;
-			7)  _label="In Progress"; _color="\\Z5" ;;
-			9)  _label="    N/A    "; _color="" ;;
-			*)  _label="$status"; _color="" ;;
+			0) _label="Succeeded" ;;
+			1) _label="Failed" ;;
+			6) _label="No-op" ;;
+			7) _label="In Progress" ;;
+			9) _label="N/A" ;;
+			*) _label="$status" ;;
 		esac
-		_pad=$(( _max_len - ${#text} ))
-		[ "$_pad" -lt 1 ] && _pad=1
-		if [ -n "$_color" ]; then
-			_body="${_body}  ${text}$(printf '%*s' "$_pad" '')${_color}[${_label}]\\Zn\n"
-		else
-			_body="${_body}  ${text}$(printf '%*s' "$_pad" '')[${_label}]\n"
-		fi
+		_bracket=$(_tp_status_bracket "$_label")
+		text="${text:0:38}"
+		printf -v _row '%-38s%s' "$text" "$_bracket"
+		_body="${_body}${_row}\n"
 	done
-	_body="${_body}\n  \\Z2✓  All steps completed successfully.\\Zn\n "
+	_body="${_body}\n  All steps completed successfully.\n "
 
-	local _height=$(( ${#_tp_order[@]} + 8 ))
-	[ "$_height" -lt 14 ] && _height=14
+	_height=$(( ${#_tp_order[@]} + 8 ))
+	[ "$_height" -lt 12 ] && _height=12
 
-	local _default_btn=""
 	while true; do
-		local _rc=0
-		_tp_dlg --backtitle "$(ui_backtitle)" --colors $_default_btn \
-			--title " $_title " \
+		_rc=0
+		_tp_dlg --backtitle "$(ui_backtitle)" --title " $_title " \
 			--yes-label "Done" --no-label "Output" \
-			--yesno "$_body" \
-			"$_height" 56 || _rc=$?
+			--yesno "$_body" "$_height" 56 || _rc=$?
 		case "$_rc" in
-			0|255) break ;;
-			1) _default_btn="--defaultno"; _tp_show_output ;;
+			1) _tp_show_output ;;
+			*) break ;;
 		esac
 	done
 }
@@ -635,8 +672,9 @@ _exec_with_progress() {
 	_tp_script_pid=$!
 
 	# Show immediate feedback while waiting for the command to emit PLAN events.
-	# 0 0 lets dialog size the box to the title and the text.
-	_tp_dlg --backtitle "$(ui_backtitle)" --title " $title " --infobox "\n  One moment please ..." 0 0 2>/dev/null || true
+	# 0 0 lets dialog size the box to the title. The extra newline is the blank
+	# row under the sentence; dialog drops a single trailing newline when autosizing.
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " $title " --infobox "\n  One moment please ...\n\n" 0 0 2>/dev/null || true
 
 	# Wait for PLAN events before first draw (10s timeout — aba.sh startup takes ~4s)
 	local _wait=100
@@ -671,7 +709,7 @@ _exec_with_progress() {
 				# isn't swallowed by dialog redraws in rapid succession.
 				if IFS= read -rsn1 -t 0.2 key; then
 					case "$key" in
-						o|O|' ') _tp_show_output ;;
+						' ') _tp_show_output ;;
 						q|Q|$'\e') _rc=1; break ;;
 					esac
 				fi
@@ -731,7 +769,7 @@ _exec_with_progress() {
 			# isn't swallowed by dialog redraws in rapid succession.
 			if IFS= read -rsn1 -t 0.2 key; then
 				case "$key" in
-					o|O|' ') _tp_show_output ;;
+					' ') _tp_show_output ;;
 					q|Q|$'\e') _rc=1; break ;;
 				esac
 			fi
@@ -745,7 +783,7 @@ _exec_with_progress() {
 
 		if IFS= read -rsn1 -t 0.4 key; then
 			case "$key" in
-				o|O|' ') _tp_show_output ;;
+				' ') _tp_show_output ;;
 				q|Q|$'\e')
 					# Leave before the command finishes. Callers treat 0 as
 					# success and would offer Day-2 on a mirror that was not updated.

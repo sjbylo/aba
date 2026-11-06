@@ -210,11 +210,11 @@ _bm_type_gates() {
 	_bm_replace_macs "$_MAC1"
 	_scr=$(tui_capture)
 	tui_screenshot "bm-${name}-warn"
-	if echo "$_scr" | grep -q "needs $need"; then
-		echo "  ✓ PASS: $name warns that it needs $need MACs"
+	if echo "$_scr" | grep -q "need $need" && echo "$_scr" | grep -q "Save anyway"; then
+		echo "  ✓ PASS: $name asks to save anyway when it needs $need MACs"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: $name did not warn that it needs $need MACs"
+		echo "  ✗ FAIL: $name did not ask to save anyway when it needs $need MACs"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	tui_keys Enter
@@ -413,7 +413,7 @@ tui_press_button "Next"
 sleep 2
 
 echo ""
-echo "--- 3. Interfaces: two ports, one MAC warns and does not block ---"
+echo "--- 3. Interfaces: two ports, one MAC asks Save anyway ---"
 tui_wait_for "Interface\|Ports\|MAC" 10
 tui_assert_title "Interfaces" "Interfaces page"
 tui_screenshot "bm-03-iface"
@@ -436,11 +436,11 @@ tui_keys Enter; sleep 1
 _bm_replace_macs "$_MAC1"
 _scr=$(tui_capture)
 tui_screenshot "bm-03-mac-warn"
-if echo "$_scr" | grep -qi "Warning: 1 MAC"; then
-	echo "  ✓ PASS: short MAC list warns"
+if echo "$_scr" | grep -q "too few" && echo "$_scr" | grep -q "Save anyway"; then
+	echo "  ✓ PASS: short MAC list asks to save anyway"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ✗ FAIL: expected a warning for 1 MAC on 2 ports"
+	echo "  ✗ FAIL: expected Save anyway for 1 MAC on 2 ports"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Enter

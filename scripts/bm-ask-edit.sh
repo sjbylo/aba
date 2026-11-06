@@ -80,65 +80,119 @@ fi
 eval "$(macs_status)"
 _mac_rpt=$(macs_report)
 
+# TUI progress dialog is up when the install was started from the wizard.
+_bm_in_tui() { [ -n "${ABA_PROGRESS_FIFO:-}" ]; }
+
 # Fix steps for the current UI. One copy of each sentence.
-# TUI preferred = cluster install wizard. CLI preferred = macs.conf.
-# Prints lines on stdout (for ask / aba_abort).
-# $2 = next → also emit TUI NEXT events (only on a stop/abort, not while building the ask).
+# TUI preferred = Cluster Install wizard (NEXT events only; the error line stays the failure).
+# CLI preferred = macs.conf (printed for ask / aba_abort).
+# $2 = next → emit TUI NEXT events (only on a stop, not while building the ask).
 # $1 = placeholders | missing | declined
 _bm_fix_text() {
 	local _why=$1 _next=${2:-}
-	if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
+	if _bm_in_tui; then
 		if [ -n "$_next" ]; then
-			aba_progress "NEXT|Go back to the cluster install wizard and add the MACs (preferred), then Retry"
+			aba_progress "NEXT|Go back to the Cluster Install wizard and add the MAC addresses (preferred), then Retry"
 			case "$_why" in
 				placeholders)
-					aba_progress "NEXT|Or edit macs.conf, then Retry"
+					aba_progress "NEXT|Or edit the MAC addresses (macs.conf), then Retry"
 					aba_progress "NEXT|Or replace ${BM_MAC_PLACEHOLDER} in agent-config.yaml, then Retry"
 					;;
 				missing)
-					aba_progress "NEXT|Or edit macs.conf, or create agent-config.yaml, then Retry"
+					aba_progress "NEXT|Or edit the MAC addresses (macs.conf), or create agent-config.yaml, then Retry"
+					;;
+				*)
+					aba_progress "NEXT|Or edit the MAC addresses (macs.conf) or agent-config.yaml, then Retry"
 					;;
 			esac
 		fi
-		case "$_why" in
-			placeholders)
-				printf '%s\n' \
-					"Go back to the cluster install wizard and add the MACs (preferred), then Retry." \
-					"Or edit macs.conf, or replace ${BM_MAC_PLACEHOLDER} in agent-config.yaml, then Retry."
-				;;
-			missing)
-				printf '%s\n' \
-					"Go back to the cluster install wizard and add the MACs (preferred), then Retry." \
-					"Or edit macs.conf, or create agent-config.yaml, then Retry."
-				;;
-			*)
-				printf '%s\n' \
-					"Go back to the cluster install wizard and add the MACs (preferred), then Retry. Or edit macs.conf or agent-config.yaml, then Retry."
-				;;
-		esac
-	else
-		case "$_why" in
-			placeholders)
-				printf '%s\n' \
-					"Fix, then re-run the SAME command:" \
-					"    $(aba_cmd install)" \
-					"  - add the missing MACs to macs.conf (preferred), or" \
-					"  - replace ${BM_MAC_PLACEHOLDER} in agent-config.yaml" \
-					"(Quit or Ctrl-C, edit, and re-run does the same.)"
-				;;
-			missing)
-				printf '%s\n' \
-					"Add MACs to macs.conf (preferred), or create agent-config.yaml, then re-run the SAME command:" \
-					"    $(aba_cmd install)"
-				;;
-			*)
-				printf '%s\n' \
-					"Edit macs.conf (preferred) or agent-config.yaml, then re-run" \
-					"    the SAME command (Quit or Ctrl-C and re-run does the same):" \
-					"    $(aba_cmd install)"
-				;;
-		esac
+		return 0
 	fi
+	case "$_why" in
+		placeholders)
+			printf '%s\n' \
+				"Fix, then re-run the SAME command:" \
+				"    $(aba_cmd install)" \
+				"  - add the missing MACs to macs.conf (preferred), or" \
+				"  - replace ${BM_MAC_PLACEHOLDER} in agent-config.yaml" \
+				"(Quit or Ctrl-C, edit, and re-run does the same.)"
+			;;
+		missing)
+			printf '%s\n' \
+				"Add MACs to macs.conf (preferred), or create agent-config.yaml, then re-run the SAME command:" \
+				"    $(aba_cmd install)"
+			;;
+		*)
+			printf '%s\n' \
+				"Edit macs.conf (preferred) or agent-config.yaml, then re-run" \
+				"    the SAME command (Quit or Ctrl-C and re-run does the same):" \
+				"    $(aba_cmd install)"
+			;;
+	esac
+}
+
+# macs_report, with the TUI label. The placeholder token is a CLI hint only.
+_bm_mac_report() {
+	local _rpt
+	_rpt=$(macs_report)
+	if _bm_in_tui; then
+		_rpt=${_rpt/macs.conf:/MAC addresses (macs.conf):}
+		_rpt=${_rpt// — missing slots are ${BM_MAC_PLACEHOLDER}/}
+	fi
+	printf '%s\n' "$_rpt"
+}
+
+# Question and Yes/No lines. Counts come from the macs_status eval above.
+_bm_tui_mac_question() {
+	if grep -F -q "$BM_MAC_PLACEHOLDER" agent-config.yaml 2>/dev/null; then
+		printf '%s\n' \
+			"WARN: The list is still short: ${mac_count:-0} of ${mac_expected:-?} required MAC(s)." \
+			"Go back to the cluster install wizard and add every MAC address (preferred)." \
+			"Or edit the MAC addresses (macs.conf), or replace ${BM_MAC_PLACEHOLDER} in agent-config.yaml." \
+			"" \
+			"Have all ${mac_expected:-?} required MAC addresses been added?" \
+			"  Yes: re-check. Continue only when every required MAC is a real address." \
+			"  No: stop this run and go back to the Cluster Install wizard"
+		return 0
+	fi
+	printf '%s\n' \
+		"Are the MAC addresses correct?" \
+		"  Yes: build the agent ISO." \
+		"  No: stop this run and go back to the Cluster Install wizard"
+}
+
+# Full ask body. CLI keeps file paths and the re-run command.
+_bm_mac_ask() {
+	local _rpt _q _yes_help _no_help
+	_rpt=$(_bm_mac_report)
+	if _bm_in_tui; then
+		_q=$(_bm_tui_mac_question)
+		printf '%s\n' \
+			"======== Bare-metal MAC check ========" \
+			"" \
+			"$_rpt" \
+			"" \
+			"agent-config.yaml: $PWD/agent-config.yaml" \
+			"" \
+			"$_q"
+		return 0
+	fi
+	_yes_help="Yes: build the agent ISO."
+	_no_help=$(_bm_fix_text declined)
+	if grep -F -q "$BM_MAC_PLACEHOLDER" agent-config.yaml 2>/dev/null; then
+		_yes_help="Placeholder MAC(s) ${BM_MAC_PLACEHOLDER} were just written.
+Edit macs.conf or agent-config.yaml now, then Yes.
+Yes: re-check. Continue only when every required MAC is a real address."
+	fi
+	printf '%s\n' "======== Bare-metal MAC check ========
+
+$_rpt
+
+agent-config.yaml: $PWD/agent-config.yaml
+macs.conf:         $PWD/macs.conf
+
+${_yes_help}
+No: stop this run. ${_no_help}"
 }
 
 # Placeholders mean the ISO must not be built. One stop block, no Yes/No.
@@ -148,7 +202,6 @@ _bm_stop_if_placeholders() {
 	grep -F -q "$BM_MAC_PLACEHOLDER" agent-config.yaml 2>/dev/null || return 0
 	local -a _fix=() _rpt=()
 	local _line=
-	mapfile -t _fix < <(_bm_fix_text placeholders next)
 	# One argument per line. aba_abort prefixes each argument, same as aba_info -m.
 	if [ -n "$_mac_rpt" ]; then
 		while IFS= read -r _line; do
@@ -156,12 +209,15 @@ _bm_stop_if_placeholders() {
 		done <<< "$_mac_rpt"
 	fi
 	aba_progress "FAIL|ci_config"
-	aba_progress "DETAIL|Have ${mac_count:-0} of ${mac_expected:-?} MAC(s) in macs.conf."
-	aba_progress "DETAIL|macs.conf: $PWD/macs.conf"
-	aba_progress "DETAIL|agent-config.yaml: $PWD/agent-config.yaml"
 	aba_info "======== Bare-metal MAC check ========"
+	# Dialog ERROR is this sentence only. The remedy is the NEXT events.
+	if _bm_in_tui; then
+		_bm_fix_text placeholders next >/dev/null
+		aba_abort "Stopped. agent-config.yaml still contains placeholder MAC(s) ${BM_MAC_PLACEHOLDER}. Have ${mac_count:-0} of ${mac_expected:-?} required MAC(s)."
+	fi
+	mapfile -t _fix < <(_bm_fix_text placeholders next)
 	aba_abort "Stopped: agent-config.yaml still contains placeholder MAC(s) ${BM_MAC_PLACEHOLDER}." \
-		"Have ${mac_count:-0} of ${mac_expected:-?} MAC(s) (${mac_nodes:-?} nodes × ${mac_ports:-?} port)." \
+		"Have ${mac_count:-0} of ${mac_expected:-?} required MAC(s) (${mac_nodes:-?} nodes × ${mac_ports:-?} port)." \
 		"macs.conf:         $PWD/macs.conf" \
 		"agent-config.yaml: $PWD/agent-config.yaml" \
 		"${_rpt[@]}" \
@@ -181,28 +237,15 @@ if [ ! -f agent-config.yaml ]; then
 	aba_abort "Stopped: agent-config.yaml was not created." "${_fix[@]}"
 fi
 
-# Real MACs: confirm and build. Fresh placeholders: pause so the user can edit first.
-# Preferred fix differs: TUI = cluster install wizard; CLI = macs.conf.
-_no_help=$( _bm_fix_text declined )
-_yes_help="Yes: build the agent ISO."
-if grep -F -q "$BM_MAC_PLACEHOLDER" agent-config.yaml 2>/dev/null; then
-	_yes_help="Placeholder MAC(s) ${BM_MAC_PLACEHOLDER} were just written.
-Edit macs.conf or agent-config.yaml now, then Yes.
-Yes: re-check. Continue only if the placeholders are gone."
-fi
 # Record the question before it is shown. No does not return to the Makefile,
 # so .bm-config-reviewed is not touched on that path.
 touch .bm-config-asked
-if ! ask -y --always "======== Bare-metal MAC check ========
-
-$_mac_rpt
-
-agent-config.yaml: $PWD/agent-config.yaml
-macs.conf:         $PWD/macs.conf
-
-${_yes_help}
-No: stop this run. ${_no_help}"; then
+if ! ask -y --always "$(_bm_mac_ask)"; then
 	aba_progress "FAIL|ci_config"
+	if _bm_in_tui; then
+		_bm_fix_text declined next >/dev/null
+		aba_abort "Stopped. The MAC addresses are not ready."
+	fi
 	mapfile -t _fix < <(_bm_fix_text declined next)
 	aba_abort "Aborted. ${_fix[*]}"
 fi

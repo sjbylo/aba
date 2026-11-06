@@ -121,11 +121,21 @@ else
 	_fail "bm-ask-edit missing unified review ask"
 fi
 if grep -q 'macs.conf (preferred)' scripts/bm-ask-edit.sh \
-	&& grep -q 'cluster install wizard and add the MACs (preferred), then Retry' scripts/bm-ask-edit.sh \
+	&& grep -q 'Cluster Install wizard and add the MAC addresses (preferred), then Retry' scripts/bm-ask-edit.sh \
 	&& ! grep -q 'edit macs.conf (preferred), then Retry' scripts/bm-ask-edit.sh; then
 	_pass "CLI prefers macs.conf; TUI prefers the cluster install wizard"
 else
 	_fail "preferred path must be macs.conf on CLI and the wizard on TUI"
+fi
+if grep -q 'Have all ${mac_expected:-?} required MAC addresses been added?' scripts/bm-ask-edit.sh \
+	&& grep -q 'stop this run and go back to the Cluster Install wizard' scripts/bm-ask-edit.sh \
+	&& grep -q 'missing slots are ${BM_MAC_PLACEHOLDER}' scripts/bm-ask-edit.sh \
+	&& grep -q 'Have the servers been booted with the ISO file?' scripts/bm-ask-boot.sh \
+	&& grep -q 'start monitoring installation progress' scripts/bm-ask-boot.sh \
+	&& grep -q 'aba_cmd write-usb' scripts/bm-ask-boot.sh; then
+	_pass "TUI asks name the wizard and keep write-usb; placeholder token is stripped for the TUI report"
+else
+	_fail "TUI MAC/boot wording drifted"
 fi
 if grep -q "BM_MAC_PLACEHOLDER='xx:xx:xx:xx:xx:xx'" scripts/include_all.sh \
 	&& grep -q 'BM_MAC_PLACEHOLDER' scripts/create-agent-config.sh \
@@ -201,10 +211,10 @@ if grep -q 'macs_status' tui/v2/tui-cluster.sh && ! grep -qE '_expected_macs=\$\
 else
 	_fail "TUI must call macs_status, not local expected-count math"
 fi
-if grep -q 'Stage nodes' scripts/progress-plan.sh; then
-	_pass "progress plan labels ci_vms as Stage nodes"
+if grep -q 'Stage nodes (VMs only)' scripts/progress-plan.sh; then
+	_pass "progress plan labels ci_vms as Stage nodes (VMs only)"
 else
-	_fail "ci_vms plan label should be Stage nodes"
+	_fail "ci_vms plan label should be Stage nodes (VMs only)"
 fi
 
 # Runtime layout: cluster dir with scripts → ../scripts

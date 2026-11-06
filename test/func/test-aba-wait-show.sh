@@ -546,6 +546,26 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 [ "$stress_ok" -eq 1 ] && _pass "10 rapid successive calls all succeed"
 
+# --------------------------------------------------------------------------
+# 21. TUI progress output hides Ctrl-C hints; CLI keeps them
+# --------------------------------------------------------------------------
+echo "── 21. Ctrl-C hint hidden only under the progress dialog ──"
+
+out="$TMPDIR_TEST/t21-cli.out"
+rc=0
+aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 1 2 false > "$out" 2>&1 || rc=$?
+assert_rc 1 "$rc" "CLI wait still times out"
+assert_output_matches "$out" 'Ctrl-C to abort' "CLI wait keeps the Ctrl-C hint"
+_show_output "$out"
+
+out="$TMPDIR_TEST/t21-tui.out"
+rc=0
+ABA_PROGRESS_FIFO=/dev/null aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 1 2 false > "$out" 2>&1 || rc=$?
+assert_rc 1 "$rc" "TUI wait still times out"
+assert_output_matches "$out" 'Waiting for cluster API' "TUI wait keeps the action text"
+assert_output_no_match "$out" 'Ctrl-C' "TUI wait drops the Ctrl-C hint"
+_show_output "$out"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""

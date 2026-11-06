@@ -1381,6 +1381,12 @@ done
 # Guard for VM lifecycle targets: validate platform + hypervisor config
 _ensure_vm_platform_ready() {
 	source <(cd "$ABA_ROOT" && normalize-aba-conf)
+	# An installed cluster keeps its platform in state.sh.
+	local _from_state= _installed=
+	if _installed=$(cluster_installed_platform "$PWD"); then
+		platform=$_installed
+		_from_state=1
+	fi
 	case "$platform" in
 		vmw)
 			# Remove dangling symlink so ln can recreate it
@@ -1395,7 +1401,12 @@ _ensure_vm_platform_ready() {
 			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
 			ensure_virsh
 			;;
-		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
+		bm)
+			if [ "$_from_state" ]; then
+				aba_abort "This cluster was installed on bare metal (platform=bm in state.sh)."
+			fi
+			aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf"
+			;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
 	esac
 	[ -f agent-config.yaml ] || aba_warn "agent-config.yaml not found. Run 'aba cluster' first."
@@ -1690,6 +1701,9 @@ if [ "$cur_target" ]; then
 			make -s init 2>/dev/null || aba_warn "Cluster .init failed — proceeding with best-effort delete."
 
 			source <(cd "$ABA_ROOT" && normalize-aba-conf)
+			if _installed=$(cluster_installed_platform "$PWD"); then
+				platform=$_installed
+			fi
 			case "$platform" in
 				vmw|kvm)
 					# Best-effort: missing vmware.conf/kvm.conf must not block cleanup —

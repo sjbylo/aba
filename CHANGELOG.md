@@ -2,11 +2,28 @@
 
 ### Changed
 
+- **Progress live output drops Ctrl-C hints** — Waits still say "(Ctrl-C to skip)" on the command line. In the progress dialog that key is not delivered, so the hint is left off.
+- **Release-images warning has hotkeys** — I includes release images, K keeps them excluded, D clears the upgrade target.
+- **Include release images regenerates the ImageSet file** — Choosing Include starts the usual background ImageSet regen. View Config waits until that file is ready, so the platform section is no longer left commented out.
+- **Install-status dialog names more than one cluster** — When only one install is being checked, the box also names up to two other clusters that exist.
+- **Terminal runs say Ctrl-C interrupts** — The "Executing:" screen tells you Ctrl-C stops the command and returns to the menu.
+- **Prepare Upgrade has a Help button** — Explains the base version, Next minor vs Z-stream, and why the same version can appear twice with `[switch to fast]`.
+- **Wait dialogs have a blank line above and below the text** — Infoboxes such as "One moment please...", "Generating ImageSet configuration...", and "Fetching available upgrade versions..." no longer sit flush against the frame.
+- **Install success lists the steps like the progress dialog** — Same name and `[ Succeeded ]` / `[   No-op    ]` columns. Real buttons: Enter/Done closes, Output opens the log.
+- **Stage nodes is labeled VMs only** — The install progress step says `Stage nodes (VMs only)`, so a bare-metal run showing No-op is the VM step being skipped.
 - **Bare-metal install is continuous (#B80)** — One `aba install` / `make install` for BM (edit + boot `ask()` gates) instead of three Make stops (`.bm-message` / `.bm-nextstep` removed). VM stamps renamed to `.vms-stopped` / `.iso-uploaded` / `.vms-ready`; wait-agent on install chain only (`aba mon` skips it). TUI BM runs full install with progress prompts (no forced ISO-only step). Primed beta: no `.bm-message` fabrication; recreate primed/transfer artifacts after upgrade. No BC shims for old stamp names.
 - **Skip agent wait on manual BM** — `wait-agent-up.sh` exits immediately when `platform=bm` and `bmc.conf` has no `bmc_host_*` nodes (USB/virtual-media walk-away). Still waits after BMC auto-boot and on vmw/kvm so `openshift-install wait-for` does not race a just-powered node.
 - **BMC host helpers** — `bmc_host_list` / `bmc_host_count` / `bmc_has_hosts` in `include_all.sh` replace duplicated `bmc_host_*` greps (wait-agent, ask-boot, preflight, bmc-boot/unmount, cluster-config).
 - **Conf reads and derived values (ADR-005)** — `fetch_value` reads one raw key. `normalize-*-conf` still only coerces and defaults the same key: it no longer emits `ocp_major` or splits `machine_network` into `prefix_length`, and `-y` no longer clears `ask` inside normalize. Formulas live in helpers (`ocp_major_of`, `apply_cidr_split`, `cluster_type` / `is_sno`, `ask_is_on`).
 - **Warnings are yellow** — `aba_warn` defaults to yellow. Red stays for `aba_error` and `aba_abort`.
+- **Live output is Space only** — Space opens the progress dialog's live output and Space returns to the dialog. Other keys no longer leave that view.
+- **Short or invalid MAC list asks before it replaces macs.conf** — Save anyway / Cancel uses `macs_report` (too few, duplicate, empty, not hex, not a MAC). Save anyway writes the list with blank lines and surrounding spaces removed; an empty list clears the file. Cancel leaves the previous file unchanged.
+- **Bare-metal progress asks say when to continue (#B97)** — The TUI MAC ask continues only when every required MAC is a real address. No returns to the Cluster Install wizard. The boot ask's Yes starts monitoring; No stops the run. The error line states the failure. The remedy is listed once under Possible next steps. CLI text is unchanged.
+
+### Fixed
+
+- **Bare-metal startup asks you to power on the servers** — Whether a cluster is bare metal comes from that cluster's `state.sh`, not the current `platform` in aba.conf (that setting is for the next install and can change). A leftover `vmware.conf` no longer sends a bare-metal cluster into `aba start`. When the API is down, startup `ask()`s you to turn the servers on, then waits.
+- **Install and mirror config render `ocp_major`** — After `ocp_version` is loaded, `create-install-config.sh` and `create-mirror-conf.sh` set `ocp_major` and abort if that number is missing or the template fails. A failed render no longer writes an install config with no `ImageDigestSources`, or a `mirror.conf` with `reg_path=/ocp/openshift`.
 
 ---
 
