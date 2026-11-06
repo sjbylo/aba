@@ -39,19 +39,14 @@ _scan_cluster_dir() {
 	# Read cluster config
 	local _num_masters="" _num_workers="" _cname="" _bdomain=""
 	if [ -f "$_dir/cluster.conf" ]; then
-		_num_masters=$(grep -m1 '^num_masters=' "$_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs) || true
-		_num_workers=$(grep -m1 '^num_workers=' "$_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs) || true
-		_cname=$(grep -m1 '^cluster_name=' "$_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs) || true
-		_bdomain=$(grep -m1 '^base_domain=' "$_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs) || true
+		_num_masters=$(fetch_value num_masters "$_dir/cluster.conf") || _num_masters=
+		_num_workers=$(fetch_value num_workers "$_dir/cluster.conf") || _num_workers=
+		_cname=$(fetch_value cluster_name "$_dir/cluster.conf") || _cname=
+		_bdomain=$(fetch_value base_domain "$_dir/cluster.conf") || _bdomain=
 	fi
 
-	# Derive type
-	local _type="standard"
-	if [ "${_num_masters:-3}" = "1" ] && [ "${_num_workers:-0}" = "0" ]; then
-		_type="sno"
-	elif [ "${_num_workers:-0}" = "0" ]; then
-		_type="compact"
-	fi
+	local _type
+	_type=$(cluster_type "${_num_masters:-3}" "${_num_workers:-0}")
 
 	# Install status
 	local _status="installing"

@@ -3653,3 +3653,104 @@ non-interactive terminal. The wizard still writes `cluster.conf` and
 `macs.conf` first. This choice is only how the install command is shown.
 Delete the menu when the progress-dialog asks are good enough (#B97).
 
+---
+
+## #B99: `aba_tip` for optional hints (post-load archive line)
+
+**Severity:** LOW — UX
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** After `aba load`, the "archive files can be deleted" note is an
+optional hint, but it shares `aba_info` (white) with real next steps. There is
+no channel for "safe to ignore".
+
+**Proposed fix:** Add `aba_tip` (cyan) and use it for that line in
+`scripts/reg-load.sh` (`Tip: Archive files … can be deleted`). Do not use
+`aba_warn` for it. Palette: red = stop (`aba_error` / `aba_abort`), yellow =
+attention (`aba_warn`, already the default), white = progress (`aba_info`),
+green = success, cyan = tip, magenta = debug.
+
+---
+
+## #B100: Audit ABA output colors and blank lines
+
+**Severity:** LOW — UX
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** Color and spacing are inconsistent. Some non-failures still print
+with `echo_red` (for example rpm-install and the passwordless-sudo note).
+Many scripts emit extra blank lines that make the log look sparse or like a
+pause.
+
+**Proposed fix:**
+
+1. Walk operational output and put each line on the palette in #B99. Red only
+   when the command failed or will not continue. `aba_warn` is already yellow;
+   replace leftover `echo_red` warnings.
+2. Review blank `echo` lines. Keep one blank line before a new section or an
+   error. Remove blanks that sit between two related lines.
+
+---
+
+## #B101: Accept `aba unstuck` as an alias of `aba unstick`
+
+**Severity:** LOW — UX
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** `aba unstuck` (and `aba unstuck -y`) falls through to Make:
+`No rule to make target 'unstuck'`. The recovery command was never a Make
+target and was never named `unstuck`. It is `aba unstick`, dispatched in
+`scripts/aba.sh` to `scripts/cluster-unstick.sh`. Grep of the cluster
+`Makefile` and the `aba` wrapper finds nothing, which looks like the command
+was removed.
+
+**Proposed fix:** In `scripts/aba.sh`, treat `unstuck` as `unstick` before the
+Make handoff. One line on stderr is enough if we want to say which name ran.
+Do not add a Make target.
+
+---
+
+## #B102: Non-interactive `ask` should show the answer it took
+
+**Severity:** LOW — UX (test logs and `ask=false`)
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** `aba refresh` with `ask=false` prints:
+
+```
+Delete the above virtual machine(s)? (y/n) [n]: [default: ask=false]
+```
+
+and then deletes the VMs. `[n]` is the interactive default (`ask -n`). `[default: ask=false]` only says prompts are off. It does not say the answer. `vmw-delete.sh` / `kvm-delete.sh` call `ask -n --auto-yes`, so automation proceeds (yes) while the line still looks like "default is no".
+
+**Proposed fix:** In `ask()`, when not reading a tty, print the answer that was used:
+
+- `--auto-yes` → `[auto-yes]`
+- `--auto-no` → `[auto-no]`
+- no auto flag → the interactive default, `[y]` or `[n]`
+
+Drop `[default: ask=false]`. Same for `ASK_OVERRIDE` / `-y`. Interactive prompts stay `(y/n) [n]:` and wait. Showing the auto override in logs is fine; people running by hand do not hit this path.
+
+---
+
+## #B103: day2-osus progress leaves "Access cluster" In Progress across nested day2
+
+**Severity:** LOW — TUI progress accuracy
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** The Day-2: day2-osus dialog shows two access rows at once:
+
+- `Access cluster` — In Progress
+- `Accessing cluster` — Succeeded
+
+and the other OSUS rows (`Install OSUS operator`, `Deploy Update Service`, `Wait for cluster stable`) as No-op, while day2 rows continue below.
+
+**Root cause:** A late `DONE` is honored. `DONE|id` sets that row to Succeeded on the next redraw, whatever status it had. The screenshot is from before that event. `scripts/day2-config-osus.sh` sends `START|osus_access` immediately, and `DONE|osus_access` only after the CatalogSource checks (~line 194). If OperatorHub is missing it calls `scripts/day2.sh` in between, which appends `Accessing cluster` and completes it. Until `DONE|osus_access` is written, `Access cluster` stays In Progress, and the dialog auto-marks the not-yet-started OSUS steps No-op. Those No-op rows return to In Progress when their own `START` arrives. The path that never flips is the direct-internet `exit 0` (`image_source` is not a mirror), which returns without `DONE|osus_access`.
+
+**Proposed fix:** Do not `START|osus_access` until OSUS work actually begins (after any nested `day2.sh`). Send `DONE|osus_access` on the early-exit path before `exit 0`. Nested day2 should be the only plan on screen while it runs.
+

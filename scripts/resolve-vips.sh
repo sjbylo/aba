@@ -27,7 +27,7 @@ cl_ingress_domain="*.apps.$cl_domain"
 
 # SNO clusters use starting_ip for api+apps — no VIP resolution needed
 SNO=
-[ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ] && SNO=1
+is_sno && SNO=1
 
 if [ "$SNO" ]; then
 	[ "$api_vip" ] || [ "$ingress_vip" ] && \

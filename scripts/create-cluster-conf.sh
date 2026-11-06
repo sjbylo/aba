@@ -53,7 +53,7 @@ if [ ! "$ntp_servers" ]; then
 	[ "$ntp_servers" ] && { _detected+="  ntp_servers=$ntp_servers"$'\n'; _filled=$((_filled+1)); }
 fi
 if [ $_filled -gt 0 ]; then
-	if [ "$ask" ]; then
+	if ask_is_on; then
 		echo_red "[ABA] Warning: $_filled network value(s) were auto-detected and written to aba.conf:" >&2
 		printf "%s" "$_detected" >&2
 		echo_red "[ABA]          Please review aba.conf and re-run the command." >&2
