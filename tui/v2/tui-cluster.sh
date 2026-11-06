@@ -1517,10 +1517,6 @@ ${_conn_help}
 # --- Page 4: VM Resources (menu-style, only for vmw/kvm) ---
 _cluster_page_vm() {
 	local default_item="C"
-	local mac_info=""
-	if [[ -f "$ABA_ROOT/$cl_name/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/$cl_name/macs.conf" 2>/dev/null; then
-		mac_info=" (from macs.conf)"
-	fi
 
 	while :; do
 		local items=()
@@ -1534,7 +1530,7 @@ _cluster_page_vm() {
 			items+=("E" "Worker Memory:  $_wmem_disp")
 		fi
 		items+=("D" "Data disk:      $_disk_disp")
-		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
+		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VM" \
 			--cancel-label "$TUI2_BTN_BACK" \

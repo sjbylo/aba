@@ -205,11 +205,11 @@ if grep -A3 '^\.preflight-done:' templates/Makefile.cluster | grep -q '\.bm-conf
 else
 	_fail ".preflight-done must depend on .bm-config-reviewed (Ask1 before create/preflight)"
 fi
-# TUI must not re-derive nodes×ports for MAC completeness
-if grep -q 'macs_status' tui/v2/tui-cluster.sh && ! grep -qE '_expected_macs=\$\(\(' tui/v2/tui-cluster.sh; then
-	_pass "TUI uses macs_status (dumb consumer)"
+# TUI must not re-derive nodes×ports for MAC completeness (macs_report owns that)
+if grep -q 'macs_report' tui/v2/tui-cluster.sh && ! grep -qE '_expected_macs=\$\(\(' tui/v2/tui-cluster.sh; then
+	_pass "TUI uses macs_report (dumb consumer)"
 else
-	_fail "TUI must call macs_status, not local expected-count math"
+	_fail "TUI must call macs_report, not local expected-count math"
 fi
 if grep -q 'Stage nodes (VMs only)' scripts/progress-plan.sh; then
 	_pass "progress plan labels ci_vms as Stage nodes (VMs only)"
