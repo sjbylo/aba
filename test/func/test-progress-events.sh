@@ -261,6 +261,9 @@ test_plan_id_coverage cluster-upgrade 4 \
 
 test_plan_id_coverage cluster-install 5 \
 	scripts/bm-ask-edit.sh scripts/bm-ask-boot.sh scripts/monitor-install.sh \
+	scripts/generate-image.sh \
+	scripts/vmw-kill.sh scripts/vmw-refresh.sh \
+	scripts/kvm-kill.sh scripts/kvm-refresh.sh \
 	templates/Makefile.cluster
 
 echo ""

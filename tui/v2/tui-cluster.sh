@@ -1340,8 +1340,9 @@ _cluster_page_iface() {
 		)
 		if [[ "$cl_platform" == "bm" ]]; then
 			local mac_count=0
-			[[ -n "$cl_macs" ]] && mac_count=$(echo "$cl_macs" | wc -l)
-			if [[ $mac_count -gt 0 ]]; then
+			[[ -n "$cl_macs" ]] && mac_count=$(macs_list_from_text "$cl_macs" | wc -l)
+			mac_count=${mac_count// /}
+			if [[ ${mac_count:-0} -gt 0 ]]; then
 				iface_items+=("M" "MACs:        $mac_count entered")
 			else
 				iface_items+=("M" "MACs:        (none — paste to add)")
@@ -1484,19 +1485,13 @@ ${_conn_help}
 				fi
 				cl_macs="$_new_macs"
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
-				# Warn if count doesn't match expected MACs (nodes × ports)
-				local _mac_count _node_count _port_count _expected_macs
-				_mac_count=$(echo "$cl_macs" | wc -l)
-				case "$cl_type" in
-					sno) _node_count=1 ;; compact) _node_count=3 ;;
-					standard) _node_count=$(( 3 + ${cl_workers:-2} )) ;; *) _node_count=1 ;;
-				esac
-				_port_count=$(echo "$cl_ports" | tr ',' '\n' | grep -c .)
-				[ "$_port_count" -lt 1 ] && _port_count=1
-				_expected_macs=$(( _node_count * _port_count ))
-				if [[ $_mac_count -ne $_expected_macs ]]; then
+				# Completeness is core intelligence (macs_status); TUI only displays.
+				local mac_count mac_expected mac_complete mac_nodes mac_ports
+				# shellcheck disable=SC2086
+				eval "$(macs_status --text "$cl_macs" --type "$cl_type" --workers "${cl_workers:-2}" --ports "$cl_ports")"
+				if [[ "${mac_complete:-0}" -ne 1 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Warning: $_mac_count MAC(s) entered, but $cl_type needs $_expected_macs ($_node_count nodes × $_port_count port(s) each)." 0 0 || true
+						"Warning: ${mac_count:-0} MAC(s) entered, but $cl_type needs ${mac_expected:-?} (${mac_nodes:-?} nodes × ${mac_ports:-?} port(s) each)." 0 0 || true
 				fi
 			fi
 			rm -f "$_mac_edit"
@@ -1819,20 +1814,15 @@ _cluster_execute() {
 	# Platform config check before executing
 	_check_platform_config "$cl_name" "$cl_platform" || return 1
 
-	# Long operation. BM must NOT inject --yes so edit/boot ask() gates
-	# surface in the progress dialog (PROMPT). Vmw/kvm keep confirm_and_execute.
+	# Long operation — same progress UI for bm/vmw/kvm (unified PLAN path).
+	# Do NOT inject --yes: BM edit/boot ask() gates must surface as PROMPT;
+	# vmw/kvm have no ask gates so the dialog just runs through.
 	local rc=0
-	if [[ "$cl_platform" == "bm" ]]; then
-		# Prefer progress UI (PLAN + PROMPT); fall back to interactive terminal.
-		_exec_with_progress "$cmd" "Install Cluster: $fqdn"
-		rc=$?
-		if [[ $rc -eq 2 ]]; then
-			# No PLAN events — interactive terminal so asks still work
-			_exec_in_terminal "$cmd" "Install Cluster: $fqdn"
-			rc=$?
-		fi
-	else
-		confirm_and_execute "$cmd" "Install Cluster: $fqdn"
+	_exec_with_progress "$cmd" "Install Cluster: $fqdn"
+	rc=$?
+	if [[ $rc -eq 2 ]]; then
+		# No PLAN events — interactive terminal so BM asks still work
+		_exec_in_terminal "$cmd" "Install Cluster: $fqdn"
 		rc=$?
 	fi
 
@@ -1953,8 +1943,10 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	# platform comes from aba.conf. Do not source cluster.conf here:
+	# normalize-cluster-conf prints export lines, and those values leak
+	# into the next aba cluster (Make forwards them as if they were flags).
 	source <(normalize-aba-conf) 2>/dev/null || true
-	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
 
 	local _del_msg _del_help
 	if [[ "${platform:-bm}" == "bm" ]]; then
@@ -2031,6 +2023,8 @@ tui_advanced_menu() {
 				;;
 		esac
 		adv_items+=("" "──── Danger Zone ───────────────────")
+		# Always listed when a cluster exists. On bare metal, _day2_refresh
+		# explains and returns; it does not offer to destroy VMs.
 		if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
 			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
 		fi
@@ -2064,7 +2058,8 @@ F - Monitor Cluster Installation: Re-attach to a running install\n\
 X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
-    installation from scratch. All current cluster data is lost.\n\n\
+    installation from scratch. All current cluster data is lost.\n\
+    On bare metal this explains that there are no VMs to recreate.\n\n\
 R - Clean ABA: Removes configuration and state files so you can\n\
     reconfigure from scratch. Keeps downloaded CLI tools, mirror\n\
     installers, and saved image archives. Use 'aba reset --force'\n\
@@ -2502,9 +2497,13 @@ _day2_ssh() {
 
 	cd "$ABA_ROOT/$SELECTED_CLUSTER"
 
-	# Read SSH key and rendezvous IP from cluster config
-	source <(normalize-cluster-conf) 2>/dev/null || true
-	local _ssh_key="${ssh_key_file:-~/.ssh/id_rsa}"
+	# Subshell: normalize-cluster-conf exports every key. Sourcing it in
+	# this shell would leak that cluster into the next aba cluster run.
+	local _ssh_key
+	_ssh_key=$(
+		source <(normalize-cluster-conf) 2>/dev/null || true
+		echo "${ssh_key_file:-~/.ssh/id_rsa}"
+	)
 	local _ssh_ip
 	_ssh_ip=$(cat iso-agent-based/rendezvousIP 2>/dev/null)
 
@@ -2817,8 +2816,9 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
+	# platform is global (aba.conf). Sourcing cluster.conf here exports
+	# its VIPs and node counts into this shell and the next aba run.
 	source <(normalize-aba-conf) 2>/dev/null || true
-	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
 	[[ "${platform:-bm}" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
@@ -2834,6 +2834,13 @@ _day2_startup() {
 
 # --- Refresh (recreate VMs, trigger new install) ---
 _day2_refresh() {
+	source <(normalize-aba-conf) 2>/dev/null || true
+	if [[ "${platform:-bm}" == "bm" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
+			--msgbox "Refresh recreates virtual machines and needs platform vmw or kvm in aba.conf.\n\nPlatform is bare metal, so there are no VMs to recreate.\nSet the platform to VMware or KVM under Platform Settings, then run Refresh again." 0 0 || true
+		return 0
+	fi
+
 	if ! select_cluster "$TUI2_TITLE_DAY2_REFRESH" "Select cluster to refresh:"; then
 		return 1
 	fi

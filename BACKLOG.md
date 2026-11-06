@@ -3457,3 +3457,171 @@ workflow is done and approved.
 
 **Reminder:** Revisit ~few weeks after #B80 + release soak — do not forget.
 
+---
+
+## #B96: Exported cluster.conf values are applied to the next `aba cluster`
+
+**Severity:** HIGH — silent overwrite of another cluster's topology
+**Status:** Planned (TUI call sites closed in the working tree; Make still forwards the environment)
+**Added:** 2026-11-06
+
+**Problem:** After the TUI loads one cluster, the next `aba cluster` for a different
+directory can write the first cluster's API VIP, starting IP, and node counts into
+the second `cluster.conf`. The wizard screen still shows the values the user
+entered. The install uses the file, so it never reaches the step the user expects
+(in the bare-metal case, the MAC check). DNS then fails because the record points
+at the second cluster's address while the file still expects the first cluster's.
+
+**Root cause:** `normalize-cluster-conf` prints `export` lines. Sourcing it in a
+long-lived shell (the TUI, or a user shell) exports every `cluster.conf` key.
+GNU make imports those variables. The root `cluster:` recipe always passes them
+to `setup-cluster.sh` (`api_vip=$(api_vip)`, `starting_ip=$(starting_ip)`,
+`num_masters=$(num_masters)`, and the same for the other cluster fields).
+`setup-cluster.sh` treats any non-empty value as a flag and writes it with
+`replace-value-conf`. An explicit `--type` used to lose as well: the type was
+applied only when `num_masters` was empty, so a leaked count blocked it.
+
+**Already done (working tree, not a complete fix):**
+
+- `cluster_delete`, cluster startup, and the SSH-key lookup no longer source
+  `normalize-cluster-conf` in the TUI process. `cluster_display_name` was
+  already a subshell.
+- An explicit `type=` now sets `num_masters` and `num_workers` even when those
+  variables were already in the environment.
+
+**Proposed fix:** `aba cluster` must apply a cluster field only when that field
+was passed on this invocation. Do not let an inherited export through Make count
+as a flag. Audit every `source <(normalize-cluster-conf)` that runs in the same
+shell as a later `aba` or `make`. Sourcing inside a subshell is safe.
+
+**Workaround:** Run `aba cluster` from a shell that has not sourced a
+`cluster.conf`. In the TUI, do not source `normalize-cluster-conf` in the
+menu process.
+
+**Reproducer:** Two cluster directories, A (SNO) and B (standard, its own API
+VIP and starting IP). In one shell, `source <(cd B && normalize-cluster-conf)`,
+then `aba cluster --name A --type sno --step install`. A's `cluster.conf` now
+has B's API VIP, starting IP, and node counts. The install checks DNS against
+B's API address.
+
+---
+
+## #B97: Bare-metal MAC ask says "placeholders gone" when the list must be complete
+
+**Severity:** MEDIUM — TUI progress dialogs still show CLI next steps (MAC ask and boot ask)
+**Status:** Planned
+**Added:** 2026-11-06
+
+**Problem:** The fresh-placeholder ask in `scripts/bm-ask-edit.sh` says:
+
+```
+Placeholder MAC(s) xx:xx:xx:xx:xx:xx were just written.
+Edit macs.conf or agent-config.yaml now, then Yes.
+Yes: re-check. Continue only if the placeholders are gone.
+```
+
+That sentence is the CLI file-edit instruction, and the TUI progress dialog
+shows the same words. The report above it can already say `PARTIAL` and
+`WARN: too few` (one real MAC, two ports). A reader cannot tell whether Yes
+continues when the placeholder token is deleted, or only when the missing
+real MACs have been added.
+
+**What Yes actually does:** After Yes, the script regenerates
+`agent-config.yaml` when `macs.conf` should win, then stops if the placeholder
+token is still in the YAML. A short `macs.conf` is padded back to placeholders
+on that regenerate. Deleting `xx:xx:xx:xx:xx:xx` without adding the missing
+real addresses does not continue. "Placeholders gone" is the check. The way
+they stay gone is a complete list of real MACs. The sentence does not say that.
+
+The No line is already split (CLI: re-run `aba install`; TUI: wizard, then
+Retry). The Yes line is not.
+
+**Error dialog repeats the remedy.** After No, the progress error dialog
+uses the right TUI words (wizard, then Retry; buttons Dismiss, Retry, View
+Output). The same sentence is shown twice. Seen on
+`Install Cluster: standard.example.com: Error`:
+
+```
+Failed: Review/generate configs
+ERROR: Aborted. Go back to the cluster install wizard and add the MACs
+(preferred), then Retry. Or edit macs.conf or agent-config.yaml, then Retry.
+
+Possible next steps:
+  • Go back to the cluster install wizard and add the MACs (preferred), then Retry
+```
+
+`_bm_fix_text` prints that remedy for `aba_abort` (the ERROR line) and also
+emits it as `NEXT` (Possible next steps). `_tp_show_error` displays both.
+The ERROR line should say what failed (MAC list still short, or placeholders
+still present). The remedy belongs once, under Possible next steps.
+
+The ask shown just before this dialog is a different problem. It still tells
+a TUI user to edit the files and to continue when the placeholders are gone,
+and the No sentence is cut off (`add the MACs (`).
+
+**Proposed fix:** Say the continue condition in the words the report already
+uses: have the required count, and no placeholders. Keep one sentence for the
+CLI (edit `macs.conf`, then Yes). When `ABA_PROGRESS_FIFO` is set, do not
+reuse that CLI paragraph. Use the same TUI instructions as the error dialog:
+the wizard is the preferred place to add the MACs, editing the files is the
+alternative, and Yes re-checks only after the list is complete. Do not say
+"placeholders are gone" as if that alone were enough. On the error dialog,
+do not repeat that remedy in the ERROR line. Say the failure there, and
+list the wizard / file-edit steps once under Possible next steps.
+
+**Boot ask, same mistake:** `scripts/bm-ask-boot.sh` has no TUI branch. The
+progress dialog shows the CLI paragraph, including "use another terminal" and:
+
+```
+Yes: servers are booting (or booted) — start monitoring installation.
+No: stop this run only. Boot the servers, then re-run the SAME command:
+    aba install
+    (or continue later with: aba mon)
+```
+
+`aba write-usb` is in that same box. A TUI user has no command to re-run.
+Yes and No are the buttons already on screen. No should say: stop this run,
+boot the servers, then Retry (or come back and monitor). Keep `aba install`,
+`aba mon`, and `aba write-usb` for the CLI only, via `aba_cmd` when
+`ABA_PROGRESS_FIFO` is not set.
+
+**Workaround:** Add every missing real MAC, then Yes. Removing only the
+placeholder lines leaves the list short and the next check stops again.
+On the boot ask, Yes means the servers are already booting. No only stops
+this run.
+
+---
+
+## #B98: Offer the old run-mode menu before cluster install, until the progress dialog is trusted
+
+**Severity:** LOW — temporary escape hatch, remove it once the progress dialog is the one we want
+**Status:** Planned (after the bare-metal merge to `dev`)
+**Added:** 2026-11-06
+
+**Problem:** Cluster install skips `confirm_and_execute` and always uses the
+new progress dialog. The older menu is still in the TUI for other actions.
+It has three choices:
+
+1. Run in Terminal (interactive) — real terminal, prompts stay
+2. Run in Terminal (non-interactive) — same terminal, `--yes`
+3. Run in TUI (non-interactive) — the old scrolling box, also `--yes`
+
+That third choice is not the new progress dialog. Do not offer either
+`--yes` choice on the install menu. `ask()` checks `ASK_OVERRIDE` (`aba -y`)
+before `--always`, and both bare-metal gates are `ask -y --always`
+(`bm-ask-edit.sh` MAC check, `bm-ask-boot.sh` boot ask). A terminal started
+with `--yes` returns yes immediately. The questions never appear. Placeholders
+then fail later in `_bm_stop_if_placeholders`, with no chance to edit. Real
+MACs continue straight into monitoring, including the boot ask.
+
+**Proposed fix:** After the user presses Install, and only until we trust the
+progress dialog, show:
+
+1. Progress dialog (default) — `_exec_with_progress`
+2. Terminal, interactive — prompts stay, no `--yes`
+
+Do not keep the old scrolling box on this menu, and do not add a
+non-interactive terminal. The wizard still writes `cluster.conf` and
+`macs.conf` first. This choice is only how the install command is shown.
+Delete the menu when the progress-dialog asks are good enough (#B97).
+

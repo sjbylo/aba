@@ -407,9 +407,10 @@ tui_keys_wait() {
 
 # Extract menu items from screen capture.
 # Returns lines of "KEY<tab>LABEL" for each item with a shortcut key.
-# Format on screen: │ │   K  Some Label   │ │
+# Letter menus: │ │   K  Some Label   │ │
+# Numbered menus (delete list): │ │   1  sno4.example.com   │ │
 tui_menu_items() {
-	tui_capture | sed -n 's/.*│[[:space:]]*\([A-Z]\)  \(.*\)│.*/\1\t\2/p' \
+	tui_capture | sed -n 's/.*│[[:space:]]*\([A-Z0-9]\)  \(.*\)│.*/\1\t\2/p' \
 		| sed 's/[[:space:]]*│[[:space:]]*$//; s/[[:space:]]*$//'
 }
 
@@ -1403,12 +1404,19 @@ tui_wait_for_progress() {
 			return 0
 		fi
 
-		# Completed with errors: progress dialog done, "Quit" button visible
-		# Only treat as complete when NO step is still "In Progress"
+		# Completed with errors: progress dialog done, "Quit" button visible.
+		# Do not quit while a step is In Progress, or while a later step is
+		# still N/A. Review can already say No-op in the gap after the ISO
+		# step finishes and before stage/boot leave N/A. q in that gap aborts
+		# the install. A Failed step leaves the rest N/A on purpose, so that
+		# case still quits.
 		if echo "$_scr" | grep -qi "Quit.*Q\|Q.*ESC"; then
 			if echo "$_scr" | grep -qi "Failed\|No-op\|Done\|Skipped\|Succeeded"; then
 				if echo "$_scr" | grep -qi "In Progress"; then
-					# Steps still running — do not quit yet
+					sleep 5
+					continue
+				fi
+				if echo "$_scr" | grep -q "N/A" && ! echo "$_scr" | grep -qi "Failed"; then
 					sleep 5
 					continue
 				fi

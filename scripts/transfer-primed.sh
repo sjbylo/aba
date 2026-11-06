@@ -113,6 +113,7 @@ tar cf "$_output_file" \
 	--exclude='.vms-ready' \
 	--exclude='.bm-bmc-boot-done' \
 	--exclude='.bm-config-reviewed' \
+	--exclude='.bm-config-asked' \
 	--exclude='.preflight-done' \
 	"${_tar_args[@]}"
 

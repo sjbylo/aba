@@ -1729,6 +1729,16 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		install)
+			# `aba install` is already the full Make goal. --step would turn it
+			# into `make install target=iso`, which is `aba install iso`.
+			# A stage is its own command (`aba iso`). `aba cluster -s` is how
+			# creation selects a goal.
+			if echo " $BUILD_COMMAND " | grep -q " target="; then
+				aba_abort "--step cannot be used with install." \
+					"aba install is the full install." \
+					"A single stage is its own command: aba iso, aba upload, aba create --start, aba mon." \
+					"To create a cluster directory and run a stage: aba cluster -s iso"
+			fi
 			# Guard: install needs a cluster, mirror, or cli directory
 			if [ ! -f cluster.conf ] && [ ! -f mirror.conf ] && [ "$(basename "$PWD")" != "cli" ]; then
 				aba_abort "'install' requires a cluster or mirror directory." \

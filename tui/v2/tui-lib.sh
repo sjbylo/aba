@@ -139,10 +139,13 @@ _valid_mac_prefix() {
 	[[ "$1" =~ ^([0-9A-Fa-fXx]{2}:){5}$ ]]
 }
 
-# Validate full MAC address (e.g. 00:50:56:ab:cd:ef)
-_valid_mac() {
-	[[ "$1" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]
-}
+# Full MAC validation lives in include_all.sh (_valid_mac) — TUI stays dumb.
+# Fallback only if include_all was not sourced (standalone lib tests).
+if ! declare -F _valid_mac >/dev/null 2>&1; then
+	_valid_mac() {
+		[[ "$1" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]
+	}
+fi
 
 # Validate comma-separated network port names (e.g. ens1f0,ens1f1)
 # Uses _valid_port_name from include_all.sh for each item.

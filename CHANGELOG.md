@@ -2,7 +2,9 @@
 
 ### Changed
 
-- **Bare-metal install is continuous (#B80)** — One `aba install` / `make install` for BM (edit + boot `ask()` gates) instead of three Make stops (`.bm-message` / `.bm-nextstep` removed). VM stamps renamed to `.vms-stopped` / `.iso-uploaded` / `.vms-ready`; wait-agent folded into `monitor-install`. TUI BM runs full install with progress prompts (no forced ISO-only step). Primed beta: no `.bm-message` fabrication; recreate primed/transfer artifacts after upgrade. No BC shims for old stamp names.
+- **Bare-metal install is continuous (#B80)** — One `aba install` / `make install` for BM (edit + boot `ask()` gates) instead of three Make stops (`.bm-message` / `.bm-nextstep` removed). VM stamps renamed to `.vms-stopped` / `.iso-uploaded` / `.vms-ready`; wait-agent on install chain only (`aba mon` skips it). TUI BM runs full install with progress prompts (no forced ISO-only step). Primed beta: no `.bm-message` fabrication; recreate primed/transfer artifacts after upgrade. No BC shims for old stamp names.
+- **Skip agent wait on manual BM** — `wait-agent-up.sh` exits immediately when `platform=bm` and `bmc.conf` has no `bmc_host_*` nodes (USB/virtual-media walk-away). Still waits after BMC auto-boot and on vmw/kvm so `openshift-install wait-for` does not race a just-powered node.
+- **BMC host helpers** — `bmc_host_list` / `bmc_host_count` / `bmc_has_hosts` in `include_all.sh` replace duplicated `bmc_host_*` greps (wait-agent, ask-boot, preflight, bmc-boot/unmount, cluster-config).
 
 ---
 
