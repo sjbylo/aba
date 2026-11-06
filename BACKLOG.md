@@ -3459,6 +3459,34 @@ workflow is done and approved.
 
 ---
 
+## #B95: TUI ISC wait dialog — show accurate Generating vs Fetching status
+
+**Severity:** LOW — UX clarity
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** While waiting for `aba:isconf:generate`, the TUI shows a static
+hedge: "Generating imageset-config.yaml… (May need to wait for operator catalog
+indexes to refresh)". The user cannot tell whether catalogs are still
+downloading or ISC generation itself is running.
+
+**Root cause:** `TUI2_MSG_ISC_GENERATING` / hard-coded upgrade-path copy is
+fixed text. `make isconf` depends on `catalogs-download` + `catalogs-wait`, so
+the wait is often catalog fetch — but the dialog never inspects that state.
+
+**Proposed fix:** Pick the infobox from signals already used by
+`download-catalogs-wait.sh` / `tui_ensure_catalogs_ready`:
+
+1. `.index/*-operator-index-v${minor}` missing, **or** any
+   `run_once -p -i "catalog:${minor}:…"` incomplete →
+   `Fetching operator catalog indexes...\n\nPlease wait a short while.`
+2. Catalogs ready, `aba:isconf:generate` still running →
+   `Generating imageset-config.yaml...`
+3. Optional: refresh the infobox when state transitions fetch → generate.
+
+Wire through `tui_wait_isconf`, `mirror_payload_menu`, and the Prepare Upgrade
+path; split `TUI2_MSG_ISC_GENERATING` into fetch vs generate strings.
+
 ## #B96: Exported cluster.conf values are applied to the next `aba cluster`
 
 **Severity:** HIGH — silent overwrite of another cluster's topology
