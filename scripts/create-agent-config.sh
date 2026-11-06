@@ -190,8 +190,8 @@ elif [ "$platform" = "bm" ]; then
 		aba_info "macs.conf empty — keeping existing agent-config.yaml"
 		exit 0
 	fi
-	aba_warn "No macs.conf — writing agent-config.yaml with placeholder MAC(s) $BM_MAC_PLACEHOLDER."
-	aba_warn "Replace them in agent-config.yaml, or add real MACs to macs.conf (shortcut) and re-run."
+	aba_warn "No macs.conf — writing agent-config.yaml with placeholder MAC(s) $BM_MAC_PLACEHOLDER." \
+		"Replace them in agent-config.yaml, or add real MACs to macs.conf (shortcut) and re-run."
 	mac_list=$(
 		for ((i=1; i <= expected_mac_count; i++)); do
 			printf '%s\n' "$BM_MAC_PLACEHOLDER"
