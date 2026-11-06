@@ -169,6 +169,7 @@ which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$REPO_ROOT/test/lib.sh"
+source "$REPO_ROOT/scripts/include_all.sh"
 
 # Ensure internet access via the direct interface
 int_up
@@ -193,16 +194,21 @@ export BATCH=1
 # CLI tools and ~/.aba state are NOT cleaned here -- use 'make clean' for a fresh start.
 # This allows go.sh to be re-run idempotently after a failure (make resumes from markers).
 
-# Discover latest OCP versions
+# Discover latest GA z-stream per tracked minor via ABA core (Cincinnati).
+# Do not curl CDN stable-$minor/release.txt — that path 404s for 5.0 even when
+# 5.0.0 is GA (same lag as version tips / catalog refresh).
 versions=()
 
 for v in $vers_track
 do
-	ver=
-	major=${v%%.*}
-	echo "Checking for version stable-$v ..."
-	ver=$(curl -f --retry 8 -sSL "https://mirror.openshift.com/pub/openshift-v${major}/amd64/clients/ocp/stable-$v/release.txt" | grep ^Name: | awk '{print $NF}')
-	[ ! "$ver" ] && echo "No stable release for $v yet -- skipping" >&2 && continue
+	echo "Checking for GA tip of stable-$v ..."
+	ver=$(fetch_latest_z_version "stable" "$v" 2>/dev/null) || ver=
+	# Skip empty / pre-release-only tips (bundle track wants GA).
+	if [ -z "$ver" ] || _is_prerelease "$ver"; then
+		echo "No stable GA release for $v yet -- skipping" >&2
+		continue
+	fi
+	echo "  Found $ver"
 	versions+=("$ver")
 done
 
