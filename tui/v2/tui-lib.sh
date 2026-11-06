@@ -227,10 +227,11 @@ _tui_apply_mode_colors() {
 # dlg — wrapper that adds consistent styling:
 #   - Pads --title with spaces: "Foo" → " Foo "
 #   - Prepends \n to the prompt/message text (empty line below title)
-#   - Appends \n<space> to msgbox/yesno/inputbox text (blank line before buttons);
-#     dialog ignores bare trailing \n for height, the space forces the line to render.
+#   - Appends \n<space> to msgbox/yesno/inputbox text (blank line before buttons)
+#     and to infobox text (blank line above the bottom frame).
+#     dialog ignores a bare trailing \n for height; the space forces the line.
 #     Skipped for menus and mixedform.
-#   - Infobox text is NOT modified (no buttons, compact spinners with fixed sizes)
+#     An infobox that already ends on a blank line (\n\n) is left alone.
 #   - For menu/radiolist/checklist: replaces menu-height=0 with the actual
 #     item count so dialog sizes the box to fit all items (no scrollbar)
 dlg() {
@@ -240,6 +241,7 @@ dlg() {
 	local has_menu=false
 	local menu_type=""
 	local _add_trailing=false
+	local _infobox=false
 	local _needs_tab_hint=false
 	local dims_after_text=0
 	local height_idx=-1
@@ -257,13 +259,23 @@ dlg() {
 			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
 				arg="\n$arg"
 			fi
-			# Append trailing blank line before buttons.
-			# dialog ignores bare trailing newlines for height; the space forces the
-			# line to render.  Use the same newline style as the text: literal \n for
-			# texts using literal \n sequences, real $'\n' for texts with real newlines
-			# (e.g. splash screen).  Mixing styles causes dialog to misbehave.
-			# Only for types with buttons — skip infobox/mixedform/menus.
-			if [[ "$_add_trailing" == "true" && "$arg" != *'\n ' && "$arg" != *$'\n ' ]]; then
+			# Append a trailing blank line.
+			# dialog ignores a bare trailing newline for height; the space forces
+			# the line to render.  Use the same newline style as the text: literal
+			# \n for texts using literal \n sequences, real $'\n' for texts with
+			# real newlines (e.g. splash screen).  Mixing styles misbehaves.
+			# msgbox/yesno/inputbox: blank line before the buttons.
+			# infobox: blank line above the bottom frame, unless the text already
+			# ends on a blank line (the progress "One moment please" does).
+			if [[ "$_infobox" == "true" ]]; then
+				if [[ "$arg" != *'\n\n' && "$arg" != *'\n ' && "$arg" != *$'\n' && "$arg" != *$'\n ' ]]; then
+					if [[ "$arg" == *$'\n'* ]]; then
+						arg="$arg"$'\n '
+					else
+						arg="$arg\n "
+					fi
+				fi
+			elif [[ "$_add_trailing" == "true" && "$arg" != *'\n ' && "$arg" != *$'\n ' ]]; then
 				if [[ "$arg" == *$'\n'* ]]; then
 					arg="$arg"$'\n '
 				else
@@ -298,6 +310,8 @@ dlg() {
 				next_is_text=true; has_menu=true; menu_type="checklist" ;;
 		--msgbox|--yesno)
 			next_is_text=true; _add_trailing=true ;;
+		--infobox)
+			next_is_text=true; _infobox=true ;;
 		--inputbox)
 			next_is_text=true; _add_trailing=true; _needs_tab_hint=true ;;
 		--mixedform)
@@ -762,6 +776,7 @@ _exec_in_terminal() {
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Executing: $cmd"
+	echo "  Press Ctrl-C to interrupt"
 	echo "═══════════════════════════════════════════════════════════════"
 	if [[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]]; then
 		echo "  Tip: Select non-interactive mode to skip prompts"
@@ -1021,9 +1036,37 @@ _probe_undetected_clusters() {
 	done
 	[[ ${#_to_probe[@]} -eq 0 ]] && return 0
 
-	local names="${_to_probe[*]}"
+	# Name the clusters being checked. One name reads as if that is the only
+	# cluster, so add up to two other real clusters (newest first) when they exist.
+	local -a _shown=()
+	local _d _disp _names="" _extra=0 _already _p
+	for _d in "${_to_probe[@]}"; do
+		_shown+=("$(cluster_display_name "$_d")")
+	done
+	if [[ ${#_shown[@]} -eq 1 ]]; then
+		for _d in $(list_cluster_dirs); do
+			[[ $_extra -ge 2 ]] && break
+			_already=0
+			for _p in "${_to_probe[@]}"; do
+				[[ "$_p" == "$_d" ]] && _already=1
+			done
+			[[ $_already -eq 1 ]] && continue
+			if [[ ! -f "$ABA_ROOT/$_d/.install-complete" && ! -f "$ABA_ROOT/$_d/iso-agent-based/auth/kubeconfig" ]]; then
+				continue
+			fi
+			_shown+=("$(cluster_display_name "$_d")")
+			_extra=$(( _extra + 1 ))
+		done
+	fi
+	for _disp in "${_shown[@]}"; do
+		if [[ -z "$_names" ]]; then
+			_names="$_disp"
+		else
+			_names="$_names, $_disp"
+		fi
+	done
 	dlg --backtitle "$(ui_backtitle)" \
-		--infobox "\nDetecting installation status: ${names// /, }..." 5 55
+		--infobox "\nDetecting installation status: ${_names}..." 0 0
 
 	# Probe in parallel
 	for dir in "${_to_probe[@]}"; do
@@ -1656,7 +1699,7 @@ _require_podman() {
 	# If still running, show "Please wait..." until it completes
 	if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"One moment please..." 5 30
+			"One moment please..." 0 0
 	fi
 
 	# Block until result is available
@@ -1666,7 +1709,7 @@ _require_podman() {
 		aba_podman_check_start
 		if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
 			dlg --backtitle "$(ui_backtitle)" --infobox \
-				"Retrying podman check...\n\nPlease wait." 5 45
+				"Retrying podman check...\n\nPlease wait." 0 0
 		fi
 	fi
 

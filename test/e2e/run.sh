@@ -533,9 +533,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 	done
 	if [ -n "$_source_tar" ]; then
 		rm -f "$_source_tar"
-		local _cksum
-		_cksum=$(_source_checksum "$_ABA_ROOT")
-		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+		_record_source_deploy "$_ABA_ROOT"
 	fi
 
 	# 4) Re-launch last suite on each pool

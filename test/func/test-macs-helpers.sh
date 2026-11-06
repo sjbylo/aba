@@ -136,6 +136,35 @@ _rpt=$(macs_report --file "$_td/macs-dup.conf" --type compact --ports ens1f0 --a
 echo "$_rpt" | grep -q 'ERROR: duplicate' \
 	&& _pass "macs_report: duplicate ERROR" || _fail "macs_report: duplicate (got: $_rpt)"
 
+# Case-insensitive duplicate, and whitespace is not an error.
+_rpt=$(macs_report --text $'  AA:BB:CC:DD:EE:01  \n\naa:bb:cc:dd:ee:01\n' --type sno --ports ens1f0)
+echo "$_rpt" | grep -q 'ERROR: duplicate' \
+	&& _pass "macs_report: case-insensitive duplicate" || _fail "macs_report: case-insensitive duplicate (got: $_rpt)"
+
+_canon=$(macs_canonicalize_text $'\n  00:11:22:33:44:55  \n\n')
+[ "$_canon" = "00:11:22:33:44:55" ] \
+	&& _pass "canonicalize trims blank lines and surrounding spaces" \
+	|| _fail "canonicalize trim (got: $_canon)"
+
+_rpt=$(macs_report --text $'\n  00:11:22:33:44:55  \n\n' --type sno --ports ens1f0)
+if echo "$_rpt" | grep -q 'READY (1/1' && ! grep -q 'ERROR:' <<<"$_rpt"; then
+	_pass "macs_report: padded MAC is ready"
+else
+	_fail "macs_report: padded MAC (got: $_rpt)"
+fi
+
+_rpt=$(macs_report --text $'   \n\n' --type sno --ports ens1f0)
+echo "$_rpt" | grep -q 'missing/empty — NOT READY' \
+	&& _pass "macs_report: whitespace-only is empty" || _fail "macs_report: whitespace-only (got: $_rpt)"
+
+_rpt=$(macs_report --text $'00:zz:zz:zz:zz:zz' --type sno --ports ens1f0)
+echo "$_rpt" | grep -q 'ERROR: not hex: 00:zz:zz:zz:zz:zz' \
+	&& _pass "macs_report: not hex" || _fail "macs_report: not hex (got: $_rpt)"
+
+_rpt=$(macs_report --text $'not-a-mac' --type sno --ports ens1f0)
+echo "$_rpt" | grep -q 'ERROR: not a MAC address: not-a-mac' \
+	&& _pass "macs_report: not a MAC address" || _fail "macs_report: not a MAC address (got: $_rpt)"
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 exit "$fail"

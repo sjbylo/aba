@@ -271,11 +271,11 @@ _auto_deploy_dev_branch() {
 		fi
 	done
 
-	# Update deploy meta once (for verify-code tracking)
+	# Same snapshot verify-code reads. The tarball md5 does not match a
+	# per-file checksum, and skipping the file list left the previous
+	# manual deploy on screen.
 	if [ -n "$_deployed_any" ]; then
-		local _cksum
-		_cksum=$(md5sum "$_tar" | cut -d' ' -f1)
-		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') git:$(echo "$_head" | head -c 8)" > /tmp/e2e-last-deploy.meta
+		_record_source_deploy "$_ABA_ROOT" "git:$(echo "$_head" | head -c 8)"
 	fi
 	rm -f "$_tar"
 }
@@ -369,9 +369,7 @@ _dispatch_suite() {
 		_tar=$(_make_source_tar "$_ABA_ROOT")
 		if sync_source "$target" "$_tar"; then
 			echo "    Source deployed to con${pool_num}"
-			local _cksum
-			_cksum=$(_source_checksum "$_ABA_ROOT")
-			echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+			_record_source_deploy "$_ABA_ROOT"
 		else
 			echo "    WARNING: source deploy to con${pool_num} failed"
 		fi

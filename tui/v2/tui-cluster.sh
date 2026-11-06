@@ -129,6 +129,20 @@ _cluster_load_conf() {
 	return 0
 }
 
+# Replace macs.conf with the list the user just confirmed.
+# An empty list truncates the file: Save anyway on a blank editor means
+# "this file should now be empty", not "leave the previous lines alone".
+_write_cluster_macs() {
+	local _f="$ABA_ROOT/$cl_name/macs.conf"
+	mkdir -p "${_f%/*}"
+	if [[ -n "${cl_macs:-}" ]]; then
+		printf '%s\n' "$cl_macs" > "$_f"
+	else
+		: > "$_f"
+	fi
+	tui_log "Wrote $_f"
+}
+
 # Write current wizard values back to cluster.conf (the single source of truth).
 # Called after every page transition so changes persist across re-entries and crashes.
 _persist_cluster_draft() {
@@ -1462,37 +1476,22 @@ ${_conn_help}
 				2>"$_TUI_TMP"
 			if [[ $? -eq 0 ]]; then
 				local raw=$(<"$_TUI_TMP")
-				# Normalize: convert commas/spaces to newlines, trim empty lines and whitespace
-				local _new_macs
-				_new_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
-				# Validate MAC format (XX:XX:XX:XX:XX:XX)
-				local _bad_macs
-				_bad_macs=$(echo "$_new_macs" | grep -vE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || true)
-				if [[ -n "$_bad_macs" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid MAC address(es):\n\n${_bad_macs}\n\nExpected format: XX:XX:XX:XX:XX:XX" 0 0 || true
-					rm -f "$_mac_edit"
-					continue
-				fi
-				# Reject duplicate MACs (case-insensitive)
-				local _dup_macs
-				_dup_macs=$(echo "$_new_macs" | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
-				if [[ -n "$_dup_macs" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Duplicate MAC address(es):\n\n${_dup_macs}\n\nEach node must have a unique MAC." 0 0 || true
-					rm -f "$_mac_edit"
-					continue
+				# Checks live in macs_report (too few, duplicate, empty, not hex, not a MAC).
+				# macs_canonicalize_text strips blank lines and surrounding whitespace.
+				local _new_macs _rpt
+				_new_macs=$(macs_canonicalize_text "$raw")
+				_rpt=$(macs_report --text "$raw" --type "$cl_type" --workers "${cl_workers:-2}" --ports "$cl_ports")
+				if printf '%s\n' "$_rpt" | grep -qE 'ERROR:|WARN:|NOT READY'; then
+					if ! dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_ADDRS" \
+						--yes-label "$TUI2_BTN_SAVE_ANYWAY" --no-label "$TUI2_BTN_CANCEL" \
+						--yesno "$(printf '%s\n\nSave this list anyway?' "$_rpt")" 0 0; then
+						rm -f "$_mac_edit"
+						continue
+					fi
 				fi
 				cl_macs="$_new_macs"
-				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
-				# Completeness is core intelligence (macs_status); TUI only displays.
-				local mac_count mac_expected mac_complete mac_nodes mac_ports
-				# shellcheck disable=SC2086
-				eval "$(macs_status --text "$cl_macs" --type "$cl_type" --workers "${cl_workers:-2}" --ports "$cl_ports")"
-				if [[ "${mac_complete:-0}" -ne 1 ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Warning: ${mac_count:-0} MAC(s) entered, but $cl_type needs ${mac_expected:-?} (${mac_nodes:-?} nodes × ${mac_ports:-?} port(s) each)." 0 0 || true
-				fi
+				tui_log "MAC addresses entered: $(printf '%s\n' "$cl_macs" | grep -c . || true)"
+				_write_cluster_macs
 			fi
 			rm -f "$_mac_edit"
 			;;
@@ -1943,13 +1942,18 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
-	# platform comes from aba.conf. Do not source cluster.conf here:
+	# Installed platform is state.sh. Do not source cluster.conf here:
 	# normalize-cluster-conf prints export lines, and those values leak
 	# into the next aba cluster (Make forwards them as if they were flags).
-	source <(normalize-aba-conf) 2>/dev/null || true
+	local _plat
+	_plat=$(cluster_installed_platform "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null) || _plat=""
+	if [[ -z "$_plat" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null || true
+		_plat="${platform:-bm}"
+	fi
 
 	local _del_msg _del_help
-	if [[ "${platform:-bm}" == "bm" ]]; then
+	if [[ "$_plat" == "bm" ]]; then
 		_del_msg="Delete cluster '$cl_display'?\n\nThis removes cluster state files only.\nThe physical servers are left running — decommission them manually."
 		_del_help="Delete removes cluster state and generated resources\n\
 (kubeconfig, manifests, ISOs, state markers).\n\
@@ -2816,17 +2820,26 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
-	# platform is global (aba.conf). Sourcing cluster.conf here exports
-	# its VIPs and node counts into this shell and the next aba run.
-	source <(normalize-aba-conf) 2>/dev/null || true
-	[[ "${platform:-bm}" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
+	# Installed platform is this cluster's state.sh. aba.conf can change
+	# after install, and sourcing cluster.conf would leak into later runs.
+	local _plat
+	_plat=$(cluster_installed_platform "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null) || _plat=""
+	if [[ -z "$_plat" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null || true
+		_plat="${platform:-bm}"
+	fi
+	[[ "$_plat" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	_exec_with_progress "aba --dir $SELECTED_CLUSTER startup --yes" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	# Do not pass --yes on bare metal: the power-on ask() must surface as a
+	# progress PROMPT. vmw/kvm have no such gate, so --yes keeps VM start quiet.
+	local _startup_cmd="aba --dir $SELECTED_CLUSTER startup"
+	[[ "$_plat" != "bm" ]] && _startup_cmd+=" --yes"
+	_exec_with_progress "$_startup_cmd" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
 	local rc=$?
 	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display" && rc=$?
 	return $rc
@@ -2834,18 +2847,22 @@ _day2_startup() {
 
 # --- Refresh (recreate VMs, trigger new install) ---
 _day2_refresh() {
-	source <(normalize-aba-conf) 2>/dev/null || true
-	if [[ "${platform:-bm}" == "bm" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
-			--msgbox "Refresh recreates virtual machines and needs platform vmw or kvm in aba.conf.\n\nPlatform is bare metal, so there are no VMs to recreate.\nSet the platform to VMware or KVM under Platform Settings, then run Refresh again." 0 0 || true
-		return 0
-	fi
-
 	if ! select_cluster "$TUI2_TITLE_DAY2_REFRESH" "Select cluster to refresh:"; then
 		return 1
 	fi
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	local _plat
+	_plat=$(cluster_installed_platform "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null) || _plat=""
+	if [[ -z "$_plat" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null || true
+		_plat="${platform:-bm}"
+	fi
+	if [[ "$_plat" == "bm" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
+			--msgbox "Refresh recreates virtual machines.\n\n'$cl_display' was installed on bare metal, so there are no VMs to recreate." 0 0 || true
+		return 0
+	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
 		--yes-label "Refresh" --no-label "$TUI2_BTN_CANCEL" \

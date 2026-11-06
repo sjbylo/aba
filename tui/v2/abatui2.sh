@@ -527,7 +527,7 @@ _conno_main() {
 	while :; do
 		# Internet: runs independently on 300s TTL cache (fast when warm)
 		if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
-			dlg --backtitle "$(ui_backtitle)" --infobox "Please wait..." 3 25
+			dlg --backtitle "$(ui_backtitle)" --infobox "Please wait..." 0 0
 		fi
 		if aba_inet_check_cached 300; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
@@ -557,7 +557,7 @@ _conno_main() {
 		# mirror-changing action (sync, load, install, uninstall).
 		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
 			if ! run_once -p -i "aba:mirror:runtime" 2>/dev/null; then
-				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
+				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 0 0
 			fi
 			aba_mirror_runtime_wait
 			_TUI_NEED_MIRROR_RECHECK=false

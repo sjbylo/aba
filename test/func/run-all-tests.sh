@@ -84,6 +84,7 @@ unit_tests=(
 
 	# Config / normalize
 	test/func/test-normalize-conf-pipeline.sh
+	test/func/test-ocp-major-render.sh
 	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh
 	test/func/test-resource-pool-resolution.sh

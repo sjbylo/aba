@@ -3537,8 +3537,9 @@ B's API address.
 ## #B97: Bare-metal MAC ask says "placeholders gone" when the list must be complete
 
 **Severity:** MEDIUM — TUI progress dialogs still show CLI next steps (MAC ask and boot ask)
-**Status:** Planned
+**Status:** Done (2026-11-06 — TUI MAC and boot asks state the continue condition; the error line is the failure; CLI text unchanged)
 **Added:** 2026-11-06
+**Updated:** 2026-11-06
 
 **Problem:** The fresh-placeholder ask in `scripts/bm-ask-edit.sh` says:
 
