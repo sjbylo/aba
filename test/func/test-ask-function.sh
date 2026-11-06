@@ -159,6 +159,94 @@ rc=$(_ask_rc "x" -n)
 [ "$rc" -eq 1 ] && test_pass "ask -n: 'x' → rc=1 (unrecognized = reject)" \
 	|| test_fail "ask -n: 'x' should return 1 (only explicit y/Y proceeds)" "got rc=$rc"
 
+# ============================================================================
+# Group 6: --always + ask=false (BM gates must still prompt)
+# ============================================================================
+echo "--- ask --always vs ask=false ---"
+
+_ask_rc_noask() {
+	local input="$1"; shift
+	local rc=0
+	local td
+	td=$(mktemp -d)
+	printf 'ask=false\n' > "$td/aba.conf"
+	(
+		cd "$td" || exit 1
+		unset ASK_ALWAYS ASK_OVERRIDE
+		export PATH="$REPO_ROOT/scripts:$PATH"
+		# shellcheck disable=SC1091
+		source "$REPO_ROOT/scripts/include_all.sh" dummy_arg 2>/dev/null
+		echo "$input" | ask "$@" "Test prompt" >/dev/null 2>&1
+	) || rc=$?
+	rm -rf "$td"
+	echo $rc
+}
+
+# Regression: ask=false + --auto-no used to silently refuse BM boot (no prompt).
+rc=$(_ask_rc_noask "" -y --auto-no)
+[ "$rc" -eq 1 ] && test_pass "ask=false: -y --auto-no → rc=1 (auto decline)" \
+	|| test_fail "ask=false: -y --auto-no should return 1" "got rc=$rc"
+
+# --always forces interactive even with ask=false
+rc=$(_ask_rc_noask "y" -y --always)
+[ "$rc" -eq 0 ] && test_pass "ask=false: -y --always + 'y' → rc=0 (forced interactive)" \
+	|| test_fail "ask=false: --always should prompt and accept y" "got rc=$rc"
+
+rc=$(_ask_rc_noask "n" -y --always)
+[ "$rc" -eq 1 ] && test_pass "ask=false: -y --always + 'n' → rc=1" \
+	|| test_fail "ask=false: --always + n should decline" "got rc=$rc"
+
+# aba -y (ASK_OVERRIDE) still wins over --always (automation)
+rc=$(
+	td=$(mktemp -d)
+	printf 'ask=false\n' > "$td/aba.conf"
+	(
+		cd "$td" || exit 1
+		unset ASK_ALWAYS
+		export ASK_OVERRIDE=1
+		export PATH="$REPO_ROOT/scripts:$PATH"
+		source "$REPO_ROOT/scripts/include_all.sh" dummy_arg 2>/dev/null
+		echo "n" | ask -y --always "Test prompt" >/dev/null 2>&1
+	) && echo 0 || echo $?
+	rm -rf "$td"
+)
+[ "$rc" -eq 0 ] && test_pass "ASK_OVERRIDE beats --always (aba -y still skips prompt)" \
+	|| test_fail "ASK_OVERRIDE should win over --always" "got rc=$rc"
+
+# ============================================================================
+# Group 7: multi-line CLI prompt must keep newlines (not collapse to one line)
+# ============================================================================
+echo "--- multi-line CLI prompt ---"
+
+_ml_out=$(
+	unset ASK_OVERRIDE
+	export ASK_ALWAYS=1
+	export PLAIN_OUTPUT=1
+	echo y | ask -y --always $'Boot servers from the agent ISO, then continue to monitor.\n\nISO file:\n  /tmp/agent.iso\n\nYes: continue' 2>&1
+)
+# Collapsed bug looks like: "...monitor.ISO file:  /tmp/..." (no newline).
+# Require a real newline before "ISO file:" and before the indented path.
+if echo "$_ml_out" | grep -q $'monitor\.\n\[ABA\] \n\[ABA\] ISO file:\n' \
+	&& echo "$_ml_out" | grep -q $'ISO file:\n\[ABA\]   /tmp/agent.iso\n' \
+	&& ! echo "$_ml_out" | grep -qF 'monitor.ISO file:'; then
+	test_pass "multi-line ask preserves newlines on CLI"
+else
+	test_fail "multi-line ask must preserve newlines" "$(printf '%s' "$_ml_out" | tr '\n' '|' | head -c 240)"
+fi
+
+# BM scripts must use --always
+if grep -q 'ask -y --always' "$REPO_ROOT/scripts/bm-ask-boot.sh" \
+	&& grep -q 'ask -y --always' "$REPO_ROOT/scripts/bm-ask-edit.sh"; then
+	test_pass "bm-ask-boot/edit use ask --always"
+else
+	test_fail "bm-ask-boot/edit must use ask --always" "missing --always"
+fi
+if grep -q -- '--auto-no' "$REPO_ROOT/scripts/bm-ask-boot.sh"; then
+	test_fail "bm-ask-boot must not use --auto-no (blocks ask=false users)" "still has --auto-no"
+else
+	test_pass "bm-ask-boot has no --auto-no"
+fi
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo

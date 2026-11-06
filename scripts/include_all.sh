@@ -67,44 +67,64 @@ yaml2json() {
 # ===========================
 
 _color_echo() {
-    local color="$1"; shift
-    local n_opt=
-    local text
+	local color="$1"; shift
+	local n_opt=
+	local text
+	local -a lines
+	local i n
 
-    # Handle -n option if present
-    if [ "$1" = "-n" ]; then
-        n_opt="-n"
-        shift
-    fi
+	# Handle -n option if present
+	if [ "$1" = "-n" ]; then
+		n_opt="-n"
+		shift
+	fi
 
-    # Determine input source: arguments or stdin
-    if [ $# -gt 0 ]; then
-        text="$*"
-        # Process each line (in case args contain newlines)
-        while IFS= read -r line; do
-            _print_colored "$color" "$n_opt" "$line"
-        done <<< "$text"
-    else
-        # Read from stdin line by line
-        while IFS= read -r line; do
-            _print_colored "$color" "$n_opt" "$line"
-        done
-    fi
+	# Determine input source: arguments or stdin
+	if [ $# -gt 0 ]; then
+		text="$*"
+	else
+		text=$(cat)
+	fi
+
+	# Split on real newlines. With -n, only the LAST line omits the newline —
+	# applying -n to every line glued multi-line ask() prompts into one blob.
+	mapfile -t lines <<< "$text"
+	n=${#lines[@]}
+	# mapfile keeps a trailing empty element when text ends with \n
+	[ "$n" -gt 0 ] && [ -z "${lines[$((n - 1))]}" ] && n=$(( n - 1 ))
+	[ "$n" -lt 1 ] && return 0
+
+	for ((i = 0; i < n; i++)); do
+		if [ -n "$n_opt" ] && [ "$i" -eq $(( n - 1 )) ]; then
+			_print_colored "$color" "-n" "${lines[i]}"
+		else
+			_print_colored "$color" "" "${lines[i]}"
+		fi
+	done
 }
 
 # Helper function to handle color and terminal checks
 _print_colored() {
-    local color="$1"; shift
-    local n_opt="$1"; shift
-    local line="$*"
+	local color="$1"; shift
+	local n_opt="$1"; shift
+	local line="$*"
 
-    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
-        tput setaf "$color"
-        echo -e $n_opt "$line"
-        tput sgr0
-    else
-        echo -e $n_opt "$line"
-    fi
+	# printf (not echo -e): do not interpret backslashes in user text (paths, etc.)
+	if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
+		tput setaf "$color"
+		if [ "$n_opt" = "-n" ]; then
+			printf '%s' "$line"
+		else
+			printf '%s\n' "$line"
+		fi
+		tput sgr0
+	else
+		if [ "$n_opt" = "-n" ]; then
+			printf '%s' "$line"
+		else
+			printf '%s\n' "$line"
+		fi
+	fi
 }
 
 # Standard 8 colors
@@ -843,9 +863,16 @@ _resolve_node_setting() {
 	local varname val
 
 	# Node-specific: e.g. disk_hint_node_master1
+	# A hostname may contain '-'. That is not a legal shell name, and cluster.conf
+	# is sourced as shell, so the key uses '_' instead: hostname e2e-bm-sno1 is
+	# disk_hint_node_e2e_bm_sno1. DNS labels cannot contain '_', so this is only
+	# the variable spelling, not the hostname.
 	varname="${base}_node_${hostname}"
-	val="${!varname:-}"
-	[ "$val" ] && { echo "$val"; return 0; }
+	varname=${varname//-/_}
+	if [[ "$varname" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+		val="${!varname:-}"
+		[ "$val" ] && { echo "$val"; return 0; }
+	fi
 
 	# Role-level: e.g. disk_hint_master
 	varname="${base}_${role}"
@@ -1237,6 +1264,305 @@ _valid_port_name() {
 	[[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
 }
 
+# =============================================================================
+# MAC address / macs.conf helpers
+# Intelligence lives here (ADR: TUI is dumb, aba is smart). Callers:
+#   create-agent-config.sh, bm-ask-edit.sh, TUI (display via macs_status/macs_report).
+# Derived — NOT normalize*() (ADR-005).
+#
+# Policy (macs does NOT always win; macs.conf is a shortcut, not required):
+#   macs has ≥1 unique address + (no agent-config | macs.conf -nt agent-config)
+#        → apply those MACs (regen YAML). Shortfall → placeholder slots + warn
+#   macs empty, or agent-config.yaml newer than macs.conf
+#        → keep hand-edited agent-config.yaml (ignore macs)
+#   platform=bm + no macs + no agent-config yet
+#        → still write agent-config.yaml with placeholder MACs
+#          (xx:xx:xx:xx:xx:xx) — do NOT invent real-looking MACs
+#   platform=vmw|kvm + empty macs
+#        → invent from mac_prefix (VMs only)
+# =============================================================================
+
+# Single Ethernet MAC (grep -oE / [[ =~ ]])
+_MAC_ADDR_RE='([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
+
+# Stand-in written into agent-config.yaml when a bare-metal MAC is unknown.
+# Not a real NIC address ('x' is not hex). One definition — callers must not copy it.
+BM_MAC_PLACEHOLDER='xx:xx:xx:xx:xx:xx'
+
+# Validate a full MAC address (e.g. 00:50:56:ab:cd:ef).
+_valid_mac() {
+	[[ "$1" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]
+}
+
+# Map cluster type → "masters workers" (standard uses $2 or default 2 workers).
+macs_nodes_from_type() {
+	case "${1:-}" in
+		sno)      echo "1 0" ;;
+		compact)  echo "3 0" ;;
+		standard) echo "3 ${2:-2}" ;;
+		*)        echo "1 0" ;;
+	esac
+}
+
+# Expected MAC count = nodes × ports. Args optional; else env from normalize-cluster-conf.
+# Prints integer on stdout (minimum 1).
+macs_expected_count() {
+	local nm=${1:-${num_masters:-0}}
+	local nw=${2:-${num_workers:-0}}
+	local ports_csv=${3:-${ports:-}}
+	local nodes=$(( nm + nw ))
+	local nports
+	nports=$(echo "$ports_csv" | tr ',' ' ' | tr -s '[:space:]' | wc -w)
+	nports=${nports// /}
+	[ "${nports:-0}" -lt 1 ] && nports=1
+	local exp=$(( nodes * nports ))
+	[ "$exp" -lt 1 ] && exp=1
+	echo "$exp"
+}
+
+# Extract valid MACs from a file (default macs.conf). One per line on stdout.
+macs_list_from_file() {
+	local f=${1:-macs.conf}
+	[ -s "$f" ] || return 0
+	grep -oE "$_MAC_ADDR_RE" "$f" || true
+}
+
+# Extract valid MACs from a text blob (e.g. TUI paste buffer). One per line.
+macs_list_from_text() {
+	[ -n "${1:-}" ] || return 0
+	# tr normalizes commas/spaces so paste formats match file format
+	grep -oE "$_MAC_ADDR_RE" <<<"$(printf '%s\n' "$1" | tr ',;' ' ')" || true
+}
+
+# Sourceable status for ask gates and TUI (dumb consumer: eval + display).
+#   eval "$(macs_status)"
+#   eval "$(macs_status --text "$cl_macs" --type sno --ports ens1f0)"
+#   eval "$(macs_status --file path --masters 3 --workers 2 --ports a,b)"
+# Output keys: mac_count mac_expected mac_complete mac_nodes mac_ports
+macs_status() {
+	local file=macs.conf text= use_text=0
+	local nm=${num_masters:-} nw=${num_workers:-} ports_csv=${ports:-}
+	local cl_type= type_workers=
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			--file)    file=$2; shift 2 ;;
+			--text)    text=$2; use_text=1; shift 2 ;;
+			--masters) nm=$2; shift 2 ;;
+			--workers) nw=$2; type_workers=$2; shift 2 ;;
+			--ports)   ports_csv=$2; shift 2 ;;
+			--type)    cl_type=$2; shift 2 ;;
+			*) shift ;;
+		esac
+	done
+	if [ -n "$cl_type" ]; then
+		# Type mapping is core intelligence — TUI must not re-derive node counts.
+		read -r nm nw <<<"$(macs_nodes_from_type "$cl_type" "${type_workers:-${nw:-2}}")"
+	fi
+	nm=${nm:-0}
+	nw=${nw:-0}
+	ports_csv=${ports_csv:-}
+
+	local mac_nodes=$(( nm + nw ))
+	local mac_ports
+	mac_ports=$(echo "$ports_csv" | tr ',' ' ' | tr -s '[:space:]' | wc -w)
+	mac_ports=${mac_ports// /}
+	[ "${mac_ports:-0}" -lt 1 ] && mac_ports=1
+
+	local mac_expected
+	mac_expected=$(macs_expected_count "$nm" "$nw" "$ports_csv")
+
+	local mac_count=0
+	if [ "$use_text" -eq 1 ]; then
+		mac_count=$(macs_list_from_text "$text" | wc -l)
+	else
+		mac_count=$(macs_list_from_file "$file" | wc -l)
+	fi
+	mac_count=${mac_count// /}
+
+	local mac_complete=0
+	[ "$mac_count" -ge "$mac_expected" ] && mac_complete=1
+
+	printf 'mac_count=%s mac_expected=%s mac_complete=%s mac_nodes=%s mac_ports=%s\n' \
+		"$mac_count" "$mac_expected" "$mac_complete" "$mac_nodes" "$mac_ports"
+}
+
+# Return 0 if macs are complete (same flags as macs_status).
+macs_is_complete() {
+	local mac_count mac_expected mac_complete mac_nodes mac_ports
+	# shellcheck disable=SC2086
+	eval "$(macs_status "$@")"
+	[ "${mac_complete:-0}" -eq 1 ]
+}
+
+# Should macs.conf drive regeneration of agent-config.yaml? (see policy table above)
+# Returns 0 when there is at least one MAC AND (no agent-config OR macs.conf -nt it).
+# Completeness is not required: a short unique list is still applied; missing
+# slots become placeholders in create-agent-config.sh (with a warning).
+# Usage: macs_should_apply [macs_file] [agent_config_file]
+#   Optional macs_status flags may be passed first: --masters N --ports …
+macs_should_apply() {
+	local status_args=() macs_file=macs.conf agent_file=agent-config.yaml
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			--file|--text|--masters|--workers|--ports|--type)
+				status_args+=("$1" "$2"); shift 2 ;;
+			*) break ;;
+		esac
+	done
+	[ -n "${1:-}" ] && macs_file=$1 && shift
+	[ -n "${1:-}" ] && agent_file=$1
+
+	local mac_count mac_expected mac_complete mac_nodes mac_ports
+	# shellcheck disable=SC2086
+	eval "$(macs_status --file "$macs_file" "${status_args[@]}")"
+	# Any real MAC list can win (complete or short). Empty cannot.
+	[ "${mac_count:-0}" -ge 1 ] || return 1
+	[ -f "$agent_file" ] || return 0
+	# -nt: macs newer than agent-config → apply. Equal/older → ignore macs.
+	[ "$macs_file" -nt "$agent_file" ]
+}
+
+# cluster.conf outranks macs.conf. A newer cluster.conf (SNO vs standard,
+# node counts, IPs) must rebuild agent-config.yaml even when macs.conf is
+# older than the YAML. macs.conf only chooses the MAC addresses inside that
+# rebuild. Returns 0 when cluster.conf is strictly newer than the YAML.
+# Usage: cluster_conf_outranks_agent [cluster.conf] [agent-config.yaml]
+cluster_conf_outranks_agent() {
+	local conf=${1:-cluster.conf} agent=${2:-agent-config.yaml}
+	[ -f "$conf" ] && [ -f "$agent" ] && [ "$conf" -nt "$agent" ]
+}
+
+# Human-readable macs.conf state for ask() / aba_info (compact: ~2–5 lines).
+# Same flags as macs_status, plus optional --agent PATH (default agent-config.yaml).
+# Prints: presence/ready, vs agent-config, content preview (≤3 lines), errors
+# (too few, duplicates, empty file with junk). Intelligence stays here — callers display.
+macs_report() {
+	local file=macs.conf text= use_text=0 agent_file=agent-config.yaml
+	local nm=${num_masters:-} nw=${num_workers:-} ports_csv=${ports:-}
+	local cl_type= type_workers=
+	local status_args=()
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			--file)    file=$2; status_args+=(--file "$2"); shift 2 ;;
+			--text)    text=$2; use_text=1; status_args+=(--text "$2"); shift 2 ;;
+			--agent)   agent_file=$2; shift 2 ;;
+			--masters) nm=$2; status_args+=(--masters "$2"); shift 2 ;;
+			--workers) nw=$2; type_workers=$2; status_args+=(--workers "$2"); shift 2 ;;
+			--ports)   ports_csv=$2; status_args+=(--ports "$2"); shift 2 ;;
+			--type)    cl_type=$2; status_args+=(--type "$2"); shift 2 ;;
+			*) shift ;;
+		esac
+	done
+
+	local mac_count mac_expected mac_complete mac_nodes mac_ports
+	# shellcheck disable=SC2086
+	eval "$(macs_status "${status_args[@]}")"
+
+	local list= uniq_count=0 dup_list=
+	if [ "$use_text" -eq 1 ]; then
+		list=$(macs_list_from_text "$text")
+	else
+		list=$(macs_list_from_file "$file")
+	fi
+	if [ -n "$list" ]; then
+		uniq_count=$(printf '%s\n' "$list" | sort -u | wc -l)
+		uniq_count=${uniq_count// /}
+		dup_list=$(printf '%s\n' "$list" | sort | uniq -d | tr '\n' ' ')
+		dup_list=${dup_list%% }
+	fi
+
+	local present=0
+	if [ "$use_text" -eq 1 ]; then
+		[ -n "$text" ] && present=1
+	else
+		[ -s "$file" ] && present=1
+	fi
+
+	local ready_word="NOT READY" vs_agent=""
+	local -a errors=() warns=()
+	if [ "$present" -eq 0 ]; then
+		printf 'macs.conf: missing/empty — NOT READY (need %s = %s node(s) × %s port(s))\n' \
+			"$mac_expected" "$mac_nodes" "$mac_ports"
+		return 0
+	fi
+
+	if [ "${mac_count:-0}" -eq 0 ]; then
+		errors+=("no valid MAC addresses found (file has content but nothing matched aa:bb:cc:dd:ee:ff)")
+	fi
+	if [ "${mac_count:-0}" -gt 0 ] && [ "${uniq_count:-0}" -ne "${mac_count:-0}" ]; then
+		errors+=("duplicate MAC(s): ${dup_list:-?} — addresses must be unique")
+	fi
+	if [ "${mac_count:-0}" -gt 0 ] && [ "${mac_count:-0}" -lt "${mac_expected:-0}" ]; then
+		# Mention placeholders only when these MACs will actually be written.
+		# A newer hand-edited agent-config.yaml is kept as-is (macs_should_apply).
+		local _short="too few: have ${mac_count}, need ${mac_expected} (${mac_nodes} node(s) × ${mac_ports} port(s))"
+		if [ "$use_text" -eq 1 ] || [ ! -f "$agent_file" ] || [ "$file" -nt "$agent_file" ]; then
+			_short="${_short} — missing slots are ${BM_MAC_PLACEHOLDER}"
+		fi
+		warns+=("$_short")
+	fi
+	if [ "${mac_count:-0}" -gt "${mac_expected:-0}" ]; then
+		warns+=("extra: have ${mac_count}, expected ${mac_expected} (first ${mac_expected} will be used)")
+	fi
+
+	# READY = full unique set. PARTIAL = unique but short (placeholders fill the rest).
+	if [ "${#errors[@]}" -eq 0 ] && [ "${mac_complete:-0}" -eq 1 ]; then
+		ready_word="READY"
+	elif [ "${#errors[@]}" -eq 0 ] && [ "${mac_count:-0}" -ge 1 ] && [ "${uniq_count:-0}" -eq "${mac_count:-0}" ]; then
+		ready_word="PARTIAL"
+	fi
+
+	# No mtime words in user text ("newer than"). Apply-or-not stays in macs_should_apply.
+	if [ "$use_text" -eq 0 ]; then
+		if [ ! -f "$agent_file" ]; then
+			vs_agent="no agent-config.yaml yet"
+			if [ "$ready_word" = "READY" ] || [ "$ready_word" = "PARTIAL" ]; then
+				vs_agent="$vs_agent — will generate agent-config (cluster.conf + these MACs)"
+			fi
+		elif [ "$file" -nt "$agent_file" ] && { [ "$ready_word" = "READY" ] || [ "$ready_word" = "PARTIAL" ]; }; then
+			vs_agent="will use these MACs in agent-config.yaml"
+		fi
+	fi
+
+	if [ -n "$vs_agent" ]; then
+		printf 'macs.conf: present, %s (%s/%s) — %s\n' \
+			"$ready_word" "$mac_count" "$mac_expected" "$vs_agent"
+	else
+		printf 'macs.conf: present, %s (%s/%s = %s node(s) × %s port(s))\n' \
+			"$ready_word" "$mac_count" "$mac_expected" "$mac_nodes" "$mac_ports"
+	fi
+
+	# Content preview — at most 3 lines (≤3 MACs/line; line 3 may end with “… and N more”).
+	if [ -n "$list" ]; then
+		local -a macs=()
+		local _m
+		while IFS= read -r _m; do
+			[ -n "$_m" ] && macs+=("$_m")
+		done <<<"$list"
+		local total=${#macs[@]} i
+		if [ "$total" -le 9 ]; then
+			for ((i = 0; i < total; i += 3)); do
+				printf '  %s' "${macs[$i]}"
+				[ $(( i + 1 )) -lt "$total" ] && printf '  %s' "${macs[$((i + 1))]}"
+				[ $(( i + 2 )) -lt "$total" ] && printf '  %s' "${macs[$((i + 2))]}"
+				printf '\n'
+			done
+		else
+			printf '  %s  %s  %s\n' "${macs[0]}" "${macs[1]}" "${macs[2]}"
+			printf '  %s  %s  %s\n' "${macs[3]}" "${macs[4]}" "${macs[5]}"
+			printf '  %s  %s  ... and %s more\n' "${macs[6]}" "${macs[7]}" "$(( total - 8 ))"
+		fi
+	fi
+
+	local e
+	for e in "${errors[@]}"; do
+		printf '  ERROR: %s\n' "$e"
+	done
+	for e in "${warns[@]}"; do
+		printf '  WARN: %s\n' "$e"
+	done
+}
+
 # Validate an operator package name against the catalog indexes.
 # Format: lowercase alphanumeric with hyphens, may start with a digit (e.g. 3scale-operator).
 # Warns (does NOT abort) if the name is not found in any catalog index for the configured OCP version.
@@ -1390,6 +1716,46 @@ externalize_cluster_state() {
 	aba_debug "State dir: $_state_dir/"
 }
 
+# The only place that decides `aba` versus `aba -d <name>`.
+# An empty name means the operator is already in the directory.
+_aba_cmd_line() {
+	local _name="$1"
+	shift
+	local _line="aba"
+	[ -n "$_name" ] && _line="aba -d $_name"
+	if [ $# -eq 0 ]; then
+		echo "$_line"
+	else
+		echo "$_line $*"
+	fi
+}
+
+# Command the operator can type again from this shell.
+# `aba <words>` when they are already in the directory.
+# `aba -d <name> <words>` only when this shell got here with aba -d / --dir.
+# ABA_TARGET_DIR is set only in that second case (scripts/aba.sh).
+aba_cmd() {
+	if [ -n "${ABA_TARGET_DIR:-}" ]; then
+		_aba_cmd_line "$(basename "$PWD")" "$@"
+	else
+		_aba_cmd_line "" "$@"
+	fi
+}
+
+# Command for a directory that may not be the current one.
+# When <dir> is this directory and -d was not used, same as aba_cmd.
+aba_cmd_for() {
+	local _dir="$1"
+	shift
+	local _base
+	_base=$(basename "$_dir")
+	if [ "$_base" = "$(basename "$PWD")" ] && [ -z "${ABA_TARGET_DIR:-}" ]; then
+		aba_cmd "$@"
+	else
+		_aba_cmd_line "$_base" "$@"
+	fi
+}
+
 # Display post-install summary and next steps.
 # Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
 # and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
@@ -1415,12 +1781,6 @@ show_cluster_summary() {
 		bm)  _plat="bare-metal" ;;
 	esac
 
-	# Context-aware command prefix: "aba" from inside the cluster dir,
-	# "aba -d <dir>" when invoked via -d flag.
-	local _dir; _dir=$(basename "$PWD")
-	local _p="aba"
-	[ "${ABA_TARGET_DIR:-}" ] && _p="aba -d $_dir"
-
 	echo
 	if [ "${installed_from:-}" = "imported" ]; then
 		aba_success "Cluster imported successfully!"
@@ -1434,15 +1794,15 @@ show_cluster_summary() {
 	aba_info "  API:      https://api.$_cn.$_bd:6443"
 	echo
 	aba_info "Next steps:"
-	aba_info "  $_p terminal       — open interactive cluster shell"
-	aba_info "  . <($_p shell)     — access cluster (kubeconfig)"
-	aba_info "  . <($_p login)     — log in as kubeadmin"
+	aba_info "  $(aba_cmd terminal)       — open interactive cluster shell"
+	aba_info "  . <($(aba_cmd shell))     — access cluster (kubeconfig)"
+	aba_info "  . <($(aba_cmd login))     — log in as kubeadmin"
 	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then
-		aba_info "  $_p day2           — configure OperatorHub with mirror registry"
-		aba_info "  $_p day2-osus      — configure OpenShift Update Service"
+		aba_info "  $(aba_cmd day2)           — configure OperatorHub with mirror registry"
+		aba_info "  $(aba_cmd day2-osus)      — configure OpenShift Update Service"
 	fi
-	aba_info "  $_p day2-ntp       — configure NTP"
-	aba_info "  $_p info           — view this information again"
+	aba_info "  $(aba_cmd day2-ntp)       — configure NTP"
+	aba_info "  $(aba_cmd info)           — view this information again"
 }
 
 # Emit export lines for cluster status fields from state.sh.
@@ -1843,6 +2203,30 @@ normalize-bmc-conf()
 	echo "$vars" | grep -v '^export bmc_password_'
 }
 
+# BMC host inventory helpers (derived from bmc.conf — not normalize*() output; ADR-005).
+# Single grep/sed chokepoint for "any / how many / which bmc_host_* nodes".
+
+# List node name suffixes from bmc_host_<node>= lines (declaration order).
+# Empty stdout if bmc.conf absent or no matching keys.
+bmc_host_list() {
+	[ -f bmc.conf ] || return 0
+	grep -E '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf \
+		| sed -E 's/^[[:space:]]*bmc_host_([A-Za-z0-9_-]+)=.*/\1/'
+}
+
+# Count of bmc_host_* nodes (0 if none / no file).
+bmc_host_count() {
+	local n=0
+	n=$(bmc_host_list | grep -c . || true)
+	echo "${n:-0}"
+}
+
+# Return 0 if at least one bmc_host_* key is defined.
+bmc_has_hosts() {
+	[ -f bmc.conf ] || return 1
+	grep -qE '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf
+}
+
 bmc_redact_env()
 {
 	# D-07 chokepoint: emit 'export <var>=<val>' lines for every BMC config env var
@@ -1910,15 +2294,9 @@ install_rpms() {
 }
 
 ask() {
-	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
+	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-} ASK_ALWAYS=${ASK_ALWAYS:-}
 	local ret_default=
-
-	if [ ! "$ASK_ALWAYS" ]; then  # FIXME: Simplify all this!
-		[ "${ASK_OVERRIDE:-}" ] && ret_default="-y" #return 0  # reply "default reply"
-		source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
-		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
-		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="ask=false" #return 0  # reply "default reply"
-	fi
+	local force_always=
 
 	# Default reply is 'yes' (or 'no') and return 0
 	yn_opts="(y/n) [y]"
@@ -1926,16 +2304,44 @@ ask() {
 	local auto_response=
 	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/n) [n]" && shift
 	[ "$1" == "-y" ] && def_response=y && yn_opts="(y/n) [y]" && shift
+	# --always: force interactive even when ask=false (BM edit/boot gates).
+	# Does NOT override aba -y (ASK_OVERRIDE) — automation still skips prompts.
+	[ "$1" == "--always" ] && force_always=1 && shift
 	# --auto-yes/--auto-no: override the non-interactive (ask=false) answer
 	# independently of the interactive default (-n/-y).  Allows e.g.
 	# "ask -n --auto-yes" = human default N (safe), automation default Y (proceed).
 	[ "$1" == "--auto-yes" ] && auto_response=y && shift
 	[ "$1" == "--auto-no" ] && auto_response=n && shift
 	timer=
-	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
+	[ "$1" == "-t" ] && timer="-t $2" && shift 2
 
-	#echo
- 	echo_yellow -n "[ABA] $@? $yn_opts: " >&2
+	# Precedence: aba -y → auto; --always/ASK_ALWAYS → interactive; ask=false → auto.
+	if [ "${ASK_OVERRIDE:-}" ]; then
+		ret_default="-y"
+	elif [ -n "${ASK_ALWAYS:-}" ] || [ -n "$force_always" ]; then
+		ret_default=
+	else
+		source <(normalize-aba-conf)  # missing aba.conf → ask=true (safe)
+		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
+		[ ! "$ask" ] && ret_default="ask=false"
+	fi
+
+	# Preserve newlines in multi-line prompts.
+	# 1) Always quote the message ("$*") — unquoted $@ collapses \n to spaces.
+	# 2) Multi-line: print body with newlines, then "? (y/n):" on its own line.
+	#    (echo_* -n used to apply -n to every line and glue the blob; fixed in
+	#    _color_echo, but keep this layout for readable CLI prompts.)
+	local _ask_msg="$*"
+	if [[ "$_ask_msg" == *$'\n'* ]]; then
+		# Same rule as aba_info -m: one [ABA] per physical line.
+		local _aline=
+		while IFS= read -r _aline; do
+			echo_yellow "[ABA] $_aline" >&2
+		done <<< "$_ask_msg"
+		echo_yellow -n "[ABA] ? $yn_opts: " >&2
+	else
+		echo_yellow -n "[ABA] ${_ask_msg}? $yn_opts: " >&2
+	fi
 	if [ "$ret_default" ]; then
 		echo_white "[default: $ret_default]" >&2
 		# ASK_OVERRIDE (-y flag): always proceed (like dnf -y)
@@ -1949,8 +2355,17 @@ ask() {
 		[ "$effective" = "n" ] && return 1
 		return 0
 	fi
-	# TUI mode: notify the progress dialog so it shows a yes/no prompt
-	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "PROMPT|$*|$def_response"
+	# TUI progress PROMPT (does NOT change CLI output):
+	#   CLI already printed _ask_msg with real newlines via echo_yellow above.
+	#   FIFO is line-oriented (one event per line), so multi-line ask text must
+	#   be encoded as literal \n here; tui-progress.sh expands them back for
+	#   the yes/no dialog only. When ABA_PROGRESS_FIFO is unset, this block is
+	#   skipped — pure CLI/ask behavior is unchanged.
+	if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
+		local _ask_prompt="$_ask_msg"
+		_ask_prompt=${_ask_prompt//$'\n'/\\n}
+		aba_progress "PROMPT|${_ask_prompt}|$def_response"
+	fi
 	read $timer yn
 	[ -n "${ABA_PROGRESS_FIFO:-}" ] && aba_progress "PROMPT_DONE"
 

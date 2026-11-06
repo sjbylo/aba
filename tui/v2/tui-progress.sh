@@ -350,7 +350,16 @@ _tp_handle_prompt() {
 	local _default_flag=""
 	[ "$_default" = "n" ] && _default_flag="--defaultno"
 
+	# Decode ask() PROMPT transport: real newlines → literal \n in the FIFO
+	# (line-oriented), expanded here for dialog only. CLI ask() never sees
+	# this path — it prints $* with real newlines before read.
+	_prompt="${_prompt//\\n/$'\n'}"
+
+	# dialog turns real newlines into spaces unless --cr-wrap. Without it the
+	# boot ask is one paragraph and a long `dd` line breaks mid-token.
+	# --no-collapse keeps the blank line between sections.
 	_tp_dlg --backtitle "$(ui_backtitle)" --title " ABA " --yes-label "Yes" --no-label "No" $_default_flag \
+		--cr-wrap --no-collapse \
 		--yesno "\n$_prompt" 0 0 || rc=$?
 	case "$rc" in
 		0) printf 'y\r' > "$_tp_input_fifo" ;;
@@ -625,8 +634,9 @@ _exec_with_progress() {
 	fi
 	_tp_script_pid=$!
 
-	# Show immediate feedback while waiting for the command to emit PLAN events
-	_tp_dlg --backtitle "$(ui_backtitle)" --title " $title " --infobox "\n  One moment please ..." 5 30 2>/dev/null || true
+	# Show immediate feedback while waiting for the command to emit PLAN events.
+	# 0 0 lets dialog size the box to the title and the text.
+	_tp_dlg --backtitle "$(ui_backtitle)" --title " $title " --infobox "\n  One moment please ..." 0 0 2>/dev/null || true
 
 	# Wait for PLAN events before first draw (10s timeout — aba.sh startup takes ~4s)
 	local _wait=100

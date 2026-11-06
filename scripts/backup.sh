@@ -223,6 +223,7 @@ file_list=$(find				\
 	! -name ".vms-ready"						\
 	! -name ".bm-bmc-boot-done"					\
 	! -name ".bm-config-reviewed"						\
+	! -name ".bm-config-asked"						\
 	! -name ".preflight-done"					\
 	! -name ".cli"							\
 	! -name "*.content-layer-digest"				\

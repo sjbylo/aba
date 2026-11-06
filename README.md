@@ -1030,7 +1030,7 @@ aba install
 **What bare-metal users typically configure (prefer `cluster.conf` / `macs.conf` over hand-editing YAML):**
 
 - **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory (or BMC auto-discovery when `bmc.conf` is set).
-- **Installation disk (optional)** — only if the default disk is wrong: set `disk_hint` in `cluster.conf` (or CLI `--disk-hint` / `--disk-hint-master` / `--disk-hint-worker`). Supports a device path or criteria (`path=…,minSizeGigabytes=200`). Per-node overrides: `disk_hint_node_<hostname>=…` (node > role > global). ABA renders these into `rootDeviceHints` in `agent-config.yaml`.
+- **Installation disk (optional)** — only if the default disk is wrong: set `disk_hint` in `cluster.conf` (or CLI `--disk-hint` / `--disk-hint-master` / `--disk-hint-worker`). Supports a device path or criteria (`path=…,minSizeGigabytes=200`). Per-node overrides: `disk_hint_node_<hostname>=…` (node > role > global). A hyphen in the hostname is written as an underscore in that name (`e2e-bm-sno1` → `disk_hint_node_e2e_bm_sno1`). ABA renders these into `rootDeviceHints` in `agent-config.yaml`.
 - **Hostnames** — defaults are generated from the cluster name. If you need different hostnames, update `cluster.conf` and re-run `aba install` (which regenerates `agent-config.yaml`) rather than editing `agent-config.yaml` directly.
 
 For scenarios still beyond `cluster.conf` (fully custom NMState, non-standard agent fields), edit `agent-config.yaml` / `install-config.yaml` directly — or use a [primed bundle (beta)](#primed-bundles). ABA detects and preserves your YAML edits across re-runs.

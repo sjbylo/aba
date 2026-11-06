@@ -332,7 +332,8 @@ test_end 0
 #    flow but from the SYNC perspective (registry reachable from con via sync).
 #    Both tests are kept for defense-in-depth.
 #
-#    Continuous BM (#B80): `aba install --step iso` on disco (registry there).
+#    Continuous BM (#B80): `aba -y iso` on disco (registry there).
+#    Placeholder MACs abort, so write five test MACs first. -y skips the ask.
 # ============================================================================
 test_begin "Bare-metal simulation: platform=bm continuous ISO"
 
@@ -359,9 +360,12 @@ e2e_run_remote "Verify agent configs" \
     "ls ~/aba/$STANDARD/install-config.yaml ~/aba/$STANDARD/agent-config.yaml"
 e2e_run_remote "Verify ISO not yet created" \
     "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+# Simulation only — these MACs are never attached to a VM.
+e2e_run_remote "Write 5 test MACs (standard = 3 masters + 2 workers)" \
+    "cd ~/aba && printf '%s\n' 00:50:56:BE:E2:01 00:50:56:BE:E2:02 00:50:56:BE:E2:03 00:50:56:BE:E2:04 00:50:56:BE:E2:05 > $STANDARD/macs.conf"
 
-e2e_run_remote "aba install --step iso (continuous BM through ISO)" \
-    "mkdir -p ~/tmp && cd ~/aba && aba --dir $STANDARD install --step iso 2>&1 | tee ~/tmp/bm-iso.out && grep -q 'Review and edit' ~/tmp/bm-iso.out"
+e2e_run_remote "aba iso (continuous BM through ISO)" \
+    "set -o pipefail; mkdir -p ~/tmp && cd ~/aba && aba -y --dir $STANDARD iso 2>&1 | tee ~/tmp/bm-iso.out && grep -q 'Bare-metal MAC check' ~/tmp/bm-iso.out && ! grep -q 'xx:xx:xx:xx:xx:xx' $STANDARD/agent-config.yaml"
 e2e_run_remote "Verify .bm-config-reviewed exists" "test -f ~/aba/$STANDARD/.bm-config-reviewed"
 e2e_run_remote "Verify no legacy .bm-message" "test ! -f ~/aba/$STANDARD/.bm-message"
 e2e_run_remote "Verify no legacy .bm-nextstep" "test ! -f ~/aba/$STANDARD/.bm-nextstep"

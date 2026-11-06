@@ -44,7 +44,7 @@ fi
 # -----------------------------------------------------------------------------
 # INT-03 gate 2: bmc.conf present but no bmc_host_* keys. Manual fallback.
 # -----------------------------------------------------------------------------
-if ! grep -qE '^[[:space:]]*bmc_host_' bmc.conf; then
+if ! bmc_has_hosts; then
 	aba_info "BMC: bmc.conf present but no bmc_host_* keys defined - using manual virtual-media flow."
 	touch .bm-bmc-boot-done
 	exit 0
@@ -74,13 +74,10 @@ source scripts/bmc-redfish.sh
 source scripts/bmc-adapter-generic.sh
 
 # -----------------------------------------------------------------------------
-# Helper: list node names from bmc.conf in declaration order.
-# Mirrors scripts/preflight-check-bm.sh lines 23-27 exactly.
+# Helper: list node names from bmc.conf (shared bmc_host_list in include_all.sh).
 # -----------------------------------------------------------------------------
 _bm_node_list() {
-	[ -f bmc.conf ] || return 0
-	grep -E '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf \
-		| sed -E 's/^[[:space:]]*bmc_host_([A-Za-z0-9_-]+)=.*/\1/'
+	bmc_host_list
 }
 
 # -----------------------------------------------------------------------------

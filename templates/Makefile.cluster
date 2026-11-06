@@ -35,6 +35,8 @@ TARGET_DEPENDENCIES = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-read
 BOOTSTRAP_PRE_DEPS = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done
 
 .PHONY: install
+# Full install. `aba install` does not take --step. A single stage is its own
+# command (`aba iso`, `aba mon`). `aba cluster -s install` runs this goal.
 install: _progress_plan-cluster-install $(TARGET_DEPENDENCIES) ## Install the cluster (generate ISO, boot VMs/servers, monitor)
 
 .PHONY: _progress_plan-cluster-install
@@ -148,14 +150,26 @@ preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS,
 	@$(SCRIPTS)/infra-dns.sh add-cluster
 	@touch .infra-dns
 
-.preflight-done: install-config.yaml agent-config.yaml
+# Generate agent-config.yaml first, then ask the user to edit it.
+# The YAML rule already depends on cluster.conf, mirror.conf, and macs.conf,
+# so Make rebuilds the file when any of those is newer, and only then runs
+# bm-ask-edit.sh. create-agent-config.sh writes placeholder MACs and returns
+# success, so this prerequisite does not skip the question.
+# Do not rebuild the file again after the ask: the user may have just edited it.
+# Non-bm / .primed: bm-ask-edit is a no-op; the agent-config.yaml rule invents
+# VM MACs (or the primed YAML is already present and the rule is empty).
+# bm-ask-edit.sh writes .bm-config-asked when it shows the question. A No
+# answer never returns here, so the Makefile cannot own that stamp.
+.bm-config-reviewed: install-config.yaml agent-config.yaml $(if $(wildcard .primed),,$(wildcard macs.conf))
+	$(SCRIPTS)/bm-ask-edit.sh
+	@test -f agent-config.yaml || { echo "[ABA] Error: agent-config.yaml missing after config review."; exit 1; }
+	@touch .bm-config-reviewed
+
+# Preflight after the review ask. The YAML already exists: it is a prerequisite
+# of .bm-config-reviewed.
+.preflight-done: .bm-config-reviewed
 	$(SCRIPTS)/preflight-check.sh
 	@touch .preflight-done
-
-# BM edit/review gate (no-op on vmw/kvm and when .primed)
-.bm-config-reviewed: install-config.yaml agent-config.yaml
-	$(SCRIPTS)/bm-ask-edit.sh
-	@touch .bm-config-reviewed
 
 # Ensure openshift-install binary exists (delegates to cli/Makefile if missing)
 ~/bin/openshift-install:
@@ -166,7 +180,10 @@ iso: iso-agent-based/agent.$(arch).iso ## Build the agent-based iso file in iso-
 	@printf '\033[0;32m[ABA] ISO ready: %s/iso-agent-based/agent.%s.iso\033[0m\n' "$(CURDIR)" "$(arch)"
 	@echo "[ABA] Warning: The ISO contains certificates that expire 24 hours after creation."
 	@echo "[ABA]          Boot your servers and complete the install within that window."
-iso-agent-based/agent.$(arch).iso: .bm-config-reviewed .preflight-done .infra-dns ~/bin/openshift-install
+# .bm-config-reviewed depends on agent-config.yaml, so Make writes that file and
+# then asks. Listing both YAML files here rebuilds the ISO when either changes,
+# including an edit made during the ask. install-config.yaml also follows vmware.conf.
+iso-agent-based/agent.$(arch).iso: .bm-config-reviewed install-config.yaml agent-config.yaml .preflight-done .infra-dns ~/bin/openshift-install
 	$(SCRIPTS)/generate-image.sh
 
 # Bare metal: mount the ISO on each node in bmc.conf via its BMC (Redfish) and
@@ -221,6 +238,9 @@ refresh: $(hv_conf_dep) upload  ## Delete & re-create the VMs. Useful to redeplo
 	$(SCRIPTS)/$(HV_PREFIX)-refresh.sh workers=$(workers) masters=$(masters)
 
 .install-complete: .bm-bmc-boot-done
+	# Best-effort agent probe only on first install (VMs/servers just booted).
+	# 'aba mon' must NOT wait — port 8090 is often gone once bootstrap advances.
+	@$(SCRIPTS)/wait-agent-up.sh || true
 	$(SCRIPTS)/monitor-install.sh
 	@touch .install-complete
 

@@ -189,6 +189,16 @@ else
 	_fail "node override: expected /dev/vda, got '$out'"
 fi
 
+# Hyphenated hostname: cluster.conf key uses '_' because '-' is not a shell name.
+export disk_hint_node_e2e_bm_sno1="/dev/sdb"
+out=$(_resolve_node_setting disk_hint e2e-bm-sno1 master)
+if [ "$out" = "/dev/sdb" ]; then
+	_pass "hyphenated hostname maps '-' to '_'"
+else
+	_fail "hyphenated hostname: expected /dev/sdb, got '$out'"
+fi
+unset disk_hint_node_e2e_bm_sno1
+
 # Worker inherits global when no role/node set
 unset disk_hint_worker disk_hint_node_worker1 2>/dev/null || true
 out=$(_resolve_node_setting disk_hint worker1 worker)

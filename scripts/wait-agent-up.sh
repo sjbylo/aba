@@ -1,26 +1,38 @@
-#!/bin/bash 
+#!/bin/bash
 # Wait for the Agent REST API (port 8090) on the rendezvous node.
-# This short pause gives the agent time to come online and start producing
-# log output so that monitor-install.sh (openshift-install wait-for) has
-# something to show when it starts.
+# Timing cushion so openshift-install wait-for does not start before the
+# agent is up (avoids noisy early errors after same-session VM/BMC power-on).
 #
-# Edge case (reviewed, intentionally not fixed):
-# After 'aba refresh', if bootstrap succeeds and the node reboots before
-# the user re-runs 'aba install', port 8090 is gone.  The agent wait (now folded into monitor-install)
-# marker was removed by refresh, so Make re-runs this script and it waits
-# the full 5-min timeout before falling through to monitor-install.sh.
-# This is harmless — monitor-install picks up the running install fine.
-# Using 'aba mon' instead of 'aba install' skips this wait entirely.
+# Called only from the install Make chain (.install-complete), not from
+# 'aba mon' / monitor-install.sh — once install is underway the agent API
+# (8090) is often already gone after bootstrap.
+#
+# Skip: platform=bm with no BMC nodes (manual boot). Operators often return
+# to the TUI/CLI long after 8090 is gone; waiting up to 5m is useless then.
+# Keep the wait for vmw/kvm and for BM after BMC auto-boot (bmc.conf).
+#
+# Edge case (vmw/kvm / BM+BMC): if the node is already past agent when this
+# runs, we wait the full timeout then fall through to monitor-install.sh.
+# Harmless — monitor picks up the running install. Use 'aba mon' to skip.
 
 source scripts/include_all.sh
 
 aba_debug "Running: $0 $*" >&2
 
-trap - ERR  # We don't want to catch on error. error handling added below. 
+trap - ERR  # We don't want to catch on error. error handling added below.
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh || exit 1
 	eval "$(scripts/cluster-config.sh "$@")" || exit 1
+fi
+
+source <(normalize-aba-conf)
+platform=${platform:-bm}
+
+# Manual BM: no same-session power-on race — skip straight to monitor.
+if [ "$platform" = "bm" ] && ! bmc_has_hosts; then
+	aba_debug "wait-agent-up: skip (platform=bm, no BMC auto-boot)"
+	exit 0
 fi
 
 [ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "$ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."

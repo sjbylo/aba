@@ -37,10 +37,10 @@ opts=
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
-# Best-effort wait for agent REST API before openshift-install monitor
-# (folded from former .auto-agent-up Make stamp — see wait-agent-up.sh).
+# Agent wait is NOT here — only on the install Make chain (.install-complete
+# recipe). Standalone 'aba mon' must go straight to openshift-install monitor:
+# by then the agent API (8090) is often already gone after bootstrap.
 aba_progress "START|ci_mon"
-scripts/wait-agent-up.sh || true
 
 # Ensure openshift-install is available (wait for background download/install)
 if ! ensure_openshift_install >/dev/null; then
@@ -73,9 +73,9 @@ if ! exit_unless_install_finished "$ret"; then
 	aba_progress "FAIL|ci_mon"
 	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
-	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
+	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: $(aba_cmd mon)."
 	if [ $ret -eq 6 ] || [ $ret -eq 7 ]; then
-		echo_yellow "[ABA] Stuck pods may be blocking progress. Run 'aba -d $CLUSTER_NAME unstick' to detect and restart them."
+		echo_yellow "[ABA] Stuck pods may be blocking progress. Run '$(aba_cmd unstick)' to detect and restart them."
 	fi
 	echo_yellow "[ABA] If the problem persists, check the output above for clues."
 

@@ -454,8 +454,10 @@ test_end
 #    because the registry was loaded there and is not reachable from con).
 #    Both tests are kept for defense-in-depth.
 #
-#    Continuous BM install (#B80): `aba install --step iso` builds ISO with
-#    edit-ask (ask=false auto-yes). Full install would hit boot-ask --auto-no.
+#    Continuous BM install (#B80): the MAC-check ask is interactive unless
+#    `aba -y`. Placeholder MACs abort the run, so this simulation writes five
+#    unique test MACs (3 masters + 2 workers, 1 port) before the ISO step.
+#    Full install would also hit the boot ask (same `aba -y` requirement).
 # ============================================================================
 test_begin "Bare-metal: ISO simulation"
 
@@ -477,10 +479,14 @@ e2e_run "Create agent configs (bare-metal)" \
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
+# Simulation only — these MACs are never attached to a VM. Distinct from the
+# OOB SNO MAC later in this suite (00:50:56:BE:E0:01).
+e2e_run "Write 5 test MACs (standard = 3 masters + 2 workers)" \
+    "printf '%s\n' 00:50:56:BE:E2:01 00:50:56:BE:E2:02 00:50:56:BE:E2:03 00:50:56:BE:E2:04 00:50:56:BE:E2:05 > $STANDARD/macs.conf"
 
-# Continuous path through ISO only (avoids boot-ask --auto-no + mon hang)
-e2e_run "aba install --step iso (continuous BM through ISO)" \
-    "mkdir -p ~/tmp && aba --dir $STANDARD install --step iso 2>&1 | tee ~/tmp/bm-iso.out && grep -q 'Review and edit' ~/tmp/bm-iso.out"
+# -y skips the MAC-check ask. pipefail so a failed install is not hidden by grep.
+e2e_run "aba iso (continuous BM through ISO)" \
+    "set -o pipefail; mkdir -p ~/tmp && aba -y --dir $STANDARD iso 2>&1 | tee ~/tmp/bm-iso.out && grep -q 'Bare-metal MAC check' ~/tmp/bm-iso.out && ! grep -q 'xx:xx:xx:xx:xx:xx' $STANDARD/agent-config.yaml"
 e2e_run "Verify .bm-config-reviewed exists" "test -f $STANDARD/.bm-config-reviewed"
 e2e_run "Verify no legacy .bm-message" "test ! -f $STANDARD/.bm-message"
 e2e_run "Verify no legacy .bm-nextstep" "test ! -f $STANDARD/.bm-nextstep"
@@ -497,9 +503,9 @@ test_end
 #    Uses the extracted vmp_* helpers from scripts/vm-vmw.sh for VM lifecycle.
 #
 #    Continuous BM (#B80):
-#      `aba install --step iso` -> configs + ISO (edit ask)
+#      `aba -y iso` -> configs + ISO (MAC-check ask auto-yes)
 #      Upload ISO + create OOB VM + boot
-#      `aba mon` -> wait-agent + monitor-install
+#      `aba mon` -> monitor-install (no agent wait)
 # ============================================================================
 test_begin "Bare-metal: full OOB SNO install"
 
@@ -516,9 +522,10 @@ e2e_run "Create SNO-BM cluster.conf (reuses SNO DNS records)" \
 e2e_run "Write BM MAC to macs.conf" \
     "echo '$_BM_MAC' > $SNO_BM/macs.conf"
 
-# Through ISO only (boot ask would --auto-no under ask=false)
-e2e_run "BM: generate ISO (install --step iso)" \
-    "mkdir -p ~/tmp && aba --dir $SNO_BM install --step iso 2>&1 | tee ~/tmp/bm3-iso.out && grep -q 'Review and edit' ~/tmp/bm3-iso.out"
+# Through ISO only. macs.conf already has the one SNO MAC. -y skips the
+# MAC-check ask; a later full install would also need -y for the boot ask.
+e2e_run "BM: generate ISO (aba iso)" \
+    "set -o pipefail; mkdir -p ~/tmp && aba -y --dir $SNO_BM iso 2>&1 | tee ~/tmp/bm3-iso.out && grep -q 'Bare-metal MAC check' ~/tmp/bm3-iso.out && ! grep -q 'xx:xx:xx:xx:xx:xx' $SNO_BM/agent-config.yaml"
 e2e_run "Verify no legacy .bm-message" "test ! -f $SNO_BM/.bm-message"
 e2e_run "Verify ISO created" "ls -l $SNO_BM/iso-agent-based/agent.*.iso"
 
