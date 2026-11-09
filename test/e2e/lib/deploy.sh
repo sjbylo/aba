@@ -224,10 +224,12 @@ sync_source() {
 		_essh "root@${_host}" "mkdir -p ~/aba && tar xzf /tmp/aba-deploy.tar.gz -C ~/aba" || true
 	fi
 
-	# Refresh ~/bin/aba for both users (./install copies scripts/aba.sh there)
-	_essh "$target" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+	# Refresh ~/bin/aba for both users (./install copies scripts/aba.sh there).
+	# Atomic replace (cp to tmp + mv) so a suite mid-exec of ~/bin/aba cannot
+	# read a half-written file and die with a bogus syntax error (seen on con2).
+	_essh "$target" "[ -f ~/aba/scripts/aba.sh ] && mkdir -p ~/bin && cp ~/aba/scripts/aba.sh ~/bin/aba.new && mv -f ~/bin/aba.new ~/bin/aba && chmod +x ~/bin/aba" || true
 	if [ "$_user" != "root" ]; then
-		_essh "root@${_host}" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+		_essh "root@${_host}" "[ -f ~/aba/scripts/aba.sh ] && mkdir -p ~/bin && cp ~/aba/scripts/aba.sh ~/bin/aba.new && mv -f ~/bin/aba.new ~/bin/aba && chmod +x ~/bin/aba" || true
 	fi
 
 	# Cleanup

@@ -409,7 +409,11 @@ if [ ! "$upgrade_already_running" ]; then
 			if [ -n "$opt_force" ]; then
 				aba_info "--force specified: proceeding despite Upgradeable=False"
 			else
-				ask -n --auto-yes "Continue with upgrade (only if you have resolved the above)" || exit 1
+				# Do not --auto-yes here: ask=false must not bypass admin-ack /
+				# Upgradeable=False gates. Use --force to proceed intentionally.
+				aba_abort "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)." \
+					"$_cv_upg_msg" \
+					"Resolve the condition, or re-run with --force to bypass upgrade safety checks."
 			fi
 		fi
 	fi

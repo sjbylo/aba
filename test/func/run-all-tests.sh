@@ -84,6 +84,8 @@ unit_tests=(
 
 	# Config / normalize
 	test/func/test-normalize-conf-pipeline.sh
+	test/func/test-normalize-ipv4.sh
+	test/func/test-input-validation-all.sh
 	test/func/test-ocp-major-render.sh
 	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh
@@ -112,6 +114,7 @@ unit_tests=(
 	test/func/test-bm-continuous-install.sh
 	test/func/test-bm-prompt-dialog.sh
 	test/func/test-macs-helpers.sh
+	test/func/test-agent-config-summary.sh
 
 	test/func/test-make-regen-install-config.sh
 	test/func/test-vm-power-helpers.sh

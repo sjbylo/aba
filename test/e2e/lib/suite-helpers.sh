@@ -192,6 +192,44 @@ echo "--- Bounce complete ---"'
 	fi
 }
 
+# --- suite_clone_cluster_workdir <src> <dst> [image_source] --------------------
+# Second ABA working directory for an already-managed live cluster.
+# Shares ~/.aba/clusters/<fqdn>/ via symlink — does NOT run aba import --force
+# (which must refuse healthy already-managed clusters and must not rewrite
+# platform in state.sh).
+suite_clone_cluster_workdir() {
+	local src="${1:?}"
+	local dst="${2:?}"
+	local isrc="${3:-}"
+	local sd
+
+	[ -d "$src" ] || { echo "FAIL: source cluster dir missing: $src" >&2; return 1; }
+	[ -L "$src/clusterstate" ] || { echo "FAIL: $src/clusterstate is not a symlink" >&2; return 1; }
+	sd=$(readlink -f "$src/clusterstate") || return 1
+	[ -d "$sd" ] || { echo "FAIL: shared state missing: $sd" >&2; return 1; }
+
+	rm -rf "$dst"
+	mkdir -p "$dst"
+	cp -a "$src/cluster.conf" "$dst/"
+	if [ -n "$isrc" ]; then
+		sed -i "s|^image_source=.*|image_source=$isrc|" "$dst/cluster.conf"
+	fi
+	ln -fs ../templates/Makefile.cluster "$dst/Makefile"
+	( cd "$dst" && make -s init )
+	ln -sfn "$sd" "$dst/clusterstate"
+	mkdir -p "$dst/iso-agent-based/auth"
+	if [ -f "$src/iso-agent-based/auth/kubeconfig" ]; then
+		cp -p "$src/iso-agent-based/auth/kubeconfig" "$dst/iso-agent-based/auth/kubeconfig"
+	elif [ -f "$sd/kubeconfig" ]; then
+		cp -p "$sd/kubeconfig" "$dst/iso-agent-based/auth/kubeconfig"
+	fi
+	if [ -f "$src/iso-agent-based/rendezvousIP" ]; then
+		cp -p "$src/iso-agent-based/rendezvousIP" "$dst/iso-agent-based/rendezvousIP"
+	fi
+	touch "$dst/.install-complete"
+	echo "Cloned working dir $src -> $dst (shared state $sd)"
+}
+
 # --- suite_full_setup --------------------------------------------------------
 # Complete setup sequence used by most integration suites:
 # install aba, reset, configure, verify, vmware env, NTP, operator sets.

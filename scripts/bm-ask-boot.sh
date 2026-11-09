@@ -111,8 +111,9 @@ if [ "${_bmc_nodes:-0}" -gt 0 ]; then
 		aba_progress "FAIL|ci_boot"
 		if _bm_in_tui; then
 			aba_abort "Stopped. Go back to the Cluster Install wizard."
+		else
+			aba_abort "Aborted. Fix iso_url / BMC, then re-run the same command: $(aba_cmd install)"
 		fi
-		aba_abort "Aborted. Fix iso_url / BMC, then re-run the same command: $(aba_cmd install)"
 	fi
 	aba_progress "DONE|ci_boot"
 	exit 0

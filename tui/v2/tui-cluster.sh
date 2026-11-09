@@ -1114,11 +1114,16 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 					[[ $? -ne 0 ]] && break
 					local wrk_input
 					wrk_input=$(<"$_TUI_TMP")
-				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^(0|[1-9][0-9]*)$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid worker count.\n\nMust be a number without leading zeros (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
-					continue
-				fi
+					if ! wrk_input=$(_normalize_uint "$wrk_input"); then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid worker count.\n\nMust be a number (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+						continue
+					fi
+					if [[ -n "$wrk_input" ]] && [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid worker count.\n\nMust be a number (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+						continue
+					fi
 					[[ -n "$wrk_input" ]] && cl_workers="$wrk_input"
 					break
 				done
@@ -1191,7 +1196,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local net_val
 					net_val=$(<"$_TUI_TMP")
-					if [[ -n "$net_val" ]] && ! _valid_cidr "$net_val"; then
+					if ! net_val=$(_normalize_cidr "$net_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid CIDR format.\n\nExpected: IP/prefix (e.g. 10.0.0.0/24)" 0 0 || true
 						continue
@@ -1208,7 +1213,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local sip_val
 					sip_val=$(<"$_TUI_TMP")
-					if [[ -n "$sip_val" ]] && ! _valid_ip "$sip_val"; then
+					if ! sip_val=$(_normalize_ip "$sip_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.100)" 0 0 || true
 						continue
@@ -1225,7 +1230,8 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local api_val
 					api_val=$(<"$_TUI_TMP")
-					if [[ -n "$api_val" ]] && ! _valid_ip "$api_val"; then
+					# Strip leading zeros immediately (10.0.0.08 → 10.0.0.8)
+					if ! api_val=$(_normalize_ip "$api_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.200)" 0 0 || true
 						continue
@@ -1242,7 +1248,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local ing_val
 					ing_val=$(<"$_TUI_TMP")
-					if [[ -n "$ing_val" ]] && ! _valid_ip "$ing_val"; then
+					if ! ing_val=$(_normalize_ip "$ing_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.201)" 0 0 || true
 						continue
@@ -1260,7 +1266,7 @@ _cluster_page_network() {
 					local dns_val
 					dns_val=$(<"$_TUI_TMP")
 					dns_val=$(echo "$dns_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
-					if [[ -n "$dns_val" ]] && ! _valid_ip_list "$dns_val"; then
+					if ! dns_val=$(_normalize_ip_list "$dns_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid DNS entry.\n\nExpected: comma-separated IP addresses (e.g. 10.0.1.8,10.0.1.9)." 0 0 || true
 						continue
@@ -1277,7 +1283,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local gw_val
 					gw_val=$(<"$_TUI_TMP")
-					if [[ -n "$gw_val" ]] && ! _valid_ip "$gw_val"; then
+					if ! gw_val=$(_normalize_ip "$gw_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.1.1)" 0 0 || true
 						continue
@@ -1295,7 +1301,7 @@ _cluster_page_network() {
 					local ntp_val
 					ntp_val=$(<"$_TUI_TMP")
 					ntp_val=$(echo "$ntp_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
-					if [[ -n "$ntp_val" ]] && ! _valid_ip_or_host_list "$ntp_val"; then
+					if ! ntp_val=$(_normalize_ip_or_host_list "$ntp_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid NTP entry.\n\nExpected: comma-separated IPs or hostnames\n(e.g. 10.0.1.8,ntp.lab.local)" 0 0 || true
 						continue
@@ -1432,7 +1438,12 @@ ${_conn_help}
 				[[ $? -ne 0 ]] && break
 				local vlan_val
 				vlan_val=$(<"$_TUI_TMP")
-				if [[ -n "$vlan_val" ]] && { [[ ! "$vlan_val" =~ ^[0-9]+$ ]] || [[ "$vlan_val" -lt 1 || "$vlan_val" -gt 4094 ]]; }; then
+				if ! vlan_val=$(_normalize_uint "$vlan_val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid VLAN tag.\n\nMust be a number between 1 and 4094." 0 0 || true
+					continue
+				fi
+				if [[ -n "$vlan_val" ]] && { [[ "$vlan_val" -lt 1 || "$vlan_val" -gt 4094 ]]; }; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid VLAN tag.\n\nMust be a number between 1 and 4094." 0 0 || true
 					continue
@@ -1576,8 +1587,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 4 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 4." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 4 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 4." 0 0 || true
 					continue
 				fi
@@ -1591,8 +1607,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 16 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 16 GB." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 16 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 16 GB." 0 0 || true
 					continue
 				fi
@@ -1606,8 +1627,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 2 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 2." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 2 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 2." 0 0 || true
 					continue
 				fi
@@ -1621,8 +1647,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 8 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 8 GB." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 8 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 8 GB." 0 0 || true
 					continue
 				fi
@@ -1636,8 +1667,9 @@ _cluster_page_vm() {
 						--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 0 0 "$cl_disk" \
 						2>"$_TUI_TMP"
 					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 0 ]]; }; then
+					local val
+					val=$(<"$_TUI_TMP")
+					if ! val=$(_normalize_uint "$val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a non-negative number (0 = no extra disk)." 0 0 || true
 						continue
 					fi

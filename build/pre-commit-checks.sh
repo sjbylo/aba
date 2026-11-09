@@ -217,7 +217,8 @@ for script in scripts/*.sh; do
             if [ $((linenum - prev_line)) -eq 2 ]; then
                 _mid=$((prev_line + 1))
                 _mid_line=$(sed -n "${_mid}p" "$script")
-                if [[ "$_mid_line" =~ ^[[:space:]]*(done|fi|else|elif|esac|for|while|do|if|case)[^a-zA-Z_] ]]; then
+                # Allow keyword alone at EOL (fi/else/done) — [^a-zA-Z_] alone misses that.
+                if [[ "$_mid_line" =~ ^[[:space:]]*(done|fi|else|elif|esac|for|while|do|if|case)([^a-zA-Z_]|$) ]]; then
                     _between_has_flow=1
                 fi
             fi

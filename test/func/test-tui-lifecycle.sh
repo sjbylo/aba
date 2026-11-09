@@ -48,13 +48,9 @@ else
 	tui_select_item "shutdown"
 	sleep 1
 	tui_screenshot "lc-01-shutdown"
-
+	# Leftover dirs (compact/standard/…) make Day-2 scan status first — wait, then pick sno
+	tui_pick_cluster "$_CLUSTER"
 	_scr=$(tui_capture)
-	# Handle cluster selection
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter; sleep 1
-		_scr=$(tui_capture)
-	fi
 
 	if echo "$_scr" | grep -qi "shutdown\|Graceful.*shutdown\|shut.*down"; then
 		echo "  ✓ PASS: Shutdown confirmation dialog"
@@ -67,8 +63,9 @@ else
 
 		tui_dismiss_exec_mode
 
-		echo "  Waiting for shutdown (up to 30 min)..."
-		if tui_wait_for_progress "lc-shutdown" 1800; then
+		# ABA cluster-graceful-shutdown waits up to 40 min for hypervisor power-off
+		echo "  Waiting for shutdown (up to 45 min)..."
+		if tui_wait_for_progress "lc-shutdown" 2700; then
 			echo "  ✓ PASS: Shutdown completed"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
@@ -107,12 +104,8 @@ tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 tui_select_item "startup"
 sleep 1
 tui_screenshot "lc-03-startup"
-
+tui_pick_cluster "$_CLUSTER"
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "select.*cluster"; then
-	tui_keys Enter; sleep 1
-	_scr=$(tui_capture)
-fi
 
 if echo "$_scr" | grep -qi "startup\|Graceful.*start\|start.*cluster\|power.*on"; then
 	echo "  ✓ PASS: Startup dialog appeared"
@@ -175,16 +168,12 @@ else
 	tui_select_item "Clean"
 	sleep 1
 	tui_screenshot "lc-05-clean"
-
+	# Must pick the installed cluster — default first entry may be a leftover "installing" dir
+	tui_pick_cluster "$_CLUSTER"
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter
-		tui_wait_gone "select.*cluster" 5
-		_scr=$(tui_capture)
-	fi
 
 	# Expect msgbox refusing clean (not a confirm-and-execute progress dialog)
-	if echo "$_scr" | grep -qiE "refused|installed|Delete cluster first|install-complete"; then
+	if echo "$_scr" | grep -qiE "refused|installed|Delete cluster first|install-complete|cannot clean"; then
 		echo "  ✓ PASS: Clean refused while cluster is installed"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_keys Enter; sleep 0.5
@@ -216,13 +205,8 @@ else
 	tui_select_item "Delete"
 	sleep 1
 	tui_screenshot "lc-06-delete"
-
+	tui_pick_cluster "$_CLUSTER"
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter
-		tui_wait_gone "select.*cluster" 5
-		_scr=$(tui_capture)
-	fi
 
 	if echo "$_scr" | grep -qi "Delete cluster\|destroy\|sure\|remove"; then
 		echo "  ✓ PASS: Delete confirmation dialog"

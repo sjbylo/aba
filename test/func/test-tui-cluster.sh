@@ -67,11 +67,10 @@ tui_screenshot "cl-01b-basics"
 tui_assert_contains "Name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 
-# Set cluster name if not already correct (fresh install has default name)
-# Must check the "Cluster name:" line specifically, not just any "sno" on screen
-# (the Type field also shows "sno" which would false-match)
+# Set cluster name if not already correct (fresh install has default name).
+# Exact field match — "Cluster name:.*sno" must not match sno4.
 _scr=$(tui_capture)
-if ! echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+if ! tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 	echo "  Setting cluster name to $_CLUSTER (current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1 | sed 's/Cluster name:[[:space:]]*//'))"
 	# Press N to highlight the cluster-name item, Enter to open inputbox
 	tui_keys N; sleep 0.5
@@ -89,14 +88,14 @@ if ! echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
 fi
 # Verify the name field specifically (not just Type which also contains "sno")
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+if tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 	echo "  ✓ PASS: Cluster name set to $_CLUSTER"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
 	# One retry: dialog may still be settling after Enter
 	sleep 1
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+	if tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 		echo "  ✓ PASS: Cluster name set to $_CLUSTER (after settle)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else

@@ -8,7 +8,9 @@ Options:
   --kubeconfig, -k   Path to cluster kubeconfig (required)
   --image-source     Where this cluster pulls images (default: auto-detect)
   --name, -n         Cluster directory name (default: cluster_name from API)
-  --force, -f        Overwrite existing cluster directory and state
+  --force, -f        Rebuild state after a stale/reinstalled cluster only.
+                     Refused when ABA already manages the cluster with a
+                     valid kubeconfig (use that working directory instead).
 
 After import, you can run:
   aba -d <name> day2          Integrate with mirror registry

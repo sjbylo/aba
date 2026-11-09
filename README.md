@@ -24,9 +24,9 @@
 
 # ABA — Install and Manage OpenShift in Disconnected Environments <!-- omit in toc -->
 
-> **Future OpenShift Friendly!** — built to track new OpenShift releases as they land.
+> **OpenShift 5 Friendly!** — ready for OpenShift 5!!!
 
-[![Future OpenShift Friendly!](https://img.shields.io/badge/Future_OpenShift-Friendly!-2ea44f.svg)](#aba--install-and-manage-openshift-in-disconnected-environments-)
+[![OpenShift 5 Friendly!](https://img.shields.io/badge/OpenShift_5-Friendly!-2ea44f.svg)](#aba--install-and-manage-openshift-in-disconnected-environments-)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/sjbylo/aba)](https://github.com/sjbylo/aba/releases)
 [![Platform](https://img.shields.io/badge/Platform-RHEL_8%20|%209%20|%2010-red.svg)](#common-requirements)
