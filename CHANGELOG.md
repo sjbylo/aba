@@ -2,6 +2,9 @@
 
 ### Changed
 
+- **A step with nothing to do reports No-op** — `aba_progress "NOOP|id"` marks that step No-op on the progress dialog. Day-2 custom manifests does this when `day2-custom-manifests/` is missing or has no manifests to apply.
+- **Bundle rebuild deletes mirror data** — `go.sh` (via Make reset, setup, registry install, and cleanup) uninstalls the mirror with `--delete-data`, so the image store is removed with the registry.
+- **Boot ask bolds the ISO path** — The path under "ISO file:" is bold in the progress dialog. The command-line ask stays plain.
 - **Progress live output drops Ctrl-C hints** — Waits still say "(Ctrl-C to skip)" on the command line. In the progress dialog that key is not delivered, so the hint is left off.
 - **Release-images warning has hotkeys** — I includes release images, K keeps them excluded, D clears the upgrade target.
 - **Include release images regenerates the ImageSet file** — Choosing Include starts the usual background ImageSet regen. View Config waits until that file is ready, so the platform section is no longer left commented out.

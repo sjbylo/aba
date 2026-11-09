@@ -153,6 +153,9 @@ _tp_parse_event() {
 			fi
 			;;
 		DONE)        _tp_status[$id]="0"; _tp_real_done[$id]="done" ;;
+		# Explicit no-op from the task. Same label as a step that never started,
+		# but _tp_real_done keeps the final sweep from treating it as a missing event.
+		NOOP)        _tp_status[$id]="6"; _tp_real_done[$id]="noop" ;;
 		FAIL)        _tp_status[$id]="1"; _tp_real_done[$id]="fail"; _tp_failed+=("${_tp_text[$id]:-$id}") ;;
 		ERROR)       _tp_errors+=("${arg1:-$id}") ;;
 		DETAIL)      _tp_details+=("${arg1:-$id}") ;;
@@ -345,12 +348,17 @@ _tp_sweep_skipped() {
 # ============================================================
 
 # dialog --colors: whole WARN / ERROR / IMPORTANT lines in red.
+# A line that is only an absolute path (the ISO file line) is bold.
 # Applied here so CLI ask() text stays plain.
 _tp_color_alerts() {
-	local _line _out="" _first=1
+	local _line _out="" _first=1 _indent _path
 	while IFS= read -r _line || [ -n "$_line" ]; do
 		if [[ "$_line" == *WARN:* || "$_line" == *ERROR:* || "$_line" == *IMPORTANT:* ]]; then
 			_line=$'\\Z1'"${_line}"$'\\Zn'
+		elif [[ "$_line" =~ ^[[:space:]]*/[^[:space:]]+$ ]]; then
+			_indent="${_line%%/*}"
+			_path="${_line#"$_indent"}"
+			_line="${_indent}"$'\\Zb'"${_path}"$'\\Zn'
 		fi
 		if [ "$_first" -eq 1 ]; then
 			_out="$_line"

@@ -650,12 +650,15 @@ fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071
 
-aba_progress "START|manifests"
-
-# Apply user-provided custom manifests (if any)
-apply_custom_manifests
-
-aba_progress "DONE|manifests"
+# Nothing to apply is a No-op, not a success. An empty file is not a manifest.
+if find "$PWD/day2-custom-manifests" -type f \( -name '*.yaml' -o -name '*.yml' \) -size +0c -print -quit 2>/dev/null | grep -q .; then
+	aba_progress "START|manifests"
+	apply_custom_manifests
+	aba_progress "DONE|manifests"
+else
+	aba_info "No custom manifests to apply (day2-custom-manifests/ is optional)"
+	aba_progress "NOOP|manifests"
+fi
 
 # If we restarted the OSUS pod at the start, verify it's ready before finishing.
 # The pod rebuilt in parallel with the day2 work above, so this wait is usually short.

@@ -86,7 +86,7 @@ if [ ${#stale_dirs[@]} -gt 0 ] || [ "$has_running_registry" ]; then
 			echo_step "Uninstalling running registry from previous run ..."
 			aba_dir=$(ls -d "$WORK_DIR"/test-install*/aba 2>/dev/null | head -1)
 			if [ "$aba_dir" ]; then
-				( cd "$aba_dir"; ./install; aba -d mirror uninstall -y )
+				( cd "$aba_dir"; ./install; aba -d mirror uninstall -y --delete-data )
 			else
 				echo "WARNING: No aba installation found to uninstall registry." >&2
 				echo "         Attempting direct podman cleanup ..." >&2
@@ -113,7 +113,7 @@ if [ ${#stale_dirs[@]} -gt 0 ] || [ "$has_running_registry" ]; then
 		if [ "$has_running_registry" ]; then
 			aba_dir=$(ls -d "$WORK_DIR"/test-install*/aba 2>/dev/null | head -1)
 			if [ "$aba_dir" ]; then
-				echo "  - cd $aba_dir && aba -d mirror uninstall -y" >&2
+				echo "  - cd $aba_dir && aba -d mirror uninstall -y --delete-data" >&2
 			else
 				echo "  - podman pod stop quay-pod && podman pod rm quay-pod" >&2
 			fi

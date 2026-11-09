@@ -125,14 +125,15 @@ echo "=== Test 5: auto-complete logic ==="
 _tp_status=()
 _tp_text=()
 _tp_order=()
+_tp_real_done=()
 
 _tp_parse_event "PLAN|a|Step A"
 _tp_parse_event "PLAN|b|Step B"
 _tp_parse_event "PLAN|c|Step C"
-# b starts before a completes — triggers queued start
+# b starts before a ever ran — a is a No-op, not a success
 _tp_parse_event "START|b"
 
-# a is pending (9), b is queued (77) — auto-complete should mark a as done
+# a is pending (9), b is queued (77) — auto-complete should mark a No-op
 if _tp_auto_complete_one; then
 	echo "PASS: auto-complete found work to do"
 else
@@ -140,11 +141,11 @@ else
 	exit 1
 fi
 
-if [ "${_tp_status[a]}" != "0" ]; then
-	echo "FAIL: expected a to be auto-completed (0), got ${_tp_status[a]}"
+if [ "${_tp_status[a]}" != "6" ]; then
+	echo "FAIL: expected a to be No-op (6), got ${_tp_status[a]}"
 	exit 1
 fi
-echo "PASS: step a auto-completed to Succeeded"
+echo "PASS: step a auto-completed to No-op"
 
 # Next auto-complete should transition b from 77 to 7
 if _tp_auto_complete_one; then
@@ -210,6 +211,48 @@ if [ "$outcome" != "abort" ]; then
 	exit 1
 fi
 echo "PASS: abort event → abort"
+
+echo
+echo "=== Test 7: NOOP is an explicit No-op, and it counts as finished ==="
+_tp_status=()
+_tp_text=()
+_tp_order=()
+_tp_real_done=()
+_tp_errors=()
+_tp_abort=""
+
+_tp_parse_event "PLAN|manifests|Custom manifests"
+_tp_parse_event "PLAN|stabilize|Cluster stabilization"
+_tp_parse_event "NOOP|manifests"
+_tp_parse_event "START|stabilize"
+_tp_parse_event "DONE|stabilize"
+
+if [ "${_tp_status[manifests]}" != "6" ]; then
+	echo "FAIL: expected manifests status 6 (No-op), got ${_tp_status[manifests]}"
+	exit 1
+fi
+echo "PASS: NOOP sets status 6"
+
+if [ "${_tp_real_done[manifests]}" != "noop" ]; then
+	echo "FAIL: expected real_done noop, got ${_tp_real_done[manifests]}"
+	exit 1
+fi
+echo "PASS: NOOP is a real event, not a missing one"
+
+# The final sweep must leave an explicit No-op alone.
+_tp_sweep_skipped || true
+if [ "${_tp_status[manifests]}" != "6" ]; then
+	echo "FAIL: sweep changed explicit No-op to ${_tp_status[manifests]}"
+	exit 1
+fi
+echo "PASS: sweep keeps an explicit No-op"
+
+outcome=$(_tp_finish_outcome)
+if [ "$outcome" != "success" ]; then
+	echo "FAIL: expected success with a No-op step, got '$outcome'"
+	exit 1
+fi
+echo "PASS: No-op plus Succeeded is a successful run"
 
 echo
 echo "======================================="

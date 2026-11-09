@@ -127,7 +127,7 @@ fetch_rhoai_images() {
 # Will NOT run if quay-pod still exists -- forces proper aba uninstall first.
 cleanup_orphaned_quay_services() {
 	if podman pod exists quay-pod; then
-		echo "WARNING: quay-pod still exists. Use 'aba -d mirror uninstall -y' first."
+		echo "WARNING: quay-pod still exists. Use 'aba -d mirror uninstall -y --delete-data' first."
 		return 0
 	fi
 	local svc changed=

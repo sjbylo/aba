@@ -228,8 +228,9 @@ aba_success() {
 
 # TUI progress reporting.
 # No-op unless the TUI sets ABA_PROGRESS_FIFO before launching the command.
-# Events: PLAN|id|text, START|id, DONE|id, FAIL|id, ERROR|id|msg,
+# Events: PLAN|id|text, START|id, DONE|id, NOOP|id, FAIL|id, ERROR|id|msg,
 #          DETAIL|msg, NEXT|msg, ABORT|msg, PROMPT|msg, PROMPT_DONE
+# NOOP|id marks a planned step that had nothing to do. The dialog shows No-op.
 aba_progress() {
 	[ -n "${ABA_PROGRESS_FIFO:-}" ] || return 0
 	printf '%s\n' "$*" >> "$ABA_PROGRESS_FIFO"
