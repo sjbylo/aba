@@ -26,10 +26,21 @@ fi
 
 _sock="aba-dlg-$$"
 _text=$'Boot servers from the agent ISO, then continue.\n\nISO file:\n  /tmp/agent.x86_64.iso\n\n  - USB:  sudo dd if=/tmp/agent.x86_64.iso\n          of=/dev/sdX bs=4M conv=fsync status=progress\n'
+# shellcheck disable=SC1091
+source tui/v2/tui-progress.sh
+_colored=$(_tp_color_alerts "$_text")
+if printf '%s' "$_colored" | grep -qF '\Zb/tmp/agent.x86_64.iso\Zn' \
+	&& ! printf '%s' "$_colored" | grep -qF 'dd if=\Zb'; then
+	_pass "ISO path line is bold; the dd command stays plain"
+else
+	_fail "ISO path line was not wrapped in dialog bold"
+	printf '%s\n' "$_colored"
+fi
 tmux -L "$_sock" kill-session -t dlg 2>/dev/null || true
-tmux -L "$_sock" new-session -d -x 100 -y 36 -s dlg "dialog --cr-wrap --no-collapse --yesno $(printf '%q' "$_text") 0 0"
+tmux -L "$_sock" new-session -d -x 100 -y 36 -s dlg "dialog --colors --cr-wrap --no-collapse --yesno $(printf '%q' "$_colored") 0 0"
 sleep 0.6
 _scr=$(tmux -L "$_sock" capture-pane -t dlg -p)
+_esc=$(tmux -L "$_sock" capture-pane -t dlg -e -p)
 tmux -L "$_sock" kill-session -t dlg 2>/dev/null || true
 
 if echo "$_scr" | grep -q 'ISO file:' && ! echo "$_scr" | grep -q 'continue.*ISO file:'; then
@@ -43,6 +54,13 @@ if echo "$_scr" | grep -q 'of=/dev/sdX'; then
 else
 	_fail "of=/dev/sdX was split or missing"
 	echo "$_scr"
+fi
+# dialog --colors \Zb is ncurses bold (SGR 1) on that path.
+if printf '%s' "$_esc" | grep -q $'\033\[1m/tmp/agent.x86_64.iso'; then
+	_pass "rendered ISO path is bold"
+else
+	_fail "rendered ISO path is not bold"
+	printf '%s\n' "$_esc"
 fi
 
 echo ""

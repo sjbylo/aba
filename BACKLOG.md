@@ -3755,3 +3755,61 @@ and the other OSUS rows (`Install OSUS operator`, `Deploy Update Service`, `Wait
 
 **Proposed fix:** Do not `START|osus_access` until OSUS work actually begins (after any nested `day2.sh`). Send `DONE|osus_access` on the early-exit path before `exit 0`. Nested day2 should be the only plan on screen while it runs.
 
+
+---
+
+## #B108: Non-contiguous node IPs in `starting_ip`
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** `starting_ip` is a single address. ABA then takes the next addresses in order, always `+1`, masters first and workers after them. A 3-master, 3-worker cluster with `starting_ip=10.0.0.10` is forced to use `10.0.0.10` through `10.0.0.15`. There is no way to skip an address already in use, or to place workers on a different prefix from the masters.
+
+**Root cause:** `generate_ip_array` starts at `starting_ip` and emits `num_masters + num_workers` consecutive addresses. Agent config assigns that list in order: masters from the start, workers after them. The same `start + n` span is what preflight, VIP overlap, and `cluster.conf` checks use. The first address is the rendezvous IP.
+
+**Proposed fix:** Keep a single address meaning what it means today. Also accept a list in the same field. A comma means the value is the full set of node addresses, in the same order: masters first, then workers. The expanded list must have one address per node.
+
+Two ways to write the list:
+
+```
+starting_ip=10.0.0.10,10.0.0.11,10.0.0.12,10.0.0.50,10.0.0.51,10.0.0.52
+```
+
+or the short form, where a bare last octet keeps the prefix of the last full address:
+
+```
+starting_ip=10.0.0.10,11,12,10.0.0.50,51,52
+```
+
+Both resolve to:
+
+```
+10.0.0.10, 10.0.0.11, 10.0.0.12, 10.0.0.50, 10.0.0.51, 10.0.0.52
+```
+
+A new full address changes the prefix for the octets that follow:
+
+```
+starting_ip=10.0.0.10,11,12,10.0.1.60,61,62,63
+```
+
+resolves to:
+
+```
+10.0.0.10, 10.0.0.11, 10.0.0.12, 10.0.1.60, 10.0.1.61, 10.0.1.62, 10.0.1.63
+```
+
+One function, `expand_starting_ips <spec> <count>`, does this:
+
+- No comma: return `count` contiguous addresses from that IP (`+1` each time), as today.
+- Commas: split on commas, ignore spaces, and expand each item.
+  - A full address is used as itself and becomes the current prefix.
+  - A bare octet (`0`–`255`) is attached to that prefix. `51` after `10.0.0.50` is `10.0.0.51`.
+  - The first item must be a full address.
+  - The result length must equal `count`.
+
+The first address is still the rendezvous IP. `--starting-ip` accepts the same string. Agent config, preflight, and the VIP overlap check use the expanded list. Each address must be inside `machine_network`, must not be the network or broadcast address, and must not be a duplicate, the gateway, or a VIP. A list that crosses from `10.0.0.x` to `10.0.1.x` is valid only when `machine_network` covers both.
+
+**Workaround:** Use a contiguous block, or edit the generated agent config by hand. Those edits are kept until `cluster.conf` changes.
+
