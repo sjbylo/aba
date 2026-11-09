@@ -3755,6 +3755,104 @@ and the other OSUS rows (`Install OSUS operator`, `Deploy Update Service`, `Wait
 
 **Proposed fix:** Do not `START|osus_access` until OSUS work actually begins (after any nested `day2.sh`). Send `DONE|osus_access` on the early-exit path before `exit 0`. Nested day2 should be the only plan on screen while it runs.
 
+---
+
+## #B104: Accept `~user/...` paths (not only `~/...`)
+
+**Severity:** LOW — path UX
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** `_valid_abs_path` and related path handling accept absolute paths and
+`~/...` (current user home) but reject `~otheruser/...` (e.g. `~steve/.ssh/id_rsa`).
+Users who paste another account's home-relative path get a validation error even
+when the path is otherwise well-formed.
+
+**Root cause:** The validator regex is effectively `^(/|~(/|$))…` — tilde is only
+allowed as `~` or `~/…`, not `~username/…`. Expansion helpers similarly map only
+`~/` → `$HOME`.
+
+**Proposed fix:** Extend `_valid_abs_path` (and any expand helper used for
+`data_dir` / `reg_ssh_key` / similar) to accept `~[A-Za-z0-9._-]+(/…)?`, and expand
+via `getent passwd` (or equivalent) to that user's home. Keep rejecting bare
+relative paths and paths with spaces/metacharacters. Add func coverage for
+`~user/…` accept and unknown-user reject/expand failure.
+
+**Workaround:** Use an absolute path (`/home/user/...`) or `~/...` for the
+current user.
+
+---
+
+## #B105: Accept hyphen-form MAC addresses (`00-50-…`) on input
+
+**Severity:** LOW — paste UX for bare-metal tools
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** `_valid_mac` / `_MAC_ADDR_RE` accept only colon form (`00:50:56:…`).
+Hyphen form (`00-50-56-…`), common when pasting from Windows / some BMC UIs, is
+rejected — paste friction for BM installs.
+
+**Root cause:** Validators and extractors are colon-only regexes.
+
+**Proposed fix:** On input, normalize `-` → `:` (canonical store/agent-config
+form stays colon). Update `_valid_mac`, `_MAC_ADDR_RE` / `macs_list_from_*`,
+and any `mac_prefix` checks. Keep placeholders (`xx:xx:…`) invalid. Func tests
+for hyphen accept → colon canonicalize, and reject mixed junk.
+
+**Workaround:** Replace hyphens with colons before paste/save.
+
+---
+
+## #B106: Normalize leading zeros on all integer CLI/TUI inputs (incl. `--host-prefix`)
+
+**Severity:** LOW — input consistency
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** Most integer fields (VLAN, workers, CPU, memory, disk) and IPv4/CIDR
+paths run through `normalize_uint` / `normalize_ipv4` so `08` → `8`. `--host-prefix`
+still uses a raw `0-32` grep and **rejects** `08` instead of normalizing. Incomplete
+coverage, not intentional.
+
+**Root cause:** `--host-prefix` (and any similar leftover int flags) never got the
+shared `normalize_uint` + range-check pattern.
+
+**Proposed fix:** Audit every integer CLI flag and TUI numeric field; route all
+through `normalize_uint` (then range-check). At minimum fix `--host-prefix`.
+Extend `test-normalize-ipv4.sh` / `test-input-validation-all.sh` (or a small CLI
+spot test) so `08` is accepted and stored as `8` for every int path.
+
+**Workaround:** Omit leading zeros (`--host-prefix 8`).
+
+---
+
+## #B107: Remove dead `validate_domain` / `validate_ntp_servers` (DRY)
+
+**Severity:** LOW — code hygiene / DRY
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** Live TUI/CLI domain and NTP paths use `_valid_domain` /
+`_normalize_ip_or_host_list` (and friends). Legacy `validate_domain` and
+`validate_ntp_servers` in `include_all.sh` are stricter (e.g. reject `_` in
+domains), unused by product code, and only exercised by func tests under a
+misleading “TUI” label — duplicate validators (DRY smell).
+
+**Root cause:** Older TUI-oriented helpers were never deleted after `_valid_*`
+became the hot path. `validate_ip` / `validate_cidr` / `validate_ip_list` are
+still referenced and must stay.
+
+**Proposed fix:** Delete `validate_domain` and `validate_ntp_servers`. Point
+`test-input-validation-all.sh` NTP/domain cases at the live helpers (e.g.
+`_valid_domain`, `_normalize_ip_or_host_list` via sourcing tui-lib or a thin
+shared helper in `include_all.sh`). Do **not** keep both or “alias” unless a
+compat shim is required for an external caller (none known).
+
+**Workaround:** None needed — dead code; behavior users see is already `_valid_*`.
+
+**Note:** Not done in-tree yet — not zero-risk (scripts + test retarget; NTP live
+helper currently lives in `tui-lib.sh`). Track here until a focused cleanup PR.
 
 ---
 
