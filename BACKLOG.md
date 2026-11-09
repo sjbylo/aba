@@ -3911,3 +3911,25 @@ The first address is still the rendezvous IP. `--starting-ip` accepts the same s
 
 **Workaround:** Use a contiguous block, or edit the generated agent config by hand. Those edits are kept until `cluster.conf` changes.
 
+---
+
+## #B109: Show a 2-3 line agent-config summary on MAC and edit asks
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** Asks about MAC addresses, and asks that invite an edit of `agent-config.yaml`, name the path and then stop. The user cannot tell which cluster file the question is about without opening it. The bare-metal review ask in `scripts/bm-ask-edit.sh` prints the MAC report and `agent-config.yaml: <path>`, then "Are the MAC addresses correct?" (or the placeholder "have all required MACs been added?" question). The same gap is on the ask that collects MAC addresses, and on any prompt that says the user may edit that file.
+
+**Root cause:** `scripts/agent-config-summary.sh` already prints the compact summary (cluster and role, rendezvous IP, node IPs, gateway, NIC, DNS, NTP) and is not called from these asks. `macs_report` only covers the MAC list.
+
+**Proposed fix:** When `agent-config.yaml` exists, print that compact summary (two or three lines) immediately before the question. Cover:
+
+- Entering MAC addresses
+- Confirming the MAC addresses are correct, including the placeholder re-check
+- Any ask that offers an edit of `agent-config.yaml`
+
+Skip the summary when the file does not exist yet. Keep MACs in the existing MAC report so the summary does not repeat them. CLI and the progress dialog show the same lines. Do not shell out to an example script that may sit in a cluster directory.
+
+**Workaround:** Open `agent-config.yaml` before answering Yes.
+
