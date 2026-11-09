@@ -44,7 +44,7 @@ plan_tests \
     "Make regen: install-config.yaml tracks image_source" \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
-    "Import: day2 injects mirror creds on imported cluster" \
+    "Day2: injects mirror creds when pull secret stripped" \
     "Import: multi-mirror day2 CA and CatalogSource naming" \
     "Real multi-mirror: second registry + day2" \
     "Import: stale kubeconfig detection" \
@@ -335,30 +335,18 @@ e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagema
 test_end
 
 # ============================================================================
-# 9. Import: aba import + day2 pull secret injection
+# 9. Day2 pull secret injection (already-managed cluster)
 # ============================================================================
-# The SNO cluster is running with day2 applied.  Import it into a separate
-# directory, strip mirror creds from the cluster pull secret (simulating an
-# externally installed cluster), run day2, and verify creds are re-injected.
-test_begin "Import: day2 injects mirror creds on imported cluster"
+# The SNO is ABA-managed. Do NOT aba import --force here — that must refuse a
+# healthy already-managed cluster and must not rewrite shared state.sh.
+# Strip mirror creds, run day2 on the existing dir, verify re-injection.
+# Import semantics are covered in test 9c.
+test_begin "Day2: injects mirror creds when pull secret stripped"
 
-IMPORT_DIR="e2e-imported"
 _KUBECONFIG="$SNO/iso-agent-based/auth/kubeconfig"
 
-e2e_run "Import running SNO cluster" \
-    "aba import --kubeconfig $_KUBECONFIG --name $IMPORT_DIR --force"
-
-e2e_run "Verify imported cluster.conf exists" \
-    "test -f $IMPORT_DIR/cluster.conf"
-
-e2e_run "Verify imported cluster_name matches" \
-    "grep -q '^cluster_name=$SNO' $IMPORT_DIR/cluster.conf"
-
-e2e_run "Verify image_source=mirror in imported config" \
-    "grep -q '^image_source=mirror' $IMPORT_DIR/cluster.conf"
-
-e2e_run "Verify getco works on imported cluster" \
-    "aba --dir $IMPORT_DIR getco"
+e2e_run "Verify getco works on managed SNO" \
+    "aba --dir $SNO getco"
 
 # Read mirror host:port for pull secret verification
 _REG_HOST_IMPORT=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
@@ -383,11 +371,8 @@ e2e_run "Verify mirror creds are gone" "
     echo 'Confirmed: no mirror creds in pull secret'
 "
 
-e2e_run "Fix gateway for imported cluster (bastion gateway differs from cluster network)" \
-    "sed -i 's/^next_hop_address=.*/next_hop_address=$(pool_gateway)/' $IMPORT_DIR/cluster.conf"
-
-e2e_run "Run day2 on imported cluster (must inject creds)" \
-    "aba --dir $IMPORT_DIR day2"
+e2e_run "Run day2 on managed SNO (must inject creds)" \
+    "aba --dir $SNO day2"
 
 e2e_run "Verify mirror creds injected after day2" "
     export KUBECONFIG=$_KUBECONFIG
@@ -396,7 +381,8 @@ e2e_run "Verify mirror creds injected after day2" "
     echo \"Mirror creds present after day2: \$_auth\"
 "
 
-e2e_run "Clean up imported cluster dir" "rm -rf $IMPORT_DIR"
+e2e_run "Verify state.sh platform still vmw after day2" \
+    "grep -E '^platform=vmw' ~/.aba/clusters/${SNO}.$(pool_domain)/state.sh"
 
 test_end
 
@@ -421,8 +407,9 @@ _HP_MM="${_RH_MM}:${_RP_MM}"
 _CM_KEY_MM="${_RH_MM}..${_RP_MM}"
 _SUFFIX_MM="${_RH_MM%%.*}"
 
-e2e_run "Import SNO for multi-mirror test" \
-    "aba import --kubeconfig $_KC_MM --name $IMPORT_MM --force"
+# Second working dir sharing SNO state — no import --force (preserves platform).
+e2e_run "Clone SNO workdir for multi-mirror test" \
+    "suite_clone_cluster_workdir $SNO $IMPORT_MM"
 
 # Save original redhat-operators CS image for cleanup
 e2e_run "Save original redhat-operators CS image" "
@@ -557,10 +544,11 @@ test_end
 # syncs a single operator to it, runs day2 from that mirror against the SNO,
 # and verifies the full multi-mirror outcome.
 #
-# NOTE: Uses `aba import --image-source` to create a second cluster dir as a
+# NOTE: Uses a cloned working dir with image_source=<second mirror> as a
 # workaround for image_source being a scalar.  When ADR-017 (multi-value
 # image_source) lands, this test should be simplified to use a single cluster
 # dir with image_source=mirror,mm2.  See BACKLOG "Multi-value image_source".
+# Do not aba import --force here — that must not clobber shared state.sh.
 #
 # Verifies:
 #   (a) Both CA keys present in registry-config (real certs, not patched)
@@ -626,10 +614,10 @@ e2e_run "Snapshot: registry-config keys before" "
 
 # --- Run day2 from the second mirror ---
 
-e2e_run "Import SNO for second mirror day2" \
-    "aba import --kubeconfig $_MM2_KC --name $_MM2_IMPORT --image-source $_MM2_NAME --force"
+e2e_run "Clone SNO workdir for second mirror day2" \
+    "suite_clone_cluster_workdir $SNO $_MM2_IMPORT $_MM2_NAME"
 
-e2e_run "Verify imported cluster references second mirror" \
+e2e_run "Verify cloned cluster references second mirror" \
     "grep -q 'image_source=$_MM2_NAME' $_MM2_IMPORT/cluster.conf"
 
 e2e_run "Fix gateway for imported cluster" \
@@ -767,11 +755,12 @@ e2e_run "Cleanup: remove second mirror dir, import dir and temp files" \
 test_end
 
 # ============================================================================
-# 9c. Import: stale kubeconfig detection
+# 9c. Import: already-managed / stale kubeconfig / --force rules
 # ============================================================================
 # When importing a cluster that ABA already manages, verify that:
-#   - Valid kubeconfig: blocks with "already managed" message
+#   - Valid kubeconfig: blocks with "already managed" (with or without --force)
 #   - Stale kubeconfig: detects invalid auth and suggests --force
+#   - Shared state.sh platform remains vmw (never clobbered to bm)
 test_begin "Import: stale kubeconfig detection"
 
 _KC_STALE="$SNO/iso-agent-based/auth/kubeconfig"
@@ -785,6 +774,20 @@ e2e_run "Import with valid kubeconfig (should block)" "
     echo \"\$output\" | grep -q 'already managed by ABA' \
         || { echo 'FAIL: expected already-managed message'; exit 1; }
     echo 'PASS: correctly blocked with already-managed'
+"
+
+# Test 1b: --force must also refuse a healthy already-managed cluster
+e2e_run "Import --force with valid kubeconfig (should still block)" "
+    cd ~/aba &&
+    output=\$(aba import --kubeconfig $_KC_STALE --name e2e-imported --force 2>&1) && exit 1 || true
+    echo \"\$output\"
+    echo \"\$output\" | grep -q 'already managed by ABA' \
+        || { echo 'FAIL: expected already-managed message with --force'; exit 1; }
+    echo \"\$output\" | grep -qi 'Overwriting existing state' \
+        && { echo 'FAIL: --force must not overwrite healthy managed state'; exit 1; }
+    grep -E '^platform=vmw' $_STALE_DIR/state.sh \
+        || { echo 'FAIL: state.sh platform was changed'; exit 1; }
+    echo 'PASS: --force refused healthy already-managed cluster; platform=vmw intact'
 "
 
 # Test 2: corrupt the state kubeconfig, import should detect stale auth

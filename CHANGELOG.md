@@ -1,8 +1,16 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.4...HEAD)
 
+### Added
+
+- **Input validation func coverage** — `test-normalize-ipv4.sh` and `test-input-validation-all.sh` exercise leading-zero strip, IPv4/CIDR, domain, NTP, hostname, path, and related TUI/CLI validators end-to-end.
+- **AgentConfig summary tests** — `test-agent-config-summary.sh` covers the standalone summary script.
+
 ### Changed
 
+- **Catalog indexes refreshed** — Operator catalog indexes updated for OCP 4.18–5.0 (GA) and 5.1 (pre-release) content.
+- **README: OpenShift 5 Friendly** — Top-of-README callout and badge announce OpenShift 5 (and OpenShift 4) readiness as new releases land.
 - **A step with nothing to do reports No-op** — `aba_progress "NOOP|id"` marks that step No-op on the progress dialog. Day-2 custom manifests does this when `day2-custom-manifests/` is missing or has no manifests to apply.
+- **AgentConfig summary is a standalone script** — `scripts/agent-config-summary.sh` prints the cluster, gateway, DNS, NTP, IPs, and MACs from an agent-config file. It reads the file with `yaml2json` and formats the lines with `jq`. `-s` adds disk hints. `-v` is one block per node. The review ask does not call it.
 - **Bundle rebuild deletes mirror data** — `go.sh` (via Make reset, setup, registry install, and cleanup) uninstalls the mirror with `--delete-data`, so the image store is removed with the registry.
 - **Boot ask bolds the ISO path** — The path under "ISO file:" is bold in the progress dialog. The command-line ask stays plain.
 - **Progress live output drops Ctrl-C hints** — Waits still say "(Ctrl-C to skip)" on the command line. In the progress dialog that key is not delivered, so the hint is left off.
@@ -27,6 +35,9 @@
 
 ### Fixed
 
+- **Leading zeros stripped on numeric input** — Integer fields (workers, VLAN, CPU, memory, disk) and IPv4/CIDR values (API/ingress VIP, starting IP, gateway, DNS, machine network) drop leading zeros immediately on TUI and CLI input (`08` → `8`, `10.0.0.08` → `10.0.0.8`, `010.0.0.0/08` → `10.0.0.0/8`).
+- **`aba import --force` no longer clobbers a healthy managed cluster** — If ABA already manages the FQDN with a valid kubeconfig, import refuses even with `--force` (use that working directory). `--force` remains for stale/reinstall rebuild only. Import preserves prior `platform` in `state.sh` (or detects VSphere/BareMetal) instead of always writing `platform=bm`.
+- **Upgrade without `--force` respects Upgradeable=False** — Admin-ack / Upgradeable=False no longer proceeds via `--auto-yes` when `ask=false`. Re-run with `--force` to bypass intentionally.
 - **Bare-metal startup asks you to power on the servers** — Whether a cluster is bare metal comes from that cluster's `state.sh`, not the current `platform` in aba.conf (that setting is for the next install and can change). A leftover `vmware.conf` no longer sends a bare-metal cluster into `aba start`. When the API is down, startup `ask()`s you to turn the servers on, then waits.
 - **Install and mirror config render `ocp_major`** — After `ocp_version` is loaded, `create-install-config.sh` and `create-mirror-conf.sh` set `ocp_major` and abort if that number is missing or the template fails. A failed render no longer writes an install config with no `ImageDigestSources`, or a `mirror.conf` with `reg_path=/ocp/openshift`.
 

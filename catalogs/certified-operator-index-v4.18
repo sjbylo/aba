@@ -42,7 +42,7 @@ conjur-follower-operator Conjur Enterprise Follower Operator stable
 coroot-operator Coroot stable
 couchbase-enterprise-certified Couchbase Operator stable
 cpd-platform-operator Cloud Pak for Data Platform Operator v6.4
-cp-fko Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.15
+cp-fko Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.16
 crunchy-postgres-operator Crunchy Postgres for Kubernetes v5
 cte-k8s-operator Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified Datadog Operator stable
@@ -264,3 +264,4 @@ xcrypt-operator Zettaset XCrypt Operator alpha
 xspc-operator HPE XP Storage Plug-in for Containers stable
 zabbix-operator-certified Zabbix Operator stable-v7.0
 zk-operator ZooKeeper Operator stable
+ztouch-os-operator zTouch.OS stable

@@ -44,7 +44,7 @@ Add the helpers in section B1 in this same commit, and call them from the three 
 
 ### A2. Short summary of agent-config.yaml before Yes
 
-Idea only. Not designed yet. Do not shell the install ask out to the example script.
+`scripts/agent-config-summary.sh` is the standalone summary (`[-s|-v] [agent-config.yaml]`). It reads the file with `yaml2json` and formats the lines with `jq`. The review ask does not call it yet. Do not shell the install ask out to the example script in a cluster directory. That file is only a guide for the shape.
 
 The review ask in `scripts/bm-ask-edit.sh` prints the path and stops:
 

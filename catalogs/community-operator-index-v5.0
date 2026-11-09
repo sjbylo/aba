@@ -33,6 +33,7 @@ ack-emr-controller AWS Controllers for Kubernetes - Amazon EMR alpha
 ack-emrserverless-controller AWS Controllers for Kubernetes - Amazon EMR Serverless alpha
 ack-eventbridge-controller AWS Controllers for Kubernetes - Amazon EventBridge alpha
 ack-firehose-controller AWS Controllers for Kubernetes - Amazon Firehose alpha
+ack-fsx-controller AWS Controllers for Kubernetes - Amazon FSx alpha
 ack-glue-controller AWS Controllers for Kubernetes - Amazon Glue alpha
 ack-iam-controller AWS Controllers for Kubernetes - Amazon IAM alpha
 ack-kafka-controller AWS Controllers for Kubernetes - Amazon Kafka alpha
@@ -260,6 +261,7 @@ tempo-operator Community Tempo Operator alpha
 tf-controller Weave GitOps Terraform Controller stable
 tidb-operator TiDB Operator stable
 tls-compliance-operator TLS Compliance Operator stable
+trident-operator NetApp Trident stable
 trustify-operator Trustify Operator alpha
 ucs-ci-solutions-operator UCS-CI-Solutions-Operator alpha
 universal-crossplane Upbound Universal Crossplane (UXP) stable

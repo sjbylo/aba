@@ -33,6 +33,7 @@ ack-emr-controller AWS Controllers for Kubernetes - Amazon EMR alpha
 ack-emrserverless-controller AWS Controllers for Kubernetes - Amazon EMR Serverless alpha
 ack-eventbridge-controller AWS Controllers for Kubernetes - Amazon EventBridge alpha
 ack-firehose-controller AWS Controllers for Kubernetes - Amazon Firehose alpha
+ack-fsx-controller AWS Controllers for Kubernetes - Amazon FSx alpha
 ack-glue-controller AWS Controllers for Kubernetes - Amazon Glue alpha
 ack-iam-controller AWS Controllers for Kubernetes - Amazon IAM alpha
 ack-kafka-controller AWS Controllers for Kubernetes - Amazon Kafka alpha
@@ -175,6 +176,7 @@ jupyter-notebook-validator-operator Jupyter Notebook Validator Operator stable
 k8boss-operator K8Boss alpha
 k8gb k8gb alpha
 kairos-operator Kairos Operator candidate-v2
+kaoto-operator Kaoto Operator alpha
 keda [DEPRECATED] KEDA alpha
 keepalived-operator Keepalived Operator alpha
 kepler-operator Kepler alpha
@@ -268,6 +270,7 @@ resource-locker-operator Resource Locker Operator alpha
 rhoas-operator OpenShift Application Services (RHOAS) beta
 ripsaw benchmark-operator alpha
 rsct-operator RSCT Operator for IBM Power Systems alpha
+ruptura-operator Ruptura Operator stable
 sailoperator Sail Operator stable
 sap-commerce-operator SAP Commerce Operator alpha
 sap-data-intelligence-observer-operator SAP Data Intelligence 3 - Observer Operator stable
@@ -275,6 +278,7 @@ sap-hana-express-operator SAP Hana Express Operator stable
 seldon-operator Seldon Operator stable
 self-node-remediation Self Node Remediation Operator - Community Edition stable
 service-binding-operator Service Binding Operator stable
+shellwarden-operator Denegra Shellwarden for NVIDIA OpenShell alpha
 shiftwise-operator ShiftWise Operator stable
 sigstore-helm-operator sigstore alpha
 silicom-sts-operator Silicom STS Operator alpha

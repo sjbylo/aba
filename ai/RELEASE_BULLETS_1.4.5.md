@@ -1,14 +1,10 @@
 # ABA 1.4.5 Release Highlights
 
-OpenShift 5 readiness with enhancements and bug fixes.
+Improved OpenShift 5 readiness with enhancements and bug fixes.
 
 ### New features
 
 - **Continuous bare-metal install** — One `aba install` / `make install` for BM (edit + boot prompts) instead of three Make stops. Recreate primed/transfer artifacts after upgrade (primed remains beta).
-
-### Improvements
-
-- **OpenShift 5 Friendly** — README callout and badge: ready for OpenShift 5 (and OpenShift 4) as new releases land.
 
 ### Fixes
 

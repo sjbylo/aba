@@ -71,26 +71,51 @@ _tui_redirect_activate() {
 # Input validation helpers
 # =============================================================================
 
-# Validate a single IPv4 address (returns 0 if valid)
+# Validate a single IPv4 address (returns 0 if valid).
+# Prefer _normalize_ip before storing so leading zeros are stripped.
 _valid_ip() {
+	normalize_ipv4 "$1" >/dev/null 2>&1
+}
+
+# Strip leading zeros per octet (10.0.0.08 → 10.0.0.8). Empty stays empty.
+# Prints normalized IP on stdout. Returns 1 if non-empty and invalid.
+_normalize_ip() {
 	local ip="$1"
-	[[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
-	local IFS='.'
-	read -ra octets <<< "$ip"
-	for o in "${octets[@]}"; do
-		[[ "10#$o" -le 255 ]] || return 1
+	[[ -z "$ip" ]] && { printf '\n'; return 0; }
+	normalize_ipv4 "$ip"
+}
+
+# Strip leading zeros from a non-negative integer (08 → 8). Empty stays empty.
+_normalize_uint() {
+	normalize_uint "$1"
+}
+
+# Normalize a comma-separated IPv4 list (each octet leading zeros stripped).
+_normalize_ip_list() {
+	local input="$1"
+	local IFS=',' entry out="" norm
+	[[ -z "$input" ]] && { printf '\n'; return 0; }
+	read -ra entries <<< "$input"
+	for entry in "${entries[@]}"; do
+		entry="${entry#"${entry%%[![:space:]]*}"}"
+		entry="${entry%"${entry##*[![:space:]]}"}"
+		[[ -z "$entry" ]] && continue
+		norm=$(normalize_ipv4 "$entry") || return 1
+		out+="${out:+,}$norm"
 	done
-	return 0
+	printf '%s\n' "$out"
 }
 
 # Validate CIDR notation (e.g. 10.0.0.0/24)
 _valid_cidr() {
+	normalize_cidr "$1" >/dev/null 2>&1
+}
+
+# Strip leading zeros in CIDR address and prefix. Empty stays empty.
+_normalize_cidr() {
 	local cidr="$1"
-	[[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || return 1
-	local ip="${cidr%/*}" prefix="${cidr#*/}"       # split "10.0.0.0/24" → ip + prefix
-	_valid_ip "$ip" || return 1
-	[[ "$prefix" -ge 0 && "$prefix" -le 32 ]] || return 1
-	return 0
+	[[ -z "$cidr" ]] && { printf '\n'; return 0; }
+	normalize_cidr "$cidr"
 }
 
 # Validate comma-separated list of IPs or hostnames (DNS/NTP)
@@ -108,6 +133,28 @@ _valid_ip_or_host_list() {
 		fi
 	done
 	return 0
+}
+
+# Normalize IPs in a comma-separated IP/hostname list; leave hostnames as-is.
+_normalize_ip_or_host_list() {
+	local input="$1"
+	local IFS=',' entry out="" norm
+	[[ -z "$input" ]] && { printf '\n'; return 0; }
+	read -ra entries <<< "$input"
+	for entry in "${entries[@]}"; do
+		entry="${entry#"${entry%%[![:space:]]*}"}"
+		entry="${entry%"${entry##*[![:space:]]}"}"
+		[[ -z "$entry" ]] && continue
+		if norm=$(normalize_ipv4 "$entry" 2>/dev/null); then
+			:
+		elif _valid_domain "$entry"; then
+			norm=$entry
+		else
+			return 1
+		fi
+		out+="${out:+,}$norm"
+	done
+	printf '%s\n' "$out"
 }
 
 # Validate comma-separated list of IPv4 addresses ONLY (no hostnames).

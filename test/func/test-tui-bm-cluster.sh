@@ -140,7 +140,8 @@ _bm_wait_agent() {
 _bm_set_cluster_name() {
 	local name="$1"
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Cluster name:.*$name"; then
+	# Exact field match — "Cluster name:.*sno" must not match sno4
+	if tui_cluster_name_is "$name" "$_scr"; then
 		return 0
 	fi
 	tui_keys N; sleep 0.4
@@ -376,7 +377,7 @@ _open_install
 tui_wait_for "Basics\|Cluster Name\|Name" 10
 tui_screenshot "bm-01-basics"
 _scr=$(tui_capture)
-if ! echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+if ! tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 	tui_keys N; sleep 0.4
 	tui_keys Enter; sleep 0.8
 	tui_keys C-u; sleep 0.2

@@ -795,9 +795,8 @@ e2e_wait_cluster_available $SNO remote
 e2e_wait_cluster_ready $SNO remote 2400
 
 # Cross-minor upgrade: first attempt WITHOUT --force must FAIL.
-# Admin acknowledgment gates (Upgradeable=False) block cross-minor upgrades
-# until the admin explicitly acknowledges API removals. Without --force, oc
-# refuses the upgrade.
+# Admin acknowledgment gates (Upgradeable=False) block cross-minor upgrades.
+# ABA aborts unless --force is set (does not auto-yes past Upgradeable=False).
 e2e_run_must_fail_remote "Upgrade without --force must fail (admin ack gate)" \
     "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
 

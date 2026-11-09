@@ -33,6 +33,7 @@ ack-emr-controller AWS Controllers for Kubernetes - Amazon EMR alpha
 ack-emrserverless-controller AWS Controllers for Kubernetes - Amazon EMR Serverless alpha
 ack-eventbridge-controller AWS Controllers for Kubernetes - Amazon EventBridge alpha
 ack-firehose-controller AWS Controllers for Kubernetes - Amazon Firehose alpha
+ack-fsx-controller AWS Controllers for Kubernetes - Amazon FSx alpha
 ack-glue-controller AWS Controllers for Kubernetes - Amazon Glue alpha
 ack-iam-controller AWS Controllers for Kubernetes - Amazon IAM alpha
 ack-kafka-controller AWS Controllers for Kubernetes - Amazon Kafka alpha
@@ -176,6 +177,7 @@ jupyter-notebook-validator-operator Jupyter Notebook Validator Operator stable
 k8boss-operator K8Boss alpha
 k8gb k8gb alpha
 kairos-operator Kairos Operator candidate-v2
+kaoto-operator Kaoto Operator alpha
 keda [DEPRECATED] KEDA alpha
 keepalived-operator Keepalived Operator alpha
 kepler-operator Kepler alpha

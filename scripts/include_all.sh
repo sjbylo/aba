@@ -1242,12 +1242,43 @@ _validate_network_consistency() {
 	return $_ret
 }
 
-# Validate an IPv4 address: format + octet range (0-255).
-# Returns 0 if valid, 1 if invalid.
-_valid_ipv4() {
+# Canonicalize a non-negative integer: strip leading zeros (08 → 8, 00 → 0).
+# Empty input prints empty and returns 0 (caller decides if empty is allowed).
+# Returns 1 if non-empty and not digits-only.
+normalize_uint() {
+	local n="$1"
+	[[ -z "$n" ]] && { printf '\n'; return 0; }
+	[[ "$n" =~ ^[0-9]+$ ]] || return 1
+	printf '%s\n' "$((10#$n))"
+}
+
+# Canonicalize an IPv4 address: strip leading zeros per octet (10.0.0.08 → 10.0.0.8).
+# Prints the normalized address on stdout. Returns 0 if valid, 1 if invalid.
+# Uses 10# so bash never treats leading zeros as octal.
+normalize_ipv4() {
 	local ip="$1"
+	local IFS='.'
+	local -a octets
+	local o out="" n
+
+	[[ -z "$ip" ]] && return 1
 	[[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
-	(( BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255 ))
+	read -ra octets <<< "$ip"
+	[[ ${#octets[@]} -ne 4 ]] && return 1
+	for o in "${octets[@]}"; do
+		[[ "$o" =~ ^[0-9]+$ ]] || return 1
+		n=$((10#$o))
+		(( n > 255 )) && return 1
+		out+="${out:+.}$n"
+	done
+	printf '%s\n' "$out"
+}
+
+# Validate an IPv4 address: format + octet range (0-255).
+# Leading zeros are accepted (same as normalize_ipv4); use normalize_ipv4 to
+# strip them before storing. Returns 0 if valid, 1 if invalid.
+_valid_ipv4() {
+	normalize_ipv4 "$1" >/dev/null
 }
 
 # Validate a Unix username (SSH user, registry user, etc.)
@@ -5420,34 +5451,11 @@ probe_host() {
 # Validation Functions for TUI inputs
 # -----------------------------------------------------------------------------
 
-# Validate IPv4 address
+# Validate IPv4 address (allows leading zeros; prefer normalize_ipv4 before store)
 # Usage: validate_ip "192.168.1.1" && echo "valid"
 # Returns: 0 if valid, 1 if invalid
 validate_ip() {
-	local ip="$1"
-	local IFS='.'
-	local -a octets
-	
-	# Empty is invalid
-	[[ -z "$ip" ]] && return 1
-	
-	# Split into octets
-	read -ra octets <<< "$ip"
-	
-	# Must have exactly 4 octets
-	[[ ${#octets[@]} -ne 4 ]] && return 1
-	
-	# Each octet must be 0-255
-	for octet in "${octets[@]}"; do
-		# Must be numeric
-		[[ ! "$octet" =~ ^[0-9]+$ ]] && return 1
-		# No leading zeros (except "0" itself) — check before arithmetic to avoid octal parse errors
-		[[ ${#octet} -gt 1 && ${octet:0:1} == "0" ]] && return 1
-		# Must be in range 0-255
-		[[ $octet -lt 0 || $octet -gt 255 ]] && return 1
-	done
-	
-	return 0
+	normalize_ipv4 "$1" >/dev/null
 }
 
 # Validate comma-separated IP list
@@ -5477,31 +5485,26 @@ validate_ip_list() {
 	return 0
 }
 
+# Canonicalize CIDR: strip leading zeros in address and prefix (010.0.0.0/08 → 10.0.0.0/8).
+# Prints normalized CIDR on stdout. Returns 0 if valid, 1 if invalid.
+normalize_cidr() {
+	local cidr="$1"
+	local ip prefix nip npre
+	[[ -z "$cidr" ]] && return 1
+	[[ ! "$cidr" =~ ^[^/]+/[^/]+$ ]] && return 1
+	ip="${cidr%/*}"
+	prefix="${cidr#*/}"
+	nip=$(normalize_ipv4 "$ip") || return 1
+	npre=$(normalize_uint "$prefix") || return 1
+	[[ -n "$npre" && "$npre" -ge 0 && "$npre" -le 32 ]] || return 1
+	printf '%s\n' "$nip/$npre"
+}
+
 # Validate CIDR notation (IPv4 only)
 # Usage: validate_cidr "10.0.0.0/24" && echo "valid"
 # Returns: 0 if valid, 1 if invalid
 validate_cidr() {
-	local cidr="$1"
-	local ip prefix
-	
-	# Empty is invalid
-	[[ -z "$cidr" ]] && return 1
-	
-	# Must contain exactly one slash
-	[[ ! "$cidr" =~ ^[^/]+/[^/]+$ ]] && return 1
-	
-	# Split into IP and prefix
-	ip="${cidr%/*}"
-	prefix="${cidr#*/}"
-	
-	# Validate IP part
-	validate_ip "$ip" || return 1
-	
-	# Validate prefix part (must be numeric 0-32)
-	[[ ! "$prefix" =~ ^[0-9]+$ ]] && return 1
-	[[ $prefix -lt 0 || $prefix -gt 32 ]] && return 1
-	
-	return 0
+	normalize_cidr "$1" >/dev/null
 }
 
 # Validate pull secret by testing authentication with registry.redhat.io
