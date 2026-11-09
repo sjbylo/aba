@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.5...HEAD)
+
+---
+
+## [1.4.5](https://github.com/sjbylo/aba/releases/tag/v1.4.5) - 2026-11-09
+
+Improved OpenShift 5 readiness with enhancements and bug fixes.
+
 
 ### Added
 
