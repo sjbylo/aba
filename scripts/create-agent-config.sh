@@ -126,42 +126,82 @@ aba_debug num_ports=${#arr_ports[@]}
 
 aba_info "$num_ports port(s): ${arr_ports[@]}"
 
-# Generate the mac addresses or get them from 'macs.conf'
-# Goal is to allow user to BYO mac addresses for bare-metal use-case. So, we generate the addresses in advance into an array "arr_". scripts/j2 will create a python list.
+# Resolve MACs for agent-config.yaml (see macs_* policy in include_all.sh):
+#
+#   | Condition                                      | Action                                      |
+#   |------------------------------------------------|---------------------------------------------|
+#   | cluster.conf newer than agent-config.yaml     | Rebuild YAML (cluster.conf wins)           |
+#   | macs has unique addrs + newer (or no YAML)     | Apply those MACs; pad shortfall w/ placeholder |
+#   | macs empty, or agent-config newer than macs    | Keep agent-config.yaml (no wipe)            |
+#   | platform=bm + missing MACs + no agent-config   | Write YAML with $BM_MAC_PLACEHOLDER          |
+#   | platform=vmw|kvm + empty macs                  | Invent from mac_prefix (VMs)                |
+#
+# macs.conf is a shortcut for filling MACs. Bare metal always gets an
+# agent-config.yaml so the user can edit it. Do NOT invent real-looking BM
+# MACs (useless on physical NICs) — use an obvious placeholder instead.
+#
+# macs.conf / expected count — shared helpers (TUI stays dumb).
+# Unknown BM MACs use $BM_MAC_PLACEHOLDER from include_all.sh (one definition).
+expected_mac_count=$(macs_expected_count "$num_masters" "$num_workers" "$ports")
+platform=${platform:-bm}
 
-# Only proceed if macs.conf exists and is not empty
 if [[ -s macs.conf ]]; then
+	# macs.conf older than the YAML is not a reason to keep a stale topology.
+	# cluster.conf newer than the YAML always rebuilds (SNO vs standard, IPs).
+	if [ -f agent-config.yaml ] && ! macs_should_apply && ! cluster_conf_outranks_agent; then
+		aba_info "Keeping existing agent-config.yaml — macs.conf will not replace it."
+		exit 0
+	fi
 
-	# Compute expected count
-	expected_mac_count=$(( num_nodes * num_ports ))
+	# Check the whole file before truncating to the expected count.
+	# head -n first would hide a repeated MAC that sits past the first slot,
+	# and an empty list makes `printf | wc -l` look like one unique blank line.
+	mapfile -t _mac_all < <(macs_list_from_file macs.conf)
+	if [ "${#_mac_all[@]}" -eq 0 ]; then
+		aba_abort "No valid MAC addresses in macs.conf. Expected lines like aa:bb:cc:dd:ee:ff."
+	fi
+	_all_count=${#_mac_all[@]}
+	_all_uniq=$(printf '%s\n' "${_mac_all[@]}" | sort -u | wc -l)
+	_all_uniq=${_all_uniq// /}
+	if [ "$_all_uniq" -ne "$_all_count" ]; then
+		aba_abort "Duplicate MAC addresses found in macs.conf! ($_all_count total, $_all_uniq unique)"
+	fi
+	if [ "$_all_count" -gt "$expected_mac_count" ]; then
+		aba_warn "macs.conf has $_all_count MAC(s); this cluster needs $expected_mac_count. Using the first $expected_mac_count."
+	fi
 
-	# Extract all MAC addresses into an array
-	mapfile -t mac_array < <(grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' macs.conf | head -n $expected_mac_count)
+	mapfile -t mac_array < <(printf '%s\n' "${_mac_all[@]}" | head -n "$expected_mac_count")
 	mac_count=${#mac_array[@]}
 
-	# Store as newline-separated string
-	mac_list=$(printf "%s\n" "${mac_array[@]}")
-
-	# Check for uniqueness
-	uniq_count=$(echo "$mac_list" | sort -u | wc -l)
-
-	aba_debug uniq_count=$uniq_count mac_count=$mac_count expected_mac_count=$expected_mac_count
-
-	if (( uniq_count != mac_count )); then
-		aba_abort "Duplicate MAC addresses found in macs.conf! ($mac_count total, $uniq_count unique)"
-	fi
-
-	# Warn if fewer MAC addresses than expected
 	if (( mac_count < expected_mac_count )); then
-		aba_warn "Found only $mac_count valid MAC addresses in macs.conf.  Expecting: $expected_mac_count for the whole cluster ($num_ports port(s) per node x $num_nodes nodes)."
+		aba_warn "macs.conf has $mac_count unique MAC(s); this cluster needs $expected_mac_count ($num_ports port(s) per node x $num_nodes nodes)."
+		if [ "$platform" = "bm" ]; then
+			aba_warn "Using those $mac_count MAC(s). Filling the remaining $(( expected_mac_count - mac_count )) slot(s) with placeholder $BM_MAC_PLACEHOLDER — replace them before the ISO is built."
+			while [ "${#mac_array[@]}" -lt "$expected_mac_count" ]; do
+				mac_array+=("$BM_MAC_PLACEHOLDER")
+			done
+		fi
 	fi
-else
-	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
-	# Note, double (or more of) the number of mac addresses are generated in case port bonding is required (ports and vlan in cluster.conf)
-
+	mac_list=$(printf "%s\n" "${mac_array[@]}")
+elif [ "$platform" = "bm" ]; then
+	# No real MACs yet. Still write agent-config.yaml so it can be edited.
+	# macs.conf is optional — a shortcut that overwrites these when it should apply.
+	if [ -f agent-config.yaml ] && ! cluster_conf_outranks_agent; then
+		aba_info "macs.conf empty — keeping existing agent-config.yaml"
+		exit 0
+	fi
+	aba_warn "No macs.conf — writing agent-config.yaml with placeholder MAC(s) $BM_MAC_PLACEHOLDER." \
+		"Replace them in agent-config.yaml, or add real MACs to macs.conf (shortcut) and re-run."
 	mac_list=$(
-		for ((i=1; i <= num_nodes * num_ports; i++)); do
-			[ "$i" -gt 255 ] && aba_abort "MAC address overflow: need $((num_nodes * num_ports)) addresses but last octet max is 255 (ff)"
+		for ((i=1; i <= expected_mac_count; i++)); do
+			printf '%s\n' "$BM_MAC_PLACEHOLDER"
+		done
+	)
+else
+	# VMs only: auto-generate from mac_prefix (count includes multi-port bonding).
+	mac_list=$(
+		for ((i=1; i <= expected_mac_count; i++)); do
+			[ "$i" -gt 255 ] && aba_abort "MAC address overflow: need $expected_mac_count addresses but last octet max is 255 (ff)"
 			printf "%s%02x\n" "$mac_prefix" "$i"
 		done
 	)
@@ -287,4 +327,9 @@ aba_debug "arr_macs=${arr_macs[@]}"
 scripts/j2 templates/$template_file > agent-config.yaml
 
 aba_success "$PWD/agent-config.yaml generated successfully!"
+
+# Bare metal keeps this step open through the review ask in bm-ask-edit.sh.
+if [ "$platform" != "bm" ]; then
+	aba_progress "DONE|ci_config"
+fi
 

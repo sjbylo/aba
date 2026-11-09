@@ -61,8 +61,9 @@ $exec_cmd
 # Handles the case where cluster.conf already existed and
 # create-cluster-conf.sh exited early ([ -s cluster.conf ] && exit 0).
 
-# Map --type to num_masters/num_workers for existing clusters
-if [ "$type" ] && [ -z "$num_masters" ]; then
+# An explicit type is the topology. A num_masters already in the
+# environment (another cluster.conf exported earlier) must not win.
+if [ "$type" ]; then
 	case "$type" in
 		sno)      num_masters=1; num_workers=0 ;;
 		compact)  num_masters=3; num_workers=0 ;;
@@ -111,7 +112,7 @@ msg="Install the cluster with: aba -d $name install  OR  cd $name; aba install"
 [ "$target" ] && msg="Proceed by running: aba -d $name $target  OR  cd $name; aba $target"
 
 # Show "how to install" instructions and exit, unless a target step was given
-if [ "$ask" ] && [ -z "$target" ]; then
+if ask_is_on && [ -z "$target" ]; then
 	echo
 	aba_info "The cluster directory has been created: $name"
 	aba_info "$msg"
@@ -130,7 +131,10 @@ if [ "$target" ]; then
 		exit 0
 	fi
 	aba_debug "Targeting step: $target in dir: $PWD"
-	exec_cmd="make -s $target"
+	# `make cluster target=install` exports that variable into this sub-make.
+	# Clear it. The goal is already $target; a leftover target=install makes
+	# the install rule depend on itself.
+	exec_cmd="make -s $target target="
 	aba_debug "Running: $exec_cmd (in $PWD)"
 	$exec_cmd
 fi

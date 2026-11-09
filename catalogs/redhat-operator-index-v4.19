@@ -76,8 +76,8 @@ mtc-operator Migration Toolkit for Containers Operator release-v1.8
 mtr-operator Migration Toolkit for Runtimes Operator alpha
 mtv-operator Migration Toolkit for Virtualization Operator release-v2.11
 multiarch-tuning-operator Multiarch Tuning Operator stable
-multicluster-engine multicluster engine for Kubernetes stable-2.17
-multicluster-global-hub-operator-rh Multicluster Global Hub Operator release-5.0
+multicluster-engine MultiCluster Engine stable-2.17
+multicluster-global-hub-operator-rh Multicluster Global Hub Operator release-1.7
 netobserv-operator Network Observability stable
 nfd Node Feature Discovery Operator stable
 node-healthcheck-operator Node Health Check Operator stable
@@ -139,7 +139,7 @@ skupper-netobs-operator Red Hat Service Interconnect Network Observer stable-2
 skupper-operator Red Hat Service Interconnect stable-2
 smb-csi-driver-operator CIFS/SMB CSI Driver Operator stable
 sriov-network-operator SR-IOV Network Operator stable
-submariner Submariner stable-0.24
+submariner Submariner stable-0.25
 tang-operator NBDE Tang Server alpha
 tempo-product Tempo Operator stable
 topology-aware-lifecycle-manager Topology Aware Lifecycle Manager stable

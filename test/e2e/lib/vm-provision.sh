@@ -286,7 +286,8 @@ _vm_dnf_update() {
 _vm_dnf_update_pool() {
 	local host="$1"
 	local user="${2:-$VM_DEFAULT_USER}"
-	local poll_timeout=900
+	# Large firmware packages on a cold CDN can exceed 15m; 30m avoids false FATAL
+	local poll_timeout="${E2E_DNF_UPDATE_TIMEOUT:-1800}"
 	local poll_interval=20
 
 	echo "  [vm] Checking for OS updates on $host (pool VM) ..."

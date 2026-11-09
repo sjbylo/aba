@@ -37,9 +37,15 @@ opts=
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
+# Agent wait is NOT here — only on the install Make chain (.install-complete
+# recipe). Standalone 'aba mon' must go straight to openshift-install monitor:
+# by then the agent API (8090) is often already gone after bootstrap.
+aba_progress "START|ci_mon"
+
 # Ensure openshift-install is available (wait for background download/install)
 if ! ensure_openshift_install >/dev/null; then
 	error_msg=$(get_task_error "$TASK_INST_OPENSHIFT_INSTALL")
+	aba_progress "FAIL|ci_mon"
 	aba_abort "Failed to install openshift-install:\n$error_msg"
 fi
 
@@ -64,16 +70,19 @@ declare -A wait_for_exit_reasons=(
 # ret = 8 means openshift-install was interrupted (e.g. Ctrl-c). Stay quiet, but
 # exit non-zero so Make does not create .install-complete.
 if ! exit_unless_install_finished "$ret"; then
+	aba_progress "FAIL|ci_mon"
 	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
-	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
+	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: $(aba_cmd mon)."
 	if [ $ret -eq 6 ] || [ $ret -eq 7 ]; then
-		echo_yellow "[ABA] Stuck pods may be blocking progress. Run 'aba -d $CLUSTER_NAME unstick' to detect and restart them."
+		echo_yellow "[ABA] Stuck pods may be blocking progress. Run '$(aba_cmd unstick)' to detect and restart them."
 	fi
 	echo_yellow "[ABA] If the problem persists, check the output above for clues."
 
 	exit $ret
 fi
+
+aba_progress "DONE|ci_mon"
 
 # Phase 6 BMC-06 + BMC-07: post-install cleanup - disable boot override + eject media.
 # Platform-gated; best-effort (scripts/bmc-unmount.sh exits 0 always per D-13).

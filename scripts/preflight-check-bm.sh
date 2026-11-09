@@ -29,13 +29,10 @@
 _BM_SHIPPED_VENDORS="irmc redfish idrac ilo supermicro lenovo"
 
 # -----------------------------------------------------------------------------
-# Node listing: extract the <node> suffix from every bmc_host_<node>= line.
-# Declaration order is preserved because grep + sed reads bmc.conf top-to-bottom.
+# Node listing: bmc_host_<node> suffixes (shared helper in include_all.sh).
 # -----------------------------------------------------------------------------
 _bm_node_list() {
-	[ -f bmc.conf ] || return 0
-	grep -E '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf \
-		| sed -E 's/^[[:space:]]*bmc_host_([A-Za-z0-9_-]+)=.*/\1/'
+	bmc_host_list
 }
 
 # -----------------------------------------------------------------------------
@@ -1099,7 +1096,7 @@ preflight_check_bm() {
 	}
 
 	# INT-03 silent-skip: bmc.conf present but no bmc_host_* keys defined.
-	if ! grep -qE '^[[:space:]]*bmc_host_' bmc.conf; then
+	if ! bmc_has_hosts; then
 		aba_info "BMC: bmc.conf present but no bmc_host_* keys defined - using manual virtual-media flow."
 		return 0
 	fi

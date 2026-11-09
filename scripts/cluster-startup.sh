@@ -6,6 +6,15 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 source <(normalize-cluster-conf)
+source <(normalize-aba-conf)
+# state.sh is how this cluster was installed. aba.conf platform is the next
+# install and can change, so it must not decide bare metal vs VM here.
+# A leftover vmware.conf symlink must not either.
+if _installed_platform=$(cluster_installed_platform); then
+	platform=$_installed_platform
+else
+	platform=${platform:-bm}
+fi
 
 scripts/progress-plan.sh cluster-startup
 aba_progress "START|su_power"
@@ -43,12 +52,42 @@ _cluster_startup_wait_api() {
 	return 1
 }
 
-# Check for bare-metal installation (no hypervisor config)
-if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
-	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
+# Bare metal: the operator powers the servers. ask() is the gate (same
+# pattern as the install boot ask) so the TUI progress dialog can show it.
+_bm_startup_ask() {
+	local _cn="${cluster_name%%:*}"
+	if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
+		printf '%s\n' "Power on the bare-metal servers for cluster '$_cn'.
 
-	# Quick check to see if servers are up?
-	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
+The API is not reachable at $server_url
+
+Yes: the servers are on (or you are turning them on now). ABA waits for the API, then brings the nodes back.
+No: stop this run. Turn the servers on, then run aba startup again."
+		return 0
+	fi
+	printf '%s\n' "Power on the bare-metal servers for cluster '$_cn'.
+
+The API is not reachable at $server_url
+
+Yes: the servers are on (or you are turning them on now). ABA waits for the API, then brings the nodes back.
+No: stop this run. Turn the servers on, then re-run:
+    $(aba_cmd startup)"
+}
+
+if [ "$platform" = "bm" ]; then
+	if ! _cluster_startup_api_up; then
+		# --always: prompt even when ask=false. aba -y still skips.
+		if ! ask -y --always "$(_bm_startup_ask)"; then
+			aba_progress "FAIL|su_power"
+			aba_progress "ERROR|Bare-metal servers were not powered on"
+			aba_progress "NEXT|Power on the servers and re-run aba startup"
+			if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
+				aba_info "Stopped. Power on the bare-metal servers, then run aba startup again."
+			else
+				aba_info "Power on the servers, then re-run: $(aba_cmd startup)"
+			fi
+			exit 1
+		fi
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 		_wait_rc=0
 		aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 1200 _cluster_startup_api_up || _wait_rc=$?
@@ -62,7 +101,7 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 			aba_abort "Cluster API not available at $server_url after 20 min. Power on all servers and try again."
 		fi
 	fi
-else
+elif [ "$platform" = "vmw" ] || [ "$platform" = "kvm" ]; then
 	_has_vms=1
 	aba_info Starting cluster $cluster_name ...
 	if ! aba start; then
@@ -70,6 +109,9 @@ else
 		aba_progress "DONE|su_power"
 		exit 0
 	fi
+else
+	aba_progress "FAIL|su_power"
+	aba_abort "Unknown platform '$platform' in aba.conf"
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)

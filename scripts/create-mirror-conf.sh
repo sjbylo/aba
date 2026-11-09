@@ -21,10 +21,19 @@ if [ ! "$ocp_version" ] || [ ! "$domain" ]; then
 		"You must set the target version and domain of OpenShift in aba.conf. See the README.md on how to get started!"
 fi
 
-# Input is 'domain' from aba.conf, 'hostname' from this host
+# Input is 'domain' from aba.conf, 'hostname' from this host.
+# ADR-005: ocp_major is derived. Without it the template silently writes
+# reg_path=/ocp/openshift (Jinja prints an empty major and exits 0).
+export ocp_major="$(ocp_major_of "$ocp_version")"
+if [ -z "$ocp_major" ]; then
+	aba_abort "ocp_version '${ocp_version:-}' has no major number"
+fi
 export hostname
 hostname=$(hostname -s)
-scripts/j2 templates/mirror.conf.j2 > mirror.conf
+if ! scripts/j2 templates/mirror.conf.j2 > mirror.conf; then
+	rm -f mirror.conf
+	aba_abort "Could not render mirror.conf"
+fi
 
 if [ "$force" != "yes" ]; then
 	edit_file mirror.conf "Configure your private mirror registry ($(basename $PWD)/mirror.conf)" || exit 1  # if editor=none exit 0

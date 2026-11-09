@@ -149,24 +149,44 @@ else
 	test_pass "_ensure_hv_ready accepts platform=vmw in sno/"
 fi
 
-# 4b. From a temp dir with cluster.conf but no vmware.conf: should fail
-TMPDIR_TEST=$(mktemp -d)
-cleanup() { rm -rf "$TMPDIR_TEST"; }
+# 4b. Nested temp cluster: repo/tmp.extXXX/cluster so
+#   - ../../Makefile → ABA_ROOT (top-level)
+#   - ../vmware.conf does NOT resolve to the repo file (would auto-ln and skip the error)
+#   - Makefile.cluster only (top-level Makefile in the cluster dir breaks ABA_ROOT)
+# platform comes from ABA_ROOT/aba.conf — briefly force vmw for this check.
+_EXT_BASE=$(mktemp -d "$PWD/tmp.extXXXXXX")
+TMPDIR_TEST="$_EXT_BASE/cluster"
+mkdir -p "$TMPDIR_TEST"
+_ABA_CONF_BAK=
+cleanup() {
+	[ -n "$_ABA_CONF_BAK" ] && [ -f "$_ABA_CONF_BAK" ] && mv -f "$_ABA_CONF_BAK" aba.conf
+	rm -rf "$_EXT_BASE"
+}
 trap cleanup EXIT
 
 cp sno/cluster.conf "$TMPDIR_TEST/"
 cp sno/agent-config.yaml "$TMPDIR_TEST/"
+# Cluster aba.conf → repo (unused for platform; normalize reads ABA_ROOT)
 ln -sf "$(pwd)/aba.conf" "$TMPDIR_TEST/aba.conf"
 ln -sfn "$(pwd)/scripts" "$TMPDIR_TEST/scripts"
 ln -sf "$(pwd)/templates" "$TMPDIR_TEST/templates"
 ln -sfn "$(pwd)/cli" "$TMPDIR_TEST/cli"
-ln -sf "$(pwd)/Makefile" "$TMPDIR_TEST/Makefile"
+ln -sf "$(pwd)/templates/Makefile.cluster" "$TMPDIR_TEST/Makefile"
+# Intentionally no vmware.conf anywhere under _EXT_BASE
+
+_ABA_CONF_BAK=$(mktemp "$PWD/tmp.abaconfXXXXXX")
+cp -a aba.conf "$_ABA_CONF_BAK"
+sed -i 's/^platform=.*/platform=vmw/' aba.conf
 
 out=$(aba --dir "$TMPDIR_TEST" ls 2>&1 || true)
+
+mv -f "$_ABA_CONF_BAK" aba.conf
+_ABA_CONF_BAK=
+
 if echo "$out" | grep -q "vmware.conf not found"; then
 	test_pass "_ensure_hv_ready rejects missing vmware.conf"
 else
-	test_fail "_ensure_hv_ready did NOT reject missing vmware.conf. Output: $(echo "$out" | tail -3)"
+	test_fail "_ensure_hv_ready did NOT reject missing vmware.conf. Output: $(echo "$out" | tail -5)"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────

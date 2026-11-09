@@ -35,7 +35,7 @@ export rendezvous_ip=$starting_ip
 
 # Detect SNO (topology rules are enforced by verify-cluster-conf)
 SNO=
-[ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ] && SNO=1
+is_sno && SNO=1
 
 # verify_conf=off: skip all validation entirely
 if [ "$verify_conf" = "off" ]; then

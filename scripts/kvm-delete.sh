@@ -34,7 +34,7 @@ elif [ $_exists_rc -ne 0 ]; then
 	aba_info "No VMs found -- nothing to delete"
 	exit 0
 else
-	if [ "$ask" ]; then
+	if ask_is_on; then
 		for name in $CP_NAMES $WORKER_NAMES; do
 			echo "$(vm_name "$CLUSTER_NAME" "$name")"
 		done

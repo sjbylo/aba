@@ -26,7 +26,7 @@ echo_step "Install mirror registry (vendor=$BUNDLE_VENDOR) ..."
 # If a previous run left any registry (Quay, Docker, or OMR), clean it up first
 if podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres|^registry(-[0-9]+)?$|^systemd-quay$'; then
 	echo_step "Found existing registry from a previous run, uninstalling first ..."
-	aba -d mirror uninstall -y || true
+	aba -d mirror uninstall -y --delete-data || true
 	cleanup_orphaned_quay_services
 fi
 

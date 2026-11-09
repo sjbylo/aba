@@ -13,6 +13,8 @@ if [ ! -f aba.conf ]; then
 	cp templates/aba.conf .
 fi
 source <(normalize-aba-conf)
+ocp_major="$(ocp_major_of "${ocp_version:-}")"
+ocp_major="${ocp_major:-4}"
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 

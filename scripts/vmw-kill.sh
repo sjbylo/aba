@@ -4,6 +4,8 @@
 
 source scripts/include_all.sh
 
+aba_progress "START|ci_vms" || true
+
 if [ -s vmware.conf ]; then
 	ensure_govc
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER

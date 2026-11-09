@@ -108,7 +108,7 @@ fi
 # Versioned downloads need ocp_version — bail out early if it's unset
 # Shell var may be empty even when aba.conf has the value (Makefile reads it directly)
 if [[ -z "${ocp_version:-}" && -f aba.conf ]]; then
-	ocp_version=$(grep -m1 '^ocp_version=' aba.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+	ocp_version=$(fetch_value ocp_version aba.conf) || ocp_version=
 fi
 if [[ "$make_list_target" != "out-download-no-version" && -z "${target_ocp_version:-}" && -z "${ocp_version:-}" ]]; then
 	aba_debug "ocp_version not set — skipping versioned CLI downloads"

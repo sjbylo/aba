@@ -129,6 +129,20 @@ _cluster_load_conf() {
 	return 0
 }
 
+# Replace macs.conf with the list the user just confirmed.
+# An empty list truncates the file: Save anyway on a blank editor means
+# "this file should now be empty", not "leave the previous lines alone".
+_write_cluster_macs() {
+	local _f="$ABA_ROOT/$cl_name/macs.conf"
+	mkdir -p "${_f%/*}"
+	if [[ -n "${cl_macs:-}" ]]; then
+		printf '%s\n' "$cl_macs" > "$_f"
+	else
+		: > "$_f"
+	fi
+	tui_log "Wrote $_f"
+}
+
 # Write current wizard values back to cluster.conf (the single source of truth).
 # Called after every page transition so changes persist across re-entries and crashes.
 _persist_cluster_draft() {
@@ -1100,11 +1114,16 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 					[[ $? -ne 0 ]] && break
 					local wrk_input
 					wrk_input=$(<"$_TUI_TMP")
-				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^(0|[1-9][0-9]*)$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid worker count.\n\nMust be a number without leading zeros (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
-					continue
-				fi
+					if ! wrk_input=$(_normalize_uint "$wrk_input"); then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid worker count.\n\nMust be a number (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+						continue
+					fi
+					if [[ -n "$wrk_input" ]] && [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid worker count.\n\nMust be a number (e.g. 0, 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+						continue
+					fi
 					[[ -n "$wrk_input" ]] && cl_workers="$wrk_input"
 					break
 				done
@@ -1177,7 +1196,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local net_val
 					net_val=$(<"$_TUI_TMP")
-					if [[ -n "$net_val" ]] && ! _valid_cidr "$net_val"; then
+					if ! net_val=$(_normalize_cidr "$net_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid CIDR format.\n\nExpected: IP/prefix (e.g. 10.0.0.0/24)" 0 0 || true
 						continue
@@ -1194,7 +1213,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local sip_val
 					sip_val=$(<"$_TUI_TMP")
-					if [[ -n "$sip_val" ]] && ! _valid_ip "$sip_val"; then
+					if ! sip_val=$(_normalize_ip "$sip_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.100)" 0 0 || true
 						continue
@@ -1211,7 +1230,8 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local api_val
 					api_val=$(<"$_TUI_TMP")
-					if [[ -n "$api_val" ]] && ! _valid_ip "$api_val"; then
+					# Strip leading zeros immediately (10.0.0.08 → 10.0.0.8)
+					if ! api_val=$(_normalize_ip "$api_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.200)" 0 0 || true
 						continue
@@ -1228,7 +1248,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local ing_val
 					ing_val=$(<"$_TUI_TMP")
-					if [[ -n "$ing_val" ]] && ! _valid_ip "$ing_val"; then
+					if ! ing_val=$(_normalize_ip "$ing_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.201)" 0 0 || true
 						continue
@@ -1246,7 +1266,7 @@ _cluster_page_network() {
 					local dns_val
 					dns_val=$(<"$_TUI_TMP")
 					dns_val=$(echo "$dns_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
-					if [[ -n "$dns_val" ]] && ! _valid_ip_list "$dns_val"; then
+					if ! dns_val=$(_normalize_ip_list "$dns_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid DNS entry.\n\nExpected: comma-separated IP addresses (e.g. 10.0.1.8,10.0.1.9)." 0 0 || true
 						continue
@@ -1263,7 +1283,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local gw_val
 					gw_val=$(<"$_TUI_TMP")
-					if [[ -n "$gw_val" ]] && ! _valid_ip "$gw_val"; then
+					if ! gw_val=$(_normalize_ip "$gw_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.1.1)" 0 0 || true
 						continue
@@ -1281,7 +1301,7 @@ _cluster_page_network() {
 					local ntp_val
 					ntp_val=$(<"$_TUI_TMP")
 					ntp_val=$(echo "$ntp_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
-					if [[ -n "$ntp_val" ]] && ! _valid_ip_or_host_list "$ntp_val"; then
+					if ! ntp_val=$(_normalize_ip_or_host_list "$ntp_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid NTP entry.\n\nExpected: comma-separated IPs or hostnames\n(e.g. 10.0.1.8,ntp.lab.local)" 0 0 || true
 						continue
@@ -1340,8 +1360,9 @@ _cluster_page_iface() {
 		)
 		if [[ "$cl_platform" == "bm" ]]; then
 			local mac_count=0
-			[[ -n "$cl_macs" ]] && mac_count=$(echo "$cl_macs" | wc -l)
-			if [[ $mac_count -gt 0 ]]; then
+			[[ -n "$cl_macs" ]] && mac_count=$(macs_list_from_text "$cl_macs" | wc -l)
+			mac_count=${mac_count// /}
+			if [[ ${mac_count:-0} -gt 0 ]]; then
 				iface_items+=("M" "MACs:        $mac_count entered")
 			else
 				iface_items+=("M" "MACs:        (none — paste to add)")
@@ -1417,7 +1438,12 @@ ${_conn_help}
 				[[ $? -ne 0 ]] && break
 				local vlan_val
 				vlan_val=$(<"$_TUI_TMP")
-				if [[ -n "$vlan_val" ]] && { [[ ! "$vlan_val" =~ ^[0-9]+$ ]] || [[ "$vlan_val" -lt 1 || "$vlan_val" -gt 4094 ]]; }; then
+				if ! vlan_val=$(_normalize_uint "$vlan_val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid VLAN tag.\n\nMust be a number between 1 and 4094." 0 0 || true
+					continue
+				fi
+				if [[ -n "$vlan_val" ]] && { [[ "$vlan_val" -lt 1 || "$vlan_val" -gt 4094 ]]; }; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid VLAN tag.\n\nMust be a number between 1 and 4094." 0 0 || true
 					continue
@@ -1461,43 +1487,22 @@ ${_conn_help}
 				2>"$_TUI_TMP"
 			if [[ $? -eq 0 ]]; then
 				local raw=$(<"$_TUI_TMP")
-				# Normalize: convert commas/spaces to newlines, trim empty lines and whitespace
-				local _new_macs
-				_new_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
-				# Validate MAC format (XX:XX:XX:XX:XX:XX)
-				local _bad_macs
-				_bad_macs=$(echo "$_new_macs" | grep -vE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || true)
-				if [[ -n "$_bad_macs" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid MAC address(es):\n\n${_bad_macs}\n\nExpected format: XX:XX:XX:XX:XX:XX" 0 0 || true
-					rm -f "$_mac_edit"
-					continue
-				fi
-				# Reject duplicate MACs (case-insensitive)
-				local _dup_macs
-				_dup_macs=$(echo "$_new_macs" | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
-				if [[ -n "$_dup_macs" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Duplicate MAC address(es):\n\n${_dup_macs}\n\nEach node must have a unique MAC." 0 0 || true
-					rm -f "$_mac_edit"
-					continue
+				# Checks live in macs_report (too few, duplicate, empty, not hex, not a MAC).
+				# macs_canonicalize_text strips blank lines and surrounding whitespace.
+				local _new_macs _rpt
+				_new_macs=$(macs_canonicalize_text "$raw")
+				_rpt=$(macs_report --text "$raw" --type "$cl_type" --workers "${cl_workers:-2}" --ports "$cl_ports")
+				if printf '%s\n' "$_rpt" | grep -qE 'ERROR:|WARN:|NOT READY'; then
+					if ! dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_ADDRS" \
+						--yes-label "$TUI2_BTN_SAVE_ANYWAY" --no-label "$TUI2_BTN_CANCEL" \
+						--yesno "$(printf '%s\n\nSave this list anyway?' "$_rpt")" 0 0; then
+						rm -f "$_mac_edit"
+						continue
+					fi
 				fi
 				cl_macs="$_new_macs"
-				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
-				# Warn if count doesn't match expected MACs (nodes × ports)
-				local _mac_count _node_count _port_count _expected_macs
-				_mac_count=$(echo "$cl_macs" | wc -l)
-				case "$cl_type" in
-					sno) _node_count=1 ;; compact) _node_count=3 ;;
-					standard) _node_count=$(( 3 + ${cl_workers:-2} )) ;; *) _node_count=1 ;;
-				esac
-				_port_count=$(echo "$cl_ports" | tr ',' '\n' | grep -c .)
-				[ "$_port_count" -lt 1 ] && _port_count=1
-				_expected_macs=$(( _node_count * _port_count ))
-				if [[ $_mac_count -ne $_expected_macs ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Warning: $_mac_count MAC(s) entered, but $cl_type needs $_expected_macs ($_node_count nodes × $_port_count port(s) each)." 0 0 || true
-				fi
+				tui_log "MAC addresses entered: $(printf '%s\n' "$cl_macs" | grep -c . || true)"
+				_write_cluster_macs
 			fi
 			rm -f "$_mac_edit"
 			;;
@@ -1523,10 +1528,6 @@ ${_conn_help}
 # --- Page 4: VM Resources (menu-style, only for vmw/kvm) ---
 _cluster_page_vm() {
 	local default_item="C"
-	local mac_info=""
-	if [[ -f "$ABA_ROOT/$cl_name/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/$cl_name/macs.conf" 2>/dev/null; then
-		mac_info=" (from macs.conf)"
-	fi
 
 	while :; do
 		local items=()
@@ -1540,7 +1541,7 @@ _cluster_page_vm() {
 			items+=("E" "Worker Memory:  $_wmem_disp")
 		fi
 		items+=("D" "Data disk:      $_disk_disp")
-		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
+		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VM" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -1586,8 +1587,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 4 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 4." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 4 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 4." 0 0 || true
 					continue
 				fi
@@ -1601,8 +1607,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 16 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 16 GB." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 16 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 16 GB." 0 0 || true
 					continue
 				fi
@@ -1616,8 +1627,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 2 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 2." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 2 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 2." 0 0 || true
 					continue
 				fi
@@ -1631,8 +1647,13 @@ _cluster_page_vm() {
 					--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
 					2>"$_TUI_TMP"
 				[[ $? -ne 0 ]] && break
-				local val=$(<"$_TUI_TMP")
-				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 8 ]]; }; then
+				local val
+				val=$(<"$_TUI_TMP")
+				if ! val=$(_normalize_uint "$val"); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 8 GB." 0 0 || true
+					continue
+				fi
+				if [[ -n "$val" ]] && [[ "$val" -lt 8 ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 8 GB." 0 0 || true
 					continue
 				fi
@@ -1646,8 +1667,9 @@ _cluster_page_vm() {
 						--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 0 0 "$cl_disk" \
 						2>"$_TUI_TMP"
 					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 0 ]]; }; then
+					local val
+					val=$(<"$_TUI_TMP")
+					if ! val=$(_normalize_uint "$val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a non-negative number (0 = no extra disk)." 0 0 || true
 						continue
 					fi
@@ -1801,11 +1823,8 @@ _cluster_execute() {
 		esac
 	done
 
-	# Bare-metal: create ISO only (user must boot servers manually)
-	# VMware/KVM: full install (ABA automates VM lifecycle)
-	if [[ "$cl_platform" == "bm" ]]; then
-		install_step="iso"
-	fi
+	# Full continuous install for all platforms (BM asks appear via ask()/PROMPT).
+	# Do not force --step iso on bare-metal — that was the old three-stop Make flow.
 	cmd="$cmd --step $install_step"
 
 	tui_log "Installing cluster ($install_step): $cmd"
@@ -1822,46 +1841,16 @@ _cluster_execute() {
 	# Platform config check before executing
 	_check_platform_config "$cl_name" "$cl_platform" || return 1
 
-	# Long operation — use confirm_and_execute (terminal/TUI mode choice)
-	# Always return 0 after command execution so the wizard exits back to the
-	# main menu.  Return 1 is reserved for "Back" on the review page (above).
-	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
-	local rc=$?
-
-	# After successful ISO creation (bare-metal, ISO-only step): show boot guidance
-	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
-		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
-		local _node_count=$total_nodes
-		local _boot_msg
-		if [ "$_node_count" -eq 1 ]; then
-			_boot_msg="Boot your server from this ISO using one of:"
-		else
-			_boot_msg="Boot all $_node_count servers at the same time using one of:"
-		fi
-		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Boot Your Servers" \
-			--yes-label "Monitor Installation" \
-			--no-label "Back to Menu" \
-			--yesno "ISO file created:\n\n\
-  $_iso_path\n\n\
-$_boot_msg\n\n\
-  • Virtual media (iLO, iDRAC, BMC) — mount the ISO over\n\
-    the management network (no physical media needed)\n\
-  • USB drive — write in raw/direct mode (byte-for-byte copy):\n\n\
-    sudo dd if=$_iso_path of=/dev/sdX bs=4M conv=fsync status=progress\n\
-    (replace /dev/sdX with your actual USB device, e.g. /dev/sdb)\n\n\
-    Or run: aba --dir $cl_name write-usb\n\n\
-    The ISO must be written as a raw disk image. Any tool that copies\n\
-    byte-for-byte to the entire device (dd, balenaEtcher, Fedora Media\n\
-    Writer) will work. Tools that reformat or extract files will NOT boot.\n\n\
-  • PXE — serve the ISO via your PXE infrastructure\n\n\
-IMPORTANT: The ISO expires 24 hours after creation.\n\
-Boot all servers and complete the install within that window.\n\n\
-Once installation completes, use Day-2 / Cluster Management\n\
-to configure OperatorHub and apply cluster resources.\n\
-ABA auto-detects when the cluster is ready." 0 0
-		if [[ $? -eq 0 ]]; then
-			cluster_monitor
-		fi
+	# Long operation — same progress UI for bm/vmw/kvm (unified PLAN path).
+	# Do NOT inject --yes: BM edit/boot ask() gates must surface as PROMPT;
+	# vmw/kvm have no ask gates so the dialog just runs through.
+	local rc=0
+	_exec_with_progress "$cmd" "Install Cluster: $fqdn"
+	rc=$?
+	if [[ $rc -eq 2 ]]; then
+		# No PLAN events — interactive terminal so BM asks still work
+		_exec_in_terminal "$cmd" "Install Cluster: $fqdn"
+		rc=$?
 	fi
 
 	# After successful install in mirror mode, offer to configure OperatorHub
@@ -1981,11 +1970,18 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
-	source <(normalize-aba-conf) 2>/dev/null || true
-	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
+	# Installed platform is state.sh. Do not source cluster.conf here:
+	# normalize-cluster-conf prints export lines, and those values leak
+	# into the next aba cluster (Make forwards them as if they were flags).
+	local _plat
+	_plat=$(cluster_installed_platform "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null) || _plat=""
+	if [[ -z "$_plat" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null || true
+		_plat="${platform:-bm}"
+	fi
 
 	local _del_msg _del_help
-	if [[ "${platform:-bm}" == "bm" ]]; then
+	if [[ "$_plat" == "bm" ]]; then
 		_del_msg="Delete cluster '$cl_display'?\n\nThis removes cluster state files only.\nThe physical servers are left running — decommission them manually."
 		_del_help="Delete removes cluster state and generated resources\n\
 (kubeconfig, manifests, ISOs, state markers).\n\
@@ -2059,6 +2055,8 @@ tui_advanced_menu() {
 				;;
 		esac
 		adv_items+=("" "──── Danger Zone ───────────────────")
+		# Always listed when a cluster exists. On bare metal, _day2_refresh
+		# explains and returns; it does not offer to destroy VMs.
 		if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
 			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
 		fi
@@ -2092,7 +2090,8 @@ F - Monitor Cluster Installation: Re-attach to a running install\n\
 X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
-    installation from scratch. All current cluster data is lost.\n\n\
+    installation from scratch. All current cluster data is lost.\n\
+    On bare metal this explains that there are no VMs to recreate.\n\n\
 R - Clean ABA: Removes configuration and state files so you can\n\
     reconfigure from scratch. Keeps downloaded CLI tools, mirror\n\
     installers, and saved image archives. Use 'aba reset --force'\n\
@@ -2530,9 +2529,13 @@ _day2_ssh() {
 
 	cd "$ABA_ROOT/$SELECTED_CLUSTER"
 
-	# Read SSH key and rendezvous IP from cluster config
-	source <(normalize-cluster-conf) 2>/dev/null || true
-	local _ssh_key="${ssh_key_file:-~/.ssh/id_rsa}"
+	# Subshell: normalize-cluster-conf exports every key. Sourcing it in
+	# this shell would leak that cluster into the next aba cluster run.
+	local _ssh_key
+	_ssh_key=$(
+		source <(normalize-cluster-conf) 2>/dev/null || true
+		echo "${ssh_key_file:-~/.ssh/id_rsa}"
+	)
 	local _ssh_ip
 	_ssh_ip=$(cat iso-agent-based/rendezvousIP 2>/dev/null)
 
@@ -2845,16 +2848,26 @@ _day2_startup() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	local _start_msg="This will power on the cluster VMs."
-	source <(normalize-aba-conf) 2>/dev/null || true
-	source <(cd "$ABA_ROOT/$SELECTED_CLUSTER" && normalize-cluster-conf) 2>/dev/null || true
-	[[ "${platform:-bm}" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
+	# Installed platform is this cluster's state.sh. aba.conf can change
+	# after install, and sourcing cluster.conf would leak into later runs.
+	local _plat
+	_plat=$(cluster_installed_platform "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null) || _plat=""
+	if [[ -z "$_plat" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null || true
+		_plat="${platform:-bm}"
+	fi
+	[[ "$_plat" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	_exec_with_progress "aba --dir $SELECTED_CLUSTER startup --yes" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	# Do not pass --yes on bare metal: the power-on ask() must surface as a
+	# progress PROMPT. vmw/kvm have no such gate, so --yes keeps VM start quiet.
+	local _startup_cmd="aba --dir $SELECTED_CLUSTER startup"
+	[[ "$_plat" != "bm" ]] && _startup_cmd+=" --yes"
+	_exec_with_progress "$_startup_cmd" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
 	local rc=$?
 	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display" && rc=$?
 	return $rc
@@ -2867,6 +2880,17 @@ _day2_refresh() {
 	fi
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	local _plat
+	_plat=$(cluster_installed_platform "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null) || _plat=""
+	if [[ -z "$_plat" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null || true
+		_plat="${platform:-bm}"
+	fi
+	if [[ "$_plat" == "bm" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
+			--msgbox "Refresh recreates virtual machines.\n\n'$cl_display' was installed on bare metal, so there are no VMs to recreate." 0 0 || true
+		return 0
+	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
 		--yes-label "Refresh" --no-label "$TUI2_BTN_CANCEL" \

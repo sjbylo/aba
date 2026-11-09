@@ -92,7 +92,6 @@ for _cdir in "${_cluster_dirs[@]}"; do
 
 	if [ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ]; then
 		touch "$_cdir/.primed"
-		touch "$_cdir/.bm-message"
 		_primed_dirs+=" $_cdir"
 	fi
 done
@@ -109,11 +108,12 @@ aba_info "Including ${#_cluster_dirs[@]} cluster dir(s): ${_cluster_dirs[*]}"
 tar cf "$_output_file" \
 	--exclude='*/iso-agent-based' \
 	--exclude='.install-complete' \
-	--exclude='.autopoweroff' \
-	--exclude='.autoupload' \
-	--exclude='.autorefresh' \
-	--exclude='.auto-agent-up' \
-	--exclude='.bm-nextstep' \
+	--exclude='.vms-stopped' \
+	--exclude='.iso-uploaded' \
+	--exclude='.vms-ready' \
+	--exclude='.bm-bmc-boot-done' \
+	--exclude='.bm-config-reviewed' \
+	--exclude='.bm-config-asked' \
 	--exclude='.preflight-done' \
 	"${_tar_args[@]}"
 

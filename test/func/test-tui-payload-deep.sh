@@ -71,6 +71,18 @@ if echo "$_scr" | grep -qi "Prepare Upgrade\|upgrade.*version\|target.*version\|
 	tui_assert_contains "Manual entry\|Manual" "Manual entry option"
 	tui_assert_contains "Change.*channel\|channel" "Change channel option"
 
+	# Help explains the duplicate rows and [switch to ...] tags
+	if tui_press_button "Help"; then
+		sleep 1
+		tui_screenshot "pd-01b-upgrade-help"
+		tui_assert_contains "switch to" "Upgrade help explains channel switch rows"
+		tui_assert_contains "Base version" "Upgrade help explains the base version"
+		tui_keys Enter; sleep 1
+	else
+		echo "  ✗ FAIL: Prepare Upgrade has no Help button"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+
 	# Cancel out
 	tui_keys Escape; sleep 1
 else

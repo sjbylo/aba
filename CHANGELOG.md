@@ -1,4 +1,52 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.5...HEAD)
+
+---
+
+## [1.4.5](https://github.com/sjbylo/aba/releases/tag/v1.4.5) - 2026-11-09
+
+Improved OpenShift 5 readiness with enhancements and bug fixes.
+
+
+### Added
+
+- **Input validation func coverage** — `test-normalize-ipv4.sh` and `test-input-validation-all.sh` exercise leading-zero strip, IPv4/CIDR, domain, NTP, hostname, path, and related TUI/CLI validators end-to-end.
+- **AgentConfig summary tests** — `test-agent-config-summary.sh` covers the standalone summary script.
+
+### Changed
+
+- **Catalog indexes refreshed** — Operator catalog indexes updated for OCP 4.18–5.0 (GA) and 5.1 (pre-release) content.
+- **README: OpenShift 5 Friendly** — Top-of-README callout and badge announce OpenShift 5 (and OpenShift 4) readiness as new releases land.
+- **A step with nothing to do reports No-op** — `aba_progress "NOOP|id"` marks that step No-op on the progress dialog. Day-2 custom manifests does this when `day2-custom-manifests/` is missing or has no manifests to apply.
+- **AgentConfig summary is a standalone script** — `scripts/agent-config-summary.sh` prints the cluster, gateway, DNS, NTP, IPs, and MACs from an agent-config file. It reads the file with `yaml2json` and formats the lines with `jq`. `-s` adds disk hints. `-v` is one block per node. The review ask does not call it.
+- **Bundle rebuild deletes mirror data** — `go.sh` (via Make reset, setup, registry install, and cleanup) uninstalls the mirror with `--delete-data`, so the image store is removed with the registry.
+- **Boot ask bolds the ISO path** — The path under "ISO file:" is bold in the progress dialog. The command-line ask stays plain.
+- **Progress live output drops Ctrl-C hints** — Waits still say "(Ctrl-C to skip)" on the command line. In the progress dialog that key is not delivered, so the hint is left off.
+- **Release-images warning has hotkeys** — I includes release images, K keeps them excluded, D clears the upgrade target.
+- **Include release images regenerates the ImageSet file** — Choosing Include starts the usual background ImageSet regen. View Config waits until that file is ready, so the platform section is no longer left commented out.
+- **Install-status dialog names more than one cluster** — When only one install is being checked, the box also names up to two other clusters that exist.
+- **Terminal runs say Ctrl-C interrupts** — The "Executing:" screen tells you Ctrl-C stops the command and returns to the menu.
+- **Prepare Upgrade has a Help button** — Explains the base version, Next minor vs Z-stream, and why the same version can appear twice with `[switch to fast]`.
+- **Wait dialogs have a blank line above and below the text** — Infoboxes such as "One moment please...", "Generating ImageSet configuration...", and "Fetching available upgrade versions..." no longer sit flush against the frame.
+- **Install success lists the steps like the progress dialog** — Same name and `[ Succeeded ]` / `[   No-op    ]` columns. Real buttons: Enter/Done closes, Output opens the log.
+- **Stage nodes is labeled VMs only** — The install progress step says `Stage nodes (VMs only)`, so a bare-metal run showing No-op is the VM step being skipped.
+- **Bare-metal install is continuous (#B80)** — One `aba install` / `make install` for BM (edit + boot `ask()` gates) instead of three Make stops (`.bm-message` / `.bm-nextstep` removed). VM stamps renamed to `.vms-stopped` / `.iso-uploaded` / `.vms-ready`; wait-agent on install chain only (`aba mon` skips it). TUI BM runs full install with progress prompts (no forced ISO-only step). Primed beta: no `.bm-message` fabrication; recreate primed/transfer artifacts after upgrade. No BC shims for old stamp names.
+- **Skip agent wait on manual BM** — `wait-agent-up.sh` exits immediately when `platform=bm` and `bmc.conf` has no `bmc_host_*` nodes (USB/virtual-media walk-away). Still waits after BMC auto-boot and on vmw/kvm so `openshift-install wait-for` does not race a just-powered node.
+- **BMC host helpers** — `bmc_host_list` / `bmc_host_count` / `bmc_has_hosts` in `include_all.sh` replace duplicated `bmc_host_*` greps (wait-agent, ask-boot, preflight, bmc-boot/unmount, cluster-config).
+- **Conf reads and derived values (ADR-005)** — `fetch_value` reads one raw key. `normalize-*-conf` still only coerces and defaults the same key: it no longer emits `ocp_major` or splits `machine_network` into `prefix_length`, and `-y` no longer clears `ask` inside normalize. Formulas live in helpers (`ocp_major_of`, `apply_cidr_split`, `cluster_type` / `is_sno`, `ask_is_on`).
+- **Warnings are yellow** — `aba_warn` defaults to yellow. Red stays for `aba_error` and `aba_abort`.
+- **Live output is Space only** — Space opens the progress dialog's live output and Space returns to the dialog. Other keys no longer leave that view.
+- **Short or invalid MAC list asks before it replaces macs.conf** — Save anyway / Cancel uses `macs_report` (too few, duplicate, empty, not hex, not a MAC). Save anyway writes the list with blank lines and surrounding spaces removed; an empty list clears the file. Cancel leaves the previous file unchanged.
+- **Cluster install progress starts at config generation** — Generate configs and Preflight checks are their own steps on bare metal, VMware, and KVM. The dialog opens when VIP resolution or DNS starts, instead of staying at 0% through install-config and the vSphere checks. On VMware and KVM, Boot nodes completes when the VMs are powered on.
+- **VM Resources shows the MAC template only** — The row is `mac_prefix`. It no longer adds "(from macs.conf)". That file holds real MAC addresses.
+- **Bare-metal progress asks say when to continue (#B97)** — The TUI MAC ask continues only when every required MAC is a real address. No returns to the Cluster Install wizard. The boot ask's Yes starts monitoring; No stops the run. The error line states the failure. The remedy is listed once under Possible next steps. CLI text is unchanged.
+
+### Fixed
+
+- **Leading zeros stripped on numeric input** — Integer fields (workers, VLAN, CPU, memory, disk) and IPv4/CIDR values (API/ingress VIP, starting IP, gateway, DNS, machine network) drop leading zeros immediately on TUI and CLI input (`08` → `8`, `10.0.0.08` → `10.0.0.8`, `010.0.0.0/08` → `10.0.0.0/8`).
+- **`aba import --force` no longer clobbers a healthy managed cluster** — If ABA already manages the FQDN with a valid kubeconfig, import refuses even with `--force` (use that working directory). `--force` remains for stale/reinstall rebuild only. Import preserves prior `platform` in `state.sh` (or detects VSphere/BareMetal) instead of always writing `platform=bm`.
+- **Upgrade without `--force` respects Upgradeable=False** — Admin-ack / Upgradeable=False no longer proceeds via `--auto-yes` when `ask=false`. Re-run with `--force` to bypass intentionally.
+- **Bare-metal startup asks you to power on the servers** — Whether a cluster is bare metal comes from that cluster's `state.sh`, not the current `platform` in aba.conf (that setting is for the next install and can change). A leftover `vmware.conf` no longer sends a bare-metal cluster into `aba start`. When the API is down, startup `ask()`s you to turn the servers on, then waits.
+- **Install and mirror config render `ocp_major`** — After `ocp_version` is loaded, `create-install-config.sh` and `create-mirror-conf.sh` set `ocp_major` and abort if that number is missing or the template fails. A failed render no longer writes an install config with no `ImageDigestSources`, or a `mirror.conf` with `reg_path=/ocp/openshift`.
 
 ---
 

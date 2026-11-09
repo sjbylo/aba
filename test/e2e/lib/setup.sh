@@ -116,9 +116,9 @@ reset_internal_bastion() {
 
     local _aba_root="${_ABA_ROOT:-$HOME/aba}"
 
-    # NOTE: We do NOT rsync the aba tree to disN here.  Only aba itself
-    # (via 'mirror sync', 'bundle', etc.) should manage files on disN.
-    # Rsyncing from the E2E framework bypasses aba's workflow and can mask bugs.
+    # NOTE: We do NOT rsync/scp the aba tree to disN here (framework rule 10b2).
+    # --dev deploy updates conN only. disN receives ~/aba solely via aba
+    # transfer/bundle. Pushing repo files from the harness masks airgap bugs.
 
     # 1. Uninstall the registry using aba's own uninstall, from conN.
     #    Rule 6: uninstall from the same host that installed.

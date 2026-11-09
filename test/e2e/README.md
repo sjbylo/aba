@@ -329,6 +329,7 @@ GOVC_INSECURE=true
 | `negative-paths` | Error handling and edge cases |
 | `cli-validation` | CLI argument validation |
 | `config-validation` | Config file validation |
+| `bm-mac-matrix` | Bare-metal MAC policy and boot-to-agent matrix |
 
 ## Lab Network Topology
 
@@ -510,6 +511,7 @@ test/e2e/
     ├── suite-negative-paths.sh
     ├── suite-cli-validation.sh
     ├── suite-config-validation.sh
+    ├── suite-bm-mac-matrix.sh
     ├── suite-vmw-lifecycle.sh
     └── suite-kvm-lifecycle.sh
 ```

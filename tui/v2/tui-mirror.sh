@@ -705,11 +705,10 @@ _ensure_platform_for_upgrade() {
 	dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
 		--colors \
 		--cancel-label "$TUI2_BTN_CANCEL" \
-		--no-tags \
 		--menu "$_msg\n\nChoose an action:" 0 0 0 \
-		"include"  "Include release images (recommended)" \
-		"keep"     "Keep as-is" \
-		"disable"  "Disable upgrade target" \
+		"I" "Include release images (recommended)" \
+		"K" "Keep as-is" \
+		"D" "Disable upgrade target" \
 		2>"$_TUI_TMP" || _rc=$?
 
 	case $_rc in
@@ -717,15 +716,20 @@ _ensure_platform_for_upgrade() {
 			local _choice
 			_choice=$(<"$_TUI_TMP")
 			case $_choice in
-				include)
+				I)
 					replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+					excl_platform=false
 					tui_log "Guard: excl_platform switched to false for upgrade to $_target"
+					# Background regen. View Config calls tui_wait_isconf and blocks there.
+					tui_kick_isconf_regen
 					;;
-				disable)
+				D)
 					replace-value-conf -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+					ocp_upgrade_to=""
 					tui_log "Guard: ocp_upgrade_to cleared (upgrade disabled)"
+					tui_kick_isconf_regen
 					;;
-				keep)
+				K)
 					tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
 					;;
 			esac
@@ -796,7 +800,7 @@ mirror_save() {
 		trap _restore_excl_platform EXIT
 		replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
-		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating imageset-config.yaml (operators only)..." 3 60
+		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating imageset-config.yaml (operators only)..." 0 0
 		run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 	fi
 
@@ -843,7 +847,7 @@ mirror_prep_upgrade() {
 	aba_upgrade_targets_start "$_current_ver" "$_channel"
 	if ! run_once -p -i "$_task_id" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"Checking available upgrade versions for v${_current_ver}..." 3 60
+			"Checking available upgrade versions for v${_current_ver}..." 0 0
 		run_once -q -w -S -i "$_task_id" 2>/dev/null || true
 	fi
 
@@ -992,14 +996,38 @@ change your channel when selected." 0 0
 
 	# Version picker loop
 	while :; do
+		local _rc=0
 		dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
 			--default-item "$_default_tag" \
 			--ok-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_CANCEL" \
+			--help-button \
 			--menu "Select target upgrade version ($_channel channel):\n\n\\ZbBase version (aba.conf): ${_current_ver}\\Zn\n\nSet the base version (b) to match the current version of\nthe cluster you plan to upgrade. If all clusters have been\nupgraded past the base version, change the base version\nto match." 0 0 0 \
 			"${items[@]}" \
-			2>"$_TUI_TMP"
-		[[ $? -ne 0 ]] && return 1
+			2>"$_TUI_TMP" || _rc=$?
+		if [[ $_rc -eq 2 ]]; then
+			show_help "Prepare Upgrade" \
+"Choose the version to upgrade to. Next downloads it. Cancel changes nothing.
+
+Base version (b) is the version already mirrored. Paths start here.
+Set it to the oldest cluster you still upgrade from.
+If every cluster is newer, raise it. Saved immediately.
+
+Next minor — the next minor's latest (4.21 → 4.22).
+Z-stream — the same minor's latest patch (4.21.17 → 4.21.40).
+The same number can appear twice.
+No tag: stay on this channel.
+[switch to fast] (or stable, or candidate): that channel's copy.
+The channel changes only after you confirm the next step.
+Same number: prefer the row with no tag.
+Candidate rows are pre-release.
+
+m — type a version. x.y becomes that minor's latest z-stream.
+h — change the channel now. This list is rebuilt.
+c — clear a target already set. Shown only when one is set."
+			continue
+		fi
+		[[ $_rc -ne 0 ]] && return 1
 
 		local _choice
 		_choice=$(<"$_TUI_TMP")
@@ -1691,7 +1719,7 @@ use the Mirror Payload menu to change what gets mirrored.
 						touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
 						rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
 						run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-						dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating..." 3 20
+						dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating..." 0 0
 						local _regen_out _regen_rc=0
 						_regen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
 							make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _regen_rc=$?
@@ -2144,7 +2172,7 @@ _tui_image_set_checklist() {
 	local _ai_ver="" _ai_count="" _ai_resolved=false
 	if _image_set_is_dynamic ai 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"Checking OpenShift AI image list..." 3 50
+			"Checking OpenShift AI image list..." 0 0
 		local _ai_res
 		if _ai_res=$(image_set_dynamic_resolve ai 2>/dev/null); then
 			_ai_resolved=true
@@ -2243,7 +2271,7 @@ _tui_image_set_checklist() {
 			local _ver _ocp_short
 			_ocp_short=$(_ver_minor "${ocp_version:-}")
 			dlg --backtitle "$(ui_backtitle)" --infobox \
-				"Detecting RHOAI version..." 3 40
+				"Detecting RHOAI version..." 0 0
 			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -2255,7 +2283,7 @@ _tui_image_set_checklist() {
 			# Fetch images for preview
 			local _preview_images _preview_count
 			dlg --backtitle "$(ui_backtitle)" --infobox \
-				"Fetching RHOAI $_ver image list from GitHub..." 3 55
+				"Fetching RHOAI $_ver image list from GitHub..." 0 0
 			_preview_images=$(fetch_rhoai_images "$_ver" 2>/dev/null)
 			local _fetch_rc=$?
 			if [[ $_fetch_rc -ne 0 ]]; then
@@ -2352,7 +2380,7 @@ _tui_offer_companion_images() {
 	# An empty OpenShift AI list is a normal result: say so once, and do not offer it.
 	if echo "$_needed" | grep -qx 'ai'; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"Checking OpenShift AI image list..." 3 50
+			"Checking OpenShift AI image list..." 0 0
 		local _ai_res _ai_ver _ai_count
 		if _ai_res=$(image_set_dynamic_resolve ai 2>/dev/null); then
 			_ai_ver="${_ai_res%%$'\t'*}"
@@ -2412,7 +2440,7 @@ _tui_offer_companion_images() {
 			local _ver _ocp_short
 			_ocp_short=$(_ver_minor "${ocp_version:-}")
 			dlg --backtitle "$(ui_backtitle)" --infobox \
-				"Detecting RHOAI version..." 3 40
+				"Detecting RHOAI version..." 0 0
 			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -2421,7 +2449,7 @@ _tui_offer_companion_images() {
 				continue
 			fi
 			dlg --backtitle "$(ui_backtitle)" --infobox \
-				"Fetching RHOAI $_ver images..." 3 45
+				"Fetching RHOAI $_ver images..." 0 0
 			image_set_add "$_set_name" "$_ver" >/dev/null 2>&1 && _added_any=true
 			tui_log "Added companion image set: $_set_name (RHOAI $_ver)"
 		else

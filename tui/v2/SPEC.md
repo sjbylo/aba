@@ -452,7 +452,6 @@ Value precedence: `aba.conf` (if set) → `get_*()` auto-detect → smart guess 
 
 **MAC addresses:**
 
-- If `macs.conf` exists and has entries → show "MACs: from macs.conf" (read-only info line)
 - If `macs.conf` is missing/empty → show editable MAC address fields for each node
 
 **Default platform = bm (bare metal).** If user selects vmw or kvm, Page 4 appears; otherwise Page 4 is skipped entirely.

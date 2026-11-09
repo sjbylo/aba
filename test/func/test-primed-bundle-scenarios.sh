@@ -5,7 +5,7 @@
 # 1. .primed marker exists in pre-built dirs → Make skips agent-config.yaml regeneration
 #    (install-config.yaml is ALWAYS regenerated — it contains registry credentials)
 # 2. .primed marker absent in cluster.conf-only dirs → Make generates normally
-# 3. .bm-message is only set for pre-built dirs (not cluster.conf-only)
+# 3. .primed is only set for pre-built dirs (not cluster.conf-only); no .bm-message
 # 4. mirror.conf is included/excluded based on .available
 # 5. No dangling symlinks exist in the bundle
 # 6. Symlinks resolved to real copies for self-contained tarball
@@ -258,7 +258,8 @@ EXTRACTED=$(run_bundle_and_extract)
 # Assertions
 assert_file_exists ".primed marker exists (pre-built)" "$EXTRACTED/sno1/.primed"
 assert_regular_file "vmware.conf is regular file (not symlink)" "$EXTRACTED/sno1/vmware.conf"
-assert_file_exists ".bm-message exists (pre-built)" "$EXTRACTED/sno1/.bm-message"
+assert_file_exists ".primed exists (pre-built)" "$EXTRACTED/sno1/.primed"
+assert_file_not_exists ".bm-message must NOT exist (continuous install)" "$EXTRACTED/sno1/.bm-message"
 assert_file_exists ".init exists" "$EXTRACTED/sno1/.init"
 assert_not_dangling_symlink "mirror.conf not dangling" "$EXTRACTED/sno1/mirror.conf"
 assert_make_uptodate "Make would NOT rebuild agent-config.yaml (.primed)" "$EXTRACTED/sno1" "agent-config.yaml"
@@ -278,6 +279,7 @@ EXTRACTED=$(run_bundle_and_extract)
 
 assert_file_not_exists ".primed should NOT exist (cluster.conf-only)" "$EXTRACTED/sno1/.primed"
 assert_file_not_exists ".bm-message should NOT exist (cluster.conf-only)" "$EXTRACTED/sno1/.bm-message"
+assert_file_not_exists ".primed should NOT exist (cluster.conf-only)" "$EXTRACTED/sno1/.primed"
 assert_file_exists ".init exists" "$EXTRACTED/sno1/.init"
 assert_make_would_rebuild "Make WOULD generate install-config.yaml (expected)" "$EXTRACTED/sno1" "install-config.yaml"
 
@@ -338,7 +340,9 @@ EXTRACTED=$(run_bundle_and_extract)
 
 assert_file_exists ".primed on pre-built sno1" "$EXTRACTED/sno1/.primed"
 assert_file_not_exists ".primed NOT on cluster.conf-only sno2" "$EXTRACTED/sno2/.primed"
-assert_file_exists ".bm-message on pre-built sno1" "$EXTRACTED/sno1/.bm-message"
+assert_file_exists ".primed on pre-built sno1" "$EXTRACTED/sno1/.primed"
+assert_file_not_exists ".bm-message NOT on pre-built sno1" "$EXTRACTED/sno1/.bm-message"
+assert_file_not_exists ".primed NOT on cluster.conf-only sno2" "$EXTRACTED/sno2/.primed"
 assert_file_not_exists ".bm-message NOT on cluster.conf-only sno2" "$EXTRACTED/sno2/.bm-message"
 assert_make_uptodate "sno1: Make would NOT rebuild agent-config.yaml (.primed)" "$EXTRACTED/sno1" "agent-config.yaml"
 assert_make_would_rebuild "sno2: Make WOULD generate install-config.yaml" "$EXTRACTED/sno2" "install-config.yaml"
@@ -436,7 +440,8 @@ rm -f "$MOCK_REPO/sno1/vmware.conf"  # No HV conf for bare-metal
 EXTRACTED=$(run_bundle_and_extract)
 
 assert_file_exists "sno1/install-config.yaml in bundle" "$EXTRACTED/sno1/install-config.yaml"
-assert_file_exists ".bm-message exists (pre-built)" "$EXTRACTED/sno1/.bm-message"
+assert_file_exists ".primed exists (pre-built)" "$EXTRACTED/sno1/.primed"
+assert_file_not_exists ".bm-message must NOT exist (continuous install)" "$EXTRACTED/sno1/.bm-message"
 # No vmware.conf to worry about
 
 # Restore

@@ -12,7 +12,7 @@ if [ -d "$WORK_TEST_INSTALL/aba" ]; then
 	cd "$WORK_TEST_INSTALL/aba"
 	./install
 	aba --noask
-	aba -d mirror uninstall -y
+	aba -d mirror uninstall -y --delete-data
 fi
 
 # Verify mirror data dirs were properly removed by 'aba uninstall'.
