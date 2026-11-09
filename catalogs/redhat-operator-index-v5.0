@@ -72,7 +72,7 @@ nfd Node Feature Discovery Operator stable
 node-healthcheck-operator Node Health Check Operator stable
 node-maintenance-operator Node Maintenance Operator stable
 node-observability-operator Node Observability Operator alpha
-numaresources-operator NUMA Resources Operator 5.0
+numaresources-operator NUMA Resources Operator stable
 o-cloud-manager o-cloud manager stable
 ocs-client-operator OpenShift Data Foundation Client stable-4.22
 ocs-operator OpenShift Container Storage stable-4.22
