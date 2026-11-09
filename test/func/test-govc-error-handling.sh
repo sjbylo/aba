@@ -172,7 +172,7 @@ else
 	PASS=$((PASS + 1))
 fi
 
-# TEST 14: refresh-style capture under ERR trap + set -e (the .autorefresh hole).
+# TEST 14: refresh-style capture under ERR trap + set -e (the VM refresh stamp hole).
 # Without ||, exit 1 from vmw-exists.sh is fatal and ISO upload never reaches create.
 echo "--- refresh capture of vmw-exists.sh no-VMs (set -e + ERR trap) ---"
 cap=$(

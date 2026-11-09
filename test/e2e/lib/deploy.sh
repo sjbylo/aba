@@ -8,9 +8,13 @@
 # Functions:
 #   sync_harness     -- push test harness to ~/.e2e-harness/ on a conN target
 #   sync_infra_aba   -- push infra-owned aba binary to conN + disN
-#   sync_source      -- push ABA source tarball to ~/aba on a conN target
+#   sync_source      -- push ABA source tarball to ~/aba on a conN target ONLY
 #   sync_extras      -- push notify.sh, vmware.conf, root essentials
 #   deploy_pool      -- full deploy to one pool (source + harness + extras)
+#
+# Rule (framework.sh 10b2): NEVER scp/rsync the ABA repo (~/aba) to disN.
+# disN gets the tree only via aba transfer/bundle. Lab configs (~/.vmware.conf)
+# are not the repo and may still be pushed to disN.
 #
 # Dependencies: remote.sh (for _essh, _escp, _con_target)
 # =============================================================================
@@ -73,6 +77,24 @@ _source_checksum() {
 
 	# Hash contents of exactly those files → overall md5
 	(cd "$aba_root" && echo "$_filelist" | xargs md5sum 2>/dev/null | tee /tmp/e2e-source-md5sums | md5sum | cut -d' ' -f1)
+}
+
+# Record the snapshot verify-code compares against this workspace.
+# The checksum is the per-file aggregate from _source_checksum, and the
+# file list is those per-file md5s. A tarball md5 never matches that
+# aggregate, and leaving the file list untouched shows the previous deploy.
+# Optional second arg is appended to the meta line (for example git:<sha>).
+_record_source_deploy() {
+	local aba_root="$1"
+	local _note="${2:-}"
+	local _cksum
+	_cksum=$(_source_checksum "$aba_root") || return 1
+	if [ -n "$_note" ]; then
+		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') $_note" > /tmp/e2e-last-deploy.meta
+	else
+		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+	fi
+	cp -f /tmp/e2e-source-md5sums /tmp/e2e-deploy-md5sums 2>/dev/null || true
 }
 
 # Compute the source checksum on a remote pool over SSH.
@@ -202,10 +224,12 @@ sync_source() {
 		_essh "root@${_host}" "mkdir -p ~/aba && tar xzf /tmp/aba-deploy.tar.gz -C ~/aba" || true
 	fi
 
-	# Refresh ~/bin/aba for both users (./install copies scripts/aba.sh there)
-	_essh "$target" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+	# Refresh ~/bin/aba for both users (./install copies scripts/aba.sh there).
+	# Atomic replace (cp to tmp + mv) so a suite mid-exec of ~/bin/aba cannot
+	# read a half-written file and die with a bogus syntax error (seen on con2).
+	_essh "$target" "[ -f ~/aba/scripts/aba.sh ] && mkdir -p ~/bin && cp ~/aba/scripts/aba.sh ~/bin/aba.new && mv -f ~/bin/aba.new ~/bin/aba && chmod +x ~/bin/aba" || true
 	if [ "$_user" != "root" ]; then
-		_essh "root@${_host}" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+		_essh "root@${_host}" "[ -f ~/aba/scripts/aba.sh ] && mkdir -p ~/bin && cp ~/aba/scripts/aba.sh ~/bin/aba.new && mv -f ~/bin/aba.new ~/bin/aba && chmod +x ~/bin/aba" || true
 	fi
 
 	# Cleanup
@@ -301,18 +325,8 @@ sync_extras() {
 		fi
 	fi
 
-	# Push corrected Makefile + template to disN after snapshot reverts.
-	# Pool-ready snapshots pre-date the cli:download:govc fallback fix;
-	# without --dev the ABA source tree is never re-synced, so we push
-	# just the two files that changed.
-	local _aba_root="${_RUN_DIR%/test/e2e}"
-	local _host="${target#*@}"
-	local _dis_host="${_host/con/dis}"
-	for _dt in "${target/con/dis}" "root@${_dis_host}"; do
-		_essh "$_dt" "[ -d ~/aba/templates ]" || continue
-		_escp "${_aba_root}/templates/Makefile.cluster" "${_dt}:~/aba/templates/Makefile.cluster" || true
-		_escp "${_aba_root}/Makefile"                   "${_dt}:~/aba/Makefile" || true
-	done
+	# ABA repo → conN only (rule 10b2). Never push ~/aba or Makefile/templates
+	# to disN here; airgap suites must transfer/bundle from conN.
 
 	# Root essentials (govc, pull-secret, vmware.conf)
 	_deploy_root_essentials "$target" "$user"
@@ -467,9 +481,7 @@ _deploy_to_pools() {
 		rm -f "$_deploy_tar"
 
 		# Store local deploy checksum for verify-code
-		local _deploy_cksum
-		_deploy_cksum=$(_source_checksum "$_ABA_ROOT")
-		echo "$_deploy_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+		_record_source_deploy "$_ABA_ROOT"
 	else
 		# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
 		local _need_install=""

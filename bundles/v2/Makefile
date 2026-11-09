@@ -115,10 +115,10 @@ reset:
 	@aba_dir=$$(ls -d $(WORK_DIR)/test-install-*/aba 2>/dev/null | head -1); \
 	if [ -n "$$aba_dir" ] && [ -d "$$aba_dir/mirror" ]; then \
 		echo "  Using: $$aba_dir"; \
-		(cd "$$aba_dir" && ./install 2>/dev/null; aba -d mirror uninstall -y) || \
+		(cd "$$aba_dir" && ./install 2>/dev/null; aba -d mirror uninstall -y --delete-data) || \
 			echo "  WARNING: aba uninstall failed — continuing with cleanup"; \
 	elif command -v aba >/dev/null 2>&1; then \
-		aba -d mirror uninstall -y 2>/dev/null || \
+		aba -d mirror uninstall -y --delete-data 2>/dev/null || \
 			echo "  WARNING: aba uninstall failed — continuing with cleanup"; \
 	else \
 		echo "  No aba installation found — skipping registry uninstall"; \

@@ -22,10 +22,7 @@ aba_debug "Starting: $0 $*"
 # -----------------------------------------------------------------------------
 # INT-03 gate: no bmc.conf or no bmc_host_* keys = nothing to do. Silent exit 0.
 # -----------------------------------------------------------------------------
-[ -f bmc.conf ] || exit 0
-if ! grep -qE '^[[:space:]]*bmc_host_' bmc.conf; then
-	exit 0
-fi
+bmc_has_hosts || exit 0
 
 # -----------------------------------------------------------------------------
 # Load bmc.conf and source adapter stack. Mode-0600 enforcement via normalize-bmc-conf.
@@ -35,12 +32,10 @@ source scripts/bmc-redfish.sh
 source scripts/bmc-adapter-generic.sh
 
 # -----------------------------------------------------------------------------
-# Helper: list node names from bmc.conf in declaration order.
+# Helper: list node names from bmc.conf (shared bmc_host_list in include_all.sh).
 # -----------------------------------------------------------------------------
 _bm_node_list() {
-	[ -f bmc.conf ] || return 0
-	grep -E '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf \
-		| sed -E 's/^[[:space:]]*bmc_host_([A-Za-z0-9_-]+)=.*/\1/'
+	bmc_host_list
 }
 
 # -----------------------------------------------------------------------------

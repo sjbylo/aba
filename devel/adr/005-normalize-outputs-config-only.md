@@ -25,3 +25,17 @@ URL) belong in the calling script, computed after sourcing normalize output.
   actually need regcreds_dir compute it themselves. If the formula changes, you
   update those specific callers. The blast radius is visible and grep-able.
 - Requires callers to do a bit more work after sourcing
+
+## Clarification (2026-11-05)
+
+Status stays Accepted. This does not allow normalize to emit derived names.
+
+Three tools, three jobs:
+
+- `fetch_value KEY FILE` reads one raw value. It does not coerce, default, or abort. A missing required key is the caller's abort (for example `verify-cluster-conf` when `num_masters` is missing).
+- `normalize-*-conf` may sanitize, coerce the same key (`ask=0` / `ask=false` / `ask=1`, lowercased `domain`), and default that same key (`verify_conf=all`). It may not emit a new name and it may not apply a formula.
+- Named helpers own formulas. Grep the helper. Do not rely on comments that list "vars used from normalize".
+
+Helpers in use: `ocp_major_of`, `apply_cidr_split`, `cluster_type` / `is_sno`, `ask_is_on` (`-y` / `ASK_OVERRIDE` is not applied inside normalize). `resolved_reg_vendor` and `image_source_is_mirror` were already this shape.
+
+`_state_override_cluster` may still replay a stored `prefix_length` from installed state (ADR-007). That is state, not a formula computed from the conf file.

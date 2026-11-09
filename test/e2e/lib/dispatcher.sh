@@ -271,11 +271,11 @@ _auto_deploy_dev_branch() {
 		fi
 	done
 
-	# Update deploy meta once (for verify-code tracking)
+	# Same snapshot verify-code reads. The tarball md5 does not match a
+	# per-file checksum, and skipping the file list left the previous
+	# manual deploy on screen.
 	if [ -n "$_deployed_any" ]; then
-		local _cksum
-		_cksum=$(md5sum "$_tar" | cut -d' ' -f1)
-		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S') git:$(echo "$_head" | head -c 8)" > /tmp/e2e-last-deploy.meta
+		_record_source_deploy "$_ABA_ROOT" "git:$(echo "$_head" | head -c 8)"
 	fi
 	rm -f "$_tar"
 }
@@ -369,9 +369,7 @@ _dispatch_suite() {
 		_tar=$(_make_source_tar "$_ABA_ROOT")
 		if sync_source "$target" "$_tar"; then
 			echo "    Source deployed to con${pool_num}"
-			local _cksum
-			_cksum=$(_source_checksum "$_ABA_ROOT")
-			echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+			_record_source_deploy "$_ABA_ROOT"
 		else
 			echo "    WARNING: source deploy to con${pool_num} failed"
 		fi
@@ -1179,9 +1177,24 @@ _dispatch_loop() {
 					[ "${_work_queue[$_qi]}" = "$_inj_suite" ] && _already_queued=1 && break
 				done
 				[ -n "$_already_queued" ] && { printf "  [%s] SKIPPED: %s (queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
-				_work_queue+=("$_inj_suite"); suites_to_run+=("$_inj_suite")
+				# Front of the not-yet-dispatched queue. run.sh prepends the
+				# inject file for this reason; appending left the suite behind
+				# whatever was already pending.
+				_wq_new=()
+				_inj_qi=0
+				while [ "$_inj_qi" -lt "$_queue_idx" ]; do
+					_wq_new+=("${_work_queue[$_inj_qi]}")
+					_inj_qi=$(( _inj_qi + 1 ))
+				done
+				_wq_new+=("$_inj_suite")
+				while [ "$_inj_qi" -lt "${#_work_queue[@]}" ]; do
+					_wq_new+=("${_work_queue[$_inj_qi]}")
+					_inj_qi=$(( _inj_qi + 1 ))
+				done
+				_work_queue=("${_wq_new[@]}")
+				suites_to_run+=("$_inj_suite")
 				_inj_count=$(( _inj_count + 1 ))
-				printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				printf "  [%s] INJECTED: %s (front of queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
 			done < "${E2E_INJECT_QUEUE}.processing"
 			rm -f "${E2E_INJECT_QUEUE}.processing"
 			if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then

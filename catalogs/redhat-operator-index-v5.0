@@ -1,5 +1,5 @@
 3scale-operator Red Hat Integration - 3scale threescale-2.13
-advanced-cluster-management Advanced Cluster Management for Kubernetes release-2.17
+advanced-cluster-management Advanced Cluster Management for Kubernetes release-5.0
 agent-sandbox-operator Red Hat build of Agent Sandbox preview-0.9
 amq7-interconnect-operator Red Hat Integration - AMQ Interconnect 1.10.x
 amq-broker-rhel8 Red Hat Integration - AMQ Broker for RHEL 8 (Multiarch) 7.12.x
@@ -22,6 +22,7 @@ cephcsi-operator CephCSI operator stable-4.22
 cincinnati-operator OpenShift Update Service v1
 cli-manager CLI Manager tech-preview
 cluster-kube-descheduler-operator Kube Descheduler Operator stable
+cluster-logging Red Hat OpenShift Logging stable-6.7
 cluster-observability-operator Cluster Observability Operator stable
 clusterresourceoverride ClusterResourceOverride Operator stable
 compliance-operator Compliance Operator stable
@@ -54,6 +55,7 @@ lightspeed-operator OpenShift Lightspeed Operator stable
 local-storage-operator Local Storage stable
 logic-operator OpenShift Serverless Logic Operator stable
 logic-operator-rhel8 OpenShift Serverless Logic Operator (Alpha) alpha
+loki-operator Loki Operator stable-6.7
 lvms-operator LVM Storage stable-5.0
 machine-deletion-remediation Machine Deletion Remediation operator stable
 mcg-operator NooBaa Operator stable-4.22
@@ -61,15 +63,16 @@ metallb-operator MetalLB Operator stable
 model-validation-operator Model Validation Operator tech-preview
 mta-operator Migration Toolkit for Applications Operator stable-v8.3
 mtr-operator Migration Toolkit for Runtimes Operator alpha
+mtv-operator Migration Toolkit for Virtualization Operator release-v5.0
 multiarch-tuning-operator Multiarch Tuning Operator stable
-multicluster-engine multicluster engine for Kubernetes stable-2.17
+multicluster-engine multicluster engine for Kubernetes stable-5.0
 multicluster-global-hub-operator-rh Multicluster Global Hub Operator release-5.0
 netobserv-operator Network Observability stable
 nfd Node Feature Discovery Operator stable
 node-healthcheck-operator Node Health Check Operator stable
 node-maintenance-operator Node Maintenance Operator stable
 node-observability-operator Node Observability Operator alpha
-numaresources-operator NUMA Resources Operator 5.0
+numaresources-operator NUMA Resources Operator stable
 o-cloud-manager o-cloud manager stable
 ocs-client-operator OpenShift Data Foundation Client stable-4.22
 ocs-operator OpenShift Container Storage stable-4.22
@@ -119,6 +122,8 @@ skupper-operator Red Hat Service Interconnect stable-2
 smb-csi-driver-operator CIFS/SMB CSI Driver Operator stable
 sriov-network-operator SR-IOV Network Operator stable
 storage-based-remediation Storage-Based Remediation Operator stable
+submariner Submariner stable-0.25
+support-log-gather-operator support log gather stable
 tang-operator NBDE Tang Server alpha
 tempo-product Tempo Operator stable
 topology-aware-lifecycle-manager Topology Aware Lifecycle Manager stable

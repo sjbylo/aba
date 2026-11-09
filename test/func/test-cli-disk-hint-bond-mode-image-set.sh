@@ -12,8 +12,16 @@ _pass() { pass=$(( pass + 1 )); printf "  \033[32mPASS\033[0m  %s\n" "$*"; }
 _fail() { fail=$(( fail + 1 )); printf "  \033[31mFAIL\033[0m  %s\n" "$*"; }
 
 _tmp=$(mktemp -d /tmp/aba-test-cli-XXXXXX)
-trap 'rm -rf "$_tmp" testcl-dh1 testcl-dh2 testcl-dh3' EXIT
 
+# Non-interactive: create-cluster-conf calls edit_file when ask=true
+cp aba.conf aba.conf.test-cli-dh-backup
+_cleanup() {
+	rm -rf "$_tmp" testcl-dh1 testcl-dh2 testcl-dh3
+	[ -f aba.conf.test-cli-dh-backup ] && mv aba.conf.test-cli-dh-backup aba.conf
+}
+trap '_cleanup' EXIT
+
+sed -i -E 's/^ask=.*/ask=false/' aba.conf
 export ABA_DO_NOT_UPDATE=1
 
 echo "=== CLI: --disk-hint and --bond-mode flags ==="

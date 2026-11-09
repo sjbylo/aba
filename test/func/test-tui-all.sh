@@ -129,12 +129,13 @@ _run_test "Progress Integration" "test/func/test-tui-progress-integration.sh" ||
 
 if [[ "$_QUICK" == "true" ]]; then
 	echo ""
-	echo "  (--quick mode: skipping destructive mirror, cluster, day2-deep, day2, upgrade, lifecycle)"
-	_total_skip=6
+	echo "  (--quick mode: skipping destructive mirror, cluster, bm-cluster, day2-deep, day2, upgrade, lifecycle)"
+	_total_skip=7
 else
 	# --- Destructive tests (full mode only, pipeline order) ---
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
+	_run_test "BM Cluster Install" "test/func/test-tui-bm-cluster.sh" || true
 	_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 	_run_test "Day-2 Operations" "test/func/test-tui-day2.sh" || true
 	_run_test "Upgrade" "test/func/test-tui-upgrade.sh" || true

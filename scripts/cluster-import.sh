@@ -158,43 +158,65 @@ echo "  image_source    = $_image_source"
 [ -n "$_ocp_version" ] && echo "  ocp_version     = $_ocp_version"
 
 # --- Check for existing state ---
+# State is keyed by cluster FQDN (not the working-dir --name). Import is for
+# OOB/UPI clusters ABA does not already manage. --force is only for stale
+# kubeconfig / reinstall rebuild — never for a healthy already-managed cluster.
 _dir_name="${_name:-$_cluster_name}"
 _valid_cluster_name "$_dir_name" || exit 1
 _state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
 _cluster_fqdn="${_cluster_name}.${_base_domain}"
 
+# Preserve platform across a legitimate --force re-import before any wipe.
+_prior_platform=""
+if [ -s "$_state_dir/state.sh" ]; then
+	_prior_platform=$(grep '^platform=' "$_state_dir/state.sh" 2>/dev/null | head -1 | cut -d= -f2 | awk '{print $1}')
+fi
+
+_existing_dir=""
 if [ -d "$_state_dir" ]; then
-	if [ "$_force" = true ]; then
-		aba_info "Overwriting existing state: $_state_dir/"
+	for _candidate in */clusterstate; do
+		[ -L "$_candidate" ] || continue
+		_target=$(readlink -f "$_candidate" 2>/dev/null) || continue
+		if [ "$_target" = "$(readlink -f "$_state_dir" 2>/dev/null)" ]; then
+			_existing_dir="$(dirname "$_candidate")"
+			break
+		fi
+	done
+fi
+
+if [ -d "$_state_dir" ]; then
+	if [ -n "$_existing_dir" ]; then
+		_existing_kc="$_state_dir/kubeconfig"
+		_kc_stale=false
+		if [ -f "$_existing_kc" ] && ! oc --kubeconfig "$_existing_kc" whoami --request-timeout=10s &>/dev/null; then
+			_kc_stale=true
+		fi
+
+		if [ "$_kc_stale" = false ]; then
+			# Healthy already-managed: refuse even with --force.
+			aba_abort "Cluster '$_cluster_fqdn' is already managed by ABA at '$_existing_dir/'." \
+				"Use 'aba -d $_existing_dir <command>' to manage it." \
+				"Import is for clusters ABA does not already manage (e.g. OOB/UPI)."
+		fi
+
+		# Stale kubeconfig (reinstalled cluster): --force rebuilds state.
+		if [ "$_force" != true ]; then
+			aba_abort "Cluster '$_cluster_fqdn' exists at '$_existing_dir/' but the kubeconfig is no longer valid." \
+				"The cluster may have been reinstalled." \
+				"To re-import, run:  aba import -k $_kubeconfig --force"
+		fi
+		aba_info "Overwriting existing state (stale kubeconfig): $_state_dir/"
 		rm -rf "$_state_dir"
 	else
-		# Find which working directory already manages this cluster
-		_existing_dir=""
-		for _candidate in */clusterstate; do
-			[ -L "$_candidate" ] || continue
-			_target=$(readlink -f "$_candidate" 2>/dev/null) || continue
-			if [ "$_target" = "$(readlink -f "$_state_dir" 2>/dev/null)" ]; then
-				_existing_dir="$(dirname "$_candidate")"
-				break
-			fi
-		done
-
-		if [ -n "$_existing_dir" ]; then
-			# Check if the existing kubeconfig still works.
-			# If stale (e.g. cluster was reinstalled), suggest --force instead of
-			# the generic "already managed" message.
-			_existing_kc="$_state_dir/kubeconfig"
-			if [ -f "$_existing_kc" ] && ! oc --kubeconfig "$_existing_kc" whoami --request-timeout=10s &>/dev/null; then
-				aba_abort "Cluster '$_cluster_fqdn' exists at '$_existing_dir/' but the kubeconfig is no longer valid." \
-					"The cluster may have been reinstalled." \
-					"To re-import, run:  aba import -k $_kubeconfig --force"
-			fi
-			aba_abort "Cluster '$_cluster_fqdn' is already managed by ABA at '$_existing_dir/'." \
-				"Use 'aba -d $_existing_dir <command>' to manage it."
+		# Orphan state dir with no working-dir link.
+		if [ "$_force" = true ]; then
+			aba_info "Overwriting existing state: $_state_dir/"
+			rm -rf "$_state_dir"
 		else
 			aba_abort "Stale state found for '$_cluster_fqdn' at $_state_dir/" \
 				"This is left over from a previous install or import." \
-				"Remove it and retry:  rm -rf $_state_dir"
+				"Remove it and retry:  rm -rf $_state_dir" \
+				"Or re-import with:  aba import -k $_kubeconfig --force"
 		fi
 	fi
 fi
@@ -269,12 +291,25 @@ mkdir -p iso-agent-based/auth
 cp -p "$_kubeconfig" iso-agent-based/auth/kubeconfig
 chmod 600 iso-agent-based/auth/kubeconfig
 
+# Platform for state.sh: preserve across --force re-import, else detect from
+# the live cluster, else default bm (typical OOB/UPI). Never invent bm over a
+# known prior platform — delete trusts state.sh.
+_platform="$_prior_platform"
+if [ -z "$_platform" ]; then
+	_infra_type=$(oc get infrastructure cluster -o jsonpath='{.status.platformStatus.type}' 2>/dev/null) || true
+	case "$_infra_type" in
+		VSphere) _platform=vmw ;;
+		BareMetal) _platform=bm ;;
+		*) _platform=bm ;;
+	esac
+fi
+
 # Write state.sh
 cat > "$_state_dir/state.sh" <<EOF
 cluster_name=$_cluster_name
 base_domain=$_base_domain
 cluster_type=$_cluster_type
-platform=bm
+platform=$_platform
 starting_ip=$_starting_ip
 machine_network=$_machine_network
 prefix_length=$_prefix_length

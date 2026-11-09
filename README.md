@@ -24,6 +24,9 @@
 
 # ABA — Install and Manage OpenShift in Disconnected Environments <!-- omit in toc -->
 
+> **OpenShift 5 Friendly!** — ready for OpenShift 5!!!
+
+[![OpenShift 5 Friendly!](https://img.shields.io/badge/OpenShift_5-Friendly!-2ea44f.svg)](#aba--install-and-manage-openshift-in-disconnected-environments-)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/sjbylo/aba)](https://github.com/sjbylo/aba/releases)
 [![Platform](https://img.shields.io/badge/Platform-RHEL_8%20|%209%20|%2010-red.svg)](#common-requirements)
@@ -253,9 +256,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.4.tar.gz
-tar xzf v1.4.4.tar.gz
-cd aba-1.4.4
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.5.tar.gz
+tar xzf v1.4.5.tar.gz
+cd aba-1.4.5
 ./install
 aba
 ```
@@ -263,7 +266,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.4.4 https://github.com/sjbylo/aba.git
+git clone --branch v1.4.5 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -529,7 +532,7 @@ aba -d mycluster install
 ```
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
-For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. `aba install` pauses so you can review generated config and boot your servers after ISO generation.
+For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
@@ -816,7 +819,7 @@ Optionally, add `--step <step>` to continue beyond configuration and into the in
 
 #### Installation stages
 
-Once the cluster directory exists, run `aba -d mycluster install` (or `cd mycluster && aba install`) to proceed through the installation pipeline. ABA processes these stages in order, pausing on bare-metal so you can review and boot your servers:
+Once the cluster directory exists, run `aba -d mycluster install` (or `cd mycluster && aba install`) to proceed through the installation pipeline. ABA processes these stages in order; on bare-metal, interactive asks let you review config and confirm boot without re-running install:
 
 | Stage         | What it does                                                | What to review / do |
 | -----         | ------------                                                | ------------------- |
@@ -825,7 +828,7 @@ Once the cluster directory exists, run `aba -d mycluster install` (or `cd myclus
 | **mon**       | Monitors host discovery, validation, bootstrap, and installation progress. | Observe progress until `Install complete!`. |
 
 For **VMware/KVM**, `aba install` runs all stages end-to-end (creates VMs, attaches the ISO, boots, and monitors).
-For **bare-metal**, `aba install` pauses between stages so you can review generated config, boot your servers, and then monitor.
+For **bare-metal**, one continuous `aba install` asks you to review generated config, then confirms servers are booted (or drives BMC boot), then monitors.
 
 You can stop at a specific stage to review and customize before continuing — see [Modifying Agent-based Configuration](#modifying-agent-based-configuration) for the workflow and examples.
 
@@ -1023,14 +1026,14 @@ aba cluster \
     --starting-ip 10.0.1.100 \
     --step agentconf
 cd mycluster
-# Review and edit install-config.yaml and/or agent-config.yaml
+# Prefer macs.conf / disk_hint; aba install asks once to review before ISO, then again after boot
 aba install
 ```
 
 **What bare-metal users typically configure (prefer `cluster.conf` / `macs.conf` over hand-editing YAML):**
 
 - **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory (or BMC auto-discovery when `bmc.conf` is set).
-- **Installation disk (optional)** — only if the default disk is wrong: set `disk_hint` in `cluster.conf` (or CLI `--disk-hint` / `--disk-hint-master` / `--disk-hint-worker`). Supports a device path or criteria (`path=…,minSizeGigabytes=200`). Per-node overrides: `disk_hint_node_<hostname>=…` (node > role > global). ABA renders these into `rootDeviceHints` in `agent-config.yaml`.
+- **Installation disk (optional)** — only if the default disk is wrong: set `disk_hint` in `cluster.conf` (or CLI `--disk-hint` / `--disk-hint-master` / `--disk-hint-worker`). Supports a device path or criteria (`path=…,minSizeGigabytes=200`). Per-node overrides: `disk_hint_node_<hostname>=…` (node > role > global). A hyphen in the hostname is written as an underscore in that name (`e2e-bm-sno1` → `disk_hint_node_e2e_bm_sno1`). ABA renders these into `rootDeviceHints` in `agent-config.yaml`.
 - **Hostnames** — defaults are generated from the cluster name. If you need different hostnames, update `cluster.conf` and re-run `aba install` (which regenerates `agent-config.yaml`) rather than editing `agent-config.yaml` directly.
 
 For scenarios still beyond `cluster.conf` (fully custom NMState, non-standard agent fields), edit `agent-config.yaml` / `install-config.yaml` directly — or use a [primed bundle (beta)](#primed-bundles). ABA detects and preserves your YAML edits across re-runs.

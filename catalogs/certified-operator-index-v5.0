@@ -1,6 +1,7 @@
 abinitio-runtime-operator Co>Operating System Runtime Operator stable
 aci-containers-operator Cisco ACI Containers Operator stable
 airlock-microgateway Airlock Microgateway stable-v5.2
+amd-gpu-operator amd-gpu-operator alpha
 anzograph-operator Altair Graph Lakehouse Operator stable
 anzo-operator Altair Graph Studio Operator stable
 anzounstructured-operator Altair Graph Studio Unstructured Operator stable
@@ -11,10 +12,11 @@ aqua-operator-certified Aqua Security Operator 2022.4
 axera-operator Axera Microsegmentation & NDR alpha
 cfm-operator Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
 cilium-enterprise Isovalent Enterprise for Cilium 1.16
+clife Isovalent Networking for Kubernetes 1.19
 cloudera-streams-messaging-kubernetes-operator Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 coherence-operator Coherence Kubernetes Operator stable
 conjur-follower-operator Conjur Enterprise Follower Operator stable
-cp-fko Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.15
+cp-fko Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.16
 cte-k8s-operator Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified Datadog Operator stable
 digitalai-deploy-operator Digital.ai Deploy stable-v24.3
@@ -92,3 +94,4 @@ vcp-operator CyberArk Certificate Manager Operator stable
 wave Wave stable
 zabbix-operator-certified Zabbix Operator lts
 zk-operator ZooKeeper Operator stable
+ztouch-os-operator zTouch.OS stable

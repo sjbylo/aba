@@ -26,6 +26,9 @@ _MARKER="/etc/dnsmasq.d/aba-upstream.conf"
 
 case "${1:-}" in
 	add-cluster)
+		# Install reaches DNS before install-config.yaml. Keep Generate configs
+		# open if resolve-vips was already stamped and did not send START.
+		aba_progress "START|ci_config"
 		# No-op if ABA doesn't own dnsmasq
 		[ -f "$_MARKER" ] || exit 0
 

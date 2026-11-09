@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.4.4
+ABA_VERSION=1.4.5
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20261104221118
+ABA_BUILD=20261109204500
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -887,16 +887,16 @@ for i in imgs:
 		replace-value-conf --lower -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		validate_cidr "$2" || aba_abort "invalid CIDR [$2] — expected X.X.X.X/N (octets 0-255, prefix 0-32)"
-		replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_cidr=$(normalize_cidr "$2") || aba_abort "invalid CIDR [$2] — expected X.X.X.X/N (octets 0-255, prefix 0-32)"
+		replace-value-conf -n machine_network -v "$_cidr" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		# If arg missing remove from aba.conf
 		dns_ips=""
 		while [[ -n $2 && $2 != -* ]]; do
-			_valid_ipv4 "$2" || aba_abort "invalid DNS server IP [$2] — expected valid IPv4 (octets 0-255)"
-			[ "$dns_ips" ] && dns_ips="$dns_ips,$2" || dns_ips="$2"
+			_dip=$(normalize_ipv4 "$2") || aba_abort "invalid DNS server IP [$2] — expected valid IPv4 (octets 0-255)"
+			[ "$dns_ips" ] && dns_ips="$dns_ips,$_dip" || dns_ips="$_dip"
 			shift
 		done
 		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
@@ -906,34 +906,33 @@ for i in imgs:
 		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip/hostname
 		ntp_vals=""
 		while [[ -n $2 && $2 != -* ]]; do
-			if [[ "$2" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
-				[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
+			if _ntp_one=$(normalize_ipv4 "$2" 2>/dev/null); then
+				: # IP — store canonical form
+			elif [[ "$2" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+				_ntp_one=$2
 			else
 				aba_abort "invalid NTP server [$2] — must be a hostname or IP address"
 			fi
-			shift	
+			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$_ntp_one" || ntp_vals="$_ntp_one"
+			shift
 		done
 		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--gateway-ip" -o "$1" = "--gateway" -o "$1" = "-g" ]; then
 		# If arg missing remove from aba.conf
-		shift 
+		shift
 		gw_ip=
 		if [[ -n $1 && $1 != -* ]]; then
-			_valid_ipv4 "$1" || aba_abort "invalid gateway IP [$1] — expected valid IPv4 (octets 0-255)"
-			gw_ip=$1
+			gw_ip=$(normalize_ipv4 "$1") || aba_abort "invalid gateway IP [$1] — expected valid IPv4 (octets 0-255)"
 			shift
 		fi
-	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-	#		gw_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
-	#	fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
 		_flag="$1"
 		api_vip=
 		if [[ -n $2 && $2 != -* ]]; then
-			_valid_ipv4 "$2" || aba_abort "invalid IPv4 address [$2] after option: $_flag"
-			api_vip=$2
+			# Strip leading zeros immediately (10.0.0.08 → 10.0.0.8)
+			api_vip=$(normalize_ipv4 "$2") || aba_abort "invalid IPv4 address [$2] after option: $_flag"
 			shift
 		fi
 		_set_cluster_conf api_vip "$api_vip" "$_flag"
@@ -942,8 +941,7 @@ for i in imgs:
 		_flag="$1"
 		ingress_vip=
 		if [[ -n $2 && $2 != -* ]]; then
-			_valid_ipv4 "$2" || aba_abort "invalid IPv4 address [$2] after option: $_flag"
-			ingress_vip=$2
+			ingress_vip=$(normalize_ipv4 "$2") || aba_abort "invalid IPv4 address [$2] after option: $_flag"
 			shift
 		fi
 		_set_cluster_conf ingress_vip "$ingress_vip" "$_flag"
@@ -1066,41 +1064,33 @@ for i in imgs:
 		export ask=
 		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			_set_cluster_conf master_cpu_count "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1" 
-		fi
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
+		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
+		_set_cluster_conf master_cpu_count "$_n" "$1"
 		shift 2
 	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			_set_cluster_conf master_mem "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1" 
-		fi
+		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
+		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
+		_set_cluster_conf master_mem "$_n" "$1"
 		shift 2
 	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			_set_cluster_conf worker_cpu_count "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1" 
-		fi
+		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
+		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
+		_set_cluster_conf worker_cpu_count "$_n" "$1"
 		shift 2
 	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			_set_cluster_conf worker_mem "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1" 
-		fi
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
+		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
+		_set_cluster_conf worker_mem "$_n" "$1"
 		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		_valid_ipv4 "$2" || aba_abort "invalid starting IP [$2] — expected valid IPv4 (octets 0-255)"
-		_set_cluster_conf starting_ip "$2" "$1"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		_sip=$(normalize_ipv4 "$2") || aba_abort "invalid starting IP [$2] — expected valid IPv4 (octets 0-255)"
+		_set_cluster_conf starting_ip "$_sip" "$1"
 		shift 2
 
 	elif [ "$1" = "--disk-hint" -o "$1" = "--disk-hint-master" -o "$1" = "--disk-hint-worker" ]; then
@@ -1221,28 +1211,24 @@ for i in imgs:
 		opt_masters="--masters"
 		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
-		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			_set_cluster_conf num_workers "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1"
-		fi
+		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
+		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
+		_set_cluster_conf num_workers "$_n" "$1"
 		shift 2
 	elif [ "$1" = "--num-masters" ]; then
-		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			_set_cluster_conf num_masters "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1"
-		fi
+		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
+		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
+		_set_cluster_conf num_masters "$_n" "$1"
 		shift 2
 	elif [ "$1" = "--vlan" ]; then
 		_flag="$1"
 		vlan_val=
 		if [[ -n $2 && $2 != -* ]]; then
-			vlan_val=$2
+			vlan_val=$(normalize_uint "$2") || aba_abort "invalid VLAN '$2' — must be 1-4094"
 			shift
 		fi
 		if [[ -n "$vlan_val" ]]; then
-			[[ "$vlan_val" =~ ^[0-9]+$ && "$vlan_val" -ge 1 && "$vlan_val" -le 4094 ]] || \
+			[[ "$vlan_val" -ge 1 && "$vlan_val" -le 4094 ]] || \
 				aba_abort "invalid VLAN '$vlan_val' — must be 1-4094"
 		fi
 		_set_cluster_conf vlan "$vlan_val" "$_flag"
@@ -1379,8 +1365,14 @@ for i in imgs:
 done
 
 # Guard for VM lifecycle targets: validate platform + hypervisor config
-_ensure_hv_ready() {
+_ensure_vm_platform_ready() {
 	source <(cd "$ABA_ROOT" && normalize-aba-conf)
+	# An installed cluster keeps its platform in state.sh.
+	local _from_state= _installed=
+	if _installed=$(cluster_installed_platform "$PWD"); then
+		platform=$_installed
+		_from_state=1
+	fi
 	case "$platform" in
 		vmw)
 			# Remove dangling symlink so ln can recreate it
@@ -1395,7 +1387,13 @@ _ensure_hv_ready() {
 			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
 			ensure_virsh
 			;;
-		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
+		bm)
+			if [ "$_from_state" ]; then
+				aba_abort "This cluster was installed on bare metal (platform=bm in state.sh)."
+			else
+				aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf"
+			fi
+			;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
 	esac
 	[ -f agent-config.yaml ] || aba_warn "agent-config.yaml not found. Run 'aba cluster' first."
@@ -1616,16 +1614,16 @@ if [ "$cur_target" ]; then
 		;;
 		create)
 			eval $BUILD_COMMAND
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start || exit $?
 			# Sync Make stamp files: VMs exist, so all prior steps (poweroff, upload,
 			# refresh) are logically complete. Without these, a subsequent 'aba bootstrap'
 			# or 'aba install' would re-run the entire chain and destroy the running VMs.
-			touch .autopoweroff .autoupload .autorefresh
+			touch .vms-stopped .iso-uploaded .vms-ready
 			exit
 		;;
 		ls)
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (ls)"
 			$exec_cmd
@@ -1636,7 +1634,7 @@ if [ "$cur_target" ]; then
 			# Cluster VM start (requires cluster.conf); otherwise fall through to Makefile
 			if [ -f cluster.conf ]; then
 				eval $BUILD_COMMAND
-				_ensure_hv_ready
+				_ensure_vm_platform_ready
 				exec_cmd="make -s init"
 				aba_debug "Running: $exec_cmd (start)"
 				$exec_cmd
@@ -1649,7 +1647,7 @@ if [ "$cur_target" ]; then
 			# Cluster VM stop (requires cluster.conf); otherwise fall through to Makefile
 			if [ -f cluster.conf ]; then
 				eval $BUILD_COMMAND
-				_ensure_hv_ready
+				_ensure_vm_platform_ready
 				exec_cmd="make -s init"
 				aba_debug "Running: $exec_cmd (stop)"
 				$exec_cmd
@@ -1659,7 +1657,7 @@ if [ "$cur_target" ]; then
 			BUILD_COMMAND="stop $BUILD_COMMAND"
 		;;
 		kill|poweroff)
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (kill)"
 			$exec_cmd
@@ -1690,11 +1688,14 @@ if [ "$cur_target" ]; then
 			make -s init 2>/dev/null || aba_warn "Cluster .init failed — proceeding with best-effort delete."
 
 			source <(cd "$ABA_ROOT" && normalize-aba-conf)
+			if _installed=$(cluster_installed_platform "$PWD"); then
+				platform=$_installed
+			fi
 			case "$platform" in
 				vmw|kvm)
 					# Best-effort: missing vmware.conf/kvm.conf must not block cleanup —
 					# vmw-delete.sh / kvm-delete.sh handle missing config gracefully.
-					( _ensure_hv_ready ) 2>/dev/null || aba_warn "vmware.conf/kvm.conf not found — proceeding with best-effort delete."
+					( _ensure_vm_platform_ready ) 2>/dev/null || aba_warn "vmware.conf/kvm.conf not found — proceeding with best-effort delete."
 					$ABA_ROOT/scripts/${platform}-delete.sh || exit $?
 					;;
 				bm)
@@ -1729,6 +1730,16 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		install)
+			# `aba install` is already the full Make goal. --step would turn it
+			# into `make install target=iso`, which is `aba install iso`.
+			# A stage is its own command (`aba iso`). `aba cluster -s` is how
+			# creation selects a goal.
+			if echo " $BUILD_COMMAND " | grep -q " target="; then
+				aba_abort "--step cannot be used with install." \
+					"aba install is the full install." \
+					"A single stage is its own command: aba iso, aba upload, aba create --start, aba mon." \
+					"To create a cluster directory and run a stage: aba cluster -s iso"
+			fi
 			# Guard: install needs a cluster, mirror, or cli directory
 			if [ ! -f cluster.conf ] && [ ! -f mirror.conf ] && [ "$(basename "$PWD")" != "cli" ]; then
 				aba_abort "'install' requires a cluster or mirror directory." \
@@ -1770,18 +1781,18 @@ if [ "$cur_target" ]; then
 		;;
 		refresh)
 			eval $BUILD_COMMAND
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (refresh)"
 			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters || exit $?
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
-			touch .autopoweroff .autoupload .autorefresh
+			touch .vms-stopped .iso-uploaded .vms-ready
 			exit
 		;;
 		upload)
-			_ensure_hv_ready
+			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (upload)"
 			$exec_cmd
@@ -1791,7 +1802,7 @@ if [ "$cur_target" ]; then
 			fi
 			$ABA_ROOT/scripts/${HV}-upload.sh || exit $?
 			# Sync Make stamp files: upload implies poweroff already happened.
-			touch .autopoweroff .autoupload
+			touch .vms-stopped .iso-uploaded
 			exit
 		;;
 	esac

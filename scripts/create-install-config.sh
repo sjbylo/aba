@@ -38,6 +38,10 @@
 
 source scripts/include_all.sh
 
+# Release-image extract and credential checks happen in this script, before
+# any later step. Repeat START so a skipped resolve-vips/DNS still opens the row.
+aba_progress "START|ci_config"
+
 aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 source <(normalize-aba-conf)
@@ -47,6 +51,21 @@ export regcreds_display="${image_source:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 [ "$platform" = "vmw" ] && source <(normalize-vmware-conf)  # vSphere values needed for install-config.yaml
 [ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
+
+# ADR-005: ocp_major is not a normalize output. The content-sources template
+# applies | int to it. A failed j2 used to be swallowed by the assignment, so
+# install-config.yaml was written with no ImageDigestSources and still reported success.
+_render_image_content_sources() {
+	export ocp_major="$(ocp_major_of "${ocp_version:-}")"
+	if [ -z "$ocp_major" ]; then
+		aba_abort "ocp_version '${ocp_version:-}' has no major number"
+	fi
+	local _src
+	if ! _src=$(scripts/j2 templates/image-content-sources.yaml.j2); then
+		aba_abort "Could not render image content sources"
+	fi
+	export image_content_sources="$_src"
+}
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
@@ -146,14 +165,14 @@ if [ "$use_mirror" ]; then
 		aba_info "Using mirror registry pull secret file at $regcreds_display/pull-secret-mirror.json to access registry at: $reg_host"
 
 		# If we pull from the local reg. then we define the image content sources
-		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
+		_render_image_content_sources
 	elif [ -s "$regcreds_dir/pull-secret-full.json" ]; then
 		export pull_secret=$(cat "$regcreds_dir/pull-secret-full.json") 
 
 		aba_info "Using mirror registry pull secret file at $regcreds_display/pull-secret-full.json to access registry at: $reg_host"
 
 		# If we pull from the local reg. then we define the image content sources
-		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
+		_render_image_content_sources
 	else
 		aba_warn -p Attention \
 			"Expected to find mirror credentials but found none!" \

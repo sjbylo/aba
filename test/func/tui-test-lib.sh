@@ -86,6 +86,17 @@ tui_lab_resolve_cluster() {
 	return 0
 }
 
+# True if the Basics "Cluster name:" field equals $1 exactly.
+# "Cluster name:.*sno" must NOT match sno4 — use this instead of a prefix grep.
+# Usage: tui_cluster_name_is sno [optional_screen_text]
+tui_cluster_name_is() {
+	local want="${1:?}"
+	local scr="${2:-}"
+	[ -n "$scr" ] || scr=$(tui_capture)
+	# Name is followed by spaces (padding to the box edge) or end-of-line
+	echo "$scr" | grep -qiE "Cluster name:[[:space:]]*${want}([[:space:]]|$)"
+}
+
 # Set a networking-page field via hotkey → clear → type → Enter.
 # Usage: tui_set_net_field S 10.0.1.201
 tui_set_net_field() {
@@ -407,9 +418,10 @@ tui_keys_wait() {
 
 # Extract menu items from screen capture.
 # Returns lines of "KEY<tab>LABEL" for each item with a shortcut key.
-# Format on screen: │ │   K  Some Label   │ │
+# Letter menus: │ │   K  Some Label   │ │
+# Numbered menus (delete list): │ │   1  sno4.example.com   │ │
 tui_menu_items() {
-	tui_capture | sed -n 's/.*│[[:space:]]*\([A-Z]\)  \(.*\)│.*/\1\t\2/p' \
+	tui_capture | sed -n 's/.*│[[:space:]]*\([A-Z0-9]\)  \(.*\)│.*/\1\t\2/p' \
 		| sed 's/[[:space:]]*│[[:space:]]*$//; s/[[:space:]]*$//'
 }
 
@@ -960,6 +972,30 @@ tui_dismiss_cluster_select() {
 	fi
 }
 
+# Wait out "Detecting installation status…" then pick $1 from a Select-cluster
+# menu when multiple leftovers exist. Prefer exact name match over first entry.
+# Usage: tui_pick_cluster sno
+tui_pick_cluster() {
+	local cluster="${1:?}"
+	local _scr _i
+	for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+		_scr=$(tui_capture)
+		echo "$_scr" | grep -qi "Detecting installation status" || break
+		sleep 2
+	done
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
+		if echo "$_scr" | grep -qi "$cluster"; then
+			tui_select_item "$cluster" 2>/dev/null || tui_keys Enter
+		else
+			echo "  WARNING: cluster '$cluster' not in picker — accepting default" >&2
+			tui_keys Enter
+		fi
+		sleep 1
+		tui_wait_gone "Select cluster|select.*cluster" 8 || true
+	fi
+}
+
 # Dismiss an execution mode dialog if present.
 # TUI shows "Run in Terminal" / "Run in TUI" before certain commands.
 # Usage: tui_dismiss_exec_mode
@@ -1391,6 +1427,23 @@ tui_wait_for_progress() {
 			fi
 		fi
 
+		# Error/failure dialog first — titles like "…: Error ───" must not be
+		# mistaken for success (and must win over later menu/success checks).
+		if echo "$_scr" | grep -qiE '(:[[:space:]]*Error[[:space:]])|Error.*─|─.*Error|─.*FAILED|FAILED.*─|A step failed'; then
+			echo "  Error detected during '$label' (${_elapsed}s)"
+			tui_screenshot "${label}-error"
+			_tui_capture_output "$label"
+
+			if echo "$_scr" | grep -qi "Retry" && [[ $_inner_retries -lt $_max_inner ]]; then
+				_inner_retries=$(( _inner_retries + 1 ))
+				echo "  Pressing TUI Retry button ($_inner_retries/$_max_inner)..."
+				tui_press_button "Retry"
+				sleep 3
+				continue
+			fi
+			return 1
+		fi
+
 		# Success: completed dialog (progress or confirm_and_execute)
 		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|─── Success ───\|── Success ──\|installed successfully"; then
 			echo "  Progress '$label' completed successfully (${_elapsed}s)"
@@ -1403,12 +1456,19 @@ tui_wait_for_progress() {
 			return 0
 		fi
 
-		# Completed with errors: progress dialog done, "Quit" button visible
-		# Only treat as complete when NO step is still "In Progress"
+		# Completed with errors: progress dialog done, "Quit" button visible.
+		# Do not quit while a step is In Progress, or while a later step is
+		# still N/A. Review can already say No-op in the gap after the ISO
+		# step finishes and before stage/boot leave N/A. q in that gap aborts
+		# the install. A Failed step leaves the rest N/A on purpose, so that
+		# case still quits.
 		if echo "$_scr" | grep -qi "Quit.*Q\|Q.*ESC"; then
 			if echo "$_scr" | grep -qi "Failed\|No-op\|Done\|Skipped\|Succeeded"; then
 				if echo "$_scr" | grep -qi "In Progress"; then
-					# Steps still running — do not quit yet
+					sleep 5
+					continue
+				fi
+				if echo "$_scr" | grep -q "N/A" && ! echo "$_scr" | grep -qi "Failed"; then
 					sleep 5
 					continue
 				fi
@@ -1436,22 +1496,6 @@ tui_wait_for_progress() {
 			# < 10s: likely a menu flash, keep waiting
 			sleep 2
 			continue
-		fi
-
-		# Error/failure dialog: title contains ─ box-drawing around Error/FAILED
-		if echo "$_scr" | grep -qi "Error.*─\|─.*Error\|─.*FAILED\|FAILED.*─\|A step failed"; then
-			echo "  Error detected during '$label' (${_elapsed}s)"
-			tui_screenshot "${label}-error"
-			_tui_capture_output "$label"
-
-			if echo "$_scr" | grep -qi "Retry" && [[ $_inner_retries -lt $_max_inner ]]; then
-				_inner_retries=$(( _inner_retries + 1 ))
-				echo "  Pressing TUI Retry button ($_inner_retries/$_max_inner)..."
-				tui_press_button "Retry"
-				sleep 3
-				continue
-			fi
-			return 1
 		fi
 
 		# Explicit stop (user quit / harness interrupted) — exit promptly so

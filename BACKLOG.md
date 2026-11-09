@@ -3025,7 +3025,7 @@ Requires rebuilding the OMR image (`quay.io/sjbylo/quay-mirror:dev`) with the pa
 ## #B80: Simplify bare-metal `aba install` into a single continuous process
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** In Progress (post-1.4.4; branch `bm-install-simplify` — no merge to origin/dev until tests green)
 **Added:** 2026-10-15
 
 **Problem:** Installing a bare-metal cluster with `aba -d <cluster> install` currently requires the user to run the command **three separate times**. The Makefile splits the workflow into three phases with hard stops between them:
@@ -3456,4 +3456,480 @@ workflow is done and approved.
 3. Close this item; keep #B80 related history for context.
 
 **Reminder:** Revisit ~few weeks after #B80 + release soak — do not forget.
+
+---
+
+## #B95: TUI ISC wait dialog — show accurate Generating vs Fetching status
+
+**Severity:** LOW — UX clarity
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** While waiting for `aba:isconf:generate`, the TUI shows a static
+hedge: "Generating imageset-config.yaml… (May need to wait for operator catalog
+indexes to refresh)". The user cannot tell whether catalogs are still
+downloading or ISC generation itself is running.
+
+**Root cause:** `TUI2_MSG_ISC_GENERATING` / hard-coded upgrade-path copy is
+fixed text. `make isconf` depends on `catalogs-download` + `catalogs-wait`, so
+the wait is often catalog fetch — but the dialog never inspects that state.
+
+**Proposed fix:** Pick the infobox from signals already used by
+`download-catalogs-wait.sh` / `tui_ensure_catalogs_ready`:
+
+1. `.index/*-operator-index-v${minor}` missing, **or** any
+   `run_once -p -i "catalog:${minor}:…"` incomplete →
+   `Fetching operator catalog indexes...\n\nPlease wait a short while.`
+2. Catalogs ready, `aba:isconf:generate` still running →
+   `Generating imageset-config.yaml...`
+3. Optional: refresh the infobox when state transitions fetch → generate.
+
+Wire through `tui_wait_isconf`, `mirror_payload_menu`, and the Prepare Upgrade
+path; split `TUI2_MSG_ISC_GENERATING` into fetch vs generate strings.
+
+## #B96: Exported cluster.conf values are applied to the next `aba cluster`
+
+**Severity:** HIGH — silent overwrite of another cluster's topology
+**Status:** Planned (TUI call sites closed in the working tree; Make still forwards the environment)
+**Added:** 2026-11-06
+
+**Problem:** After the TUI loads one cluster, the next `aba cluster` for a different
+directory can write the first cluster's API VIP, starting IP, and node counts into
+the second `cluster.conf`. The wizard screen still shows the values the user
+entered. The install uses the file, so it never reaches the step the user expects
+(in the bare-metal case, the MAC check). DNS then fails because the record points
+at the second cluster's address while the file still expects the first cluster's.
+
+**Root cause:** `normalize-cluster-conf` prints `export` lines. Sourcing it in a
+long-lived shell (the TUI, or a user shell) exports every `cluster.conf` key.
+GNU make imports those variables. The root `cluster:` recipe always passes them
+to `setup-cluster.sh` (`api_vip=$(api_vip)`, `starting_ip=$(starting_ip)`,
+`num_masters=$(num_masters)`, and the same for the other cluster fields).
+`setup-cluster.sh` treats any non-empty value as a flag and writes it with
+`replace-value-conf`. An explicit `--type` used to lose as well: the type was
+applied only when `num_masters` was empty, so a leaked count blocked it.
+
+**Already done (working tree, not a complete fix):**
+
+- `cluster_delete`, cluster startup, and the SSH-key lookup no longer source
+  `normalize-cluster-conf` in the TUI process. `cluster_display_name` was
+  already a subshell.
+- An explicit `type=` now sets `num_masters` and `num_workers` even when those
+  variables were already in the environment.
+
+**Proposed fix:** `aba cluster` must apply a cluster field only when that field
+was passed on this invocation. Do not let an inherited export through Make count
+as a flag. Audit every `source <(normalize-cluster-conf)` that runs in the same
+shell as a later `aba` or `make`. Sourcing inside a subshell is safe.
+
+**Workaround:** Run `aba cluster` from a shell that has not sourced a
+`cluster.conf`. In the TUI, do not source `normalize-cluster-conf` in the
+menu process.
+
+**Reproducer:** Two cluster directories, A (SNO) and B (standard, its own API
+VIP and starting IP). In one shell, `source <(cd B && normalize-cluster-conf)`,
+then `aba cluster --name A --type sno --step install`. A's `cluster.conf` now
+has B's API VIP, starting IP, and node counts. The install checks DNS against
+B's API address.
+
+---
+
+## #B97: Bare-metal MAC ask says "placeholders gone" when the list must be complete
+
+**Severity:** MEDIUM — TUI progress dialogs still show CLI next steps (MAC ask and boot ask)
+**Status:** Done (2026-11-06 — TUI MAC and boot asks state the continue condition; the error line is the failure; CLI text unchanged)
+**Added:** 2026-11-06
+**Updated:** 2026-11-06
+
+**Problem:** The fresh-placeholder ask in `scripts/bm-ask-edit.sh` says:
+
+```
+Placeholder MAC(s) xx:xx:xx:xx:xx:xx were just written.
+Edit macs.conf or agent-config.yaml now, then Yes.
+Yes: re-check. Continue only if the placeholders are gone.
+```
+
+That sentence is the CLI file-edit instruction, and the TUI progress dialog
+shows the same words. The report above it can already say `PARTIAL` and
+`WARN: too few` (one real MAC, two ports). A reader cannot tell whether Yes
+continues when the placeholder token is deleted, or only when the missing
+real MACs have been added.
+
+**What Yes actually does:** After Yes, the script regenerates
+`agent-config.yaml` when `macs.conf` should win, then stops if the placeholder
+token is still in the YAML. A short `macs.conf` is padded back to placeholders
+on that regenerate. Deleting `xx:xx:xx:xx:xx:xx` without adding the missing
+real addresses does not continue. "Placeholders gone" is the check. The way
+they stay gone is a complete list of real MACs. The sentence does not say that.
+
+The No line is already split (CLI: re-run `aba install`; TUI: wizard, then
+Retry). The Yes line is not.
+
+**Error dialog repeats the remedy.** After No, the progress error dialog
+uses the right TUI words (wizard, then Retry; buttons Dismiss, Retry, View
+Output). The same sentence is shown twice. Seen on
+`Install Cluster: standard.example.com: Error`:
+
+```
+Failed: Review/generate configs
+ERROR: Aborted. Go back to the cluster install wizard and add the MACs
+(preferred), then Retry. Or edit macs.conf or agent-config.yaml, then Retry.
+
+Possible next steps:
+  • Go back to the cluster install wizard and add the MACs (preferred), then Retry
+```
+
+`_bm_fix_text` prints that remedy for `aba_abort` (the ERROR line) and also
+emits it as `NEXT` (Possible next steps). `_tp_show_error` displays both.
+The ERROR line should say what failed (MAC list still short, or placeholders
+still present). The remedy belongs once, under Possible next steps.
+
+The ask shown just before this dialog is a different problem. It still tells
+a TUI user to edit the files and to continue when the placeholders are gone,
+and the No sentence is cut off (`add the MACs (`).
+
+**Proposed fix:** Say the continue condition in the words the report already
+uses: have the required count, and no placeholders. Keep one sentence for the
+CLI (edit `macs.conf`, then Yes). When `ABA_PROGRESS_FIFO` is set, do not
+reuse that CLI paragraph. Use the same TUI instructions as the error dialog:
+the wizard is the preferred place to add the MACs, editing the files is the
+alternative, and Yes re-checks only after the list is complete. Do not say
+"placeholders are gone" as if that alone were enough. On the error dialog,
+do not repeat that remedy in the ERROR line. Say the failure there, and
+list the wizard / file-edit steps once under Possible next steps.
+
+**Boot ask, same mistake:** `scripts/bm-ask-boot.sh` has no TUI branch. The
+progress dialog shows the CLI paragraph, including "use another terminal" and:
+
+```
+Yes: servers are booting (or booted) — start monitoring installation.
+No: stop this run only. Boot the servers, then re-run the SAME command:
+    aba install
+    (or continue later with: aba mon)
+```
+
+`aba write-usb` is in that same box. A TUI user has no command to re-run.
+Yes and No are the buttons already on screen. No should say: stop this run,
+boot the servers, then Retry (or come back and monitor). Keep `aba install`,
+`aba mon`, and `aba write-usb` for the CLI only, via `aba_cmd` when
+`ABA_PROGRESS_FIFO` is not set.
+
+**Workaround:** Add every missing real MAC, then Yes. Removing only the
+placeholder lines leaves the list short and the next check stops again.
+On the boot ask, Yes means the servers are already booting. No only stops
+this run.
+
+---
+
+## #B98: Offer the old run-mode menu before cluster install, until the progress dialog is trusted
+
+**Severity:** LOW — temporary escape hatch, remove it once the progress dialog is the one we want
+**Status:** Planned (after the bare-metal merge to `dev`)
+**Added:** 2026-11-06
+
+**Problem:** Cluster install skips `confirm_and_execute` and always uses the
+new progress dialog. The older menu is still in the TUI for other actions.
+It has three choices:
+
+1. Run in Terminal (interactive) — real terminal, prompts stay
+2. Run in Terminal (non-interactive) — same terminal, `--yes`
+3. Run in TUI (non-interactive) — the old scrolling box, also `--yes`
+
+That third choice is not the new progress dialog. Do not offer either
+`--yes` choice on the install menu. `ask()` checks `ASK_OVERRIDE` (`aba -y`)
+before `--always`, and both bare-metal gates are `ask -y --always`
+(`bm-ask-edit.sh` MAC check, `bm-ask-boot.sh` boot ask). A terminal started
+with `--yes` returns yes immediately. The questions never appear. Placeholders
+then fail later in `_bm_stop_if_placeholders`, with no chance to edit. Real
+MACs continue straight into monitoring, including the boot ask.
+
+**Proposed fix:** After the user presses Install, and only until we trust the
+progress dialog, show:
+
+1. Progress dialog (default) — `_exec_with_progress`
+2. Terminal, interactive — prompts stay, no `--yes`
+
+Do not keep the old scrolling box on this menu, and do not add a
+non-interactive terminal. The wizard still writes `cluster.conf` and
+`macs.conf` first. This choice is only how the install command is shown.
+Delete the menu when the progress-dialog asks are good enough (#B97).
+
+---
+
+## #B99: `aba_tip` for optional hints (post-load archive line)
+
+**Severity:** LOW — UX
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** After `aba load`, the "archive files can be deleted" note is an
+optional hint, but it shares `aba_info` (white) with real next steps. There is
+no channel for "safe to ignore".
+
+**Proposed fix:** Add `aba_tip` (cyan) and use it for that line in
+`scripts/reg-load.sh` (`Tip: Archive files … can be deleted`). Do not use
+`aba_warn` for it. Palette: red = stop (`aba_error` / `aba_abort`), yellow =
+attention (`aba_warn`, already the default), white = progress (`aba_info`),
+green = success, cyan = tip, magenta = debug.
+
+---
+
+## #B100: Audit ABA output colors and blank lines
+
+**Severity:** LOW — UX
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** Color and spacing are inconsistent. Some non-failures still print
+with `echo_red` (for example rpm-install and the passwordless-sudo note).
+Many scripts emit extra blank lines that make the log look sparse or like a
+pause.
+
+**Proposed fix:**
+
+1. Walk operational output and put each line on the palette in #B99. Red only
+   when the command failed or will not continue. `aba_warn` is already yellow;
+   replace leftover `echo_red` warnings.
+2. Review blank `echo` lines. Keep one blank line before a new section or an
+   error. Remove blanks that sit between two related lines.
+
+---
+
+## #B101: Accept `aba unstuck` as an alias of `aba unstick`
+
+**Severity:** LOW — UX
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** `aba unstuck` (and `aba unstuck -y`) falls through to Make:
+`No rule to make target 'unstuck'`. The recovery command was never a Make
+target and was never named `unstuck`. It is `aba unstick`, dispatched in
+`scripts/aba.sh` to `scripts/cluster-unstick.sh`. Grep of the cluster
+`Makefile` and the `aba` wrapper finds nothing, which looks like the command
+was removed.
+
+**Proposed fix:** In `scripts/aba.sh`, treat `unstuck` as `unstick` before the
+Make handoff. One line on stderr is enough if we want to say which name ran.
+Do not add a Make target.
+
+---
+
+## #B102: Non-interactive `ask` should show the answer it took
+
+**Severity:** LOW — UX (test logs and `ask=false`)
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** `aba refresh` with `ask=false` prints:
+
+```
+Delete the above virtual machine(s)? (y/n) [n]: [default: ask=false]
+```
+
+and then deletes the VMs. `[n]` is the interactive default (`ask -n`). `[default: ask=false]` only says prompts are off. It does not say the answer. `vmw-delete.sh` / `kvm-delete.sh` call `ask -n --auto-yes`, so automation proceeds (yes) while the line still looks like "default is no".
+
+**Proposed fix:** In `ask()`, when not reading a tty, print the answer that was used:
+
+- `--auto-yes` → `[auto-yes]`
+- `--auto-no` → `[auto-no]`
+- no auto flag → the interactive default, `[y]` or `[n]`
+
+Drop `[default: ask=false]`. Same for `ASK_OVERRIDE` / `-y`. Interactive prompts stay `(y/n) [n]:` and wait. Showing the auto override in logs is fine; people running by hand do not hit this path.
+
+---
+
+## #B103: day2-osus progress leaves "Access cluster" In Progress across nested day2
+
+**Severity:** LOW — TUI progress accuracy
+**Status:** Planned
+**Added:** 2026-11-05
+
+**Problem:** The Day-2: day2-osus dialog shows two access rows at once:
+
+- `Access cluster` — In Progress
+- `Accessing cluster` — Succeeded
+
+and the other OSUS rows (`Install OSUS operator`, `Deploy Update Service`, `Wait for cluster stable`) as No-op, while day2 rows continue below.
+
+**Root cause:** A late `DONE` is honored. `DONE|id` sets that row to Succeeded on the next redraw, whatever status it had. The screenshot is from before that event. `scripts/day2-config-osus.sh` sends `START|osus_access` immediately, and `DONE|osus_access` only after the CatalogSource checks (~line 194). If OperatorHub is missing it calls `scripts/day2.sh` in between, which appends `Accessing cluster` and completes it. Until `DONE|osus_access` is written, `Access cluster` stays In Progress, and the dialog auto-marks the not-yet-started OSUS steps No-op. Those No-op rows return to In Progress when their own `START` arrives. The path that never flips is the direct-internet `exit 0` (`image_source` is not a mirror), which returns without `DONE|osus_access`.
+
+**Proposed fix:** Do not `START|osus_access` until OSUS work actually begins (after any nested `day2.sh`). Send `DONE|osus_access` on the early-exit path before `exit 0`. Nested day2 should be the only plan on screen while it runs.
+
+---
+
+## #B104: Accept `~user/...` paths (not only `~/...`)
+
+**Severity:** LOW — path UX
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** `_valid_abs_path` and related path handling accept absolute paths and
+`~/...` (current user home) but reject `~otheruser/...` (e.g. `~steve/.ssh/id_rsa`).
+Users who paste another account's home-relative path get a validation error even
+when the path is otherwise well-formed.
+
+**Root cause:** The validator regex is effectively `^(/|~(/|$))…` — tilde is only
+allowed as `~` or `~/…`, not `~username/…`. Expansion helpers similarly map only
+`~/` → `$HOME`.
+
+**Proposed fix:** Extend `_valid_abs_path` (and any expand helper used for
+`data_dir` / `reg_ssh_key` / similar) to accept `~[A-Za-z0-9._-]+(/…)?`, and expand
+via `getent passwd` (or equivalent) to that user's home. Keep rejecting bare
+relative paths and paths with spaces/metacharacters. Add func coverage for
+`~user/…` accept and unknown-user reject/expand failure.
+
+**Workaround:** Use an absolute path (`/home/user/...`) or `~/...` for the
+current user.
+
+---
+
+## #B105: Accept hyphen-form MAC addresses (`00-50-…`) on input
+
+**Severity:** LOW — paste UX for bare-metal tools
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** `_valid_mac` / `_MAC_ADDR_RE` accept only colon form (`00:50:56:…`).
+Hyphen form (`00-50-56-…`), common when pasting from Windows / some BMC UIs, is
+rejected — paste friction for BM installs.
+
+**Root cause:** Validators and extractors are colon-only regexes.
+
+**Proposed fix:** On input, normalize `-` → `:` (canonical store/agent-config
+form stays colon). Update `_valid_mac`, `_MAC_ADDR_RE` / `macs_list_from_*`,
+and any `mac_prefix` checks. Keep placeholders (`xx:xx:…`) invalid. Func tests
+for hyphen accept → colon canonicalize, and reject mixed junk.
+
+**Workaround:** Replace hyphens with colons before paste/save.
+
+---
+
+## #B106: Normalize leading zeros on all integer CLI/TUI inputs (incl. `--host-prefix`)
+
+**Severity:** LOW — input consistency
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** Most integer fields (VLAN, workers, CPU, memory, disk) and IPv4/CIDR
+paths run through `normalize_uint` / `normalize_ipv4` so `08` → `8`. `--host-prefix`
+still uses a raw `0-32` grep and **rejects** `08` instead of normalizing. Incomplete
+coverage, not intentional.
+
+**Root cause:** `--host-prefix` (and any similar leftover int flags) never got the
+shared `normalize_uint` + range-check pattern.
+
+**Proposed fix:** Audit every integer CLI flag and TUI numeric field; route all
+through `normalize_uint` (then range-check). At minimum fix `--host-prefix`.
+Extend `test-normalize-ipv4.sh` / `test-input-validation-all.sh` (or a small CLI
+spot test) so `08` is accepted and stored as `8` for every int path.
+
+**Workaround:** Omit leading zeros (`--host-prefix 8`).
+
+---
+
+## #B107: Remove dead `validate_domain` / `validate_ntp_servers` (DRY)
+
+**Severity:** LOW — code hygiene / DRY
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** Live TUI/CLI domain and NTP paths use `_valid_domain` /
+`_normalize_ip_or_host_list` (and friends). Legacy `validate_domain` and
+`validate_ntp_servers` in `include_all.sh` are stricter (e.g. reject `_` in
+domains), unused by product code, and only exercised by func tests under a
+misleading “TUI” label — duplicate validators (DRY smell).
+
+**Root cause:** Older TUI-oriented helpers were never deleted after `_valid_*`
+became the hot path. `validate_ip` / `validate_cidr` / `validate_ip_list` are
+still referenced and must stay.
+
+**Proposed fix:** Delete `validate_domain` and `validate_ntp_servers`. Point
+`test-input-validation-all.sh` NTP/domain cases at the live helpers (e.g.
+`_valid_domain`, `_normalize_ip_or_host_list` via sourcing tui-lib or a thin
+shared helper in `include_all.sh`). Do **not** keep both or “alias” unless a
+compat shim is required for an external caller (none known).
+
+**Workaround:** None needed — dead code; behavior users see is already `_valid_*`.
+
+**Note:** Not done in-tree yet — not zero-risk (scripts + test retarget; NTP live
+helper currently lives in `tui-lib.sh`). Track here until a focused cleanup PR.
+
+---
+
+## #B108: Non-contiguous node IPs in `starting_ip`
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** `starting_ip` is a single address. ABA then takes the next addresses in order, always `+1`, masters first and workers after them. A 3-master, 3-worker cluster with `starting_ip=10.0.0.10` is forced to use `10.0.0.10` through `10.0.0.15`. There is no way to skip an address already in use, or to place workers on a different prefix from the masters.
+
+**Root cause:** `generate_ip_array` starts at `starting_ip` and emits `num_masters + num_workers` consecutive addresses. Agent config assigns that list in order: masters from the start, workers after them. The same `start + n` span is what preflight, VIP overlap, and `cluster.conf` checks use. The first address is the rendezvous IP.
+
+**Proposed fix:** Keep a single address meaning what it means today. Also accept a list in the same field. A comma means the value is the full set of node addresses, in the same order: masters first, then workers. The expanded list must have one address per node.
+
+Two ways to write the list:
+
+```
+starting_ip=10.0.0.10,10.0.0.11,10.0.0.12,10.0.0.50,10.0.0.51,10.0.0.52
+```
+
+or the short form, where a bare last octet keeps the prefix of the last full address:
+
+```
+starting_ip=10.0.0.10,11,12,10.0.0.50,51,52
+```
+
+Both resolve to:
+
+```
+10.0.0.10, 10.0.0.11, 10.0.0.12, 10.0.0.50, 10.0.0.51, 10.0.0.52
+```
+
+A new full address changes the prefix for the octets that follow:
+
+```
+starting_ip=10.0.0.10,11,12,10.0.1.60,61,62,63
+```
+
+resolves to:
+
+```
+10.0.0.10, 10.0.0.11, 10.0.0.12, 10.0.1.60, 10.0.1.61, 10.0.1.62, 10.0.1.63
+```
+
+One function, `expand_starting_ips <spec> <count>`, does this:
+
+- No comma: return `count` contiguous addresses from that IP (`+1` each time), as today.
+- Commas: split on commas, ignore spaces, and expand each item.
+  - A full address is used as itself and becomes the current prefix.
+  - A bare octet (`0`–`255`) is attached to that prefix. `51` after `10.0.0.50` is `10.0.0.51`.
+  - The first item must be a full address.
+  - The result length must equal `count`.
+
+The first address is still the rendezvous IP. `--starting-ip` accepts the same string. Agent config, preflight, and the VIP overlap check use the expanded list. Each address must be inside `machine_network`, must not be the network or broadcast address, and must not be a duplicate, the gateway, or a VIP. A list that crosses from `10.0.0.x` to `10.0.1.x` is valid only when `machine_network` covers both.
+
+**Workaround:** Use a contiguous block, or edit the generated agent config by hand. Those edits are kept until `cluster.conf` changes.
+
+---
+
+## #B109: Show a 2-3 line agent-config summary on MAC and edit asks
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-09
+
+**Problem:** Asks about MAC addresses, and asks that invite an edit of `agent-config.yaml`, name the path and then stop. The user cannot tell which cluster file the question is about without opening it. The bare-metal review ask in `scripts/bm-ask-edit.sh` prints the MAC report and `agent-config.yaml: <path>`, then "Are the MAC addresses correct?" (or the placeholder "have all required MACs been added?" question). The same gap is on the ask that collects MAC addresses, and on any prompt that says the user may edit that file.
+
+**Root cause:** `scripts/agent-config-summary.sh` already prints the compact summary (cluster and role, rendezvous IP, node IPs, gateway, NIC, DNS, NTP) and is not called from these asks. `macs_report` only covers the MAC list.
+
+**Proposed fix:** When `agent-config.yaml` exists, print that compact summary (two or three lines) immediately before the question. Cover:
+
+- Entering MAC addresses
+- Confirming the MAC addresses are correct, including the placeholder re-check
+- Any ask that offers an edit of `agent-config.yaml`
+
+Skip the summary when the file does not exist yet. Keep MACs in the existing MAC report so the summary does not repeat them. CLI and the progress dialog show the same lines. Do not shell out to an example script that may sit in a cluster directory.
+
+**Workaround:** Open `agent-config.yaml` before answering Yes.
 

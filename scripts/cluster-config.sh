@@ -30,7 +30,7 @@ unset WKR_IP_ADDR
 # ARP-cache conflict detection is unaffected.
 # -----------------------------------------------------------------------------
 _BMC_MAC_OVERRIDE_ACTIVE=false
-if [ -f bmc.conf ] && grep -qE '^[[:space:]]*bmc_host_' bmc.conf; then
+if bmc_has_hosts; then
 	_BMC_MAC_OVERRIDE_ACTIVE=true
 	# _bm_get_mac (D-03) lives in bmc-mac-discovery.sh.
 	[ -f scripts/bmc-redfish.sh ]         && source scripts/bmc-redfish.sh
@@ -213,7 +213,7 @@ if [ "$_BMC_MAC_OVERRIDE_ACTIVE" = "true" ]; then
 			worker*) _new_wkr="$_new_wkr $_mac" ;;
 			*)       aba_debug "BMC: unrecognized node-name pattern $_bmc_node (not master*/worker*); leaving CP/WKR list unchanged for this node" ;;
 		esac
-	done < <(grep -E '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf | sed -E 's/^[[:space:]]*bmc_host_([A-Za-z0-9_-]+)=.*/\1/')
+	done < <(bmc_host_list)
 	# Trim leading space.
 	CP_MAC_ADDRS="${_new_cp# }"
 	WKR_MAC_ADDRS="${_new_wkr# }"

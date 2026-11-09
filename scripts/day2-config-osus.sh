@@ -261,7 +261,7 @@ if [ -z "$_osus_installed" ]; then
 	_osus_apply_sub
 
 	if ! _osus_wait_for_csv; then
-		echo_yellow "[ABA] OSUS operator subscription did not complete in time. Retrying ... Hit Ctrl-C to stop."
+		echo_yellow "[ABA] $(_aba_hide_ctrlc "OSUS operator subscription did not complete in time. Retrying ... Hit Ctrl-C to stop.")"
 		_osus_log
 		_osus_cleanup_sub
 		sleep 30

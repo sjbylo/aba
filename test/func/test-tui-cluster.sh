@@ -67,11 +67,10 @@ tui_screenshot "cl-01b-basics"
 tui_assert_contains "Name\|name" "Cluster name field"
 tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 
-# Set cluster name if not already correct (fresh install has default name)
-# Must check the "Cluster name:" line specifically, not just any "sno" on screen
-# (the Type field also shows "sno" which would false-match)
+# Set cluster name if not already correct (fresh install has default name).
+# Exact field match — "Cluster name:.*sno" must not match sno4.
 _scr=$(tui_capture)
-if ! echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+if ! tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 	echo "  Setting cluster name to $_CLUSTER (current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1 | sed 's/Cluster name:[[:space:]]*//'))"
 	# Press N to highlight the cluster-name item, Enter to open inputbox
 	tui_keys N; sleep 0.5
@@ -81,18 +80,29 @@ if ! echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
 	tui_keys C-u; sleep 0.3
 	$_TUI_SSH "tmux send-keys -t $_TUI_SESSION -l '$_CLUSTER'" 2>/dev/null
 	sleep 0.3
-	tui_keys Enter; sleep 1
+	tui_keys Enter
+	# Wait for input dialog to close before asserting the Basics field
+	# (a premature capture sees the open dialog, not "Cluster name: sno")
+	tui_wait_gone "Enter cluster name" 8 || sleep 2
 	tui_screenshot "cl-01b-name-set"
 fi
 # Verify the name field specifically (not just Type which also contains "sno")
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Cluster name:.*$_CLUSTER"; then
+if tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 	echo "  ✓ PASS: Cluster name set to $_CLUSTER"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ✗ FAIL: Cluster name not set (expected $_CLUSTER)"
-	echo "    Current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1)"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	# One retry: dialog may still be settling after Enter
+	sleep 1
+	_scr=$(tui_capture)
+	if tui_cluster_name_is "$_CLUSTER" "$_scr"; then
+		echo "  ✓ PASS: Cluster name set to $_CLUSTER (after settle)"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: Cluster name not set (expected $_CLUSTER)"
+		echo "    Current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
 fi
 # Force Type from skill table (SNO leftover "standard" fails VIP validation).
 if tui_force_type "$_lab_type"; then

@@ -20,7 +20,13 @@ elif [ $_exists_rc -eq 0 ]; then
 	scripts/vmw-delete.sh || true
 fi
 
-rm -f .install-complete .autorefresh .auto-agent-up
+rm -f .install-complete .vms-ready
 
 scripts/vmw-create.sh --start --nomaccheck  # Do not re-check the mac addresses since we are re-creating the exact same VMs
+
+aba_progress "DONE|ci_vms" || true
+# vmw-create.sh --start already powered the VMs on. Close Boot nodes here so
+# it does not sit at No-op until monitor starts. Bare metal uses bm-ask-boot.sh.
+aba_progress "START|ci_boot" || true
+aba_progress "DONE|ci_boot" || true
 

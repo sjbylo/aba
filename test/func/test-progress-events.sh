@@ -207,10 +207,11 @@ test_plan_count day2-virt 3
 test_plan_count cluster-shutdown 4
 test_plan_count cluster-startup  6
 test_plan_count cluster-upgrade  4
+test_plan_count cluster-install  6
 echo ""
 
 echo "--- PLAN format ---"
-for wf in install sync save load uninstall bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade; do
+for wf in install sync save load uninstall bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade cluster-install; do
 	test_plan_format "$wf"
 done
 echo ""
@@ -258,6 +259,15 @@ test_plan_id_coverage cluster-startup 6 \
 test_plan_id_coverage cluster-upgrade 4 \
 	scripts/cluster-upgrade.sh
 
+test_plan_id_coverage cluster-install 6 \
+	scripts/bm-ask-edit.sh scripts/bm-ask-boot.sh scripts/monitor-install.sh \
+	scripts/resolve-vips.sh scripts/infra-dns.sh scripts/create-install-config.sh \
+	scripts/create-agent-config.sh scripts/preflight-check.sh \
+	scripts/generate-image.sh \
+	scripts/vmw-kill.sh scripts/vmw-refresh.sh \
+	scripts/kvm-kill.sh scripts/kvm-refresh.sh \
+	templates/Makefile.cluster
+
 echo ""
 
 # ── Orphan emitter check — START IDs that have no PLAN ──
@@ -265,7 +275,7 @@ echo "--- Orphan emitters (START without any PLAN) ---"
 
 # Collect all PLAN IDs across all workflows
 _all_plan_ids=""
-for wf in install sync save load uninstall stop start bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade; do
+for wf in install sync save load uninstall stop start bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade cluster-install; do
 	_tmpf=$(capture_plans "$wf")
 	_all_plan_ids="$_all_plan_ids $(grep '^PLAN|' "$_tmpf" 2>/dev/null | cut -d'|' -f2)"
 	rm -f "$_tmpf"

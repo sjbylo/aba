@@ -332,12 +332,10 @@ test_end 0
 #    flow but from the SYNC perspective (registry reachable from con via sync).
 #    Both tests are kept for defense-in-depth.
 #
-#    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
-#      1st `aba install` -> creates agent configs, prints "Review and edit"
-#      2nd `aba install` -> creates ISO, prints "Boot your servers"
-#      (3rd would monitor cluster -- not tested since no real BM servers)
+#    Continuous BM (#B80): `aba -y iso` on disco (registry there).
+#    Placeholder MACs abort, so write five test MACs first. -y skips the ask.
 # ============================================================================
-test_begin "Bare-metal simulation: platform=bm two-step install"
+test_begin "Bare-metal simulation: platform=bm continuous ISO"
 
 # govc download-all test runs on connected bastion (CLI behavior check)
 e2e_run "Switch to bare-metal platform" "aba --platform bm"
@@ -350,13 +348,11 @@ e2e_run "Run download-all (govc skipped for platform=bm)" \
 e2e_run "Verify govc tarball NOT downloaded (platform=bm excludes govc)" \
     "test ! -f cli/govc*gz"
 
-# BM two-step install runs on internal bastion (registry is there, loaded from bundle)
+# BM ISO install runs on internal bastion (registry is there, loaded from bundle)
 e2e_run_remote "Switch to bare-metal platform on internal bastion" \
     "cd ~/aba && aba --platform bm"
 e2e_run_remote "Delete any leftover $STANDARD cluster dir (bm has no VMs)" \
     "cd ~/aba && rm -rf $STANDARD"
-# No e2e_add_to_cluster_cleanup: bm has no VMs, 'aba delete' doesn't support bm.
-# The explicit rm -rf at end of test handles cleanup.
 e2e_run_remote "Create agent configs (bare-metal)" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
 e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"
@@ -364,18 +360,15 @@ e2e_run_remote "Verify agent configs" \
     "ls ~/aba/$STANDARD/install-config.yaml ~/aba/$STANDARD/agent-config.yaml"
 e2e_run_remote "Verify ISO not yet created" \
     "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+# Simulation only — these MACs are never attached to a VM.
+e2e_run_remote "Write 5 test MACs (standard = 3 masters + 2 workers)" \
+    "cd ~/aba && printf '%s\n' 00:50:56:BE:E2:01 00:50:56:BE:E2:02 00:50:56:BE:E2:03 00:50:56:BE:E2:04 00:50:56:BE:E2:05 > $STANDARD/macs.conf"
 
-# Phase 1: "aba install" stops after agent configs, shows MAC review instructions
-e2e_run_remote "First aba install (creates configs, stops for MAC review)" \
-    "mkdir -p ~/tmp && cd ~/aba && aba --dir $STANDARD install 2>&1 | tee ~/tmp/bm-phase1.out && grep -q 'Review and edit' ~/tmp/bm-phase1.out"
-e2e_run_remote "Verify .bm-message exists" "test -f ~/aba/$STANDARD/.bm-message"
-e2e_run_remote "Verify ISO not yet created (still)" \
-    "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
-
-# Phase 2: "aba install" creates ISO, shows boot instructions
-e2e_run_remote "Second aba install (creates ISO, stops for server boot)" \
-    "mkdir -p ~/tmp && cd ~/aba && aba --dir $STANDARD install 2>&1 | tee ~/tmp/bm-phase2.out && grep -q 'Boot your servers' ~/tmp/bm-phase2.out"
-e2e_run_remote "Verify .bm-nextstep exists" "test -f ~/aba/$STANDARD/.bm-nextstep"
+e2e_run_remote "aba iso (continuous BM through ISO)" \
+    "set -o pipefail; mkdir -p ~/tmp && cd ~/aba && aba -y --dir $STANDARD iso 2>&1 | tee ~/tmp/bm-iso.out && grep -q 'Bare-metal MAC check' ~/tmp/bm-iso.out && ! grep -q 'xx:xx:xx:xx:xx:xx' $STANDARD/agent-config.yaml"
+e2e_run_remote "Verify .bm-config-reviewed exists" "test -f ~/aba/$STANDARD/.bm-config-reviewed"
+e2e_run_remote "Verify no legacy .bm-message" "test ! -f ~/aba/$STANDARD/.bm-message"
+e2e_run_remote "Verify no legacy .bm-nextstep" "test ! -f ~/aba/$STANDARD/.bm-nextstep"
 e2e_run_remote "Verify ISO created" \
     "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
@@ -451,8 +444,10 @@ test_begin "Primed bundle: verify on disco"
 e2e_run_remote "Pre-built: .primed marker present" \
     "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/.primed"
 
-e2e_run_remote "Pre-built: .bm-message present" \
-    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/.bm-message"
+e2e_run_remote "Pre-built: .primed present" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/.primed"
+e2e_run_remote "Pre-built: .bm-message absent (continuous BM)" \
+    "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/.bm-message"
 
 e2e_run_remote "Pre-built: install-config.yaml present" \
     "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/install-config.yaml"
@@ -482,6 +477,8 @@ e2e_run_remote "Pre-built: Make skips agent-config rebuild (.primed guard)" \
 e2e_run_remote "Conf-only: .primed marker absent" \
     "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_COMPACT/.primed"
 
+e2e_run_remote "Conf-only: .primed absent" \
+    "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_COMPACT/.primed"
 e2e_run_remote "Conf-only: .bm-message absent" \
     "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_COMPACT/.bm-message"
 

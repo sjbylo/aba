@@ -18,6 +18,8 @@ ensure_openshift_install
 
 aba_debug "Starting: $0 $*"
 
+aba_progress "START|ci_iso" || true
+
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
@@ -138,3 +140,4 @@ backup_auth_dir "$ASSETS_DIR/auth" "$ASSETS_DIR/auth.backup"
 echo 
 #aba_success "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"
 aba_success "The agent based ISO has been created."
+aba_progress "DONE|ci_iso" || true

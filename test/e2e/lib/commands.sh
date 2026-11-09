@@ -573,10 +573,7 @@ cmd_deploy() {
 	echo "  Deploy complete."
 
 	# Store local deploy checksum and per-file manifest for verify-code
-	local _deploy_cksum
-	_deploy_cksum=$(_source_checksum "$aba_root")
-	echo "$_deploy_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
-	cp -f /tmp/e2e-source-md5sums /tmp/e2e-deploy-md5sums 2>/dev/null || true
+	_record_source_deploy "$aba_root"
 }
 
 # --- verify-code: check source sync between workspace and pools --------------
@@ -607,9 +604,16 @@ cmd_verify_code() {
 		echo "  Workspace:   ${_ws_cksum:0:12}  ✓ matches last deploy (${_deploy_time})"
 	else
 		echo "  Workspace:   ${_ws_cksum:0:12}  ✗ CHANGED since last deploy (${_deploy_time})"
-		# Show which tracked files differ between workspace and last deploy.
-		# The deploy snapshot is saved at deploy time; compare against current.
-		if [ -f /tmp/e2e-deploy-md5sums ] && [ -f /tmp/e2e-source-md5sums ]; then
+		# The file list belongs to this deploy only when its aggregate matches
+		# the recorded checksum. Auto-deploy used to store a tarball md5 and
+		# leave an older per-file list in place; that list is not this deploy.
+		local _snapshot_ok=""
+		if [ -f /tmp/e2e-deploy-md5sums ]; then
+			local _snap
+			_snap=$(md5sum /tmp/e2e-deploy-md5sums | awk '{print $1}')
+			[ "$_snap" = "$_deploy_cksum" ] && _snapshot_ok=1
+		fi
+		if [ -n "$_snapshot_ok" ] && [ -f /tmp/e2e-source-md5sums ]; then
 			local _changed_files
 			_changed_files=$(diff <(LC_ALL=C sort /tmp/e2e-deploy-md5sums) <(LC_ALL=C sort /tmp/e2e-source-md5sums) 2>/dev/null | \
 				grep '^[<>]' | sed 's/^[<>] [a-f0-9]*  //' | LC_ALL=C sort -u || true)
@@ -619,6 +623,9 @@ cmd_verify_code() {
 				echo "               ${_count} changed file(s):"
 				echo "$_changed_files" | while read -r f; do echo "                 $f"; done
 			fi
+		elif [ -z "$_snapshot_ok" ]; then
+			echo "               No per-file record for that deploy."
+			echo "               The pool lines below are the current diff."
 		fi
 	fi
 

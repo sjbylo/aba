@@ -327,7 +327,7 @@ tui_keys Space
 sleep 3
 tui_screenshot "pi-c2-live-output"
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Live Output\|ABA\|Step.*running\|press any key"; then
+if echo "$_scr" | grep -qi "Live Output\|ABA\|Step.*running\|press Space"; then
 	echo "  ✓ PASS: Live output view opened"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
