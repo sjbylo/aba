@@ -82,6 +82,7 @@ Mainly improvements, fixes and refactoring
 ### Fixed
 
 - **OCP version tips miss next-major GA / sticky forever** — `Latest`/`Previous`/`Older` now prefer a GA next-major Cincinnati tip when the CDN floating tip lags (e.g. `5.0.0` while CDN still on 4.22), step Previous/Older across majors at `X.0`, and refresh via `run_once -t` (`ABA_CACHE_TTL`) instead of caching the first successful tip forever. Shared helpers: `_cdn_tip_version`, `_peek_next_major_ga`, `aba_version_fetch_channel`/`_wait`.
+- **Previous empty after 5.0 tips under openshift-v4** — `_cdn_tip_version` now keeps same-major floating tips only; when `openshift-v4/.../ocp/stable` publishes `5.x`, it falls back to the highest `stable-4.Y` release.txt so `--version p` / Previous still resolve (e.g. `4.22.22`).
 - **Catalog refresh skipped GA next-major** — `tools/refresh-catalog-indexes.sh` now starts from `fetch_latest_version` (peek-aware) and walks with `_channel_prev_minor`, so GA `5.0` is included when CDN still tips `4.22`; prerelease probes reuse `_next_minor` / `_next_major`.
 - **Bundle NAS temp cleanup** — `bundles/v2` startup cleans all stale staging dirs under the NAS temp area (not only the current bundle name), so failed builds of other versions do not linger.
 - **Clean while installed orphans VMs** — `make clean` / `aba clean` now refuse when `.install-complete` exists (use `aba delete` first). `cluster-clean.sh` owns cleanup; delete passes `force=1` after VMs are gone. Stale-VM install guard suggests `delete` then `install`.

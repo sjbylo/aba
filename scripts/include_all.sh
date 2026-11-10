@@ -2967,8 +2967,53 @@ _next_major() {
 	echo "$(( x + 1 )).0"
 }
 
+# Version field from a cached release.txt. Empty when the file has none.
+_cdn_release_txt_version() {
+	local file="$1"
+	[ -s "$file" ] || return 0
+	grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$file" 2>/dev/null | awk '{print $2}' | head -n1
+}
+
+# Echo ver only when its first component is major. A 5.x tip is not a 4.x tip.
+_cdn_version_for_major() {
+	local ver="$1" major="$2"
+	[[ -n "$ver" && "${ver%%.*}" == "$major" ]] || return 0
+	echo "$ver"
+}
+
+# Highest channel-MAJOR.Y tip under openshift-vMAJOR (e.g. stable-4.22 → 4.22.22).
+# Used when the floating ocp/<channel> tip has crossed into another major.
+_cdn_scoped_tip_version() {
+	local channel="${1:-stable}"
+	local major="$2"
+	local index_url index_cache tip_dir tip_url tip_cache latest_ver
+
+	[[ "$major" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+
+	index_url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/"
+	index_cache="${ABA_CACHE_DIR}/ocp_index_v${major}_${ARCH}.html"
+	_fetch_cached "$index_url" "$index_cache" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+
+	# Directory links look like href="stable-4.22/"; pick highest Y for this major.
+	# href=" stops unstable-4.22 from matching the stable-4.22 pattern.
+	tip_dir="$(grep -Eo "href=\"${channel}-${major}\.[0-9]+/\"" "$index_cache" 2>/dev/null \
+		| sed -E 's/^href="([^"]+)\/"$/\1/' \
+		| sort -t. -k2,2n \
+		| tail -n1)"
+	[[ -n "$tip_dir" ]] || { echo ""; return 0; }
+
+	tip_url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/${tip_dir}/release.txt"
+	tip_cache="${ABA_CACHE_DIR}/release_${tip_dir}_${ARCH}.txt"
+	_fetch_cached "$tip_url" "$tip_cache" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+
+	latest_ver="$(_cdn_release_txt_version "$tip_cache")"
+	_cdn_version_for_major "$latest_ver" "$major"
+}
+
 # Full Version: string from CDN release.txt for channel + major (openshift-vN/...).
-# Cincinnati is channel-tip truth; CDN is only the floating download anchor (can lag).
+# Cincinnati is channel-tip truth; CDN is only the floating download anchor (can lag
+# or, after a major GA, publish the next major under the previous tree —
+# e.g. openshift-v4/.../ocp/stable → 5.0.1). Same-major tips only.
 _cdn_tip_version() {
 	local channel="${1:-stable}"
 	local major="$2"
@@ -2979,11 +3024,16 @@ _cdn_tip_version() {
 	url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/${channel}/release.txt"
 	cache_file="${ABA_CACHE_DIR}/release_${channel}_v${major}_${ARCH}.txt"
 
-	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+	if _fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" ""; then
+		latest_ver="$(_cdn_version_for_major "$(_cdn_release_txt_version "$cache_file")" "$major")"
+		if [[ -n "$latest_ver" ]]; then
+			echo "$latest_ver"
+			return 0
+		fi
+	fi
 
-	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
-	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
-	echo "$latest_ver"
+	# Floating tip empty or wrong major → highest channel-MAJOR.Y under this tree.
+	_cdn_scoped_tip_version "$channel" "$major"
 }
 
 # CDN floating-tip minor for a specific major. Rejects cross-contaminated tips
