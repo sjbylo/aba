@@ -266,6 +266,173 @@ _g=$(_cdn_tip_version stable 4)
 [[ -z "$_g" ]] && _pass "G scoped 5.x tip is not a 4.x result" \
 	|| _fail "G scoped 5.x tip should be empty, got '$_g'"
 
+# ========== Scenario I: candidate offer — exclusive + GA-equal + CDN-on-5.0 ==========
+echo ""
+echo "--- Scenario I: _candidate_offer_compute circumstances ---"
+# Restored graph mocks (Scenarios H/G overrode network helpers).
+_version_has_cross_minor_edge() { return 0; }
+
+# I1: today-like — CDN still on 4.22; candidate has GA-equal 5.0.1 plus -ec previews.
+#     Must KEEP 5.0.1 even though fast tips the same build (no exclusive-only filter).
+_MOCK_CDN_MINOR="4.22"
+fetch_latest_minor_version() { echo "$_MOCK_CDN_MINOR"; }
+fetch_all_versions() {
+	local channel="$1" minor="$2"
+	case "$channel:$minor" in
+		candidate:4.22) echo "4.22.22" ;;
+		fast:4.22) echo "4.22.22" ;;
+		candidate:4.23) echo "4.23.0-ec.2" ;;
+		fast:4.23) echo "" ;;
+		candidate:5.0) echo "5.0.1" ;;
+		fast:5.0) echo "5.0.1" ;;
+		candidate:5.1) echo "5.1.0-ec.2" ;;
+		fast:5.1) echo "" ;;
+		*) echo "" ;;
+	esac
+}
+mapfile -t _off < <(_candidate_offer_compute || true)
+# Newest-first, at most 3: 5.1.0-ec.2, 5.0.1, 4.23.0-ec.2 (4.22.22 drops off the cap)
+[[ "${_off[0]:-}" == "5.1.0-ec.2" && "${_off[1]:-}" == "5.0.1" && "${_off[2]:-}" == "4.23.0-ec.2" ]] \
+	&& _pass "I1 offer keeps GA-equal 5.0.1 + exclusives (${_off[*]})" \
+	|| _fail "I1 expected '5.1.0-ec.2 5.0.1 4.23.0-ec.2' got '${_off[*]:-}'"
+
+# I2: CDN already on 5.0 — inclusive anchor fills Previous when only one -ec exists.
+_MOCK_CDN_MINOR="5.0"
+fetch_all_versions() {
+	local channel="$1" minor="$2"
+	case "$channel:$minor" in
+		candidate:5.0) echo "5.0.1" ;;
+		fast:5.0) echo "5.0.1" ;;
+		candidate:5.1) echo "5.1.0-ec.2" ;;
+		fast:5.1) echo "" ;;
+		*) echo "" ;;
+	esac
+}
+mapfile -t _off < <(_candidate_offer_compute || true)
+[[ "${_off[0]:-}" == "5.1.0-ec.2" && "${_off[1]:-}" == "5.0.1" && -z "${_off[2]:-}" ]] \
+	&& _pass "I2 CDN-on-5.0 offer is 5.1-ec + 5.0.1 (${_off[*]})" \
+	|| _fail "I2 expected '5.1.0-ec.2 5.0.1' got '${_off[*]:-}'"
+
+_lat=$(fetch_latest_version candidate) || true
+_prev=$(fetch_previous_version candidate) || true
+[[ "$_lat" == "5.1.0-ec.2" ]] && _pass "I2 Latest candidate → 5.1.0-ec.2" \
+	|| _fail "I2 Latest candidate expected 5.1.0-ec.2 got '$_lat'"
+[[ "$_prev" == "5.0.1" ]] && _pass "I2 Previous candidate → 5.0.1 (same as fast/stable OK)" \
+	|| _fail "I2 Previous candidate expected 5.0.1 got '$_prev'"
+
+# I3: only GA-equal tips (no -ec ahead) — still offer the caught-up tip, not empty.
+_MOCK_CDN_MINOR="5.0"
+fetch_all_versions() {
+	local channel="$1" minor="$2"
+	case "$channel:$minor" in
+		candidate:5.0) echo "5.0.1" ;;
+		fast:5.0) echo "5.0.1" ;;
+		*) echo "" ;;
+	esac
+}
+mapfile -t _off < <(_candidate_offer_compute || true)
+[[ "${_off[0]:-}" == "5.0.1" && -z "${_off[1]:-}" ]] \
+	&& _pass "I3 GA-only offer is 5.0.1 (not empty)" \
+	|| _fail "I3 expected sole '5.0.1' got '${_off[*]:-}'"
+
+# ========== Scenario J: deep ec / rc / GA tip handling ==========
+echo ""
+echo "--- Scenario J: ec/rc/GA version strings + offer tips ---"
+_version_has_cross_minor_edge() { return 0; }
+
+# J1: helpers accept ec and rc; prerelease detection
+for _v in 5.1.0-ec.2 4.23.0-ec.0 5.1.0-rc.1 5.0.0-rc.0; do
+	if _is_version_string "$_v" && _is_prerelease "$_v"; then
+		_pass "J1 $_v is version + prerelease"
+	else
+		_fail "J1 $_v should be version+prerelease"
+	fi
+done
+_is_ga_version "5.0.1" && ! _is_prerelease "5.0.1" \
+	&& _pass "J1 5.0.1 is GA (not prerelease)" \
+	|| _fail "J1 5.0.1 should be GA"
+
+# J2: fetch_all_versions tip is newest after ec < rc < GA sort (mock the pipe path)
+# _semver_sort must put GA last so tail -n1 is the channel tip.
+_sorted=$(printf '%s\n' "5.1.0-ec.1" "5.1.0-rc.1" "5.1.0-ec.2" "5.1.0" "5.1.0-rc.0" | _semver_sort)
+_tip=$(echo "$_sorted" | tail -n1)
+[[ "$_tip" == "5.1.0" ]] && _pass "J2 semver tip of ec/rc/GA mix is GA 5.1.0" \
+	|| _fail "J2 expected tip 5.1.0 got '$_tip' (order: $(echo $_sorted))"
+_ec_tip=$(printf '%s\n' "5.1.0-ec.1" "5.1.0-ec.2" | _semver_sort | tail -n1)
+[[ "$_ec_tip" == "5.1.0-ec.2" ]] && _pass "J2 semver tip of ec-only is newest ec" \
+	|| _fail "J2 expected 5.1.0-ec.2 got '$_ec_tip'"
+_rc_tip=$(printf '%s\n' "5.1.0-rc.0" "5.1.0-rc.1" "5.1.0-ec.9" | _semver_sort | tail -n1)
+[[ "$_rc_tip" == "5.1.0-rc.1" ]] && _pass "J2 semver tip rc > ec" \
+	|| _fail "J2 expected 5.1.0-rc.1 got '$_rc_tip'"
+
+# J3: offer Latest prefers -rc when that minor's candidate tip is rc (ahead of fast)
+_MOCK_CDN_MINOR="5.0"
+fetch_latest_minor_version() { echo "$_MOCK_CDN_MINOR"; }
+fetch_all_versions() {
+	local channel="$1" minor="$2"
+	case "$channel:$minor" in
+		candidate:5.0) echo "5.0.1" ;;
+		fast:5.0) echo "5.0.1" ;;
+		candidate:5.1) printf '%s\n' "5.1.0-ec.2" "5.1.0-rc.1" ;;
+		fast:5.1) echo "" ;;
+		*) echo "" ;;
+	esac
+}
+# Tip of candidate-5.1 must be rc.1 (fetch_all_versions | tail -n1 after sort in real code;
+# our mock returns unsorted lines — mirror real helper by sorting like fetch_all_versions).
+fetch_all_versions() {
+	local channel="$1" minor="$2" raw
+	case "$channel:$minor" in
+		candidate:5.0) raw="5.0.1" ;;
+		fast:5.0) raw="5.0.1" ;;
+		candidate:5.1) raw=$'5.1.0-ec.2\n5.1.0-rc.1' ;;
+		fast:5.1) raw="" ;;
+		*) raw="" ;;
+	esac
+	[[ -n "$raw" ]] || return 0
+	printf '%s\n' "$raw" | _semver_sort
+}
+mapfile -t _off < <(_candidate_offer_compute || true)
+[[ "${_off[0]:-}" == "5.1.0-rc.1" && "${_off[1]:-}" == "5.0.1" ]] \
+	&& _pass "J3 offer Latest is rc tip 5.1.0-rc.1 (${_off[*]})" \
+	|| _fail "J3 expected '5.1.0-rc.1 5.0.1' got '${_off[*]:-}'"
+
+# J4: offer Latest is -ec when that is the only prerelease tip
+fetch_all_versions() {
+	local channel="$1" minor="$2" raw
+	case "$channel:$minor" in
+		candidate:5.0) raw="5.0.1" ;;
+		fast:5.0) raw="5.0.1" ;;
+		candidate:5.1) raw=$'5.1.0-ec.1\n5.1.0-ec.2' ;;
+		*) raw="" ;;
+	esac
+	[[ -n "$raw" ]] || return 0
+	printf '%s\n' "$raw" | _semver_sort
+}
+mapfile -t _off < <(_candidate_offer_compute || true)
+[[ "${_off[0]:-}" == "5.1.0-ec.2" ]] && _pass "J4 offer Latest is newest ec 5.1.0-ec.2" \
+	|| _fail "J4 expected Latest 5.1.0-ec.2 got '${_off[*]:-}'"
+
+# J5: orphan ec without cross-minor edge is skipped; GA-equal with edge kept
+_version_has_cross_minor_edge() {
+	[[ "$1" != "5.1.0-ec.2" ]]
+}
+fetch_all_versions() {
+	local channel="$1" minor="$2" raw
+	case "$channel:$minor" in
+		candidate:5.0) raw="5.0.1" ;;
+		fast:5.0) raw="5.0.1" ;;
+		candidate:5.1) raw="5.1.0-ec.2" ;;
+		*) raw="" ;;
+	esac
+	[[ -n "$raw" ]] || return 0
+	printf '%s\n' "$raw"
+}
+mapfile -t _off < <(_candidate_offer_compute || true)
+[[ "${_off[0]:-}" == "5.0.1" && -z "${_off[1]:-}" ]] \
+	&& _pass "J5 orphan ec without edge dropped; GA tip kept" \
+	|| _fail "J5 expected sole 5.0.1 got '${_off[*]:-}'"
+
 # --- Summary ---
 echo ""
 echo "Results: $pass passed, $fail failed"

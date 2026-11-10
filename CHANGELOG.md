@@ -1,5 +1,13 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.5...HEAD)
 
+### Changed
+
+- **`aba ocp-ver` drops Older candidate** — List only Latest and Previous tips; the third candidate offer slot was often an uninteresting interim `-ec` and cluttered the summary.
+
+### Fixed
+
+- **Candidate Previous/Older empty after GA catch-up** — `_candidate_offer` now includes the stable CDN minor and keeps candidate tips even when they already match fast/stable (e.g. `5.0.1`), so `aba ocp-ver` / TUI suggestions are not left blank when channels have converged.
+
 ---
 
 ## [1.4.5](https://github.com/sjbylo/aba/releases/tag/v1.4.5) - 2026-11-09

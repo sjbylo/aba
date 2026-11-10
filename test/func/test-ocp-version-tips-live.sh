@@ -11,6 +11,7 @@
 #   candidate (_candidate_offer, not CDN peek):
 #     - Latest (+ Previous when offer has ≥2) are valid and ordered
 #     - Older optional (only when offer has ≥3)
+#     - Tips may equal stable/fast after GA catch-up (intentional, not exclusive-only)
 
 cd "$(dirname "$0")/../.." || exit 1
 source scripts/include_all.sh 2>/dev/null
@@ -172,6 +173,59 @@ elif [[ -z "$old" ]]; then
 	_pass "candidate Older empty matches offer size $_offer_n"
 elif [[ -n "$old" ]]; then
 	_fail "candidate Older ($old) set but offer size is $_offer_n"
+fi
+
+# Official-card style: for each released minor, candidate tip must match stable tip
+# when both are GA (candidate-5.0 == stable-5.0, etc.). Prerelease next minors are
+# allowed in the offer list ahead of those cards — that is intentional.
+echo ""
+echo "--- card-style per-minor tips (stable vs candidate) ---"
+_card_minors=()
+_cdn_m=$(fetch_latest_minor_version stable) || true
+if [[ -n "$_cdn_m" ]]; then
+	_card_minors+=("$_cdn_m")
+	_p=$(_channel_prev_minor stable "$_cdn_m") || true
+	[[ -n "$_p" ]] && _card_minors+=("$_p")
+	_p2=$(_channel_prev_minor stable "${_p:-}") || true
+	[[ -n "$_p2" ]] && _card_minors+=("$_p2")
+fi
+# Always include known GA minors from the public cards when reachable
+for _m in 5.0 4.22 4.21; do
+	_have=""
+	for _e in "${_card_minors[@]:-}"; do [[ "$_e" == "$_m" ]] && _have=1 && break; done
+	[[ -z "$_have" ]] && _card_minors+=("$_m")
+done
+
+for _m in "${_card_minors[@]}"; do
+	_st=$(fetch_all_versions stable "$_m" 2>/dev/null | tail -n1) || true
+	_ca=$(fetch_all_versions candidate "$_m" 2>/dev/null | tail -n1) || true
+	[[ -z "$_st" && -z "$_ca" ]] && continue
+	if [[ -n "$_st" && -n "$_ca" ]]; then
+		if [[ "$_st" == "$_ca" ]]; then
+			_pass "card $_m: candidate tip == stable tip ($_st)"
+		elif _is_prerelease "$_ca" && ! _is_prerelease "$_st"; then
+			# Rare: candidate ahead of stable on same minor (rc/ec before GA lands on stable)
+			_pass "card $_m: candidate $_ca is prerelease ahead of stable $_st"
+		else
+			_fail "card $_m: candidate ($_ca) vs stable ($_st) unexpected"
+		fi
+	elif [[ -n "$_st" ]]; then
+		_pass "card $_m: stable tip $_st (no candidate graph)"
+	else
+		_pass "card $_m: candidate-only tip $_ca"
+	fi
+done
+
+# If Latest candidate is prerelease (ec/rc), Previous may equal the GA card tip.
+if _is_prerelease "$lat"; then
+	_pass "candidate Latest is prerelease preview ($lat) — ahead of official GA cards"
+	if [[ -n "$prev" ]] && ! _is_prerelease "$prev"; then
+		_pass "candidate Previous is GA tip ($prev) while Latest is still ec/rc"
+	elif [[ -n "$prev" ]]; then
+		_pass "candidate Previous is also prerelease ($prev)"
+	fi
+else
+	_pass "candidate Latest is GA ($lat) — channels have caught up (no newer ec/rc offer)"
 fi
 
 echo ""
