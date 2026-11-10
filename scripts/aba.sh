@@ -341,7 +341,7 @@ source <(cd "$ABA_ROOT" && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*|*" status "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" ocp-ver "*|*" ocp-versions "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*|*" status "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -431,24 +431,40 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
-		_prev_s="" ; _prev_f="" ; _prev_c=""
-		_lat_s="" ; _lat_f="" ; _lat_c=""
-		_old_c=""
 		echo_yellow "Available OpenShift versions:"
-		_lat_s=$(fetch_latest_version stable) || true
-		_lat_f=$(fetch_latest_version fast) || true
-		_lat_c=$(fetch_latest_version candidate) || true
+		# Same lookups as the serial walk. Channels overlap; within a channel
+		# latest runs first so previous reuses the files just cached.
+		# Candidate previous and older then read the offer file latest just wrote.
+		_ov_dir=$(mktemp -d "$ABA_TMP/ocp-ver-XXXX")
+		(
+			fetch_latest_version stable > "$_ov_dir/lat_s" || true
+			fetch_previous_version stable > "$_ov_dir/prev_s" || true
+		) &
+		(
+			fetch_latest_version fast > "$_ov_dir/lat_f" || true
+			fetch_previous_version fast > "$_ov_dir/prev_f" || true
+		) &
+		(
+			fetch_latest_version candidate > "$_ov_dir/lat_c" || true
+			fetch_previous_version candidate > "$_ov_dir/prev_c" || true
+			fetch_older_version candidate > "$_ov_dir/old_c" || true
+		) &
+		wait
+		_lat_s=$(cat "$_ov_dir/lat_s" 2>/dev/null) || true
+		_lat_f=$(cat "$_ov_dir/lat_f" 2>/dev/null) || true
+		_lat_c=$(cat "$_ov_dir/lat_c" 2>/dev/null) || true
+		_prev_s=$(cat "$_ov_dir/prev_s" 2>/dev/null) || true
+		_prev_f=$(cat "$_ov_dir/prev_f" 2>/dev/null) || true
+		_prev_c=$(cat "$_ov_dir/prev_c" 2>/dev/null) || true
+		_old_c=$(cat "$_ov_dir/old_c" 2>/dev/null) || true
+		rm -rf "$_ov_dir"
 		[ -n "$_lat_s" ] && echo_white  "Latest stable:      $_lat_s"
 		[ -n "$_lat_f" ] && echo_white  "Latest fast:        $_lat_f"
 		[ -n "$_lat_c" ] && echo_white  "Latest candidate:   $_lat_c"
 		echo
-		_prev_s=$(fetch_previous_version stable) || true
-		_prev_f=$(fetch_previous_version fast) || true
-		_prev_c=$(fetch_previous_version candidate) || true
 		[ -n "$_prev_s" ] && echo_white  "Previous stable:    $_prev_s"
 		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
 		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
-		_old_c=$(fetch_older_version candidate) || true
 		[ -n "$_old_c" ] && [ "$_old_c" != "$_prev_c" ] && [ "$_old_c" != "$_lat_c" ] && echo_white "Older candidate:    $_old_c"
 
 		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")

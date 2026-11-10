@@ -186,13 +186,23 @@ _fetch_cached() {
 	_fetch_count=$(( _fetch_count + 1 ))
 	_last_cache_file="$cache_file"
 	mkdir -p "$(dirname "$cache_file")"
-	printf 'Name:           4.22.18\nVersion:        4.22.18\n' > "$cache_file"
+	# Floating tip content depends on openshift-vN path so Scenario H/G stay deterministic.
+	if [[ "$url" == *"/openshift-v5/"*"/ocp/stable/release.txt" ]]; then
+		printf 'Name:           5.0.1\n  Version:  5.0.1\n' > "$cache_file"
+	elif [[ "$url" == *"/openshift-v4/"*"/ocp/stable/release.txt" ]]; then
+		printf 'Name:           4.22.18\n  Version:  4.22.18\n' > "$cache_file"
+	elif [[ "$url" == *"/clients/ocp/" && "$url" != *release.txt ]]; then
+		printf '<a href="stable-4.22/">stable-4.22/</a>\n' > "$cache_file"
+	elif [[ "$url" == *"/stable-4.22/release.txt" ]]; then
+		printf 'Name:           4.22.22\n  Version:  4.22.22\n' > "$cache_file"
+	else
+		printf 'Name:           4.22.18\n  Version:  4.22.18\n' > "$cache_file"
+	fi
 	return 0
 }
 ocp_major=4
 _fetch_count=0
 _cdn_tip_version stable 4 >/dev/null
-_c1=$_fetch_count
 _f1="$_last_cache_file"
 # Second call via fetch_latest_minor_version must reuse cache (fresh) — 0 new fetches
 # if _fetch_cached is still invoked for freshness check it may increment; instead
@@ -210,6 +220,51 @@ _f5="$_last_cache_file"
 [[ "$_f5" == *"/release_stable_v5_"* ]] && [[ "$_f5" != "$_f1" ]] \
 	&& _pass "H major 5 uses distinct cache key ($_f5)" \
 	|| _fail "H major 5 cache should differ from v4 (got '$_f5')"
+
+# ========== Scenario G: floating v4/stable tips 5.x → scoped stable-4.Y ==========
+echo ""
+echo "--- Scenario G: contaminated floating tip falls back to scoped channel-MAJOR.Y ---"
+_fetch_cached() {
+	local url="$1" cache_file="$2"
+	_last_cache_file="$cache_file"
+	mkdir -p "$(dirname "$cache_file")"
+	if [[ "$url" == *"/openshift-v4/"*"/ocp/stable/release.txt" ]]; then
+		# Post-5.0 GA: floating tip under v4 publishes 5.x
+		printf 'Name:           5.0.1\n  Version:  5.0.1\n' > "$cache_file"
+	elif [[ "$url" == *"/clients/ocp/" && "$url" != *release.txt ]]; then
+		printf '<a href="stable-4.21/">stable-4.21/</a>\n<a href="stable-4.22/">stable-4.22/</a>\n<a href="stable-5.0/">stable-5.0/</a>\n' > "$cache_file"
+	elif [[ "$url" == *"/stable-4.22/release.txt" ]]; then
+		printf 'Name:           4.22.22\n  Version:  4.22.22\n' > "$cache_file"
+	else
+		printf 'Name:           0.0.0\n  Version:  0.0.0\n' > "$cache_file"
+	fi
+	return 0
+}
+_g=$(_cdn_tip_version stable 4)
+[[ "$_g" == "4.22.22" ]] && _pass "G _cdn_tip_version(4) → 4.22.22 (scoped)" \
+	|| _fail "G _cdn_tip_version(4) expected 4.22.22 got '$_g'"
+_g=$(_cdn_tip_minor stable 4)
+[[ "$_g" == "4.22" ]] && _pass "G _cdn_tip_minor(4) → 4.22" \
+	|| _fail "G _cdn_tip_minor(4) expected 4.22 got '$_g'"
+
+# Scoped release.txt is also a 5.x tip: do not hand that back as a 4.x result.
+_fetch_cached() {
+	local url="$1" cache_file="$2"
+	mkdir -p "$(dirname "$cache_file")"
+	if [[ "$url" == *"/openshift-v4/"*"/ocp/stable/release.txt" ]]; then
+		printf 'Name:           5.0.1\n  Version:  5.0.1\n' > "$cache_file"
+	elif [[ "$url" == *"/clients/ocp/" && "$url" != *release.txt ]]; then
+		printf '<a href="stable-4.22/">stable-4.22/</a>\n<a href="unstable-4.22/">unstable-4.22/</a>\n' > "$cache_file"
+	elif [[ "$url" == *"/stable-4.22/release.txt" ]]; then
+		printf 'Name:           5.0.1\n  Version:  5.0.1\n' > "$cache_file"
+	else
+		printf 'Name:           0.0.0\n  Version:  0.0.0\n' > "$cache_file"
+	fi
+	return 0
+}
+_g=$(_cdn_tip_version stable 4)
+[[ -z "$_g" ]] && _pass "G scoped 5.x tip is not a 4.x result" \
+	|| _fail "G scoped 5.x tip should be empty, got '$_g'"
 
 # --- Summary ---
 echo ""
