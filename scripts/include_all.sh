@@ -3222,26 +3222,33 @@ _version_has_cross_minor_edge() {
 
 ############################################
 # Candidate versions to offer, newest first, at most 3.
-# Starts at the newest stable minor and steps forward with _next_minor.
-# The first empty minor jumps once, via _next_major, then the next empty
-# minor stops. A minor is kept only when its newest build has an upgrade
-# edge from another minor and fast does not already list that same build.
+# Starts at the newest stable CDN minor (inclusive), then steps forward
+# with _next_minor. The first empty minor jumps once via _next_major; the
+# next empty minor stops. Keep a minor when its newest candidate build has
+# an upgrade edge from another minor — including when that build already
+# matches fast/stable (post-GA catch-up). Showing the same tip under
+# candidate is intentional so Latest/Previous/Older are not left empty.
 # This is not fetch_upgrade_targets: that walk starts from an installed
 # version and stops when that version is absent from the next graph.
 ############################################
 _candidate_offer_compute() {
-	local anchor minor head fast_head jump
+	local anchor minor head jump
 	local -a heads=()
 	local crossed=0 steps=0
 	local n i start
 
 	anchor="$(fetch_latest_minor_version stable)"
 	[[ -n "$anchor" ]] || return 0
-	minor="$anchor"
+	minor=""
 
 	while [[ $steps -lt 6 ]]; do
-		minor="$(_next_minor "$minor")"
-		[[ -n "$minor" ]] || break
+		# Inclusive: first pass is the stable CDN minor; then step forward.
+		if [[ -z "$minor" ]]; then
+			minor="$anchor"
+		else
+			minor="$(_next_minor "$minor")"
+			[[ -n "$minor" ]] || break
+		fi
 		steps=$(( steps + 1 ))
 
 		head="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
@@ -3258,9 +3265,6 @@ _candidate_offer_compute() {
 
 		_is_version_string "$head" || continue
 		_version_has_cross_minor_edge "$head" || continue
-
-		fast_head="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
-		[[ "$head" == "${fast_head:-}" ]] && continue
 
 		heads+=("$head")
 	done

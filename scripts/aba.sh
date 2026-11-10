@@ -434,7 +434,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		echo_yellow "Available OpenShift versions:"
 		# Same lookups as the serial walk. Channels overlap; within a channel
 		# latest runs first so previous reuses the files just cached.
-		# Candidate previous and older then read the offer file latest just wrote.
+		# Candidate previous reads the offer file latest just wrote.
 		_ov_dir=$(mktemp -d "$ABA_TMP/ocp-ver-XXXX")
 		(
 			fetch_latest_version stable > "$_ov_dir/lat_s" || true
@@ -447,7 +447,6 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		(
 			fetch_latest_version candidate > "$_ov_dir/lat_c" || true
 			fetch_previous_version candidate > "$_ov_dir/prev_c" || true
-			fetch_older_version candidate > "$_ov_dir/old_c" || true
 		) &
 		wait
 		_lat_s=$(cat "$_ov_dir/lat_s" 2>/dev/null) || true
@@ -456,7 +455,6 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		_prev_s=$(cat "$_ov_dir/prev_s" 2>/dev/null) || true
 		_prev_f=$(cat "$_ov_dir/prev_f" 2>/dev/null) || true
 		_prev_c=$(cat "$_ov_dir/prev_c" 2>/dev/null) || true
-		_old_c=$(cat "$_ov_dir/old_c" 2>/dev/null) || true
 		rm -rf "$_ov_dir"
 		[ -n "$_lat_s" ] && echo_white  "Latest stable:      $_lat_s"
 		[ -n "$_lat_f" ] && echo_white  "Latest fast:        $_lat_f"
@@ -465,7 +463,6 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		[ -n "$_prev_s" ] && echo_white  "Previous stable:    $_prev_s"
 		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
 		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
-		[ -n "$_old_c" ] && [ "$_old_c" != "$_prev_c" ] && [ "$_old_c" != "$_lat_c" ] && echo_white "Older candidate:    $_old_c"
 
 		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 		[ "$os_inst" ] && \
