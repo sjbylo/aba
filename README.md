@@ -371,7 +371,7 @@ aba -d mirror save
 
 - Pulls the images from the Internet and saves them into `aba/mirror/data/mirror_000001.tar`. Make sure there is [enough disk space](#q-how-much-disk-space-do-i-need-when-using-aba)!
 
-> **OKD:** `aba -d mirror save` pulls the release from `quay.io/okd`. `aba -d mirror load` refuses a bundle saved for the other distribution, or for a release other than `ocp_version` in `aba.conf`. See [Using OKD](#using-okd).
+> **OKD:** `aba -d mirror save` pulls the release from `quay.io/okd`. `aba -d mirror load` refuses a bundle saved for the other distribution, or for a release other than `ocp_version` in `aba.conf`. `save` needs a flag today: see [Save and load limitation](#save-and-load-limitation). See [Using OKD](#using-okd).
 
 Then, create the *install bundle* using `aba tar`. This copies the entire `aba/` repository (including templates, scripts, images, CLIs, and other install files) into a single archive. Transfer the bundle to your disconnected bastion via a portable storage device or other method.
 
@@ -1278,7 +1278,7 @@ quay.io/containerdisks/fedora:latest
 # end-image-set: virt
 ```
 
-After adding an image set, mirror the images with `aba -d mirror sync` (or `save`/`load`).
+After adding an image set, mirror the images with `aba -d mirror sync` (or `save`/`load`; on OKD see [Save and load limitation](#save-and-load-limitation)).
 
 ### Excluding Image Categories (`excl_*`)
 
@@ -1984,6 +1984,16 @@ A real pull secret is needed only for operators (`ops`, `op_sets`): the placehol
 - `OCP_SIGNATURE_URL` must end with `/`: `oc-mirror` appends the release digest to it as is. ABA warns when a value you set does not.
 - A value you set yourself wins, for each variable on its own. An empty value counts as not set.
 - The bundled key expires on **2027-03-31**. After that date `oc-mirror` may reject the signatures; set `OCP_SIGNATURE_VERIFICATION_PK` to a current key file.
+
+### Save and load limitation
+
+The archive step of `oc-mirror` looks for a cosign signature tag (`sha256-<digest>.sig`) for each image of the release. `quay.io/okd/scos-content` has none, so `aba -d mirror save` and `aba bundle` stopped at the archive step with "manifest unknown" in the test lab (3 of 3 attempts without a flag). `sync` is not affected.
+
+What worked in the test lab, once, with `x86_64` and one release: `OC_MIRROR_FLAGS=--remove-signatures` for `save` or `bundle`, then `aba -d mirror load` into a registry. This is an experiment, not a documented fix of `oc-mirror`.
+
+- Use a fresh `aba` tree for each `save`. With the flag, `oc-mirror` packs whatever is in `mirror/data/working-dir`. A stale `working-dir/containers/registries.d/default.yaml` from an earlier run makes `load` fail with "default-docker defined both".
+- Run `./install` on the host that saves and on the host that loads, so both have the same `~/.config/containers/registries.d`.
+- The last step of `aba bundle` reads a `.index` directory, which an OKD tree without operators does not have (read from the code, not reproduced). Create an empty `.index` directory in the `aba` tree before you run it; the test lab did.
 
 ### Operators and image sets
 
