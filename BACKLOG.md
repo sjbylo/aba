@@ -3916,7 +3916,7 @@ The first address is still the rendezvous IP. `--starting-ip` accepts the same s
 ## #B109: Show a 2-3 line agent-config summary on MAC and edit asks
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Partial — the review ask prints the compact summary on the CLI and in the progress dialog. The wizard that first collects MAC addresses does not.
 **Added:** 2026-11-09
 
 **Problem:** Asks about MAC addresses, and asks that invite an edit of `agent-config.yaml`, name the path and then stop. The user cannot tell which cluster file the question is about without opening it. The bare-metal review ask in `scripts/bm-ask-edit.sh` prints the MAC report and `agent-config.yaml: <path>`, then "Are the MAC addresses correct?" (or the placeholder "have all required MACs been added?" question). The same gap is on the ask that collects MAC addresses, and on any prompt that says the user may edit that file.

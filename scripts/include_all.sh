@@ -1900,20 +1900,6 @@ aba_cmd() {
 	fi
 }
 
-# Command for a directory that may not be the current one.
-# When <dir> is this directory and -d was not used, same as aba_cmd.
-aba_cmd_for() {
-	local _dir="$1"
-	shift
-	local _base
-	_base=$(basename "$_dir")
-	if [ "$_base" = "$(basename "$PWD")" ] && [ -z "${ABA_TARGET_DIR:-}" ]; then
-		aba_cmd "$@"
-	else
-		_aba_cmd_line "$_base" "$@"
-	fi
-}
-
 # Display post-install summary and next steps.
 # Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
 # and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
