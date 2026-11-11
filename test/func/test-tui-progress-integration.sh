@@ -259,7 +259,8 @@ if echo "$_scr" | grep -qi "Error.*connection\|refused\|ABA"; then
 	echo "  ✓ PASS: Error output pager shows error details"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Error output content not clearly visible"
+	echo "  ✗ FAIL: Error output content not clearly visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # B6: Quit pager
@@ -318,7 +319,8 @@ if echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Test Live"; then
 	echo "  ✓ PASS: Progress dialog running"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Progress dialog state unclear"
+	echo "  ✗ FAIL: Progress dialog state unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_screenshot "pi-c1-live-progress"
 
@@ -331,7 +333,8 @@ if echo "$_scr" | grep -qi "Live Output\|ABA\|Step.*running\|press Space"; then
 	echo "  ✓ PASS: Live output view opened"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Live output view unclear"
+	echo "  ✗ FAIL: Live output view unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # C3: Press any key to return to progress dialog
@@ -343,7 +346,8 @@ if echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Succeeded\|Output
 	echo "  ✓ PASS: Returned to progress/completion dialog"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Return from live output unclear"
+	echo "  ✗ FAIL: Return from live output unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # C4: Wait for completion
@@ -354,20 +358,40 @@ tui_screenshot "pi-c4-slow-done"
 tui_keys Enter; sleep 2
 
 # ============================================================================
-# Test D: Quit during progress (ESC/Q)
+# Test D: Quit during progress (ESC/Q) — real key press, not a code-review soft PASS
 # ============================================================================
 echo ""
 echo "--- D. Quit during progress ---"
 
 $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 $_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT \
-	'bash /tmp/aba-progress-test-slow.sh; echo EXIT_CODE=\$?; sleep 5'"
-sleep 2
-
-# Can't reliably test Q during _exec_with_progress without the full TUI context,
-# so we verify the key handling exists by checking the wrapper exits cleanly.
-echo "  ✓ PASS: Quit test acknowledged (key handling verified in code review)"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+	'bash /tmp/aba-progress-wrapper.sh \"bash /tmp/aba-progress-test-slow.sh\" \"Test Quit\"; sleep 30'"
+sleep 4
+_scr=$(tui_capture)
+if ! echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Test Quit\|In Progress"; then
+	echo "  ✗ FAIL: Quit test — progress dialog did not start"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "pi-d1-no-progress"
+else
+	tui_screenshot "pi-d1-before-quit"
+	tui_keys q
+	sleep 2
+	_scr=$(tui_capture)
+	tui_screenshot "pi-d2-after-quit"
+	if echo "$_scr" | grep -qi "Stopped\|Quit\|confirm\|Abort\|partial\|not finished\|ESC"; then
+		echo "  ✓ PASS: Quit during progress acknowledged"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_keys Enter 2>/dev/null || true
+		sleep 1
+	elif ! echo "$_scr" | grep -qi "In Progress\|Second step.*In Progress"; then
+		# Progress left the running state after q
+		echo "  ✓ PASS: Quit during progress left the running dialog"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: Quit during progress had no effect"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+fi
 
 $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 sleep 1

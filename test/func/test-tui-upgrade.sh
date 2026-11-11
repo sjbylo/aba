@@ -218,17 +218,12 @@ echo "  --- 3a. OperatorHub config ---"
 _nav_to_day2_menu
 
 tui_select_item "OperatorHub\|Configure.*OperatorHub\|Registry"
-sleep 3
+sleep 2
 tui_screenshot "upg-03-day2-opshub"
 
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "select.*cluster"; then
-	tui_keys Enter; sleep 3
-fi
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
-	tui_keys Enter; sleep 2
-fi
+# Wait out "Detecting…" and pick our cluster (BM leftovers can show first).
+tui_pick_cluster "$_CLUSTER" || true
+tui_dismiss_exec_mode
 
 if tui_wait_for_progress "upg-day2" 600; then
 	echo "  ✓ PASS: Day-2 OperatorHub config completed via TUI"
@@ -264,7 +259,8 @@ else
 
 	if [[ "$_has_catalogs" -eq 0 ]]; then
 		echo "  No operator catalogs mirrored — OSUS cannot be installed (requires redhat-operators)"
-		echo "  Skipping OSUS (upgrade will work without it using mirrored versions)"
+		echo "  ✓ PASS: OSUS correctly skipped (no redhat-operators catalog)"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
 		echo "  OSUS not running — configuring via TUI..."
 		_nav_to_day2_menu
@@ -273,17 +269,11 @@ else
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "OSUS\|Update Service"; then
 			tui_select_item "OSUS\|Update Service"
-			sleep 3
+			sleep 2
 			tui_screenshot "upg-03-osus-after-select"
 
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "select.*cluster"; then
-				tui_keys Enter; sleep 3
-			fi
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
-				tui_keys Enter; sleep 2
-			fi
+			tui_pick_cluster "$_CLUSTER" || true
+			tui_dismiss_exec_mode
 
 			# Wait for OSUS to actually start running before checking progress
 			echo "  Waiting for OSUS execution to begin..."
@@ -298,6 +288,11 @@ else
 				fi
 				if echo "$_scr" | grep -qi "Continue anyway\|Warning.*Continue"; then
 					tui_keys Enter; sleep 2; continue
+				fi
+				if echo "$_scr" | grep -qiE "Select cluster|select.*cluster"; then
+					tui_pick_cluster "$_CLUSTER" || true
+					tui_dismiss_exec_mode
+					continue
 				fi
 			done
 
@@ -345,19 +340,31 @@ tui_select_item "Day-2"
 tui_assert_title "Day-2\|Cluster Management" "Day-2 dialog title"
 tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
 tui_select_item "Upgrade"
-sleep 5
+sleep 2
 tui_screenshot "upg-04-upgrade-menu"
 
-_scr=$(tui_capture)
+tui_pick_cluster "$_CLUSTER" || true
+tui_dismiss_exec_mode
 
-# Handle cluster selection dialog
-if echo "$_scr" | grep -qi "select.*cluster"; then
-	tui_keys Enter; sleep 3
+# Wait for the real version list (not the "Fetching…" splash). Default
+# highlight is the first z-stream — not our minor target.
+echo "  Waiting for version list (not Fetching splash)..."
+_ver_ready=0
+for _vw in $(seq 1 40); do
 	_scr=$(tui_capture)
-fi
-
-# Wait for version list
-tui_wait_for "Current\|Upgrade\|version\|$_target_ver" 30
+	if echo "$_scr" | grep -qi "Fetching available upgrade versions"; then
+		sleep 2
+		continue
+	fi
+	if echo "$_scr" | grep -qi "Select target version" && echo "$_scr" | grep -qF "$_target_ver"; then
+		_ver_ready=1
+		break
+	fi
+	if echo "$_scr" | grep -qi "No available.*upgrade\|No.*versions\|Upgrade Check Failed"; then
+		break
+	fi
+	sleep 2
+done
 tui_screenshot "upg-04b-versions"
 
 _scr=$(tui_capture)
@@ -366,74 +373,97 @@ if echo "$_scr" | grep -qi "No available.*upgrade\|No.*versions"; then
 	echo "  Sync or day-2 may not have made the version visible yet."
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Enter; sleep 1
-elif echo "$_scr" | grep -qi "Current\|version"; then
+elif [[ "$_ver_ready" -ne 1 ]]; then
+	echo "  ✗ FAIL: Version list with $_target_ver never appeared"
+	tui_screenshot "upg-04-no-target"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+elif echo "$_scr" | grep -qi "Select target version"; then
 	echo "  ✓ PASS: Upgrade version list displayed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
-	# Show available versions (items with single-letter keys)
-	echo "  Available versions:"
-	tui_menu_items | while IFS=$'\t' read -r key label; do
-		echo "    [$key] $label"
-	done
-
-	# Version items don't have single-letter keys — they appear bare in the list.
-	# The target version should be highlighted by default (first real item).
-	# Just press Enter to select it and trigger the Upgrade button action.
-	echo "  Selecting version $_target_ver via Enter..."
+	# Default highlight is the first z-stream — not our target. Use Manual
+	# entry (hotkey M) so we always upgrade to $_target_ver exactly.
+	echo "  Selecting $_target_ver via Manual entry..."
+	tui_keys M
+	sleep 0.5
 	tui_keys Enter
-	sleep 3
-	tui_screenshot "upg-04c-after-enter"
-
-	# Handle execution mode dialog if it appears
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
-		echo "  Dismissing execution mode dialog..."
-		tui_keys Enter; sleep 2
-	fi
-
-	# Wait for the execution dialog to actually appear (avoid detecting
-	# a brief flash of the menu between the version picker closing and
-	# the confirm_and_execute dialog opening).
-	echo "  Waiting for upgrade execution to start..."
-	_exec_wait=""
-	for _exec_wait in 1 2 3 4 5 6 7 8 9 10; do
-		sleep 3
-		_scr=$(tui_capture)
-		tui_screenshot "upg-04d-exec-wait-${_exec_wait}"
-		# Execution dialog shows scrolling output or progress steps
-		if echo "$_scr" | grep -qi "Executing\|Running\|Syncing\|steps\|Progress\|upgrade\|day2\|oc adm\|clusterversion"; then
-			echo "  Execution dialog detected (attempt $_exec_wait)"
-			break
-		fi
-		# Handle execution mode dialog again if it re-appears
-		if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
-			echo "  Dismissing execution mode dialog (retry)..."
-			tui_keys Enter; sleep 2
-			continue
-		fi
-		# Handle warning/confirmation dialogs
-		if echo "$_scr" | grep -qi "Continue anyway\|Warning.*Continue\|Continue.*Cancel"; then
-			echo "  Dismissing warning dialog..."
-			tui_keys Enter; sleep 2
-			continue
-		fi
-		# If we see Success or FAILED, the operation already completed
-		if echo "$_scr" | grep -qi "── Success ──\|── FAILED ──\|All steps completed"; then
-			echo "  Operation already completed"
-			break
-		fi
-	done
-
-	# Wait for upgrade (up to 90 min)
-	echo "  Waiting for upgrade to complete (up to 90 min)..."
-	if tui_wait_for_progress "upg-upgrade" 5400; then
-		echo "  ✓ PASS: Upgrade completed via TUI"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Upgrade failed or timed out"
+	sleep 1
+	tui_screenshot "upg-04c-manual-prompt"
+	if ! tui_wait_for "Enter target version\|Format:.*X\.Y\.Z" 15; then
+		echo "  ✗ FAIL: Manual version inputbox did not appear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	else
+		# Literal type the version into the empty inputbox
+		_tui_ssh_retry "tmux send-keys -t $_TUI_SESSION -l '$_target_ver'"
+		sleep 0.5
+		tui_screenshot "upg-04c-manual-typed"
+		tui_keys Enter
+		sleep 3
+		tui_screenshot "upg-04c-after-enter"
+
+		tui_dismiss_exec_mode
+
+		# Wait for real execution — match progress UI, not bare "upgrade".
+		echo "  Waiting for upgrade execution to start..."
+		_exec_started=0
+		for _exec_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+			sleep 3
+			_scr=$(tui_capture)
+			tui_screenshot "upg-04d-exec-wait-${_exec_wait}"
+			if echo "$_scr" | grep -qiE "In Progress|Overall Progress|Trigger upgrade|Wait for upgrade|Executing|Running.*step|Progress.*step|── Success ──|── FAILED ──|All steps completed"; then
+				echo "  Execution dialog detected (attempt $_exec_wait)"
+				_exec_started=1
+				break
+			fi
+			if echo "$_scr" | grep -qi "Choose execution mode\|Run in Terminal\|Run in TUI"; then
+				echo "  Dismissing execution mode dialog (retry)..."
+				tui_keys Enter; sleep 2
+				continue
+			fi
+			if echo "$_scr" | grep -qi "Upgrade Gate\|Continue anyway\|Warning.*Continue\|Continue.*Cancel\|Proceed"; then
+				echo "  Dismissing warning/confirm dialog (Left+Enter for --defaultno)..."
+				tui_confirm_yes 2>/dev/null || { tui_keys Left; sleep 0.3; tui_keys Enter; }
+				sleep 2
+				continue
+			fi
+			if echo "$_scr" | grep -qi "Enter target version"; then
+				echo "  Re-typing $_target_ver into inputbox..."
+				# Clear any partial text before re-type (avoid 4.22.224.22.22)
+				tui_keys C-u; sleep 0.2
+				_tui_ssh_retry "tmux send-keys -t $_TUI_SESSION -l '$_target_ver'"
+				sleep 0.3
+				tui_keys Enter; sleep 2
+				continue
+			fi
+			if echo "$_scr" | grep -qi "Select target version"; then
+				echo "  Back on version picker — Manual entry again"
+				tui_keys M; sleep 0.5; tui_keys Enter; sleep 1
+				if tui_wait_for "Enter target version\|Format:.*X\.Y\.Z" 8; then
+					tui_keys C-u; sleep 0.2
+					_tui_ssh_retry "tmux send-keys -t $_TUI_SESSION -l '$_target_ver'"
+					sleep 0.3
+					tui_keys Enter; sleep 2
+				fi
+				continue
+			fi
+		done
+
+		if [[ "$_exec_started" -ne 1 ]]; then
+			echo "  ✗ FAIL: Upgrade execution never started"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		else
+			# Wait for upgrade (up to 90 min)
+			echo "  Waiting for upgrade to complete (up to 90 min)..."
+			if tui_wait_for_progress "upg-upgrade" 5400; then
+				echo "  ✓ PASS: Upgrade completed via TUI"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+			else
+				echo "  ✗ FAIL: Upgrade failed or timed out"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			fi
+			tui_dismiss_result
+		fi
 	fi
-	tui_dismiss_result
 elif echo "$_scr" | grep -qi "Upgrade Check Failed\|failed.*query"; then
 	echo "  ✗ FAIL: Upgrade check failed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -459,8 +489,7 @@ for _poll in 1 2 3 4 5 6; do
 		oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null
 	" 2>/dev/null || true)
 	[[ "$_new_ver" == "$_target_ver" ]] && break
-	[[ "$_new_ver" != "$_current_ver" ]] && break
-	echo "  Waiting for upgrade to be accepted... (${_poll})"
+	echo "  Waiting for upgrade to be accepted... (desired=${_new_ver:-none}, ${_poll})"
 done
 
 if [[ -n "$_new_ver" ]]; then
@@ -468,11 +497,8 @@ if [[ -n "$_new_ver" ]]; then
 	if [[ "$_new_ver" == "$_target_ver" ]]; then
 		echo "  ✓ PASS: Cluster upgrading to $_target_ver"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	elif [[ "$_new_ver" != "$_current_ver" ]]; then
-		echo "  ✓ PASS: Upgrade accepted (version changed: $_current_ver → $_new_ver)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Cluster still at $_current_ver (expected $_target_ver)"
+		echo "  ✗ FAIL: desired=$_new_ver (expected $_target_ver, was $_current_ver)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else

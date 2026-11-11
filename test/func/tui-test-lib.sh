@@ -973,27 +973,39 @@ tui_dismiss_cluster_select() {
 }
 
 # Wait out "Detecting installation status…" then pick $1 from a Select-cluster
-# menu when multiple leftovers exist. Prefer exact name match over first entry.
+# menu when multiple leftovers exist. Prefer name match over first entry.
+# Returns once the picker is gone or a post-select screen appears.
 # Usage: tui_pick_cluster sno
 tui_pick_cluster() {
 	local cluster="${1:?}"
 	local _scr _i
-	for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+	for _i in $(seq 1 60); do
 		_scr=$(tui_capture)
-		echo "$_scr" | grep -qi "Detecting installation status" || break
-		sleep 2
-	done
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
-		if echo "$_scr" | grep -qi "$cluster"; then
-			tui_select_item "$cluster" 2>/dev/null || tui_keys Enter
-		else
-			echo "  WARNING: cluster '$cluster' not in picker — accepting default" >&2
-			tui_keys Enter
+		# Splash while TUI probes leftover cluster dirs (e.g. after BM tests)
+		if echo "$_scr" | grep -qi "Detecting installation status"; then
+			sleep 2
+			continue
+		fi
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
+			if echo "$_scr" | grep -qi "$cluster"; then
+				tui_select_item "$cluster" 2>/dev/null || tui_keys Enter
+			else
+				echo "  WARNING: cluster '$cluster' not in picker — accepting default" >&2
+				tui_keys Enter
+			fi
+			sleep 1
+			tui_wait_gone "Select cluster|select.*cluster|Detecting installation status" 10 || true
+			return 0
+		fi
+		# Already past the picker (do NOT match Day-2 "── Configuration ──" —
+		# that is the menu behind the dialog and caused early return before Select).
+		if echo "$_scr" | grep -qiE "Choose execution mode|Run in Terminal|Run in TUI|Executing|Progress.*step|Overall Progress|In Progress|── Success ──|── FAILED ──|Current:.*\[|Select target version|Cluster Operators|One moment please"; then
+			return 0
 		fi
 		sleep 1
-		tui_wait_gone "Select cluster|select.*cluster" 8 || true
-	fi
+	done
+	echo "  WARNING: tui_pick_cluster timed out waiting for picker/progress" >&2
+	return 1
 }
 
 # Dismiss an execution mode dialog if present.
@@ -1369,6 +1381,8 @@ tui_wait_for_progress() {
 	local ss_interval="${3:-120}"
 	local _start _elapsed _last_ss _scr _inner_retries=0 _max_inner=3
 	local _saw_progress=0
+	local _ever_in_progress=0
+	local _saw_error=0
 	local _menu_pat="── Mirror ──\|── Registry ──\|── Cluster ──\|── Advanced ──\|── Configuration ──\|── Lifecycle ──\|── Cleanup ──\|── Transfer ──\|── Status ──"
 
 	_start=$(date +%s)
@@ -1403,24 +1417,56 @@ tui_wait_for_progress() {
 			_last_ss=$_elapsed
 		fi
 
+		# Detecting / Select-cluster are NOT progress. Auto-clear them or we
+		# sit for the full timeout (seen in upgrade day-2 OperatorHub).
+		if echo "$_scr" | grep -qi "Detecting installation status"; then
+			echo "  ... '$label' waiting out installation-status detect (${_elapsed}s)"
+			sleep 2
+			continue
+		fi
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
+			# Prefer the test cluster when known; bare Enter picks the first radiolist row.
+			echo "  Dismissing cluster select during '$label' (${_elapsed}s)"
+			if [[ -n "${TUI_CLUSTER_NAME:-${_CLUSTER:-}}" ]]; then
+				tui_pick_cluster "${TUI_CLUSTER_NAME:-$_CLUSTER}" || tui_keys Enter
+			else
+				tui_keys Enter
+			fi
+			sleep 1
+			tui_wait_gone "Select cluster|select.*cluster" 8 || true
+			# Do not mark _saw_progress — wait for a real execution dialog.
+			continue
+		fi
+
+		# Version picker / fetching splash are NOT progress (upgrade hang:
+		# wait treated "Upgrade Cluster" menu as in-progress for 90 min).
+		if echo "$_scr" | grep -qi "Fetching available upgrade versions\|Select target version"; then
+			if [[ $_saw_progress -eq 1 ]]; then
+				echo "  WARNING: '$label' — still on version picker (${_elapsed}s); not real progress"
+				_saw_progress=0
+			fi
+			if (( _elapsed >= 45 )); then
+				echo "  ERROR: '$label' stuck on version picker after ${_elapsed}s"
+				tui_screenshot "${label}-stuck-version-picker"
+				return 3
+			fi
+			sleep 2
+			continue
+		fi
+
 		# Phase 1: wait for the screen to leave the menu (progress/dialog appears)
 		# Use specific execution keywords — avoid generic words like "Upgrade"
 		# that appear in menus and buttons.
 		if [[ $_saw_progress -eq 0 ]]; then
-			if echo "$_scr" | grep -qi "Executing\|Progress.*step\|Running.*step\|Syncing.*mirror\|Installing\|Graceful.*shut\|Shutdown.*progress\|Startup.*progress\|All steps completed\|steps completed successfully\|Press.*ENTER.*return\|ENTER to return\|── Success ──\|── FAILED ──"; then
+			if echo "$_scr" | grep -qi "Executing\|Progress.*step\|Running.*step\|Syncing.*mirror\|Installing\|Graceful.*shut\|Shutdown.*progress\|Startup.*progress\|All steps completed\|steps completed successfully\|Press.*ENTER.*return\|ENTER to return\|── Success ──\|── FAILED ──\|In Progress\|Overall Progress"; then
 				_saw_progress=1
 			elif ! echo "$_scr" | grep -q "$_menu_pat"; then
 				_saw_progress=1
 			else
-				# Still on menu — wait briefly for operation to start
+				# Still on menu — do NOT soft-PASS. Wait until timeout.
 				if (( _elapsed >= 10 )); then
 					echo "  WARNING: '$label' — still on menu after ${_elapsed}s"
 					tui_screenshot "${label}-still-on-menu"
-				fi
-				# After 20s assume the menu IS the result (quick operation)
-				if (( _elapsed >= 20 )); then
-					echo "  Progress '$label' — assuming quick completion (${_elapsed}s)"
-					return 0
 				fi
 				sleep 2
 				continue
@@ -1430,17 +1476,21 @@ tui_wait_for_progress() {
 		# Error/failure dialog first — titles like "…: Error ───" must not be
 		# mistaken for success (and must win over later menu/success checks).
 		if echo "$_scr" | grep -qiE '(:[[:space:]]*Error[[:space:]])|Error.*─|─.*Error|─.*FAILED|FAILED.*─|A step failed'; then
+			_saw_error=1
 			echo "  Error detected during '$label' (${_elapsed}s)"
 			tui_screenshot "${label}-error"
-			_tui_capture_output "$label"
 
+			# Retry only when the Retry button is actually pressable.
 			if echo "$_scr" | grep -qi "Retry" && [[ $_inner_retries -lt $_max_inner ]]; then
 				_inner_retries=$(( _inner_retries + 1 ))
 				echo "  Pressing TUI Retry button ($_inner_retries/$_max_inner)..."
-				tui_press_button "Retry"
-				sleep 3
-				continue
+				if tui_press_button "Retry"; then
+					sleep 3
+					continue
+				fi
+				echo "  Retry button not pressable — treating as failure"
 			fi
+			_tui_capture_output "$label"
 			return 1
 		fi
 
@@ -1456,12 +1506,20 @@ tui_wait_for_progress() {
 			return 0
 		fi
 
+		# Track real execution so we never q-quit on the first paint.
+		if echo "$_scr" | grep -qi "In Progress"; then
+			_ever_in_progress=1
+		fi
+
 		# Completed with errors: progress dialog done, "Quit" button visible.
 		# Do not quit while a step is In Progress, or while a later step is
 		# still N/A. Review can already say No-op in the gap after the ISO
 		# step finishes and before stage/boot leave N/A. q in that gap aborts
 		# the install. A Failed step leaves the rest N/A on purpose, so that
 		# case still quits.
+		#
+		# Also: never q in the first ~25s. day2 OperatorHub was aborted at
+		# ~14s (Stopped) when an early frame matched No-op/Succeeded.
 		if echo "$_scr" | grep -qi "Quit.*Q\|Q.*ESC"; then
 			if echo "$_scr" | grep -qi "Failed\|No-op\|Done\|Skipped\|Succeeded"; then
 				if echo "$_scr" | grep -qi "In Progress"; then
@@ -1470,6 +1528,11 @@ tui_wait_for_progress() {
 				fi
 				if echo "$_scr" | grep -q "N/A" && ! echo "$_scr" | grep -qi "Failed"; then
 					sleep 5
+					continue
+				fi
+				if (( _elapsed < 25 )); then
+					echo "  ... '$label' Quit visible too early (${_elapsed}s, in_progress=${_ever_in_progress:-0}) — waiting"
+					sleep 3
 					continue
 				fi
 				local _has_fail=0
@@ -1486,14 +1549,20 @@ tui_wait_for_progress() {
 			fi
 		fi
 
-		# Back at any menu — only trust this if enough time has passed
-		# (avoids false positives from brief menu flash between dialogs)
+		# Back at menu after starting progress is NOT success (soft-PASS removed).
+		# Error dialogs often dismiss to the menu; that must remain a failure.
 		if echo "$_scr" | grep -q "$_menu_pat"; then
-			if (( _elapsed >= 10 )); then
-				echo "  Progress '$label' returned to menu (${_elapsed}s)"
-				return 0
+			if [[ $_saw_error -eq 1 ]]; then
+				echo "  Progress '$label' returned to menu after error (${_elapsed}s)"
+				tui_screenshot "${label}-menu-after-error"
+				return 1
 			fi
-			# < 10s: likely a menu flash, keep waiting
+			if [[ $_saw_progress -eq 1 ]] && (( _elapsed >= 10 )); then
+				echo "  Progress '$label' returned to menu without verified success (${_elapsed}s)"
+				tui_screenshot "${label}-menu-without-success"
+				return 1
+			fi
+			# Brief menu flash before progress starts
 			sleep 2
 			continue
 		fi
