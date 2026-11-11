@@ -7,8 +7,11 @@
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
+_CLUSTER="${TUI_CLUSTER_NAME:-sno}"
+
 echo "=== TUI Day-2 Deep Test ==="
 echo "  Host: $_TUI_HOST"
+echo "  Cluster: $_CLUSTER"
 echo ""
 
 tui_deploy_code
@@ -63,18 +66,10 @@ tui_select_item "status"
 sleep 3
 tui_screenshot "d2d-02a-cluster-select"
 
-# Handle cluster selection dialog (if multiple clusters)
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
-	echo "  ✓ PASS: Cluster selection dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	# Just press Enter to select the default
-	tui_keys Enter
-	sleep 8  # Status check takes time (API calls)
-else
-	# Single cluster — goes directly to status check
-	sleep 5
-fi
+# Wait out Detecting… / Select-cluster (BM leftovers can delay the picker)
+tui_pick_cluster "$_CLUSTER" || true
+# Status check takes time (API calls)
+sleep 8
 
 tui_screenshot "d2d-02b-status"
 _scr=$(tui_capture)
@@ -131,10 +126,10 @@ if echo "$_scr" | grep -qi "cincinnati\|OSUS\|Update Service\|not found\|Warning
 	# Cancel — don't actually install OSUS
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 	sleep 1
-elif echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
+elif echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster\|Detecting installation"; then
 	echo "  ✓ PASS: OSUS shows cluster selection first"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_keys Enter; sleep 3  # select default cluster
+	tui_pick_cluster "$_CLUSTER" || true
 	tui_screenshot "d2d-03b-osus-warn"
 	# Cancel whatever appears next
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape

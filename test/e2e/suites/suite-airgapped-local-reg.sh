@@ -794,15 +794,27 @@ e2e_wait_cluster_available $SNO remote
 # Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
 e2e_wait_cluster_ready $SNO remote 2400
 
-# Cross-minor upgrade: first attempt WITHOUT --force must FAIL.
-# Admin acknowledgment gates (Upgradeable=False) block cross-minor upgrades.
-# ABA aborts unless --force is set (does not auto-yes past Upgradeable=False).
-e2e_run_must_fail_remote "Upgrade without --force must fail (admin ack gate)" \
-    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
+# Upgradeable=False is a property of this cluster, not of the version pair.
+# A recommended 4.21 → 4.22 update is often True. Read the condition the same
+# way aba does, after the cluster is ready, and follow it:
+#   False → a normal upgrade must fail, then --force is the explicit bypass.
+#   True or absent → a normal upgrade must proceed. Do not pass --force.
+e2e_run_remote "Record ClusterVersion Upgradeable" \
+    "cd ~/aba && export KUBECONFIG=\$PWD/$SNO/iso-agent-based/auth/kubeconfig && oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Upgradeable\")].status}' > /tmp/e2e-cv-upgradeable.txt && echo Upgradeable=\$(cat /tmp/e2e-cv-upgradeable.txt)"
+e2e_run "Copy Upgradeable condition from disN" \
+    "scp ${INTERNAL_BASTION}:/tmp/e2e-cv-upgradeable.txt /tmp/e2e-cv-upgradeable.txt && printf 'Upgradeable=%s\n' \"\$(tr -d '[:space:]' < /tmp/e2e-cv-upgradeable.txt)\""
 
-# Second attempt WITH --force must PASS -- bypasses admin ack gates.
-e2e_run_remote "Upgrade with --force (bypass admin ack gate)" \
-    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --force --skip-day2"
+_cv_upgradeable=$(tr -d '[:space:]' < /tmp/e2e-cv-upgradeable.txt)
+_upgrade_to=$(tr -d '[:space:]' < /tmp/e2e-ocp-version-desired)
+if [ "$_cv_upgradeable" = "False" ]; then
+    e2e_run_must_fail_remote "Upgradeable=False: upgrade without --force must fail" \
+        "cd ~/aba && aba --dir $SNO upgrade --to $_upgrade_to --skip-day2"
+    e2e_run_remote "Upgradeable=False: upgrade with --force" \
+        "cd ~/aba && aba --dir $SNO upgrade --to $_upgrade_to --force --skip-day2"
+else
+    e2e_run_remote "Upgradeable=${_cv_upgradeable:-unset}: upgrade without --force" \
+        "cd ~/aba && aba --dir $SNO upgrade --to $_upgrade_to --skip-day2"
+fi
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \

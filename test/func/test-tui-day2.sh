@@ -60,22 +60,36 @@ done
 echo ""
 echo "--- 2. Cluster Status ---"
 tui_select_item "status"
-sleep 3
+sleep 2
 tui_screenshot "d2-02-status"
 
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "AVAILABLE\|Ready\|node\|operator\|select.*cluster"; then
+# Wait out Detecting… / Select-cluster, then wait past "Fetching status…"
+tui_pick_cluster "$_CLUSTER" || true
+_status_ok=0
+for _sw in $(seq 1 45); do
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|Detecting installation"; then
+		tui_pick_cluster "$_CLUSTER" || true
+		sleep 1
+		continue
+	fi
+	if echo "$_scr" | grep -qi "Fetching status"; then
+		sleep 2
+		continue
+	fi
+	if echo "$_scr" | grep -qi "AVAILABLE\|Ready\|node\|operator\|Cluster Operators\|Unreachable\|API"; then
+		_status_ok=1
+		break
+	fi
+	sleep 2
+done
+tui_screenshot "d2-02b-status-detail"
+if [[ "$_status_ok" -eq 1 ]]; then
 	echo "  ✓ PASS: Cluster status displayed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-	# If there's a cluster selection dialog, select our cluster
-	if echo "$_scr" | grep -qi "select.*cluster"; then
-		tui_keys Enter  # select first/default cluster
-		sleep 2
-		tui_screenshot "d2-02b-status-detail"
-	fi
 else
-	echo "  ~ NOTE: Status screen content unclear"
+	echo "  ✗ FAIL: Status screen content unclear after wait"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_screenshot "d2-02-status-unclear"
 fi
 
@@ -157,7 +171,9 @@ _day2_run_action() {
 	sleep 2
 	tui_screenshot "d2-${action_name}-start"
 
-	tui_dismiss_cluster_select
+	# Wait out Detecting… and pick our cluster (not the first leftover).
+	tui_pick_cluster "$_CLUSTER" || true
+	tui_dismiss_exec_mode
 
 	# Wait for the "One moment please" / loading dialog to transition
 	# to the actual progress dialog (can take a few seconds)
@@ -190,22 +206,23 @@ _day2_run_action() {
 		if tui_wait_for_progress "d2-${action_name}" "$timeout"; then
 			echo "  ✓ PASS: $action_name completed"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
+
+			# Verify the correct command ran (only after verified success)
+			if [[ -n "$expected_cmd" ]]; then
+				tui_screenshot "d2-${action_name}-output"
+				_scr=$(tui_capture)
+				if echo "$_scr" | grep -qi "$expected_cmd"; then
+					echo "  ✓ PASS: $action_name ran correct command ($expected_cmd)"
+					_TUI_PASS=$(( _TUI_PASS + 1 ))
+				else
+					echo "  ✗ FAIL: $action_name did not run expected command ($expected_cmd)"
+					_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+				fi
+			fi
 		else
 			echo "  ✗ FAIL: $action_name failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		fi
-
-		# Verify the correct command ran (not a stale/generic one)
-		if [[ -n "$expected_cmd" ]]; then
-			tui_screenshot "d2-${action_name}-output"
-			_scr=$(tui_capture)
-			if echo "$_scr" | grep -qi "$expected_cmd"; then
-				echo "  ✓ PASS: $action_name ran correct command ($expected_cmd)"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
-			else
-				echo "  ✗ FAIL: $action_name did not run expected command ($expected_cmd)"
-				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-			fi
+			tui_screenshot "d2-${action_name}-failed"
 		fi
 
 		tui_dismiss_result
@@ -242,7 +259,58 @@ _day2_run_action "Network Time" "ntp" 300 "day2-ntp\|day2.*ntp\|chrony\|NTP"
 # ============================================================================
 echo ""
 echo "--- 5. OSUS ---"
-_day2_run_action "Update Service" "osus" 600 "osus\|update.service\|cincinnati"
+# OSUS requires mirrored redhat-operators. Without catalogs, the TUI warns and
+# day2-osus errors — assert that path hard, do not Retry-loop as a soft PASS.
+_has_catalogs=$($_TUI_SSH "
+	cd ~/aba && source scripts/include_all.sh 2>/dev/null
+	ls mirror/data/working-dir/cluster-resources/catalogSource*.yaml 2>/dev/null | wc -l
+" 2>/dev/null || echo 0)
+_has_catalogs=${_has_catalogs//[^0-9]/}
+: "${_has_catalogs:=0}"
+
+if [[ "$_has_catalogs" -eq 0 ]]; then
+	echo "  No operator catalogs mirrored — expecting OSUS warning/cancel path"
+	if ! _nav_to_day2_menu; then
+		echo "  ✗ FAIL: Cannot reach Day-2 menu for OSUS"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	else
+		tui_select_item "Update Service\|OSUS"
+		sleep 2
+		tui_pick_cluster "$_CLUSTER" || true
+		tui_screenshot "d2-osus-nocat-start"
+		_scr=$(tui_capture)
+		# Wait briefly for warning or catalog-missing error
+		_osus_ok=0
+		for _ow in 1 2 3 4 5 6 7 8; do
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qi "Continue anyway\|cincinnati\|OSUS Warning\|does not appear to be available"; then
+				echo "  ✓ PASS: OSUS shows catalog/operator warning without catalogs"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+				tui_press_button "Cancel" 2>/dev/null || tui_keys Tab Enter
+				sleep 1
+				_osus_ok=1
+				break
+			fi
+			if echo "$_scr" | grep -qi "No operator catalogs\|redhat-operators\|Error"; then
+				echo "  ✓ PASS: OSUS errors with missing-catalog message"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+				tui_press_button "Dismiss" 2>/dev/null || tui_keys Enter
+				sleep 1
+				_osus_ok=1
+				break
+			fi
+			sleep 2
+		done
+		if [[ "$_osus_ok" -ne 1 ]]; then
+			echo "  ✗ FAIL: OSUS did not show expected no-catalog warning/error"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			tui_screenshot "d2-osus-nocat-unexpected"
+			tui_keys Escape 2>/dev/null || true
+		fi
+	fi
+else
+	_day2_run_action "Update Service" "osus" 600 "osus\|update.service\|cincinnati"
+fi
 
 tui_back_to "Actions" 5
 

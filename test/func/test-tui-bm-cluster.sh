@@ -225,7 +225,35 @@ _bm_type_gates() {
 	tui_wait_for "Review\|Install" 15 || true
 	tui_keys Enter
 	sleep 2
-	if tui_wait_for "Bare-metal MAC check\|placeholder" 180; then
+	# MAC check is asked during Generate configs. It may overlay the progress
+	# dialog, or only be visible via Output if the yesno is slow to appear.
+	_saw_ask=0
+	for _wa in $(seq 1 60); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
+			_saw_ask=1
+			break
+		fi
+		# Peek Output while Generate configs is stuck In Progress
+		if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
+			if (( _wa % 10 == 0 )); then
+				tui_keys Space 2>/dev/null || true
+				sleep 1
+				_scr=$(tui_capture)
+				tui_screenshot "bm-${name}-ask-output-${_wa}"
+				if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
+					_saw_ask=1
+					tui_keys q 2>/dev/null || tui_keys Escape
+					sleep 1
+					break
+				fi
+				tui_keys q 2>/dev/null || tui_keys Escape
+				sleep 1
+			fi
+		fi
+		sleep 3
+	done
+	if [[ "$_saw_ask" -eq 1 ]]; then
 		echo "  ✓ PASS: $name fresh placeholders ask"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_press_button "No" || tui_keys Tab Enter
@@ -234,6 +262,13 @@ _bm_type_gates() {
 		echo "  ✗ FAIL: $name fresh placeholders did not ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "bm-${name}-no-ask"
+		# Quit a stuck Generate-configs progress so fix_in_wizard can proceed
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Quit.*Q\|Overall Progress"; then
+			tui_keys q; sleep 1
+			tui_keys Enter 2>/dev/null || true
+			sleep 1
+		fi
 		return 0
 	fi
 	if tui_wait_for "wizard\|Retry" 60; then

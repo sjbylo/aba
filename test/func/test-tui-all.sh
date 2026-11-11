@@ -28,9 +28,10 @@
 #  --- destructive (full mode only) ---
 #  14.  mirror         - mirror install + sync (destructive, ~15 min)
 #  15.  cluster        - cluster wizard + install (destructive, ~45 min)
-#  16.  day2           - OperatorHub, NTP, OSUS (~10 min)
-#  17.  upgrade        - version selection + upgrade (~45 min)
-#  18.  lifecycle      - shutdown, startup, clean, delete (~30 min)
+#  16.  cluster-select - Detecting/Select-cluster race (after BM leftovers)
+#  17.  day2           - OperatorHub, NTP, OSUS (~10 min)
+#  18.  upgrade        - version selection + upgrade (~45 min)
+#  19.  lifecycle      - shutdown, startup, clean, delete (~30 min)
 
 set -o pipefail
 
@@ -136,6 +137,7 @@ else
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
 	_run_test "BM Cluster Install" "test/func/test-tui-bm-cluster.sh" || true
+	_run_test "Cluster-Select Race" "test/func/test-tui-cluster-select-race.sh" || true
 	_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 	_run_test "Day-2 Operations" "test/func/test-tui-day2.sh" || true
 	_run_test "Upgrade" "test/func/test-tui-upgrade.sh" || true
