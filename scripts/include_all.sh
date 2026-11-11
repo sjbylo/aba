@@ -6067,10 +6067,13 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	CMD_INST_BUTANE=(make -sC cli butane)
 
 	# Mirror registry commands (arrays) — one command per vendor file (no races)
-	CMD_DL_QUAY_REG=(make -sC mirror download-quay-tarball)
-	CMD_DL_DOCKER_REG=(make -sC mirror download-docker-image)
-	CMD_DL_OMR_REG=(make -sC mirror download-omr-image)
-	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
+	# Callers run from the repo root or from inside a mirror dir, so pick the dir at run time.
+	# A mirror -> . self-link used to do this, but it makes scp -r, WinSCP and cp -rL loop.
+	_MIRROR_MAKE='d=mirror; grep -qs "^# Mirror Makefile" Makefile && d=.; exec make -sC "$d" "$@"'
+	CMD_DL_QUAY_REG=(bash -c "$_MIRROR_MAKE" _ download-quay-tarball)
+	CMD_DL_DOCKER_REG=(bash -c "$_MIRROR_MAKE" _ download-docker-image)
+	CMD_DL_OMR_REG=(bash -c "$_MIRROR_MAKE" _ download-omr-image)
+	CMD_INST_QUAY_REG=(bash -c "$_MIRROR_MAKE" _ mirror-registry)
 fi
 
 # Download task IDs -- version-dependent (functions, return full ID with version)
@@ -6457,7 +6460,7 @@ _merge_images_conf() {
 
 # Start check-image in background (non-blocking)
 aba_mirror_verify_start() {
-	run_once -i "aba:mirror:check-image" -- bash -lc "cd '${ABA_ROOT:-.}' && make -sC mirror check-image"
+	run_once -i "aba:mirror:check-image" -- bash -lc "cd '${ABA_ROOT:-.}' || exit 1; $_MIRROR_MAKE" _ check-image
 }
 
 # Re-trigger after sync/load (invalidate old result, start fresh check)
