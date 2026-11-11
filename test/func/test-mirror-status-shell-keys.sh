@@ -28,7 +28,6 @@ ln -sfn "$_repo/cli" "$_tmp/cli"
 ln -sfn "$_repo/scripts" "$_tmp/mirror/scripts"
 ln -sfn "$_repo/cli" "$_tmp/mirror/cli"
 ln -sf ../aba.conf "$_tmp/mirror/aba.conf"
-ln -sfn . "$_tmp/mirror/mirror"
 cp -a "$_repo/templates" "$_tmp/templates"
 ln -sf "$_tmp/templates" "$_tmp/mirror/templates"
 
