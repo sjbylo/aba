@@ -86,6 +86,7 @@ tawon-operator Tawon alpha
 template-operator Template Operator release-0.1
 tenant-operator Multi Tenant Operator release-1.11
 tensormesh-platform Tensormesh Platform stable
+tigera-operator Tigera Operator v1.44 release-v1.44
 truenas-csi TrueNAS CSI Driver stable
 tvo-operator Trilio for OpenStack 6.0.x
 vast-csi-operator VAST CSI driver operator stable
