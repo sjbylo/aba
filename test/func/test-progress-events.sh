@@ -61,8 +61,10 @@ test_aba_progress_noop() {
 # Returns the temp file path via stdout.
 capture_plans() {
 	local workflow="$1"
-	local tmpfile="/tmp/test-plans-$workflow.$$"
-	ABA_PROGRESS_FIFO="$tmpfile" bash scripts/progress-plan.sh "$workflow" 2>/dev/null
+	shift
+	local tmpfile
+	tmpfile=$(mktemp "/tmp/test-plans-${workflow}.XXXXXX")
+	ABA_PROGRESS_FIFO="$tmpfile" bash scripts/progress-plan.sh "$workflow" "$@" 2>/dev/null
 	echo "$tmpfile"
 }
 
@@ -206,7 +208,7 @@ test_plan_count day2-osus 4
 test_plan_count day2-virt 3
 test_plan_count cluster-shutdown 4
 test_plan_count cluster-startup  6
-test_plan_count cluster-upgrade  4
+test_plan_count cluster-upgrade  3
 test_plan_count cluster-install  6
 echo ""
 
@@ -256,7 +258,7 @@ test_plan_id_coverage cluster-shutdown 4 \
 test_plan_id_coverage cluster-startup 6 \
 	scripts/cluster-startup.sh
 
-test_plan_id_coverage cluster-upgrade 4 \
+test_plan_id_coverage cluster-upgrade 3 \
 	scripts/cluster-upgrade.sh
 
 test_plan_id_coverage cluster-install 6 \
@@ -267,6 +269,126 @@ test_plan_id_coverage cluster-install 6 \
 	scripts/vmw-kill.sh scripts/vmw-refresh.sh \
 	scripts/kvm-kill.sh scripts/kvm-refresh.sh \
 	templates/Makefile.cluster
+
+echo ""
+
+# ── Child plan objects: day2 and save own their lines ──
+echo "--- Composed plans (parent asks the child) ---"
+
+_plan_lines() {
+	grep '^PLAN|' "$1" | tr -d '\r'
+}
+
+# Run `script plan` away from the repo. stdout is only the plan.
+# A set FIFO must stay absent: the child does not submit its own plan.
+_child_plan() {
+	local script="$1" label="$2" sentinel out rc
+	sentinel=$(mktemp /tmp/plan-sentinel.XXXXXX)
+	rm -f "$sentinel"
+	out=$(cd /tmp && ABA_PROGRESS_FIFO="$sentinel" bash "$root/scripts/$script" plan)
+	rc=$?
+	if [ "$rc" -eq 0 ] && [ -n "$out" ] && [ ! -e "$sentinel" ]; then
+		pass "$label plan prints steps and does not touch the FIFO"
+	else
+		local fifo_state="no"
+		[ -e "$sentinel" ] && fifo_state="yes"
+		fail "$label plan rc=$rc fifo_exists=$fifo_state"
+	fi
+	rm -f "$sentinel"
+	printf '%s\n' "$out" > "/tmp/child-plan-$label.$$"
+}
+
+root=$(pwd)
+
+_child_plan day2.sh day2
+_child_plan reg-save.sh save
+day2_stdout=$(cat "/tmp/child-plan-day2.$$")
+save_stdout=$(cat "/tmp/child-plan-save.$$")
+rm -f "/tmp/child-plan-day2.$$" "/tmp/child-plan-save.$$"
+
+# progress-plan.sh from another directory must still find the child
+_from_tmp() {
+	local dest="$1"
+	shift
+	( cd /tmp && ABA_PROGRESS_FIFO="$dest" bash "$root/scripts/progress-plan.sh" "$@" 2>/dev/null )
+}
+
+day2_fifo=$(mktemp /tmp/test-day2-fifo.XXXXXX)
+_from_tmp "$day2_fifo" day2
+if [ "$(_plan_lines "$day2_fifo")" = "$day2_stdout" ]; then
+	pass "day2 plan matches day2.sh plan"
+else
+	fail "day2 plan drifted from day2.sh plan"
+fi
+rm -f "$day2_fifo"
+
+save_fifo=$(mktemp /tmp/test-save-fifo.XXXXXX)
+_from_tmp "$save_fifo" save
+if [ "$(_plan_lines "$save_fifo")" = "$save_stdout" ]; then
+	pass "save plan matches reg-save.sh plan"
+else
+	fail "save plan drifted from reg-save.sh plan"
+fi
+rm -f "$save_fifo"
+
+bundle_fifo=$(mktemp /tmp/test-bundle-fifo.XXXXXX)
+_from_tmp "$bundle_fifo" bundle
+bundle_expect=$(printf '%s\n' "PLAN|bnd_preflight|Validate configuration|2" "$save_stdout" "PLAN|bnd_cli_wait|Verify CLI tools|3" "PLAN|bnd_pack|Pack bundle|10")
+if [ "$(_plan_lines "$bundle_fifo")" = "$bundle_expect" ]; then
+	pass "bundle plan is save's plan between its own steps"
+else
+	fail "bundle plan is not save's plan plus bundle steps"
+	echo "got:"
+	_plan_lines "$bundle_fifo"
+fi
+rm -f "$bundle_fifo"
+
+up_fifo=$(mktemp /tmp/test-up-fifo.XXXXXX)
+_from_tmp "$up_fifo" cluster-upgrade
+up_ids=$(_plan_lines "$up_fifo" | cut -d'|' -f2 | tr '\n' ' ')
+if [ "$up_ids" = "ug_preflight ug_trigger ug_progress " ] && ! grep -q 'ug_day2\|PLAN|access|' "$up_fifo"; then
+	pass "upgrade plan without day-2 is preflight, trigger, wait"
+else
+	fail "upgrade plan without day-2: [$up_ids]"
+fi
+rm -f "$up_fifo"
+
+up2_fifo=$(mktemp /tmp/test-up2-fifo.XXXXXX)
+_from_tmp "$up2_fifo" cluster-upgrade --with-day2
+up2_expect=$(printf '%s\n' "PLAN|ug_preflight|Preflight checks|2" "$day2_stdout" "PLAN|ug_trigger|Trigger upgrade|5" "PLAN|ug_progress|Wait for upgrade|70")
+if [ "$(_plan_lines "$up2_fifo")" = "$up2_expect" ]; then
+	pass "upgrade --with-day2 inserts day2.sh plan between its own steps"
+else
+	fail "upgrade --with-day2 composition is wrong"
+	echo "got:"
+	_plan_lines "$up2_fifo"
+fi
+rm -f "$up2_fifo"
+
+if printf '%s\n' "$day2_stdout" | grep -q 'ug_'; then
+	fail "day2 plan names an upgrade step"
+else
+	pass "day2 plan does not know upgrade"
+fi
+if printf '%s\n' "$save_stdout" | grep -q 'bnd_'; then
+	fail "save plan names a bundle step"
+else
+	pass "save plan does not know bundle"
+fi
+
+if grep -q 'ug_day2' scripts/cluster-upgrade.sh scripts/progress-plan.sh; then
+	fail "ug_day2 wrapper is still declared"
+else
+	pass "ug_day2 wrapper is gone"
+fi
+
+if grep -q 'image_source_is_mirror' scripts/cluster-upgrade.sh \
+	&& grep -q 'progress-plan.sh cluster-upgrade --with-day2' scripts/cluster-upgrade.sh \
+	&& grep -q 'progress-plan.sh cluster-upgrade$' scripts/cluster-upgrade.sh; then
+	pass "upgrade asks day-2 only when day-2 will run"
+else
+	fail "upgrade plan selection is missing a branch"
+fi
 
 echo ""
 

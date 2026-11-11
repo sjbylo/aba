@@ -1,5 +1,20 @@
 #!/bin/bash
-# Save images from RH reg. to disk 
+# Save images from RH reg. to disk
+#
+# `reg-save.sh plan` prints this object's steps and exits. The caller
+# submits them. This script does not know about bundle.
+
+if [ "${1:-}" = "plan" ]; then
+	cat <<'EOF'
+PLAN|rpms_ext|Install required packages|3
+PLAN|sv_preflight|Preflight checks|2
+PLAN|sv_tools|Download CLI tools|5
+PLAN|sv_save|Save images to disk|70
+PLAN|sv_cli_wait|Wait for CLI tools|5
+PLAN|sv_finalize|Pack transfer config|3
+EOF
+	exit 0
+fi
 
 # CWD is set by mirror/Makefile to the correct mirror directory
 

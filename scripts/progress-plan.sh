@@ -1,15 +1,18 @@
 #!/bin/bash
 # progress-plan.sh — Emit PLAN events for all workflows
 #
-# Single source of truth for every workflow's progress steps.
+# Day-2 steps live in day2.sh. Save steps live in reg-save.sh.
+# Every other workflow's steps are in the case below.
 # Called two ways:
 #   1. From PHONY _progress_plan-* Makefile prereqs (mirror, bundle)
 #   2. Directly from scripts that are entry points (day2, cluster-*)
 #
-# Each case only knows its OWN steps — never another workflow's steps.
-# When "make sync" triggers install as a dependency, _progress_plan-install
-# fires first (as install's prereq) and _progress_plan-sync fires later.
-# The progress dialog grows as new PLANs arrive in batches.
+# A parent that always runs a child asks that child (`script plan`) and
+# submits one list. The child prints PLAN lines and does not know the parent.
+# Upgrade asks day-2 only when called as `cluster-upgrade --with-day2`.
+# Bundle asks save, then adds its own steps. Sync does not ask install:
+# install runs only when the mirror is missing, so those plans still arrive
+# as separate batches.
 #
 # PLAN order must match execution order.  Auto-complete marks
 # predecessors of the active step — misordering causes confusing
@@ -20,6 +23,18 @@
 #   1-2 = seconds, 5 = tens of seconds, 10-20 = minutes, 50+ = many minutes
 
 source "$(dirname "$0")/include_all.sh"
+
+# Submit a child's plan. The child prints PLAN lines and does not write
+# the FIFO, so the parent decides when they are sent.
+_emit_child_plan() {
+	local _line
+	while IFS= read -r _line; do
+		if [ -n "$_line" ]; then
+			aba_progress "$_line"
+		fi
+	done < <(bash "$(dirname "$0")/$1" plan)
+	return 0
+}
 
 case "$1" in
 
@@ -59,14 +74,10 @@ case "$1" in
 	save)
 		# Order matches Make's execution:
 		#   .rpmsext → status-preflight → reg-save.sh
-		# When called during bundle, these IDs are already declared by
-		# the bundle plan — the receiver dedupes by ID (first PLAN wins).
-		aba_progress "PLAN|rpms_ext|Install required packages|3"
-		aba_progress "PLAN|sv_preflight|Preflight checks|2"
-		aba_progress "PLAN|sv_tools|Download CLI tools|5"
-		aba_progress "PLAN|sv_save|Save images to disk|70"
-		aba_progress "PLAN|sv_cli_wait|Wait for CLI tools|5"
-		aba_progress "PLAN|sv_finalize|Pack transfer config|3"
+		# The step list lives in reg-save.sh. Bundle asks for the same list.
+		# When save runs during bundle, these IDs are already declared —
+		# the receiver dedupes by ID (first PLAN wins).
+		_emit_child_plan reg-save.sh
 		;;
 
 	load)
@@ -95,16 +106,11 @@ case "$1" in
 	# ── Bundle workflow (called from _progress_plan-bundle Makefile target) ──
 
 	bundle)
-		# Bundle wraps save — pre-declare shared IDs so save's plan
-		# is silently deduped by the receiver (first PLAN wins per ID).
-		# Save can still contribute extra steps bundle didn't declare.
+		# Bundle always runs save. Ask save for its plan, then add the
+		# steps that are bundle's own. Save does not know about bundle.
+		# Order matches make-bundle.sh, then mirror save, then pack.
 		aba_progress "PLAN|bnd_preflight|Validate configuration|2"
-		aba_progress "PLAN|rpms_ext|Install required packages|3"
-		aba_progress "PLAN|sv_preflight|Preflight checks|2"
-		aba_progress "PLAN|sv_tools|Download CLI tools|5"
-		aba_progress "PLAN|sv_save|Save images to disk|70"
-		aba_progress "PLAN|sv_cli_wait|Wait for CLI tools|5"
-		aba_progress "PLAN|sv_finalize|Pack transfer config|3"
+		_emit_child_plan reg-save.sh
 		aba_progress "PLAN|bnd_cli_wait|Verify CLI tools|3"
 		aba_progress "PLAN|bnd_pack|Pack bundle|10"
 		;;
@@ -112,14 +118,7 @@ case "$1" in
 	# ── Day2 workflows (called directly from scripts) ──
 
 	day2)
-		aba_progress "PLAN|access|Accessing cluster|3"
-		aba_progress "PLAN|credentials|Registry credentials|5"
-		aba_progress "PLAN|trustca|Registry trust CA|5"
-		aba_progress "PLAN|resources|IDMS/ITMS resources|10"
-		aba_progress "PLAN|catalogs|CatalogSources|10"
-		aba_progress "PLAN|signatures|Release signatures|5"
-		aba_progress "PLAN|manifests|Custom manifests|5"
-		aba_progress "PLAN|stabilize|Cluster stabilization|20"
+		_emit_child_plan day2.sh
 		;;
 
 	day2-ntp)
@@ -174,8 +173,14 @@ case "$1" in
 		;;
 
 	cluster-upgrade)
+		# Preflight, then day-2 when the caller passes --with-day2, then
+		# trigger and wait. No wrapper row. Day-2 does not know upgrade.
+		# Order matches execution, so trigger is not marked No-op while
+		# day-2 is still running.
 		aba_progress "PLAN|ug_preflight|Preflight checks|2"
-		aba_progress "PLAN|ug_day2|Update mirror resources|15"
+		if [ "${2:-}" = "--with-day2" ]; then
+			_emit_child_plan day2.sh
+		fi
 		aba_progress "PLAN|ug_trigger|Trigger upgrade|5"
 		aba_progress "PLAN|ug_progress|Wait for upgrade|70"
 		;;

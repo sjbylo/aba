@@ -62,7 +62,13 @@ source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/${image_source:-mirror}
 source <(normalize-mirror-conf)
 
-scripts/progress-plan.sh cluster-upgrade
+# Ask day-2 for its steps only when this upgrade will run day-2.
+# --skip-day2 and a connected cluster (direct/proxy) do not.
+if [ ! "$opt_skip_day2" ] && image_source_is_mirror; then
+	scripts/progress-plan.sh cluster-upgrade --with-day2
+else
+	scripts/progress-plan.sh cluster-upgrade
+fi
 aba_progress "START|ug_preflight"
 
 # Preflight: kubeconfig (prefer externalized state, fall back to local)
@@ -354,7 +360,6 @@ if [ ! "$upgrade_already_running" ]; then
 	# Run day2 to ensure IDMS, signatures, and catalog sources are current.
 	if [ ! "$opt_skip_day2" ]; then
 		aba_progress "DONE|ug_preflight"
-		aba_progress "START|ug_day2"
 		aba_info "Running 'aba day2' to apply mirror resources, signatures, and catalog sources ..."
 		scripts/day2.sh || exit 1
 	else
@@ -544,7 +549,6 @@ if [ ! "$upgrade_already_running" ]; then
 	fi
 
 	# Execute upgrade (retry once if the cluster needs time to settle)
-	aba_progress "DONE|ug_day2"
 	aba_progress "START|ug_trigger"
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"

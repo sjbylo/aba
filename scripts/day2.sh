@@ -8,6 +8,23 @@
 # Apply any user-provided custom manifests from day2-custom-manifests/ in cluster folder
 # Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html-single/registry/index#images-configuration-cas_configuring-registry-operator
 
+# `day2.sh plan` prints this object's steps and exits. The caller submits
+# them. Answer before loading cluster config: a connected cluster returns
+# below without a plan, and this query must not.
+if [ "${1:-}" = "plan" ]; then
+	cat <<'EOF'
+PLAN|access|Accessing cluster|3
+PLAN|credentials|Registry credentials|5
+PLAN|trustca|Registry trust CA|5
+PLAN|resources|IDMS/ITMS resources|10
+PLAN|catalogs|CatalogSources|10
+PLAN|signatures|Release signatures|5
+PLAN|manifests|Custom manifests|5
+PLAN|stabilize|Cluster stabilization|20
+EOF
+	exit 0
+fi
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
