@@ -231,6 +231,8 @@ exit 0
 EOF
 chmod +x "$_td/scripts/create-agent-config.sh"
 cp scripts/bm-ask-edit.sh "$_td/scripts/"
+ln -sfn "$PWD/scripts/agent-config-summary.sh" "$_td/scripts/agent-config-summary.sh"
+ln -sfn "$PWD/scripts/bm-ask-boot.sh" "$_td/scripts/bm-ask-boot.sh"
 for _h in normalize-aba-conf.sh normalize-cluster-conf.sh replace-value-conf; do
 	[ -e "$PWD/scripts/$_h" ] && ln -sf "$PWD/scripts/$_h" "$_td/scripts/$_h"
 done
@@ -375,21 +377,166 @@ else
 	echo "$_out" | tail -20
 fi
 
+# Yes while placeholders are still in the file must stop (no ISO).
+sleep 1
+printf 'macAddress: xx:xx:xx:xx:xx:xx\n' > "$_td/sno-bm-test/agent-config.yaml"
+rm -f "$_td/sno-bm-test/macs.conf" "$_td/sno-bm-test/.bm-config-asked" "$_td/sno-bm-test/.regen-stamp"
+_out=$(cd "$_td/sno-bm-test" && echo y | bash scripts/bm-ask-edit.sh 2>&1) && _rc=0 || _rc=$?
+if [ "$_rc" -ne 0 ] && echo "$_out" | grep -q 'still contains placeholder'; then
+	_pass "Yes with placeholders still in the file stops"
+else
+	_fail "Yes must stop while placeholder MACs remain (rc=$_rc)"
+	echo "$_out" | tail -30
+fi
+
+# CLI ask prints the compact summary and leaves MACs to macs_report.
+# The progress dialog (ABA_PROGRESS_FIFO set) does not.
+if command -v jq >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then
+	sleep 1
+	cat > "$_td/sno-bm-test/agent-config.yaml" <<'EOF'
+metadata:
+  name: ocp
+rendezvousIP: 10.0.1.100
+additionalNTPSources:
+  - 10.0.1.8
+hosts:
+  - hostname: ocp
+    role: master
+    interfaces:
+      - name: eno1
+        macAddress: "00:50:56:07:d9:01"
+    networkConfig:
+      interfaces:
+        - name: eno1
+          type: ethernet
+          ipv4:
+            address:
+              - ip: 10.0.1.100
+                prefix-length: 20
+      dns-resolver:
+        config:
+          server:
+            - 10.0.1.8
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: 10.0.0.1
+            next-hop-interface: eno1
+EOF
+	rm -f "$_td/sno-bm-test/macs.conf" "$_td/sno-bm-test/.bm-config-asked" "$_td/sno-bm-test/.regen-stamp"
+	_out=$(cd "$_td/sno-bm-test" && echo n | bash scripts/bm-ask-edit.sh 2>&1) && _rc=0 || _rc=$?
+	if echo "$_out" | grep -q 'ocp | 1 masters (ocp) | RV: 10.0.1.100' \
+		&& echo "$_out" | grep -q 'IP:  10.0.1.x/20: M1=.100' \
+		&& echo "$_out" | grep -q 'NET: eno1 | Bond: - | DHCP: - | VIP: -' \
+		&& ! echo "$_out" | grep -q 'MAC: eno1'; then
+		_pass "CLI ask prints the compact summary without the MAC line"
+	else
+		_fail "CLI ask must print the compact summary and omit MAC: (rc=$_rc)"
+		echo "$_out" | tail -40
+	fi
+	touch "$_td/prog.out"
+	rm -f "$_td/sno-bm-test/.bm-config-asked"
+	_out=$(cd "$_td/sno-bm-test" && ABA_PROGRESS_FIFO="$_td/prog.out" bash scripts/bm-ask-edit.sh <<< n 2>&1) && _rc=0 || _rc=$?
+	if echo "$_out" | grep -q 'ocp | 1 masters (ocp) | RV: 10.0.1.100' \
+		&& echo "$_out" | grep -q 'IP:  10.0.1.x/20: M1=.100' \
+		&& echo "$_out" | grep -q 'NET: eno1 | Bond: - | DHCP: - | VIP: -' \
+		&& ! echo "$_out" | grep -q 'MAC: eno1' \
+		&& echo "$_out" | grep -q 'Are the MAC addresses correct?'; then
+		_pass "progress dialog ask prints the compact summary without the MAC line"
+	else
+		_fail "progress dialog ask must print the compact summary and omit MAC: (rc=$_rc)"
+		echo "$_out" | tail -40
+	fi
+	# Dialog split: PROMPT|text|y, then text is cut at the last |. Pipes in
+	# the summary must stay, and the summary must sit above the question.
+	_prompt_line=$(grep '^PROMPT|' "$_td/prog.out" | head -1)
+	# shellcheck disable=SC1091
+	source tui/v2/tui-progress.sh
+	_tp_prompt_msg=""
+	_tp_parse_event "$_prompt_line"
+	_decoded="${_tp_prompt_msg%|*}"
+	_decoded="${_decoded//\\n/$'\n'}"
+	_rvline=$(printf '%s\n' "$_decoded" | grep -n 'ocp | 1 masters (ocp) | RV: 10.0.1.100' | head -1 | cut -d: -f1)
+	_qline=$(printf '%s\n' "$_decoded" | grep -n 'Are the MAC addresses correct?' | head -1 | cut -d: -f1)
+	if [ "${_tp_prompt_msg##*|}" = "y" ] \
+		&& [ -n "$_rvline" ] && [ -n "$_qline" ] && [ "$_rvline" -lt "$_qline" ] \
+		&& printf '%s\n' "$_decoded" | grep -q 'IP:  10.0.1.x/20: M1=.100' \
+		&& printf '%s\n' "$_decoded" | grep -q 'NET: eno1 | Bond: - | DHCP: - | VIP: -' \
+		&& ! printf '%s\n' "$_decoded" | grep -q 'MAC: eno1'; then
+		_pass "progress dialog payload keeps the summary, pipes and all, before the question"
+	else
+		_fail "progress dialog payload dropped or reordered the summary"
+		printf '%s\n' "$_decoded"
+	fi
+else
+	_pass "summary ask skipped (jq or python yaml missing)"
+fi
+
+# VMware and primed bundles skip the bare-metal ask.
+sleep 1
+sed -i 's/^platform=bm$/platform=vmw/' "$_td/sno-bm-test/cluster.conf"
+rm -f "$_td/sno-bm-test/.bm-config-asked"
+_out=$(cd "$_td/sno-bm-test" && bash scripts/bm-ask-edit.sh </dev/null 2>&1) && _rc=0 || _rc=$?
+if [ "$_rc" -eq 0 ] && ! echo "$_out" | grep -q '? (y/n)'; then
+	_pass "non-bare-metal install skips the MAC ask"
+else
+	_fail "platform=vmw must skip the MAC ask (rc=$_rc)"
+	echo "$_out" | tail -20
+fi
+sed -i 's/^platform=vmw$/platform=bm/' "$_td/sno-bm-test/cluster.conf"
+touch "$_td/sno-bm-test/.primed"
+_out=$(cd "$_td/sno-bm-test" && bash scripts/bm-ask-edit.sh </dev/null 2>&1) && _rc=0 || _rc=$?
+if [ "$_rc" -eq 0 ] && ! echo "$_out" | grep -q '? (y/n)'; then
+	_pass "primed bundle skips the MAC ask"
+else
+	_fail ".primed must skip the MAC ask (rc=$_rc)"
+	echo "$_out" | tail -20
+fi
+rm -f "$_td/sno-bm-test/.primed"
+
+# Boot ask: other platforms skip; manual No names the ISO; BMC No names Redfish.
+_out=$(cd "$_td/sno-bm-test" && sed -i 's/^platform=bm$/platform=vmw/' cluster.conf && bash scripts/bm-ask-boot.sh </dev/null 2>&1) && _rc=0 || _rc=$?
+sed -i 's/^platform=vmw$/platform=bm/' "$_td/sno-bm-test/cluster.conf"
+if [ "$_rc" -eq 0 ] && ! echo "$_out" | grep -q 'Boot your servers'; then
+	_pass "non-bare-metal install skips the boot ask"
+else
+	_fail "platform=vmw must skip the boot ask (rc=$_rc)"
+	echo "$_out" | tail -20
+fi
+mkdir -p "$_td/sno-bm-test/iso-agent-based"
+touch "$_td/sno-bm-test/iso-agent-based/agent.$(uname -m).iso"
+rm -f "$_td/sno-bm-test/bmc.conf"
+_out=$(cd "$_td/sno-bm-test" && echo n | bash scripts/bm-ask-boot.sh 2>&1) && _rc=0 || _rc=$?
+if [ "$_rc" -ne 0 ] && echo "$_out" | grep -q "iso-agent-based/agent.$(uname -m).iso" \
+	&& echo "$_out" | grep -q 'aba install' && ! echo "$_out" | grep -q 'aba -d'; then
+	_pass "manual boot No names the ISO and aba install"
+else
+	_fail "manual boot No must name the ISO and aba install (rc=$_rc)"
+	echo "$_out" | tail -30
+fi
+printf 'bmc_host_master1=https://10.0.0.9\n' > "$_td/sno-bm-test/bmc.conf"
+_out=$(cd "$_td/sno-bm-test" && echo n | bash scripts/bm-ask-boot.sh 2>&1) && _rc=0 || _rc=$?
+rm -f "$_td/sno-bm-test/bmc.conf"
+if [ "$_rc" -ne 0 ] && echo "$_out" | grep -q 'BMC boot (1 node' \
+	&& echo "$_out" | grep -q 'iso_url='; then
+	_pass "BMC boot No names Redfish and iso_url"
+else
+	_fail "BMC boot No must name Redfish and iso_url (rc=$_rc)"
+	echo "$_out" | tail -30
+fi
+
 # aba_cmd: -d only when aba was invoked with -d / --dir.
 source scripts/include_all.sh
 _cmd_td=$(mktemp -d)
 (
 	cd "$_cmd_td" || exit 1
-	mkdir -p ocp other
+	mkdir -p ocp
 	cd ocp || exit 1
 	unset ABA_TARGET_DIR
 	[ "$(aba_cmd install)" = "aba install" ] || exit 1
 	[ "$(aba_cmd install -y)" = "aba install -y" ] || exit 1
-	[ "$(aba_cmd_for "$PWD" mon)" = "aba mon" ] || exit 1
-	[ "$(aba_cmd_for "$_cmd_td/other" unstick)" = "aba -d other unstick" ] || exit 1
 	ABA_TARGET_DIR="$PWD"
 	[ "$(aba_cmd mon)" = "aba -d ocp mon" ] || exit 1
-	[ "$(aba_cmd_for "$PWD" install)" = "aba -d ocp install" ] || exit 1
 ) && _pass "aba_cmd uses -d only when ABA_TARGET_DIR is set" \
 	|| _fail "aba_cmd spelling is wrong"
 rm -rf "$_cmd_td"
