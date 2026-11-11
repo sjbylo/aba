@@ -23,7 +23,7 @@ if [ -s "$regcreds_dir/state.sh" ]; then
 	if [ "$reg_vendor" = "existing" ]; then
 		aba_abort \
 			"This is an externally-managed registry (registered, not installed by ABA)." \
-			"Use 'aba -d $(basename $PWD) unregister' to remove the local credentials." \
+			"Use '$(aba_cmd unregister)' to remove the local credentials." \
 			"The registry itself will not be modified."
 	fi
 

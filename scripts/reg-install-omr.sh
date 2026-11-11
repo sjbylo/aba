@@ -113,7 +113,7 @@ if ! try_cmd -n 10 -d 1 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
 		"  - DNS points to a different host" \
 		"  - Firewall blocking port $reg_port" \
 		"" \
-		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+		"Credentials saved. After fixing: $(aba_cmd verify)"
 fi
 
 # Phase 2: Single auth check — NO retry to avoid Quay brute-force lockout
@@ -121,7 +121,7 @@ if ! reg_check_v2_auth "$reg_url" "$reg_user" "$reg_pw"; then
 	aba_abort \
 		"Registry is reachable but authentication failed on $reg_host:$reg_port." \
 		"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
-		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+		"Credentials saved. After fixing: $(aba_cmd verify)"
 fi
 
 reg_cleanup_backup

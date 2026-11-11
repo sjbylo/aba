@@ -583,7 +583,7 @@ _wait_rc=0
 aba_wait_show "Waiting for upgrade to begin (Ctrl-C to skip)" 10 300 _upgrade_progressing || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	aba_info "Monitoring skipped. The upgrade continues in background."
-	aba_info "Check with: aba -d $(basename "$PWD") run --cmd 'oc adm upgrade status'"
+	aba_info "Check with: $(aba_cmd run --cmd "'oc adm upgrade status'")"
 	exit 0
 fi
 
@@ -610,7 +610,7 @@ if [ "$_wait_rc" -ne 0 ]; then
 	fi
 	oc adm upgrade 2>&1 || true
 	echo
-	aba_info "Check with: aba -d $(basename "$PWD") run --cmd 'oc adm upgrade'"
+	aba_info "Check with: $(aba_cmd run --cmd "'oc adm upgrade'")"
 	exit 1
 fi
 
@@ -641,7 +641,7 @@ if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
 	aba_success "Upgrade complete! Cluster is now at version $target_ver"
 	oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 	echo
-	aba_info "Next step: run 'aba -d $(basename "$PWD") day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
+	aba_info "Next step: run '$(aba_cmd day2)' to update CatalogSources for v$(_ver_minor "$target_ver")"
 	exit 0
 fi
 
@@ -654,6 +654,6 @@ aba_info "To monitor the upgrade, run:"
 aba_info "  oc adm upgrade status"
 aba_info "  oc get clusterversion"
 echo
-aba_info "After upgrade completes, run 'aba -d $(basename "$PWD") day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
+aba_info "After upgrade completes, run '$(aba_cmd day2)' to update CatalogSources for v$(_ver_minor "$target_ver")"
 
 exit 0
