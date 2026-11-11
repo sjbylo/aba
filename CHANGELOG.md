@@ -7,6 +7,9 @@
 ### Fixed
 
 - **Candidate Previous/Older empty after GA catch-up** — `_candidate_offer` now includes the stable CDN minor and keeps candidate tips even when they already match fast/stable (e.g. `5.0.1`), so `aba ocp-ver` / TUI suggestions are not left blank when channels have converged.
+- **Parallel catalog extract keeps a live container** — Each download swept every `aba-catalog-*` container at startup, so one version could delete another's mount mid-copy. The sweep now leaves a container whose process is still running.
+- **Catalog refresh uses one version walk** — The GitHub workflow had its own minor countdown and aborted on stable 5.0. It now uses `tools/refresh-catalog-indexes.sh --detect`, which steps from `5.0` to `4.22`. The catalog canary reads that same list.
+- **Monitor installation starts before the agent wait** — The agent probe runs before `monitor-install.sh`, so that row stayed N/A during "Waiting for Agent". The probe now sends `START|ci_mon`. A second start from the monitor script leaves the row In Progress.
 
 ---
 
