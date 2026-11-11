@@ -2,6 +2,7 @@
 
 ### Changed
 
+- **Current-directory tips follow how you got here** — Next-step lines use `aba_cmd`. Already in the directory, they print `aba install`. After `aba -d`, they print `aba -d <name> install`. Help text and README examples still show `--dir` / `-d`.
 - **`aba ocp-ver` drops Older candidate** — List only Latest and Previous tips; the third candidate offer slot was often an uninteresting interim `-ec` and cluttered the summary.
 
 ### Fixed

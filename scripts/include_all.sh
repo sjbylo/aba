@@ -2035,7 +2035,7 @@ _state_override_mirror() {
 		touch "$ABA_TMP/drift.$$"
 		aba_warn \
 			"mirror.conf differs from installed registry: $_drifted" \
-			"Using installed values. To change, run 'aba -d $(basename "$PWD") uninstall' first, then edit mirror.conf."
+			"Using installed values. To change, run '$(aba_cmd uninstall)' first, then edit mirror.conf."
 	fi
 }
 

@@ -792,7 +792,7 @@ for i in imgs:
 				aba_abort \
 					"reg_host is locked to '$_h_state_host' by installed state." \
 					"The -H flag cannot override an installed/registered registry." \
-					"To change the registry host, run 'aba -d $(basename "$WORK_DIR") unregister' (or 'uninstall') first."
+					"To change the registry host, run '$(aba_cmd unregister)' (or 'uninstall') first."
 			fi
 		fi
 		# force will skip over asking to edit the conf file
@@ -1778,15 +1778,15 @@ if [ "$cur_target" ]; then
 				esac
 				if [ "$_install_vms_gone" ]; then
 					aba_warn "Cluster was installed but VMs no longer exist (deleted outside ABA?)."
-					aba_info "To re-install: 'aba -d $(basename "$PWD") delete' then 'aba -d $(basename "$PWD") install'."
+					aba_info "To re-install: '$(aba_cmd delete)' then '$(aba_cmd install)'."
 					exit 0
 				fi
 				if [ -f .shutdown.log ]; then
-					aba_info "Cluster is installed but shut down. Run 'aba -d $(basename "$PWD") startup' to power it on."
+					aba_info "Cluster is installed but shut down. Run '$(aba_cmd startup)' to power it on."
 				else
 					aba_info "Cluster already installed. Nothing to do."
 				fi
-				aba_info "To re-install: 'aba -d $(basename "$PWD") delete' then 'aba -d $(basename "$PWD") install'."
+				aba_info "To re-install: '$(aba_cmd delete)' then '$(aba_cmd install)'."
 				exit 0
 			fi
 			# Not yet installed — re-add target and fall through to generic make block
