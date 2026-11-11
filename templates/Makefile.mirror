@@ -15,6 +15,19 @@ endif
 
 TEMPLATES := ../templates
 SCRIPTS   := ../scripts
+
+# Older versions created a mirror -> . self-link here; scp -r, WinSCP and cp -rL loop on it.
+# Their run_once tasks saved "make -sC mirror ..." with this dir as CWD, and replaying that needs the link.
+# Forget those tasks so they re-run with the new command. Delete the files instead of
+# run-once.sh -r: -r kills the saved PID, which may belong to another process by now.
+# Then remove the link. Runs on any target because .init is already stamped in old dirs.
+_STALE_SELF_LINK := $(shell d="$${RUN_ONCE_DIR:-$$HOME/.aba/runner}"; \
+	for t in install download:quay download:docker download:omr; do \
+		s="$$d/mirror:reg:$$t"; \
+		[ "$$(cat "$$s/cwd" 2>/dev/null)" -ef . ] && grep -qsF '[1]="-sC" [2]="mirror"' "$$s/cmd.sh" && \
+			rm -f "$$s/cmd.sh" "$$s/cmd" "$$s/cwd" "$$s/exit"; \
+	done; \
+	[ "$$(readlink mirror 2>/dev/null)" = . ] && rm -f mirror)
 ##debug   ?=
 force     ?= no
 bg        ?=
@@ -92,7 +105,6 @@ init: .init
 	ln -fs $(SCRIPTS) 
 	ln -fs ../cli
 	ln -fs ../aba.conf
-	ln -fsn . mirror
 	[ -L .index ] || { rm -rf .index 2>/dev/null; ln -fs ../.index; }
 	mkdir -p ~/.aba/mirror/$$(basename $$PWD)
 	ln -sfn ~/.aba/mirror/$$(basename $$PWD) regcreds
@@ -442,7 +454,7 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -rf data/working-dir
 	rm -f mirror-registry image-archive.tar execution-environment.tar sqlite3.tar
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install"
-	rm -f templates scripts cli mirror
+	rm -f templates scripts cli
 
 
 # Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.
