@@ -155,6 +155,7 @@ generate_isc() {
 	cp "$tmpdir/aba.conf.orig" "$ABA_ROOT/aba.conf"
 	cp "$tmpdir/mirror.conf.orig" "$MIRROR_DIR/mirror.conf"
 
+	_isc_stderr="$tmpdir/stderr.log"
 	if [ $rc -ne 0 ]; then
 		echo "  [generate_isc] FAILED (exit $rc)" >&2
 		[[ $VERBOSE -eq 1 ]] && cat "$tmpdir/stderr.log" >&2
@@ -479,6 +480,284 @@ assert_contains "cincinnati has v1 channel" "$_isc" 'name: "v1"'
 assert_contains "cli-manager has tech-preview channel" "$_isc" 'name: "tech-preview"'
 
 [[ $VERBOSE -eq 1 ]] && echo "--- ISC ---" && cat "$_isc" && echo "---"
+
+# ============================================================================
+echo ""
+echo "=== Test 14: excl_platform comments the whole platform block, keeps operators ==="
+# ============================================================================
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=web-terminal" "excl_platform=true" "excl_operators=" "excl_additional="
+
+assert_not_contains "No active platform key" "$_isc" "^  platform:"
+assert_not_contains "No active channels" "$_isc" "^    channels:"
+assert_not_contains "No active graph" "$_isc" "^    graph:"
+assert_contains "Platform block is commented" "$_isc" "^#    graph: true"
+assert_contains "Operators section still active" "$_isc" "^  operators:"
+assert_contains "Operator package kept" "$_isc" "name: web-terminal"
+assert_contains "Exclusion note added" "$_isc" "^# NOTE: Platform/release images excluded"
+
+# ============================================================================
+# OKD: no network. The release digest comes from the update graph; the cache is
+# seeded and curl is a shim that refuses, so any other lookup fails the run.
+# ============================================================================
+_okd_bin=$(mktemp -d); _okd_cache=$(mktemp -d); _okd_curl_log="$_okd_cache/curl.log"
+_cleanup_files+=("$_okd_bin" "$_okd_cache")
+printf '#!/usr/bin/bash\necho "$*" >> "%s"\nexit 22\n' "$_okd_curl_log" > "$_okd_bin/curl"
+chmod +x "$_okd_bin/curl"
+# Offline registry for "skopeo inspect --raw": a digest with a fixture manifest_<digest>.json is a
+# manifest list, any other digest a plain single-architecture image.
+cat > "$_okd_bin/skopeo" <<'EOS'
+#!/usr/bin/bash
+[ -z "${OKD_TEST_SKOPEO_FAIL:-}" ] || exit 1
+ref="${*: -1}"; d="${ref##*@sha256:}"
+if [ -f "$ABA_CACHE_DIR/../manifest_$d.json" ]; then cat "$ABA_CACHE_DIR/../manifest_$d.json"
+else echo '{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json","layers":[]}'; fi
+EOS
+chmod +x "$_okd_bin/skopeo"
+# architecture override (ARCH is taken from uname -m)
+printf '#!/usr/bin/bash\n[ "${1:-}" = "-m" ] && [ -n "${OKD_TEST_UNAME_M:-}" ] && { echo "$OKD_TEST_UNAME_M"; exit 0; }\nexec /usr/bin/uname "$@"\n' > "$_okd_bin/uname"
+chmod +x "$_okd_bin/uname"
+_okd_old_path="$PATH"
+export PATH="$_okd_bin:$PATH" ABA_CACHE_DIR="$_okd_cache/cache"
+
+_okd_dg() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
+_okd_seed() { # <channel-minor> <version>...
+	local cm="$1"; shift
+	mkdir -p "$ABA_CACHE_DIR"
+	local v
+	for v in "$@"; do
+		jq -nc --arg v "$v" --arg p "quay.io/okd/scos-release@sha256:$(_okd_dg "$v")" '{version:$v,payload:$p}'
+	done | jq -sc '{nodes: ., edges: []}' > "$ABA_CACHE_DIR/graph_okd_${cm}_amd64.json"
+}
+# 4.21.0-okd-scos.11 is published as a manifest list: the graph names the list, the ISC must name the amd64 image
+_okd_idx="$(_okd_dg index-4.21.0-okd-scos.11)"
+mkdir -p "$ABA_CACHE_DIR"
+jq -nc --arg a "quay.io/okd/scos-release@sha256:$(_okd_dg 4.21.0-okd-scos.10)" --arg b "quay.io/okd/scos-release@sha256:$_okd_idx" \
+	'{nodes:[{version:"4.21.0-okd-scos.10",payload:$a},{version:"4.21.0-okd-scos.11",payload:$b}],edges:[]}' > "$ABA_CACHE_DIR/graph_okd_stable-4.21_amd64.json"
+jq -nc --arg d "sha256:$(_okd_dg 4.21.0-okd-scos.11)" '{schemaVersion:2,manifests:[{platform:{architecture:"amd64",os:"linux"},digest:$d}]}' \
+	> "$_okd_cache/manifest_$_okd_idx.json"
+_okd_seed stable-4.20 4.20.0-okd-scos.8
+_okd_seed stable-5.0 5.0.0-okd-scos.5
+_okd_seed candidate-4.22 4.22.0-okd-scos.4
+
+# ============================================================================
+echo ""
+echo "=== Test 15: OKD ISC — release by digest, no channels ==="
+# ============================================================================
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.11" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+
+assert_file_valid_yaml_operators "No duplicate operators keys" "$_isc"
+assert_contains "Has platform key" "$_isc" "^  platform:"
+assert_contains "Release is the child digest of the payload repo" "$_isc" "^    release: quay.io/okd/scos-release@sha256:$(_okd_dg 4.21.0-okd-scos.11)$"
+assert_not_contains "Not the manifest list digest" "$_isc" "$(_okd_dg index-4.21.0-okd-scos.11)"
+assert_contains "Has architectures" "$_isc" "^    architectures:"
+assert_contains "Architecture is amd64" "$_isc" "^    - amd64$"
+assert_contains "graph is false" "$_isc" "^    graph: false"
+assert_not_contains "No channels block" "$_isc" "channels:"
+assert_not_contains "No minVersion" "$_isc" "minVersion"
+assert_not_contains "No maxVersion" "$_isc" "maxVersion"
+assert_not_contains "No OCP channel type" "$_isc" "type: ocp"
+assert_not_contains "No graph: true" "$_isc" "graph: true"
+assert_not_contains "No OCP release channel name" "$_isc" "name: (stable|fast|candidate|eus)-"
+assert_not_contains "No ocp-release repo" "$_isc" "openshift-release-dev"
+assert_contains "Has 'File generated by ABA' header" "$_isc" "^# File generated by ABA"
+assert_not_contains "No operators section (core only)" "$_isc" "^  operators:"
+assert_not_contains "No registry.redhat.io anywhere (needs an account)" "$_isc" "registry.redhat.io"
+assert_contains "Operator hint names the anonymous community catalog" "$_isc" "^#  - catalog: registry.access.redhat.com/redhat/community-operator-index:v4.21$"
+[[ $VERBOSE -eq 1 ]] && echo "--- ISC ---" && cat "$_isc" && echo "---"
+
+# ============================================================================
+echo ""
+echo "=== Test 16: OKD ISC — release follows the selected version (not fixed) ==="
+# ============================================================================
+generate_isc "distribution=okd" "ocp_version=4.20.0-okd-scos.8" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "4.20 build digest" "$_isc" "^    release: quay.io/okd/scos-release@sha256:$(_okd_dg 4.20.0-okd-scos.8)$"
+assert_not_contains "Not the 4.21 digest" "$_isc" "$(_okd_dg 4.21.0-okd-scos.11)"
+
+generate_isc "distribution=okd" "ocp_version=5.0.0-okd-scos.5" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "5.x build digest" "$_isc" "^    release: quay.io/okd/scos-release@sha256:$(_okd_dg 5.0.0-okd-scos.5)$"
+
+generate_isc "distribution=okd" "ocp_version=4.22.0-okd-scos.4" "ocp_channel=candidate" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "candidate channel build digest" "$_isc" "^    release: quay.io/okd/scos-release@sha256:$(_okd_dg 4.22.0-okd-scos.4)$"
+
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.10" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "older build of the same minor" "$_isc" "^    release: quay.io/okd/scos-release@sha256:$(_okd_dg 4.21.0-okd-scos.10)$"
+
+mkdir -p "$ABA_CACHE_DIR"
+jq -nc --arg v 4.21.0-okd-scos.11 --arg p "quay.io/okd/scos-release@sha256:$(_okd_dg arm-4.21.0-okd-scos.11)" '{nodes:[{version:$v,payload:$p}],edges:[]}' > "$ABA_CACHE_DIR/graph_okd_stable-4.21_arm64.json"
+OKD_TEST_UNAME_M=aarch64 generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.11" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "arm64 host: arm64 image digest" "$_isc" "^    release: quay.io/okd/scos-release@sha256:$(_okd_dg arm-4.21.0-okd-scos.11)$"
+assert_contains "arm64 host: architectures lists arm64" "$_isc" "^    - arm64$"
+assert_not_contains "arm64 host: amd64 not listed" "$_isc" "^    - amd64$"
+
+# ============================================================================
+echo ""
+echo "=== Test 17: OKD excl_platform keeps additionalImages (range does not run to EOF) ==="
+# ============================================================================
+# images.conf is swapped in for the run and restored right after (like aba.conf)
+_img_conf="$ABA_ROOT/images.conf"; _img_bak=$(mktemp); _img_had=0
+[ -f "$_img_conf" ] && { _img_had=1; cp "$_img_conf" "$_img_bak"; }
+_img_restore() { if [ $_img_had -eq 1 ]; then cp "$_img_bak" "$_img_conf"; else rm -f "$_img_conf"; fi; }
+printf 'registry.access.redhat.com/ubi9/ubi:latest\nquay.io/openshift/hello-openshift:1.2.0\n' > "$_img_conf"
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.11" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=true" "excl_operators=" "excl_additional="
+_img_restore
+
+assert_not_contains "No active platform key" "$_isc" "^  platform:"
+assert_not_contains "No active release" "$_isc" "^    release:"
+assert_not_contains "No active graph" "$_isc" "^    graph:"
+assert_not_contains "No active architectures" "$_isc" "^    architectures:"
+assert_contains "Platform block commented (release)" "$_isc" "^#    release: quay.io/okd/scos-release@sha256:"
+assert_contains "Platform block commented (graph)" "$_isc" "^#    graph: false"
+assert_contains "additionalImages still active" "$_isc" "^  additionalImages:"
+assert_contains "First additional image kept" "$_isc" "^  - name: registry.access.redhat.com/ubi9/ubi:latest"
+assert_contains "Second additional image kept" "$_isc" "^  - name: quay.io/openshift/hello-openshift:1.2.0"
+assert_contains "Exclusion note added" "$_isc" "^# NOTE: Platform/release images excluded"
+
+# same input without excl_platform: platform active and additionalImages after it
+printf 'registry.access.redhat.com/ubi9/ubi:latest\n' > "$_img_conf"
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.11" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+_img_restore; rm -f "$_img_bak"
+assert_contains "Platform active with additionalImages" "$_isc" "^    graph: false"
+assert_contains "additionalImages active" "$_isc" "^  additionalImages:"
+
+# ============================================================================
+echo ""
+echo "=== Test 18: OKD excl_platform alone (nothing after the platform block) ==="
+# ============================================================================
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.11" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=true" "excl_operators=" "excl_additional="
+assert_not_contains "No active key under mirror (only comments)" "$_isc" "^  [a-z]"
+assert_contains "Platform commented" "$_isc" "^#  platform:"
+
+# ============================================================================
+echo ""
+echo "=== Test 19: OKD without a release digest source fails, writes no ISC ==="
+# ============================================================================
+rm -f "$MIRROR_DIR/data/imageset-config.yaml"
+if generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.99" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional=" 2>/dev/null; then
+	FAIL=$(( FAIL + 1 )); echo "  FAIL: generation succeeded for a build with no digest"
+else
+	PASS=$(( PASS + 1 )); echo "  PASS: generation failed for a build with no digest"
+fi
+if [ -s "$MIRROR_DIR/data/imageset-config.yaml" ]; then
+	FAIL=$(( FAIL + 1 )); echo "  FAIL: an ISC was written without a digest"
+else
+	PASS=$(( PASS + 1 )); echo "  PASS: no ISC written without a digest"
+fi
+
+# ============================================================================
+echo ""
+echo "=== Test 19a: OKD digest found but its manifest cannot be read ==="
+# ============================================================================
+rm -f "$MIRROR_DIR/data/imageset-config.yaml"
+if OKD_TEST_SKOPEO_FAIL=1 generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.10" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional=" 2>/dev/null; then
+	FAIL=$(( FAIL + 1 )); echo "  FAIL: generation succeeded although the release manifest is unreadable"
+else
+	PASS=$(( PASS + 1 )); echo "  PASS: generation failed when the release manifest is unreadable"
+fi
+assert_contains "Message names the manifest problem" "$_isc_stderr" "Cannot read the release image manifest of OKD 4.21.0-okd-scos.10"
+assert_not_contains "Not reported as a missing digest" "$_isc_stderr" "Cannot find the release image digest"
+[ -s "$MIRROR_DIR/data/imageset-config.yaml" ] && { FAIL=$(( FAIL + 1 )); echo "  FAIL: an ISC was written"; } || { PASS=$(( PASS + 1 )); echo "  PASS: no ISC written"; }
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.99" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional=" 2>/dev/null
+assert_contains "Unknown build is reported as a missing digest" "$_isc_stderr" "Cannot find the release image digest of OKD 4.21.0-okd-scos.99"
+
+# ============================================================================
+echo ""
+echo "=== Test 19b: OKD with the platform excluded needs no digest ==="
+# ============================================================================
+generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.99" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=true" "excl_operators=" "excl_additional="
+assert_not_contains "No active platform key" "$_isc" "^  platform:"
+assert_not_contains "No active release" "$_isc" "^    release:"
+assert_contains "Platform commented" "$_isc" "^#  platform:"
+
+# ============================================================================
+echo ""
+echo "=== Test 19c: OKD operators come from the anonymous community catalog only ==="
+# ============================================================================
+# Catalog index fixtures for 4.21 in mirror/.index; the originals are put back afterwards.
+_idx="$MIRROR_DIR/.index"; _idx_bak=$(mktemp -d); _cleanup_files+=("$_idx_bak"); mkdir -p "$_idx"
+_idx_save() { local f; for f in redhat-operator certified-operator community-operator; do
+	if [ -e "$_idx/${f}-index-v4.21" ]; then cp -p "$_idx/${f}-index-v4.21" "$_idx_bak/"; else touch "$_idx_bak/${f}-index-v4.21.absent"; fi; done; }
+_idx_restore() { local f; for f in redhat-operator certified-operator community-operator; do
+	rm -f "$_idx/${f}-index-v4.21"; [ -e "$_idx_bak/${f}-index-v4.21" ] && cp -p "$_idx_bak/${f}-index-v4.21" "$_idx/"; done; }
+_idx_put() { printf '%s\n' "${@:2}" > "$_idx/${1}-index-v4.21"; }
+_idx_save
+_okd_ops() { generate_isc "distribution=okd" "ocp_version=4.21.0-okd-scos.11" "ocp_channel=stable" "op_sets=${2:-}" "ops=$1" "excl_platform=" "excl_operators=" "excl_additional="; }
+
+# only the community index is on disk (what OKD downloads)
+rm -f "$_idx/redhat-operator-index-v4.21" "$_idx/certified-operator-index-v4.21"
+_idx_put community-operator "zz-community-one Community One alpha" "zz-community-two Community Two stable"
+_okd_ops "zz-community-one,zz-community-two"; rc=$?
+assert_eq "community operators: generation succeeds" "0" "$rc"
+assert_contains "community catalog from the anonymous host" "$_isc" "^  - catalog: registry.access.redhat.com/redhat/community-operator-index:v4.21$"
+assert_contains "first operator listed" "$_isc" "name: zz-community-one"
+assert_contains "second operator listed" "$_isc" "name: zz-community-two"
+assert_contains "operator channel taken from the index" "$_isc" 'name: "alpha"'
+assert_not_contains "no registry.redhat.io (needs an account)" "$_isc" "registry.redhat.io"
+assert_not_contains "no redhat-operator catalog" "$_isc" "redhat-operator-index"
+assert_not_contains "no certified-operator catalog" "$_isc" "certified-operator-index"
+assert_eq "exactly one catalog entry" "1" "$(grep -c '^  - catalog:' "$_isc")"
+assert_file_valid_yaml_operators "one operators key" "$_isc"
+assert_not_contains "no complaint about the redhat/certified index files" "$_isc_stderr" "Missing operator catalog file"
+
+# an operator the community catalog lacks is skipped like any unknown operator
+_okd_ops "zz-community-one,zz-not-anywhere"
+assert_contains "known operator kept" "$_isc" "name: zz-community-one"
+assert_not_contains "unknown operator skipped" "$_isc" "zz-not-anywhere"
+
+# the shipped redhat/certified indexes are on disk as well: an operator found only there is refused
+_idx_put redhat-operator "zz-redhat-only Red Hat Only stable" "zz-both Both stable-r"
+_idx_put certified-operator "zz-certified-only Certified Only fast"
+_idx_put community-operator "zz-community-one Community One alpha" "zz-both Both community-ch"
+rm -f "$MIRROR_DIR/data/imageset-config.yaml"
+if _okd_ops "zz-redhat-only" 2>/dev/null; then FAIL=$(( FAIL + 1 )); echo "  FAIL: a redhat-only operator was accepted on OKD"; else PASS=$(( PASS + 1 )); echo "  PASS: a redhat-only operator is refused on OKD"; fi
+assert_contains "refusal names the operator" "$_isc_stderr" "zz-redhat-only"
+assert_contains "refusal explains the account requirement" "$_isc_stderr" "Red Hat account"
+[ -s "$MIRROR_DIR/data/imageset-config.yaml" ] && { FAIL=$(( FAIL + 1 )); echo "  FAIL: an ISC was written"; } || { PASS=$(( PASS + 1 )); echo "  PASS: no ISC written"; }
+rm -f "$MIRROR_DIR/data/imageset-config.yaml"
+if _okd_ops "zz-certified-only" 2>/dev/null; then FAIL=$(( FAIL + 1 )); echo "  FAIL: a certified-only operator was accepted on OKD"; else PASS=$(( PASS + 1 )); echo "  PASS: a certified-only operator is refused on OKD"; fi
+# an operator in both catalogs resolves to the community one
+_okd_ops "zz-both"
+assert_contains "operator in both: community catalog" "$_isc" "^  - catalog: registry.access.redhat.com/redhat/community-operator-index:v4.21$"
+assert_contains "operator in both: community channel" "$_isc" 'name: "community-ch"'
+assert_not_contains "operator in both: not the redhat channel" "$_isc" 'name: "stable-r"'
+assert_not_contains "operator in both: no redhat catalog" "$_isc" "registry.redhat.io"
+# op_sets=all is the whole redhat catalog
+rm -f "$MIRROR_DIR/data/imageset-config.yaml"
+if _okd_ops "" "all" 2>/dev/null; then FAIL=$(( FAIL + 1 )); echo "  FAIL: op_sets=all accepted on OKD"; else PASS=$(( PASS + 1 )); echo "  PASS: op_sets=all refused on OKD"; fi
+assert_not_contains "op_sets=all: nothing from registry.redhat.io written" "$MIRROR_DIR/data/imageset-config.yaml" "registry.redhat.io"
+
+# no community index on disk: the message names that file, not the redhat one
+rm -f "$_idx/redhat-operator-index-v4.21" "$_idx/certified-operator-index-v4.21" "$_idx/community-operator-index-v4.21"
+rm -f "$MIRROR_DIR/data/imageset-config.yaml"
+if _okd_ops "zz-community-one" 2>/dev/null; then FAIL=$(( FAIL + 1 )); echo "  FAIL: generation succeeded without the community index"; else PASS=$(( PASS + 1 )); echo "  PASS: generation fails without the community index"; fi
+assert_contains "message names the community index file" "$_isc_stderr" "community-operator-index-v4.21"
+assert_not_contains "message does not ask for the redhat index" "$_isc_stderr" "redhat-operator-index-v4.21"
+assert_not_contains "message does not point at registry.redhat.io" "$_isc_stderr" "registry.redhat.io"
+
+# OCP with the same kind of fixtures keeps all three catalogs on registry.redhat.io
+_idx_put redhat-operator "zz-redhat-only Red Hat Only stable"
+_idx_put certified-operator "zz-certified-only Certified Only fast"
+_idx_put community-operator "zz-community-one Community One alpha"
+generate_isc "ocp_version=4.21.0" "ocp_channel=stable" "op_sets=" "ops=zz-redhat-only,zz-certified-only,zz-community-one" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "ocp: redhat catalog on registry.redhat.io" "$_isc" "^  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.21$"
+assert_contains "ocp: certified catalog on registry.redhat.io" "$_isc" "^  - catalog: registry.redhat.io/redhat/certified-operator-index:v4.21$"
+assert_contains "ocp: community catalog on registry.redhat.io" "$_isc" "^  - catalog: registry.redhat.io/redhat/community-operator-index:v4.21$"
+assert_not_contains "ocp: nothing from registry.access.redhat.com" "$_isc" "registry.access.redhat.com"
+_idx_restore
+
+# ============================================================================
+echo ""
+echo "=== Test 20: OCP generation does not look at OKD data ==="
+# ============================================================================
+rm -rf "$ABA_CACHE_DIR"; : > "$_okd_curl_log"
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=" "ops=" "excl_platform=" "excl_operators=" "excl_additional="
+assert_contains "OCP still has channels" "$_isc" "name: stable-${OCP_MAJOR}"
+assert_contains "OCP still graph true" "$_isc" "graph: true"
+assert_not_contains "OCP has no release key" "$_isc" "^    release:"
+assert_eq "No OKD cache created by an OCP run" "0" "$(ls "$ABA_CACHE_DIR" 2>/dev/null | grep -c okd)"
+assert_eq "No lookup made by an OCP run" "0" "$(wc -l < "$_okd_curl_log" | tr -d ' ')"
+
+export PATH="$_okd_old_path"
+unset ABA_CACHE_DIR
 
 # ============================================================================
 # Summary

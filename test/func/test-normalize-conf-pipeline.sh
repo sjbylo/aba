@@ -780,6 +780,147 @@ unset ASK_OVERRIDE
 
 # =========================================================================
 echo
+echo "--- distribution key: template, normalize default, verify enum ---"
+# =========================================================================
+
+# Template: one line, same pattern as 'platform', placed with the other global keys
+_n=$(grep -c -P '^distribution=ocp\t+# ' templates/aba.conf.j2 || true)
+[ "$_n" = "1" ] && test_pass "template: one 'distribution=ocp' line with a comment" || test_fail "template: one 'distribution=ocp' line with a comment" "found [$_n]"
+_pl=$(grep -n '^platform=' templates/aba.conf.j2 | head -1 | cut -d: -f1)
+_dl=$(grep -n '^distribution=' templates/aba.conf.j2 | head -1 | cut -d: -f1)
+_ol=$(grep -n '^op_sets=' templates/aba.conf.j2 | head -1 | cut -d: -f1)
+if [ -n "$_pl" ] && [ -n "$_dl" ] && [ "$_dl" -gt "$_pl" ] && [ "$_dl" -lt "$_ol" ]; then
+	test_pass "template: distribution sits after platform, before the optional keys"
+else
+	test_fail "template: distribution sits after platform, before the optional keys" "platform=$_pl distribution=$_dl op_sets=$_ol"
+fi
+
+# normalize-aba-conf emits only what the file holds: a missing / commented key adds no line (the
+# output for an aba.conf from before this key existed is byte-identical to the previous release),
+# every reader treats "no value" as ocp.
+_n_expect_old=$'export ocp_version=4.22.1\nexport platform=bm\nexport ask=\nexport verify_conf=all'
+_n_chk() {   # <label> <conf content> <expected stdout>
+	local d="$_tmp/nout-$RANDOM" got
+	mkdir -p "$d"; printf '%s\n' "$2" > "$d/aba.conf"
+	got=$(cd "$d" && normalize-aba-conf 2>/dev/null)
+	if [ "$got" = "$3" ]; then test_pass "$1"; else test_fail "$1" "got [$got]"; fi
+}
+_n_chk "distribution: absent -> output has no distribution line (unchanged)" $'ocp_version=4.22.1\nplatform=bm\nask=0' "$_n_expect_old"
+_n_chk "distribution: commented key -> output unchanged"          $'ocp_version=4.22.1\nplatform=bm\nask=0\n#distribution=okd' "$_n_expect_old"
+_n_chk "distribution: indented comment -> output unchanged"       $'ocp_version=4.22.1\nplatform=bm\nask=0\n   # distribution=okd' "$_n_expect_old"
+_n_chk "distribution: okd present -> emitted as written"          $'ocp_version=4.22.1\nplatform=bm\nask=0\ndistribution=okd\t\t# x' "${_n_expect_old/export verify_conf=all/export distribution=okd
+export verify_conf=all}"
+_n_chk "distribution: empty value -> emitted as written (empty)"  $'ocp_version=4.22.1\nplatform=bm\nask=0\ndistribution=' "${_n_expect_old/export verify_conf=all/export distribution=
+export verify_conf=all}"
+# the "Existing values in aba.conf" table of the bundle message is fed by exactly this pipeline
+_d="$_tmp/dist-table"; mkdir -p "$_d"; printf 'ocp_version=4.22.1\nplatform=bm\n' > "$_d/aba.conf"
+_n=$(cd "$_d" && normalize-aba-conf 2>/dev/null | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d" | grep -c 'distribution' || true)
+[ "$_n" = "0" ] && test_pass "bundle value table: no distribution row for a conf without the key" || test_fail "bundle value table: no distribution row for a conf without the key" "got [$_n]"
+# a conf with the key shows it
+printf 'ocp_version=4.22.1\nplatform=bm\ndistribution=okd\n' > "$_d/aba.conf"
+_n=$(cd "$_d" && normalize-aba-conf 2>/dev/null | sed -e "s/^export //g" | grep -c '^distribution=okd$' || true)
+[ "$_n" = "1" ] && test_pass "bundle value table: distribution=okd row shown when set" || test_fail "bundle value table: distribution=okd row shown when set" "got [$_n]"
+
+# variable after normalize: set only when the file sets it; the default is applied by the readers
+_test_aba "distribution: absent -> variable not set by normalize"        "ocp_version=4.22.1" distribution ""
+_test_aba "distribution: commented key -> variable not set by normalize" "#distribution=okd" distribution ""
+_test_aba "distribution: ocp stays ocp"                "$(printf 'distribution=ocp\t\t# x')" distribution "ocp"
+_test_aba "distribution: okd stays okd"                "$(printf 'distribution=okd\t\t# x')" distribution "okd"
+_test_aba "distribution: unknown value passed through for verify" "distribution=foo" distribution "foo"
+_test_dist() {   # <label> <conf content> <expected dist_of>
+	local d="$_tmp/dof-$RANDOM" got
+	mkdir -p "$d"; printf '%s\n' "$2" > "$d/aba.conf"
+	got=$(cd "$d" && unset distribution && eval "$(normalize-aba-conf 2>/dev/null)" && dist_of)
+	if [ "$got" = "$3" ]; then test_pass "$1"; else test_fail "$1" "dist_of=[$got] want [$3]"; fi
+}
+_test_dist "dist_of after normalize: key absent -> ocp"        "ocp_version=4.22.1" ocp
+_test_dist "dist_of after normalize: commented key -> ocp"     "#distribution=okd" ocp
+_test_dist "dist_of after normalize: indented comment -> ocp"  "   # distribution=okd" ocp
+_test_dist "dist_of after normalize: empty value -> ocp"       "distribution=" ocp
+_test_dist "dist_of after normalize: okd -> okd"               "distribution=okd" okd
+_test_dist "dist_of after normalize: ocp -> ocp"               "distribution=ocp" ocp
+
+# Exactly one export line for the key (no duplicate when present), none when absent
+_d="$_tmp/dist-count"; mkdir -p "$_d"
+printf 'ocp_version=4.22.1\ndistribution=okd\n' > "$_d/aba.conf"
+_n=$(cd "$_d" && normalize-aba-conf 2>/dev/null | grep -c '^export distribution=' || true)
+[ "$_n" = "1" ] && test_pass "distribution present: exactly one export line" || test_fail "distribution present: exactly one export line" "got [$_n]"
+printf 'ocp_version=4.22.1\n' > "$_d/aba.conf"
+_n=$(cd "$_d" && normalize-aba-conf 2>/dev/null | grep -c 'distribution' || true)
+[ "$_n" = "0" ] && test_pass "distribution absent: no line mentions it" || test_fail "distribution absent: no line mentions it" "got [$_n]"
+# Missing / empty aba.conf: the safe default output is unchanged
+_got=$(cd "$_tmp" && mkdir -p noconf && cd noconf && normalize-aba-conf 2>/dev/null)
+[ "$_got" = "ask=true" ] && test_pass "missing aba.conf: output still just ask=true" || test_fail "missing aba.conf: output still just ask=true" "got [$_got]"
+
+# verify-aba-conf: enum next to platform; OKD version checked with the anchored predicate
+_test_verify() {
+	local test_name="$1" want_rc="$2" want_msg="$3" conf="$4"
+	local d="$_tmp/verify-$RANDOM" rc out
+	mkdir -p "$d"
+	printf '%s\n' "$conf" > "$d/aba.conf"
+	out=$(cd "$d" && eval "$(normalize-aba-conf 2>/dev/null)" && verify-aba-conf 2>&1 >/dev/null)
+	rc=$?
+	if [ "$rc" = "$want_rc" ] && { [ -z "$want_msg" ] || [[ "$out" == *"$want_msg"* ]]; }; then
+		test_pass "$test_name"
+	else
+		test_fail "$test_name" "rc=$rc (want $want_rc) msg=[$out]"
+	fi
+}
+_base_conf="$(printf 'ocp_channel=stable\nocp_version=4.22.1\nplatform=bm\npull_secret_file=/x')"
+_okd_conf_head="$(printf 'ocp_channel=stable\nplatform=bm\npull_secret_file=/x\ndistribution=okd')"
+_test_verify "verify: no distribution key (default ocp) passes" 0 "" "$_base_conf"
+_test_verify "verify: distribution=ocp passes"                  0 "" "$_base_conf"$'\n'"distribution=ocp"
+_test_verify "verify: distribution given twice (okd then ocp) rejected" 1 "ambiguous" "$_base_conf"$'\n'"distribution=okd"$'\n'"distribution=ocp"
+_test_verify "verify: distribution given twice (ocp then okd) rejected" 1 "ambiguous" "$_base_conf"$'\n'"distribution=ocp"$'\n'"distribution=okd"
+_test_verify "verify: distribution given twice with the same value passes" 0 "" "$_base_conf"$'\n'"distribution=ocp"$'\n'"distribution=ocp"
+_test_verify "verify: distribution with a leading space rejected" 1 "ambiguous" "$_base_conf"$'\n'"distribution= okd"
+_test_verify "verify: distribution with trailing spaces passes" 0 "" "$_base_conf"$'\n'"distribution=ocp   "
+_test_verify "verify: distribution that is only spaces counts as unset" 0 "" "$_base_conf"$'\n'"distribution=   "
+_test_verify "verify: distribution=foo rejected"                1 "distribution incorrectly set" "$_base_conf"$'\n'"distribution=foo"
+_test_verify "verify: distribution=OKD (case) rejected"         1 "distribution incorrectly set" "$_base_conf"$'\n'"distribution=OKD"
+_test_verify "verify: distribution=okdx (suffix) rejected"      1 "distribution incorrectly set" "$_base_conf"$'\n'"distribution=okdx"
+_test_verify "verify: distribution=xocp (prefix) rejected"      1 "distribution incorrectly set" "$_base_conf"$'\n'"distribution=xocp"
+# verify-aba-conf called without normalize-aba-conf having set the variable: still ocp
+_vd="$_tmp/verify-nonorm"; mkdir -p "$_vd"; printf 'ocp_channel=stable\nocp_version=4.22.1\nplatform=bm\npull_secret_file=/x\n' > "$_vd/aba.conf"
+if (cd "$_vd" && unset distribution && ocp_channel=stable ocp_version=4.22.1 platform=bm pull_secret_file=/x verify_conf=all && verify-aba-conf >/dev/null 2>&1); then
+	test_pass "verify: variable unset (no normalize) is treated as ocp"
+else
+	test_fail "verify: variable unset (no normalize) is treated as ocp"
+fi
+_test_verify "verify: distribution=okd + okd tag passes"        0 "" "$_okd_conf_head"$'\n'"ocp_version=4.21.0-okd-scos.11"
+_test_verify "verify: distribution=okd + 5.x okd tag passes"    0 "" "$_okd_conf_head"$'\n'"ocp_version=5.0.0-okd-scos.5"
+_test_verify "verify: okd + OCP-style version rejected"         1 "ocp_version" "$_okd_conf_head"$'\n'"ocp_version=4.22.1"
+_test_verify "verify: okd + prefix-only match rejected (unanchored regex not used)" 1 "ocp_version" "$_okd_conf_head"$'\n'"ocp_version=4.21.0-okd-scos.11-extra"
+_test_verify "verify: okd + channel fast rejected"              1 "ocp_channel" "$(printf 'ocp_channel=fast\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=4.21.0-okd-scos.11')"
+_test_verify "verify: okd + channel eus rejected"               1 "ocp_channel" "$(printf 'ocp_channel=eus\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=4.21.0-okd-scos.11')"
+_test_verify "verify: okd + channel candidate passes"           0 "" "$(printf 'ocp_channel=candidate\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=4.21.0-okd-scos.11')"
+_test_verify "verify: okd + candidate + pre-release build passes"  0 "" "$(printf 'ocp_channel=candidate\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=5.1.0-okd-scos.ec.2')"
+_test_verify "verify: okd + candidate + GA build passes"          0 "" "$(printf 'ocp_channel=candidate\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=5.0.0-okd-scos.5')"
+_test_verify "verify: okd + stable + pre-release build rejected"   1 "ocp_version" "$(printf 'ocp_channel=stable\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=5.1.0-okd-scos.ec.2')"
+_test_verify "verify: okd + candidate + malformed pre-release rejected" 1 "ocp_version" "$(printf 'ocp_channel=candidate\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=5.1.0-okd-scos.ec.2x')"
+# OKD is installed on bm and kvm, x86_64 only: vmw and another architecture stop here with a clear message
+_okd_plat() { printf 'ocp_channel=stable\nplatform=%s\npull_secret_file=/x\ndistribution=okd\nocp_version=4.21.0-okd-scos.11' "$1"; }
+_test_verify "verify: okd + platform bm passes"                  0 "" "$(_okd_plat bm)"
+_test_verify "verify: okd + platform kvm passes"                 0 "" "$(_okd_plat kvm)"
+_test_verify "verify: okd + platform vmw rejected"               1 "platform [vmw] (VMware vSphere) is not supported for OKD" "$(_okd_plat vmw)"
+_test_verify "verify: ocp + platform vmw unchanged (passes)"     0 "" "$(printf 'ocp_channel=stable\nplatform=vmw\npull_secret_file=/x\nocp_version=4.22.1')"
+_test_verify "verify: ocp + platform vmw + distribution=ocp passes" 0 "" "$(printf 'ocp_channel=stable\nplatform=vmw\npull_secret_file=/x\nocp_version=4.22.1\ndistribution=ocp')"
+_test_verify_arch() {   # <label> <ARCH> <want_rc> <want_msg> <conf>
+	local d="$_tmp/verify-arch-$RANDOM" out rc; mkdir -p "$d"; printf '%s\n' "$5" > "$d/aba.conf"
+	out=$(cd "$d" && eval "$(normalize-aba-conf 2>/dev/null)" && ARCH="$2" verify-aba-conf 2>&1 >/dev/null); rc=$?
+	if [ "$rc" = "$3" ] && [[ "$out" == *"$4"* ]]; then test_pass "$1"; else test_fail "$1" "rc=$rc (want $3) msg=[$out]"; fi
+}
+_test_verify_arch "verify: okd on amd64 passes"                  amd64 0 "" "$(_okd_plat bm)"
+_test_verify_arch "verify: okd on arm64 rejected"                arm64 1 "architecture [arm64] is not supported for OKD in ABA (x86_64 only)" "$(_okd_plat bm)"
+_test_verify_arch "verify: okd on s390x rejected"                s390x 1 "architecture [s390x] is not supported for OKD" "$(_okd_plat kvm)"
+_test_verify_arch "verify: okd on ppc64le rejected"              ppc64le 1 "architecture [ppc64le] is not supported for OKD" "$(_okd_plat bm)"
+_test_verify_arch "verify: ocp on arm64 unchanged (passes)"      arm64 0 "" "$(printf 'ocp_channel=stable\nplatform=bm\npull_secret_file=/x\nocp_version=4.22.1')"
+_test_verify "verify: okd + candidate + OCP pre-release rejected"  1 "ocp_version" "$(printf 'ocp_channel=candidate\nplatform=bm\npull_secret_file=/x\ndistribution=okd\nocp_version=5.1.0-ec.2')"
+_test_verify "verify: ocp + fast channel still passes"          0 "" "$(printf 'ocp_channel=fast\nocp_version=4.22.1\nplatform=bm\npull_secret_file=/x')"
+_test_verify "verify: ocp + 5.0.0-ec.2 still passes"            0 "" "$(printf 'ocp_channel=candidate\nocp_version=5.0.0-ec.2\nplatform=bm\npull_secret_file=/x')"
+
+# =========================================================================
+echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo
 

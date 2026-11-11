@@ -1,0 +1,8 @@
+# Name: Useful OKD Images
+# General-purpose utility and base images for OKD clusters. They can all be pulled
+# without a Red Hat account.
+# No image is listed for "oc debug": its tools image is part of the release payload
+# and is mirrored together with the platform images.
+
+registry.access.redhat.com/ubi9/ubi:latest
+registry.access.redhat.com/ubi9/ubi-micro:latest

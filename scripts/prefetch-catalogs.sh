@@ -9,8 +9,10 @@
 
 source ./scripts/include_all.sh
 
-# Pull secret is required for registry.redhat.io access
-if [[ ! -f ~/.pull-secret.json ]]; then
+# Pull secret is required for registry.redhat.io access (OKD: only for operator content,
+# so the config is read first to know whether operators are selected)
+[[ -f aba.conf ]] && source <(normalize-aba-conf 2>/dev/null)
+if [[ ! -f ~/.pull-secret.json ]] && dist_pull_secret_required; then
 	aba_debug "Pre-fetch: no pull secret found, exiting"
 	exit 0
 fi

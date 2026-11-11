@@ -68,7 +68,7 @@ run_test() {
 	sed -i "s/^op_sets=.*/op_sets=$ops_val/" "$_tmp/aba.conf"
 
 	if [ "$imgs" = "yes" ]; then
-		echo "registry.redhat.io/ubi9/ubi-micro:latest" > "$_tmp/images.conf"
+		echo "${_img_ref:-registry.redhat.io/ubi9/ubi-micro:latest}" > "$_tmp/images.conf"
 	else
 		> "$_tmp/images.conf"
 	fi
@@ -173,6 +173,61 @@ run_test "Platform + ops contradiction + addl no imgs" \
 run_test "Platform + addl contradiction + ops no ops" \
 	true true true "" yes \
 	true false true
+
+# === OKD: same contradiction rules, with the OKD image set (anonymous registries only) ===
+_set_conf() {
+	if grep -q "^$1=" "$_tmp/aba.conf"; then sed -i "s|^$1=.*|$1=$2|" "$_tmp/aba.conf"; else echo "$1=$2" >> "$_tmp/aba.conf"; fi
+}
+_set_conf distribution okd
+_set_conf ocp_version 4.21.0-okd-scos.11
+_set_conf ocp_channel stable
+cat > "$_tmp/mirror/data/imageset-config.yaml" <<'EOF'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    release: quay.io/okd/scos-release@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    architectures:
+    - amd64
+    graph: false
+EOF
+_img_ref="registry.access.redhat.com/ubi9/ubi-micro:latest"
+
+run_test "OKD: all included, ops configured" \
+	false false false custom-test no \
+	false false false
+
+run_test "OKD: all included, no ops" \
+	false false false "" no \
+	false false false
+
+run_test "OKD: addl excluded + configured (contradiction)" \
+	false false true "" yes \
+	false false true
+
+run_test "OKD: platform excluded only" \
+	true false false custom-test no \
+	true false false
+
+run_test "OKD: platform + addl contradiction" \
+	true false true custom-test yes \
+	true false true
+
+run_test "OKD: triple warning" \
+	true true true custom-test yes \
+	true true true
+
+# the OKD image set itself must never need a Red Hat account
+if [ -f "$_repo/templates/image-set-okd" ]; then
+	if grep -v '^#' "$_repo/templates/image-set-okd" | grep -q 'registry.redhat.io'; then
+		_fail "OKD image set lists a registry.redhat.io image"
+	else
+		_pass "OKD image set lists no registry.redhat.io image"
+	fi
+else
+	_fail "templates/image-set-okd missing"
+fi
+unset _img_ref
 
 # --- Summary ---
 echo ""

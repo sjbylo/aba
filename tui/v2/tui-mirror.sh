@@ -832,6 +832,9 @@ mirror_save() {
 mirror_prep_upgrade() {
 	tui_log "Action: Prepare Upgrade for Transfer"
 
+	# ABA does not mirror an upgrade target for OKD
+	_tui_okd_unsupported "Mirroring an upgrade target" && return 0
+
 	source <(normalize-aba-conf) 2>/dev/null
 	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
 	local _current_ver="${ocp_version:-unknown}"
@@ -1773,6 +1776,16 @@ mirror_select_operators() {
 	return $?
 }
 
+# OKD: operators come from registries that may want credentials, which the OKD placeholder
+# pull secret does not hold. Say so, once, when the selection is done. The check is
+# dist_pull_secret_problem on the aba.conf as saved; nothing is shown for OpenShift.
+_tui_okd_pull_secret_reminder() {
+	[[ "$(dist_of)" == "okd" ]] || return 0
+	local _msg
+	_msg=$(cd "$ABA_ROOT" && source <(normalize-aba-conf) 2>/dev/null; dist_pull_secret_problem "${pull_secret_file:-$HOME/.pull-secret.json}") && return 0
+	dlg --backtitle "$(ui_backtitle)" --msgbox "$(printf "$TUI2_MSG_OKD_OPERATORS_PULL_SECRET" "$_msg")" 0 0
+}
+
 _operator_menu() {
 	local version_short="$1"
 	local wizard_mode="${2:-}"
@@ -1790,7 +1803,7 @@ _operator_menu() {
 
 		# Build catalog operator counts for menu text (aligned columns)
 		local _cat_stats="" _cat _count _idx _line
-		for _cat in redhat-operator certified-operator community-operator; do
+		for _cat in $(dist_catalogs); do
 			_idx="$ABA_ROOT/.index/${_cat}-index-v${version_short}"
 			if [[ -s "$_idx" ]]; then
 				_count=$(wc -l < "$_idx")
@@ -1802,13 +1815,17 @@ _operator_menu() {
 			_cat_stats="${_cat_stats}${_line}"
 		done
 
+		# OKD offers one catalog only; say why
+		local _okd_note=""
+		[[ "$(dist_of)" == "okd" ]] && _okd_note="\n\n$TUI2_MSG_OKD_CATALOGS"
+
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_OPERATORS" \
 			--default-item "$default_item" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--help-button \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_DONE" \
-			--menu "Available catalogs:\n\n${_cat_stats}" 0 0 0 \
+			--menu "Available catalogs:\n\n${_cat_stats}${_okd_note}" 0 0 0 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
 			3 "View/Edit Selection ($basket_count operator$( [[ $basket_count -ne 1 ]] && echo s))" \
@@ -1852,6 +1869,7 @@ Selected operators will be included in the ImageSet config."
 				tui_log "Operator selection done with $basket_count operators"
 				# Check for companion image sets for newly added operator sets
 				_tui_offer_companion_images "$_entry_op_sets"
+				_tui_okd_pull_secret_reminder
 				return 0
 				;;
 			1|255)
@@ -1902,12 +1920,36 @@ Selected operators will be included in the ImageSet config."
 _operator_sets() {
 	local version_short="$1"
 
+	# Indexes the set operators are looked up in (OKD: only the catalogs it offers)
+	local _idx_files=("$ABA_ROOT"/.index/*-index-v${version_short})
+	local -A _okd_have=()
+	if [[ "$(dist_of)" == "okd" ]]; then
+		mapfile -t _idx_files < <(dist_catalog_index_files "$version_short" "$ABA_ROOT/.index")
+		# Operator names the OKD catalogs carry (first field of each index line)
+		local _name _rest
+		while read -r _name _rest; do
+			[[ -n "$_name" ]] && _okd_have["$_name"]=1
+		done < <(cat "${_idx_files[@]}" 2>/dev/null)
+	fi
+
 	# Build checklist items (tag=set_key, description=display_name, state=on/off)
 	local items=()
 	local set_file set_key display state
 	for set_file in "$ABA_ROOT"/templates/operator-set-*; do
 		[[ -f "$set_file" ]] || continue
 		set_key="${set_file##*operator-set-}"          # extract set name from full path
+		# OKD: only a set whose operators are all in the catalog it offers (the others hold operators of
+		# the catalogs that need a Red Hat account)
+		if [[ "$(dist_of)" == "okd" ]]; then
+			local _sline _all_in=true
+			while IFS= read -r _sline; do
+				_sline="${_sline%%#*}"
+				_sline="${_sline//[[:space:]]/}"
+				[[ -z "$_sline" ]] && continue
+				[[ -n "${_okd_have[$_sline]:-}" ]] || { _all_in=false; break; }
+			done < "$set_file"
+			$_all_in || continue
+		fi
 		display=$(head -n1 "$set_file" 2>/dev/null | sed 's/^# *//' | sed 's/^Name: *//')
 		[[ -z "$display" ]] && display="$set_key"
 		state="off"
@@ -1916,18 +1958,22 @@ _operator_sets() {
 	done
 
 	if [[ ${#items[@]} -eq 0 ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_OPERATOR_SETS" 0 0
+		local _no_sets="$TUI2_MSG_NO_OPERATOR_SETS"
+		[[ "$(dist_of)" == "okd" ]] && _no_sets="$TUI2_MSG_OKD_NO_OPERATOR_SETS"
+		dlg --backtitle "$(ui_backtitle)" --msgbox "$_no_sets" 0 0
 		return
 	fi
 
 	local num_sets=$((${#items[@]} / 3))
 	local list_h=$((num_sets < 18 ? num_sets + 2 : 18))
+	local _okd_sets_note=""
+	[[ "$(dist_of)" == "okd" ]] && _okd_sets_note="\n\n$TUI2_MSG_OKD_OPERATOR_SETS"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_OPERATOR_SETS" \
 		--cancel-label "$TUI2_BTN_BACK" \
 		--ok-label "Apply" \
 		--separate-output \
-		--checklist "$TUI2_MSG_OPERATOR_SET_MENU" 0 70 $list_h \
+		--checklist "$TUI2_MSG_OPERATOR_SET_MENU${_okd_sets_note}" 0 70 $list_h \
 		"${items[@]}" \
 		2>"$_TUI_TMP"
 	local rc=$?
@@ -1977,7 +2023,7 @@ _operator_sets() {
 				line="${line#"${line%%[![:space:]]*}"}"     # trim leading whitespace
 				line="${line%"${line##*[![:space:]]}"}"     # trim trailing whitespace
 				[[ -z "$line" ]] && continue
-				if awk -v name="$line" '$1 == name {found=1; exit} END {exit !found}' "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
+				if awk -v name="$line" '$1 == name {found=1; exit} END {exit !found}' "${_idx_files[@]}" 2>/dev/null; then
 					OP_BASKET["$line"]=1
 				fi
 			done < "$sf"
@@ -2008,6 +2054,8 @@ _operator_search() {
 
 	# Search across all catalog indexes (format: "op-name  Display Name  channel")
 	# Priority order: redhat, certified, community — first match per operator wins
+	local _idx_files=()
+	mapfile -t _idx_files < <(dist_catalog_index_files "$version_short" "$ABA_ROOT/.index")
 	local items=()
 	local line op_name display_name state catalog_label
 	declare -A _seen_ops=()
@@ -2032,11 +2080,7 @@ _operator_search() {
 		[[ -n "${OP_BASKET[$op_name]:-}" ]] && state="on"
 		items+=("$op_name" "$(printf '%-48s %s' "${display_name:--}" "${catalog_label:+($catalog_label)}")" "$state")
 	# -H includes filename prefix for catalog detection
-	done < <(grep -HiF "$query" \
-		"$ABA_ROOT"/.index/redhat-operator-index-v${version_short} \
-		"$ABA_ROOT"/.index/certified-operator-index-v${version_short} \
-		"$ABA_ROOT"/.index/community-operator-index-v${version_short} \
-		2>/dev/null | head -100)
+	done < <(grep -HiF "$query" "${_idx_files[@]}" 2>/dev/null | head -100)
 
 	if [[ ${#items[@]} -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --msgbox "$(printf "$TUI2_MSG_NO_SEARCH_RESULTS" "$query")" 0 0
@@ -2092,16 +2136,14 @@ _operator_view_basket() {
 	fi
 	local items=()
 	local op display_name line catalog_label
+	local _idx_files=()
+	mapfile -t _idx_files < <(dist_catalog_index_files "$version_short" "$ABA_ROOT/.index")
 	for op in $(echo "${!OP_BASKET[@]}" | tr ' ' '\n' | sort); do
 		display_name=""
 		catalog_label=""
-		# Multi-file grep prepends "filename:line" — extract catalog from the filename
+		# grep -H prepends "filename:line" (also with one file on OKD) — extract catalog from the filename
 		# -m1 returns one match per file; head -1 ensures a single result
-		line=$(grep -m1 "^${op}[[:space:]]" \
-			"$ABA_ROOT"/.index/redhat-operator-index-v${version_short} \
-			"$ABA_ROOT"/.index/certified-operator-index-v${version_short} \
-			"$ABA_ROOT"/.index/community-operator-index-v${version_short} \
-			2>/dev/null | head -1)
+		line=$(grep -Hm1 "^${op}[[:space:]]" "${_idx_files[@]}" 2>/dev/null | head -1)
 		if [[ -n "$line" ]]; then
 			case "${line%%:*}" in
 				*redhat-operator*)    catalog_label="redhat" ;;
@@ -2170,7 +2212,8 @@ _tui_image_set_checklist() {
 	# shown as "~50 images" and is not offered as something to add.
 	# A set already written to images.conf stays on the menu so it can be removed.
 	local _ai_ver="" _ai_count="" _ai_resolved=false
-	if _image_set_is_dynamic ai 2>/dev/null; then
+	# The AI set is not offered on OKD (it pulls from registry.redhat.io), so it is not resolved there
+	if _image_set_for_dist ai && _image_set_is_dynamic ai 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"Checking OpenShift AI image list..." 0 0
 		local _ai_res
@@ -2377,6 +2420,12 @@ _tui_offer_companion_images() {
 	_needed=$(image_set_companions_needed "${_new_sets[@]}" 2>/dev/null) || return
 	[[ -z "$_needed" ]] && return
 
+	# The AI set is not offered on OKD, so it is not a companion there either
+	if ! _image_set_for_dist ai; then
+		_needed=$(echo "$_needed" | grep -vx 'ai' || true)
+		[[ -z "$_needed" ]] && return
+	fi
+
 	# An empty OpenShift AI list is a normal result: say so once, and do not offer it.
 	if echo "$_needed" | grep -qx 'ai'; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
@@ -2469,6 +2518,9 @@ _tui_offer_companion_images() {
 
 mirror_manage_images() {
 	tui_log "Action: Additional Images"
+	# The example image: OKD takes it from the host that serves it without an account
+	local _img_example="registry.redhat.io/ubi9/ubi:latest"
+	[[ "$(dist_of)" == "okd" ]] && _img_example="registry.access.redhat.com/ubi9/ubi:latest"
 	local _img_file="$ABA_ROOT/images.conf"
 	local default_item="L"
 
@@ -2524,7 +2576,7 @@ These images are added to the 'additionalImages' section of the ImageSet config
 and will be mirrored alongside OpenShift platform and operator images.
 
 • List: show all configured additional images
-• Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
+• Add: add a container image reference (e.g. ${_img_example})
 • Remove: remove a previously added image
 • Delete all: clear all additional images from images.conf
 
@@ -2563,7 +2615,7 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 				;;
 			A)
 				dlg --backtitle "$(ui_backtitle)" --title "Add Image" \
-					--inputbox "Enter container image reference:\n\n(e.g. registry.redhat.io/ubi9/ubi:latest)" \
+					--inputbox "Enter container image reference:\n\n(e.g. ${_img_example})" \
 					0 0 "" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					local _new_img

@@ -49,6 +49,8 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 
 > **Prerequisites:** RHEL 8/9/10, sudo access (passwordless recommended) or root, Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
 
+> **Installing OKD instead of OpenShift?** After installing ABA, run `aba --distribution okd` before the first `aba` or `abatui`. OKD needs no Red Hat account or pull secret unless you add operators. See [Using OKD](#using-okd).
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"
 cd aba
@@ -93,6 +95,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
 - [Advanced Topics](#advanced-topics)
   - [Named Mirror Directories (Enclaves)](#named-mirror-directories-enclaves)
   - [Supported Architectures](#supported-architectures)
+  - [Using OKD](#using-okd)
   - [Running ABA in a Container](#running-aba-in-a-container)
   - [Sigstore Signature Handling](#sigstore-signature-handling)
   - [Prompt Control](#prompt-control)
@@ -335,6 +338,8 @@ This command:
   - or, installs *Mirror Registry for Red Hat OpenShift* (OMR, Quay, or Docker) on the local bastion. For remote host installation, see [Load images to a remote host](#load-images-to-a-remote-host).
   - pulls images from the Internet and stores them in the registry.
 
+> **OKD:** the release is pulled from `quay.io/okd` and no Red Hat pull secret is needed, but the credentials of the mirror registry are. Operators are limited to the community catalog. See [Using OKD](#using-okd).
+
 ```
 aba -d cli download
 ```
@@ -365,6 +370,8 @@ aba -d mirror save
 ```
 
 - Pulls the images from the Internet and saves them into `aba/mirror/data/mirror_000001.tar`. Make sure there is [enough disk space](#q-how-much-disk-space-do-i-need-when-using-aba)!
+
+> **OKD:** `aba -d mirror save` pulls the release from `quay.io/okd`. `aba -d mirror load` refuses a bundle saved for the other distribution, or for a release other than `ocp_version` in `aba.conf`. See [Using OKD](#using-okd).
 
 Then, create the *install bundle* using `aba tar`. This copies the entire `aba/` repository (including templates, scripts, images, CLIs, and other install files) into a single archive. Transfer the bundle to your disconnected bastion via a portable storage device or other method.
 
@@ -1922,6 +1929,96 @@ ABA supports the following architectures, automatically detecting the host and d
 **Notes on arm64:**
 
 - Tested on Mac M1 with arm64 VMware Fusion VMs. The generated ISO was used to complete OpenShift installation in a second arm64 VM on the same private network.
+
+## Using OKD
+
+ABA can install [OKD](https://okd.io), the community distribution of OpenShift, instead of OpenShift. The workflow is the same: mirror the images (`sync`, or `save` and `load`), then install the cluster. Only new installs are covered; see [Not supported on OKD](#not-supported-on-okd).
+
+### Selecting OKD
+
+```bash
+aba --distribution okd       # Writes distribution=okd to aba.conf
+```
+
+Or set `distribution=okd` in `aba.conf`. The values are `ocp` (the default) and `okd`; an empty or missing value means `ocp`. In the TUI, *Distribution* is the first page of the wizard. It is asked once, when `aba.conf` has no value yet.
+
+> **TUI, first run:** the TUI checks Internet access before it asks for the distribution, and that check uses the OpenShift sites. On a host that can reach only the OKD sites, and has no install bundle, the TUI reports "Internet Access Required" and exits. Run `aba --distribution okd` before starting `abatui`.
+
+### Channels and versions
+
+| Channel | Holds |
+| ------- | ----- |
+| `stable` | Release builds, `X.Y.Z-okd-scos.N` |
+| `candidate` | The builds the candidate update graph lists, today pre-release builds `X.Y.Z-okd-scos.ec.N`. ABA shows the pre-release warning. |
+
+The channels `fast` and `eus` do not exist for OKD; ABA rejects them. `--version` takes `latest`, `previous`, `older`, `X.Y` (the newest build of that minor version), or a full version:
+
+```bash
+aba --distribution okd --channel stable --version latest
+aba --distribution okd --channel candidate --version X.Y.Z-okd-scos.ec.N
+```
+
+The order of `--distribution` and `--channel` on the command line does not matter. A version must be listed in the update graph of the channel (`updates.okd.io`). On `stable`, a release published on GitHub that the graph does not list yet is accepted too.
+
+### Where the tools come from
+
+- `oc` and `openshift-install`: the assets of the release on [GitHub](https://github.com/okd-project/okd/releases), checked against the `sha256sum.txt` of that release.
+- `oc-mirror`: OKD does not publish it. ABA downloads the same `oc-mirror` as for OpenShift, from `mirror.openshift.com`.
+- Release images: `quay.io/okd`. Update graph: `updates.okd.io`. Release list: the GitHub API.
+
+### Pull secret
+
+OKD needs no Red Hat pull secret. If `pull_secret_file` does not exist and no operators are selected, ABA writes the placeholder published by the OKD project (`{"auths":{"fake":{"auth":"aWQ6cGFzcwo="}}}`, mode 600). It holds no credential. An existing file must be valid JSON with an `auths` entry.
+
+A real pull secret is needed only for operators (`ops`, `op_sets`): the placeholder is then rejected, and the file must hold credentials for the registries that host the operator images. `aba -d mirror sync` also needs the credentials of the mirror registry, as for OpenShift. ABA does not ask for `registry.redhat.io` or `console.redhat.com` on OKD. Images you add yourself (`aba image add`, `images.conf`) must be pullable without an account, or the secret must cover them.
+
+### Release signatures
+
+`oc-mirror` verifies the signature of the release it mirrors. For OKD the signatures are not on `mirror.openshift.com`, so `aba -d mirror sync`, `save`, and `load` set two environment variables for `oc-mirror`:
+
+| Variable | Default set by ABA |
+| -------- | ------------------ |
+| `OCP_SIGNATURE_URL` | `https://storage.googleapis.com/openshift-ci-release/releases/signatures/openshift/release/` |
+| `OCP_SIGNATURE_VERIFICATION_PK` | `templates/okd-release-signing-key.asc` (public key of the release CI) |
+
+- `OCP_SIGNATURE_URL` must end with `/`: `oc-mirror` appends the release digest to it as is. ABA warns when a value you set does not.
+- A value you set yourself wins, for each variable on its own. An empty value counts as not set.
+- The bundled key expires on **2027-03-31**. After that date `oc-mirror` may reject the signatures; set `OCP_SIGNATURE_VERIFICATION_PK` to a current key file.
+
+### Operators and image sets
+
+- Only the community catalog is available, pulled from `registry.access.redhat.com/redhat/community-operator-index:vX.Y`. `aba show-operators` lists it. An operator that exists only in the `redhat-operator` or `certified-operator` catalog is rejected with a message, because those catalogs need a Red Hat account.
+- Operator sets (`op_sets`) are Red Hat products. `sync` and `save` reject any `op_sets` value.
+- The image set `okd` (`aba image set add okd`) holds `ubi9` and `ubi9-micro`. The sets `ocp` and `ai` are not offered.
+
+### One distribution per mirror and cluster
+
+`aba.conf` (the next install), the mirror registry, and each cluster record their distribution separately. A mirror registry holds one distribution: `sync` and `load` stop when it already holds the other one (use another `reg_host` or `reg_path`). A cluster keeps the distribution it was installed with; changing `aba.conf` later does not change it. For a mirror install, ABA builds the image sources of `install-config.yaml` from the mapping `oc-mirror` wrote, and adds two install-time manifests (Samples Operator removed, default OperatorHub sources off). That mapping, and the release signature check of the installer, are read from `mirror/data/working-dir`, which `aba -d mirror clean` deletes while the registry keeps its content: after a clean, run `aba -d mirror sync` again before creating the cluster (ABA says "No oc-mirror IDMS found" until you do).
+
+### Not supported on OKD
+
+These are not supported. Where ABA can tell, it stops with "unsupported for OKD" before anything is changed:
+
+- Upgrades: `aba upgrade`, `aba upgrade-mon`, `--upgrade-to` and `ocp_upgrade_to`, and loading a bundle of another release.
+- `aba day2-osus` and `aba day2-virt`.
+- `aba import` of an OKD cluster.
+- Operators from the `redhat-operator` and `certified-operator` catalogs, and all operator sets (`op_sets`).
+- The channels `fast` and `eus`.
+- Architectures other than x86_64, and VMware vSphere (`platform=vmw`). With `distribution=okd`, ABA stops with "not supported for OKD" when `platform` is `vmw` or the host is not x86_64: when `aba.conf` is verified, and in `aba --distribution` and `aba --platform` whatever the order of the options. They are not tested.
+
+### Red Hat-hosted content that OKD still uses
+
+None of it needs an account. Each download is anonymous.
+
+| Content | Host | Used for |
+| ------- | ---- | -------- |
+| `oc-mirror` | `mirror.openshift.com` | Mirroring (`sync`, `save`, `load`) |
+| `mirror-registry` (Quay) installer | `mirror.openshift.com` | The default registry, `reg_vendor=auto`. With `reg_vendor=docker` the registry image comes from `docker.io` instead. |
+| `butane` | `mirror.openshift.com` | Day-2 NTP configuration |
+| Community operator catalog | `registry.access.redhat.com` | Operators |
+| `ubi9` images | `registry.access.redhat.com` | Image set `okd` |
+
+Everything else comes from `github.com` (CLI tools, release list), `quay.io` (release images), `updates.okd.io` (update graph), and `storage.googleapis.com` (release signatures). The Internet check at start-up covers `github.com`, `quay.io`, `updates.okd.io`, and `mirror.openshift.com`.
 
 ## Running ABA in a Container
 

@@ -4,6 +4,8 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+cluster_okd_guard "OpenShift Update Service setup ('aba day2-osus')"
+
 
 
 umask 077

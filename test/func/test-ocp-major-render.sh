@@ -18,6 +18,7 @@ _load_renderer() {
 	# shellcheck disable=SC1091
 	source scripts/include_all.sh
 	eval "$(awk '/^_render_image_content_sources\(\)/{p=1} p{print} p && /^}/{exit}' scripts/create-install-config.sh)"
+	eval "$(awk '/^_render_okd_image_content_sources\(\)/{p=1} p{print} p && /^}/{exit}' scripts/create-install-config.sh)"
 }
 
 _out=$(
@@ -55,6 +56,51 @@ else
 	_fail "5.0.3 content sources"
 	echo "$_out"
 fi
+
+# OKD takes the sources from the IDMS oc-mirror wrote (real output kept as a fixture), not from the template
+_okd=$(mktemp -d)
+mkdir -p "$_okd/mirror/data/working-dir/cluster-resources"
+sed 's#registry\.example\.com#registry.example.com#g' test/func/fixtures/okd-idms-oc-mirror.yaml \
+	> "$_okd/mirror/data/working-dir/cluster-resources/idms-oc-mirror.yaml"
+_out=$(
+	_load_renderer
+	cd "$_okd" || exit 1
+	distribution=okd
+	unset ocp_major
+	ocp_version=4.21.0-okd-scos.11
+	reg_host=registry.example.com
+	reg_port=8443
+	reg_path=/ocp4/openshift4
+	_render_image_content_sources
+	printf '%s\n' "$image_content_sources"
+)
+if echo "$_out" | grep -q 'source: quay.io/okd/scos-content' && echo "$_out" | grep -q 'source: quay.io/okd/scos-release' \
+	&& ! echo "$_out" | grep -q 'openshift-release-dev'; then
+	_pass "okd renders the oc-mirror IDMS (and the payload source), no OCP source"
+else
+	_fail "okd content sources"
+	echo "$_out"
+fi
+rm -f "$_okd/mirror/data/working-dir/cluster-resources/idms-oc-mirror.yaml"
+_err=$(
+	{
+		_load_renderer
+		cd "$_okd" || exit 1
+		distribution=okd
+		ocp_version=4.21.0-okd-scos.11
+		reg_host=registry.example.com
+		reg_port=8443
+		reg_path=/ocp4/openshift4
+		_render_image_content_sources
+	} 2>&1
+) && _rc=0 || _rc=$?
+if [ "$_rc" -ne 0 ] && echo "$_err" | grep -q "No oc-mirror IDMS"; then
+	_pass "okd without the oc-mirror IDMS stops the render"
+else
+	_fail "okd without an IDMS must abort (rc=$_rc)"
+	echo "$_err" | tail -5
+fi
+rm -rf "$_okd"
 
 _err=$(
 	{

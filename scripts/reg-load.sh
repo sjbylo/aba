@@ -48,6 +48,8 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+mirror_distribution_guard "$regcreds_dir/state.sh"
+
 # aba-transfer.tar path (used in both early-exit and normal flow)
 _transfer_tar="data/aba-transfer.tar"
 
@@ -105,6 +107,8 @@ if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 				aba_abort "Failed to unpack transfer config ($_transfer_tar)."
 			fi
 			aba_debug "Transfer config applied."
+			bundle_distribution_guard
+			okd_bundle_release_check data/aba-transfer-metadata.json data/imageset-config.yaml
 		fi
 		aba_info "Config-only transfer: no images to load. Done."
 		exit 0
@@ -177,6 +181,9 @@ if [ -f "$_transfer_tar" ]; then
 		fi
 	fi
 
+	bundle_distribution_guard
+	okd_bundle_release_check data/aba-transfer-metadata.json data/imageset-config.yaml
+
 	aba_debug "Transfer config applied."
 fi
 
@@ -244,6 +251,12 @@ if [ ! -d data ]; then
 fi
 aba_debug "data/ directory exists"
 
+# oc-mirror reads the per-user sigstore file: keep it right for the distribution (quay.io/okd has no attachments)
+ensure_sigstore_distribution_config
+
+# OKD release signatures are not on mirror.openshift.com: point oc-mirror at the CI bucket and key
+ensure_release_signature_env
+
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
 # Reassure the user: summarize what this load will apply (tag-based ISC).
@@ -296,6 +309,13 @@ else
 		fi
 		aba_debug "Version from ISC parsing: ver=$_loaded_ver chan=$_loaded_chan"
 	fi
+	# An OKD ISC has no channels to read the version from: use the transfer metadata, and say so
+	# when there is none instead of leaving the mirror state without a version.
+	if [ "$(dist_of)" = "okd" ] && [ ! "$_loaded_ver" ]; then
+		_loaded_ver=$(_isc_release_version "$_isc_file" data/aba-transfer-metadata.json)
+		[ "$_loaded_ver" ] || aba_warn "Cannot determine the release version of the content being loaded." \
+			"The mirror state keeps its previous version; check imageset-config.yaml and the transfer bundle."
+	fi
 fi
 
 _load_rc=0
@@ -323,6 +343,11 @@ if [ "$_loaded_ver" ]; then
 	else
 		replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
 	fi
+fi
+if [ "$(dist_of)" = "okd" ]; then
+	_okd_digest=$(_transfer_meta_value data/aba-transfer-metadata.json release_digest)
+	[ "$_okd_digest" ] || _okd_digest=$(_isc_release_digest data/imageset-config.yaml)
+	okd_record_mirror_state "$regcreds_dir/state.sh" "$_okd_digest"
 fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"

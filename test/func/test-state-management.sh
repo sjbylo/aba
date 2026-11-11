@@ -294,6 +294,26 @@ fi
 rm -rf "$_plat_dir"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Distribution in cluster state: only OKD records it, a state without the key is ocp
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- cluster_installed_distribution ---"
+_dist_dir="$PWD/_test-dist"
+mkdir -p "$_dist_dir/clusterstate"
+printf 'cluster_name=d\nplatform=kvm\n' > "$_dist_dir/clusterstate/state.sh"
+_got=$(bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_distribution '$_dist_dir'")
+[ "$_got" = "ocp" ] && test_pass "state without the key reads as ocp" || test_fail "state without the key: expected ocp, got '${_got:-empty}'"
+printf 'cluster_name=d\nplatform=kvm\ndistribution=okd\nrelease_digest=sha256:0\n' > "$_dist_dir/clusterstate/state.sh"
+_got=$(bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_distribution '$_dist_dir'")
+[ "$_got" = "okd" ] && test_pass "state with distribution=okd reads as okd" || test_fail "okd state: expected okd, got '${_got:-empty}'"
+_got=$(bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_platform '$_dist_dir'")
+[ "$_got" = "kvm" ] && test_pass "platform still read from the same state" || test_fail "platform: expected kvm, got '${_got:-empty}'"
+rm -f "$_dist_dir/clusterstate/state.sh"
+_rc=0
+bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; cluster_installed_distribution '$_dist_dir'" >/dev/null || _rc=$?
+[ "$_rc" -eq 1 ] && test_pass "returns 1 when state.sh is missing" || test_fail "expected rc=1 without state.sh, got rc=$_rc"
+rm -rf "$_dist_dir"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 echo

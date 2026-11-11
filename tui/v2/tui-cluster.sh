@@ -2336,10 +2336,18 @@ _day2_run() {
 	return $rc
 }
 
+# ABA has no upgrade, OSUS or virtualization setup for an OKD cluster: say so instead of running it.
+_day2_okd_blocked() {
+	[[ "$(cluster_installed_distribution "$ABA_ROOT/$SELECTED_CLUSTER" 2>/dev/null)" == "okd" ]] || return 1
+	dlg --backtitle "$(ui_backtitle)" --msgbox "$1 is unsupported for OKD in ABA.\n\n$SELECTED_CLUSTER_DISPLAY was installed as OKD. ABA installs OKD but does not upgrade it or set up Red Hat services on it." 0 0
+	return 0
+}
+
 _day2_run_osus() {
 	if ! select_installed_cluster "$TUI2_TITLE_DAY2_MENU" "Select cluster for Day-2:"; then
 		return 1
 	fi
+	_day2_okd_blocked "OpenShift Update Service setup" && return 0
 
 	# Pre-check: warn if Cincinnati operator is not available on the cluster
 	local _kc
@@ -2367,6 +2375,7 @@ _day2_run_virt() {
 	if ! select_installed_cluster "$TUI2_TITLE_DAY2_MENU" "Select cluster for Day-2:"; then
 		return 1
 	fi
+	_day2_okd_blocked "OpenShift Virtualization add-on setup" && return 0
 
 	# Pre-check: warn if kubevirt-hyperconverged operator is not available on the cluster
 	local _kc
@@ -2607,6 +2616,7 @@ _day2_upgrade() {
 	if ! select_installed_cluster "$TUI2_TITLE_DAY2_UPGRADE" "Select cluster to upgrade:"; then
 		return 1
 	fi
+	_day2_okd_blocked "Cluster upgrade" && return 0
 
 	# Fetch available versions via machine-readable output
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY...\n\n(If OSUS is installed, may need to wait for the update graph to refresh)" 0 0

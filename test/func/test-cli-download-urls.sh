@@ -36,10 +36,10 @@ test_fail() { echo -e "  ${RED}✗ FAIL${NC}: $1"; fail_count=$(( fail_count + 1
 # Extract download URLs from the Makefile for a given ocp_version.
 # Uses Make's --eval to print resolved URL variables without downloading.
 extract_urls() {
-	local ver="$1"
+	local ver="$1" dist="${2:-}"
 	make -C cli --no-print-directory \
 		--eval='probe-urls: ; @echo "$(rhel9_oc_url)"; echo "$(rhel8_oc_url)"; echo "$(openshift_install_url)/$(openshift_install_file)"; echo "$(oc_mirror_base_url)/oc-mirror.tar.gz"; echo "$(oc_mirror_base_url)/oc-mirror.rhel9.tar.gz"; echo "$(butane_binary_file_url)"; echo "$(govc_url)/$(govc_tar_file)"' \
-		probe-urls ocp_version="$ver" platform=vmw 2>/dev/null | grep '^https://'
+		probe-urls ocp_version="$ver" platform=vmw ${dist:+distribution=$dist} 2>/dev/null | grep '^https://'
 }
 
 # HEAD-probe a URL. Returns 0 if reachable (HTTP 200), 1 otherwise.
@@ -81,12 +81,21 @@ echo ""
 # Construct a plausible EC version from the current major.minor
 EC_VER="${OCP_MAJOR_MINOR}.0-ec.1"
 
+# OKD has no engineering candidates (its tags end in -okd-scos.N)
+if [ "$(dist_of)" = "okd" ]; then
+	echo "  SKIP: no EC releases for distribution okd"
+	EC_VER=""
+fi
+
 # For EC versions, oc-mirror should either:
 #   a) Use the dev-preview path (if oc-mirror IS published there), or
 #   b) Fall back to the pinned stable channel (if NOT published there).
 # Either way, the resolved URL must be reachable.
-ec_urls=$(extract_urls "$EC_VER")
-if [ -z "$ec_urls" ]; then
+ec_urls=""
+[ -n "$EC_VER" ] && ec_urls=$(extract_urls "$EC_VER")
+if [ -z "$EC_VER" ]; then
+	:
+elif [ -z "$ec_urls" ]; then
 	test_fail "No URLs extracted for EC version $EC_VER"
 else
 	while IFS= read -r url; do
@@ -142,6 +151,40 @@ else
 		test_fail "Pinned channel $pin is NOT reachable: $pin_url"
 	fi
 fi
+
+# --- Test 4: OKD URL resolution (no network: the URLs are only compared as strings) ---
+# The live HEAD probe of the OKD URLs is Test 1 when aba.conf has distribution=okd.
+
+echo ""
+echo "=== Test 4: OKD URLs are built from ocp_version (no network) ==="
+echo ""
+
+okd_base="https://github.com/okd-project/okd/releases/download"
+for okd_ver in 4.21.0-okd-scos.11 4.20.0-okd-scos.3 5.0.0-okd-scos.5; do
+	okd_urls=$(extract_urls "$okd_ver" okd)
+	for want in \
+		"$okd_base/$okd_ver/openshift-client-linux-amd64-rhel9-$okd_ver.tar.gz" \
+		"$okd_base/$okd_ver/openshift-client-linux-amd64-rhel8-$okd_ver.tar.gz" \
+		"$okd_base/$okd_ver/openshift-install-linux-$okd_ver.tar.gz"; do
+		if grep -qxF "$want" <<< "$okd_urls"; then
+			test_pass "OKD $okd_ver: $(basename "$want")"
+		else
+			test_fail "OKD $okd_ver: expected $want"
+		fi
+	done
+	# oc-mirror keeps the OCP pin
+	if grep -qE "^https://mirror\.openshift\.com/pub/openshift-v4/[^/]+/clients/ocp/stable-[0-9.]+/oc-mirror\.rhel9\.tar\.gz$" <<< "$okd_urls"; then
+		test_pass "OKD $okd_ver: oc-mirror stays on the pinned OCP channel"
+	else
+		test_fail "OKD $okd_ver: oc-mirror URL is not the pinned OCP channel"
+	fi
+	# nothing else from the OCP CDN for the OKD client/installer
+	if grep -E "mirror\.openshift\.com.*(openshift-client|openshift-install)" <<< "$okd_urls" | grep -q .; then
+		test_fail "OKD $okd_ver: oc / openshift-install URL still points at mirror.openshift.com"
+	else
+		test_pass "OKD $okd_ver: oc / openshift-install no longer point at mirror.openshift.com"
+	fi
+done
 
 # --- Summary ---
 

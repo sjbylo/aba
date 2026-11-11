@@ -31,6 +31,9 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+okd_mirror_conf_guards
+mirror_distribution_guard "$regcreds_dir/state.sh"
+
 # Pre-flight: verify internet access and pull secret before proceeding.
 # Pass mirror-specific pull secret as fallback for hosts without a global pull secret.
 require_internet_and_pull_secret "$regcreds_dir/pull-secret-mirror.json"
@@ -150,6 +153,12 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ###[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
+# oc-mirror reads the per-user sigstore file: keep it right for the distribution (quay.io/okd has no attachments)
+ensure_sigstore_distribution_config
+
+# OKD release signatures are not on mirror.openshift.com: point oc-mirror at the CI bucket and key
+ensure_release_signature_env
+
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
 aba_progress "DONE|registry"
@@ -201,6 +210,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 else
 	replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
 fi
+okd_record_mirror_state "$regcreds_dir/state.sh" "$(_isc_release_digest data/imageset-config.yaml)"
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n reg_running -v "true" -f "$regcreds_dir/state.sh"

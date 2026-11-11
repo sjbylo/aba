@@ -1,0 +1,38 @@
+# ABA: Sigstore signature handling for oc-mirror, OKD variant.
+#
+# Same file as aba-sigstore-config.yaml with the differences OKD needs.  ABA puts
+# it in $HOME/.config/containers/registries.d/aba-sigstore.yaml when the
+# distribution is okd and that file is still the stock one (see
+# ensure_sigstore_distribution_config); it is switched back when the
+# distribution is ocp again.
+#
+# Why: oc-mirror (and podman/skopeo) read this directory to decide whether to
+# fetch sigstore (cosign) OCI signature attachments.  The OKD release payload
+# and its components on quay.io/okd carry none, so the global default stays off
+# and quay.io/okd is switched off explicitly, which also keeps a broader
+# "quay.io: true" rule added by hand from applying to it.  The registry.redhat.io
+# scope of the OCP file is left out: OKD does not pull from that registry.
+#
+# --- Customisation examples ---
+#
+# Enable sigstore for a specific quay.io namespace:
+#   quay.io/my-signed-images:
+#       use-sigstore-attachments: true
+#
+# Scopes are matched most-specific-first, so a longer path
+# always wins over a shorter one.
+#
+# Reference:
+#   man containers-registries.d(5)
+#   https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md
+# -----------------------------------------------------------
+
+default-docker:
+    use-sigstore-attachments: false
+docker:
+    quay.io/okd:
+        use-sigstore-attachments: false
+    quay.io/openshift-release-dev:
+        use-sigstore-attachments: true
+    registry.access.redhat.com:
+        lookaside: https://access.redhat.com/webassets/docker/content/sigstore

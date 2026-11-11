@@ -31,6 +31,18 @@ done
 
 [ ${#_catalogs[@]} -eq 0 ] && _catalogs=(redhat-operator)
 
+# OKD lists only the catalog it can pull anonymously, and says why
+if [ "$(dist_of)" = "okd" ]; then
+	_kept=()
+	_dropped=
+	for _cat in "${_catalogs[@]}"; do
+		if [[ " $(dist_catalogs) " == *" $_cat "* ]]; then _kept+=("$_cat"); else _dropped=1; fi
+	done
+	[ ${#_kept[@]} -eq 0 ] && _kept=($(dist_catalogs))
+	_catalogs=("${_kept[@]}")
+	[ "$_dropped" ] && aba_info "OKD lists the community-operator catalog only: the redhat-operator and certified-operator catalogs need a Red Hat account." >&2
+fi
+
 # --- Resolve OCP version ---
 
 _ocp_major=$(echo "$ocp_version" | cut -d. -f1-2)

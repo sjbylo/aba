@@ -45,6 +45,8 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+cluster_okd_guard "OpenShift Virtualization add-on setup ('aba day2-virt')"
+
 umask 077
 
 source <(normalize-aba-conf)

@@ -222,6 +222,11 @@ shell)
 		_h="${_health_map[$_dir]:-}"
 		_v="${_version_map[$_dir]:-}"
 		_bn=$(basename "$_dir")
+		# Only an OKD cluster says so; the line of any other cluster stays as it was
+		if [ "$(cluster_installed_distribution "$_dir" 2>/dev/null)" = "okd" ]; then
+			echo "cluster=${_bn} status=${_status} type=${_type} health=${_h:-unknown} version=${_v:-} distribution=okd"
+			continue
+		fi
 		echo "cluster=${_bn} status=${_status} type=${_type} health=${_h:-unknown} version=${_v:-}"
 	done
 	;;

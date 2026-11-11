@@ -66,6 +66,8 @@ WORK_DIR=$PWD # Remember so can change config file here
 new_args=()           # Array to collect arguments we want to keep
 dir_already_set=false # Only process first --dir/-d
 _CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
+_CLI_DISTRIBUTION=""  # Extracted from --distribution (ocp|okd) so the order of options does not matter
+_CLI_PLATFORM=""      # Extracted from --platform/-p (vmw|kvm|bm) for the same reason
 i=1
 
 while [ $i -le $# ]; do
@@ -154,6 +156,19 @@ while [ $i -le $# ]; do
 			i=$((i + 1))
 			chan="${!i}"
 			new_args+=("$arg" "$chan")
+			;;
+
+		--distribution)
+			# Remember the value so options given before it on the same line already see it
+			# (applied once aba.conf has been read); the value itself is handled further down
+			new_args+=("$arg")
+			case "${@:$((i + 1)):1}" in ocp|okd) _CLI_DISTRIBUTION="${@:$((i + 1)):1}" ;; esac
+			;;
+
+		--platform|-p)
+			# Same for the platform: --distribution okd must see a --platform given after it
+			new_args+=("$arg")
+			case "${@:$((i + 1)):1}" in vmw|kvm|bm) _CLI_PLATFORM="${@:$((i + 1)):1}" ;; esac
 			;;
 
 		*)
@@ -328,6 +343,18 @@ fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(cd "$ABA_ROOT" && normalize-aba-conf)
+[ "$_CLI_DISTRIBUTION" ] && distribution="$_CLI_DISTRIBUTION"  # --distribution anywhere on the line applies to all its options
+
+# A channel as typed (stable|s, candidate|c, ...) in its long form
+_chan_canon() {
+	case "$1" in
+		stable | s)	echo stable ;;
+		fast | f)	echo fast ;;
+		eus | e)	echo eus ;;
+		candidate | c)	echo candidate ;;
+		*)		echo "$1" ;;
+	esac
+}
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
@@ -464,7 +491,8 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
 		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
 
-		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+		# Keep the -okd-scos.N suffix: cut to x.y.z, an OKD release would look like another version
+		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+(-okd-scos\.[0-9]+)?")
 		[ "$os_inst" ] && \
 			echo && \
 			echo_white  "openshift-install:  $os_inst"
@@ -523,8 +551,10 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				cd "$ABA_ROOT"
 				case "$_set_action" in
 					add)
+						_avail_sets="ocp, virt, ai"
+						[ "$(dist_of)" = "okd" ] && _avail_sets="okd, virt"
 						[ $# -eq 0 ] && aba_abort "Usage: aba image set add <set-name> [version]" \
-							"Available sets: ocp, virt, ai"
+							"Available sets: $_avail_sets"
 						_set_name="$1"
 						_set_ver="${2:-}"
 						_count=$(image_set_add "$_set_name" "$_set_ver") || \
@@ -565,8 +595,11 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				# Validate all images before creating/modifying files (#1169, #1170)
 				for _img in "$@"; do
 					if ! echo "$_img" | grep -qE '^[a-zA-Z0-9][-a-zA-Z0-9.]*(/[-a-zA-Z0-9._]+)+(:[a-zA-Z0-9][-a-zA-Z0-9._]*|@sha256:[0-9a-fA-F]{64})?$'; then
+						_okd_hint=""
+						[ "$(dist_of)" = "okd" ] && _okd_hint="For OKD use images that need no Red Hat account (registry.access.redhat.com, quay.io); registry.redhat.io needs one."
 						aba_abort "Invalid image reference: $_img" \
 							"Expected format: registry/repo/image:tag  or  registry/repo/image@sha256:digest" \
+							${_okd_hint:+"$_okd_hint"} \
 							"Examples:" \
 							"  registry.redhat.io/ubi9/ubi:latest" \
 							"  quay.io/openshift/hello-openshift:1.2.0" \
@@ -666,6 +699,7 @@ for i in imgs:
 				aba_abort "wrong value [$chan] after option $opt" 
 				;;
 		esac
+		dist_channel_is_valid "$chan" || aba_abort "channel [$chan] is not available for distribution [$(dist_of)] (OKD: stable, candidate)"
 		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
 		ocp_channel=$chan
 		shift 2
@@ -680,11 +714,14 @@ for i in imgs:
 		ver=$arg
 		# Reject obvious format errors immediately (before any network lookups)
 		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p", "older", "o"
-		if ! _is_version_string "$arg" && ! _is_minor_version "$arg" && \
+		if ! dist_version_is_valid "$arg" "$(_chan_canon "${chan:-$ocp_channel}")" && ! _is_minor_version "$arg" && \
 		   ! [[ "$arg" =~ ^(latest|l|previous|p|older|o)$ ]]; then
+			dist_version_is_valid "$arg" candidate && aba_abort "incorrect version format '$arg' — an OKD pre-release build is only available on the candidate channel (use --channel candidate)"
+			[ "$(dist_of)" = "okd" ] && aba_abort "incorrect version format '$arg' — expected X.Y.Z-okd-scos.N (X.Y.Z-okd-scos.ec.N on the candidate channel)"
 			aba_abort "incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
 		fi
 		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
+		[ "$(dist_of)" = "okd" ] && chan=$(_chan_canon "$chan")
 		tmp_out=
 		case "$arg" in
 			latest | l)
@@ -705,11 +742,12 @@ for i in imgs:
 		_is_minor_version "$ver" && { ver=$(fetch_latest_z_version "$ocp_channel" "$ver") || true; }
 
 		# Validate version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
-		_is_version_string "$ver" || ver=""
+		dist_version_is_valid "$ver" "$chan" || ver=""
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		if [ ! "$ver" ]; then
 			_err_msg="incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
+			[ "$(dist_of)" = "okd" ] && _err_msg="incorrect version format '$arg' — expected X.Y.Z-okd-scos.N (X.Y.Z-okd-scos.ec.N on the candidate channel)"
 			[ "$tmp_out" ] && _err_msg="failed to look up the ${tmp_out}version for channel [$chan] after option [$opt $arg]"
 			aba_abort "$_err_msg"
 		fi
@@ -744,6 +782,7 @@ for i in imgs:
 		ocp_version=$ver
 	elif [ "$1" = "--upgrade-to" ]; then
 		opt=$1
+		okd_conf_guard "Mirroring an upgrade target ($opt)"
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
 		# If no value (or "none"), clear the target version in mirror.conf
@@ -757,6 +796,7 @@ for i in imgs:
 		arg=$2
 		tgt_ver=$arg
 		[ ! "$chan" ] && chan=$ocp_channel
+		[ "$(dist_of)" = "okd" ] && chan=$(_chan_canon "$chan")
 		tgt_tmp_out=
 		case "$arg" in
 			latest | l)
@@ -773,9 +813,9 @@ for i in imgs:
 			;;
 		esac
 		_is_minor_version "$tgt_ver" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
-		_is_version_string "$tgt_ver" || tgt_ver=""
+		dist_version_is_valid "$tgt_ver" "$chan" || tgt_ver=""
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
-		_is_version_string "$tgt_ver" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		dist_version_is_valid "$tgt_ver" "$chan" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
 		_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
 		replace-value-conf -n ocp_upgrade_to -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
@@ -973,7 +1013,20 @@ for i in imgs:
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		case "$2" in vmw|kvm|bm) ;; *) aba_abort "invalid platform '$2' (use: vmw, kvm, bm)" ;; esac
+		_tprob="$(dist_target_problem "$2")" || aba_abort "$_tprob"
 		replace-value-conf -n platform -v "$2" -f $ABA_ROOT/aba.conf
+		shift 2
+	elif [ "$1" = "--distribution" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		case "$2" in ocp|okd) ;; *) aba_abort "invalid distribution '$2' (use: ocp, okd)" ;; esac
+		distribution="$2"  # all options on the command line (--channel, --version), before or after this one, see it
+		# The channel in effect (named anywhere on this line, else from aba.conf) must exist for the distribution
+		_dchan=$(_chan_canon "${chan:-$ocp_channel}")
+		case "$_dchan" in fast | stable | candidate | eus)
+			dist_channel_is_valid "$_dchan" || aba_abort "channel [$_dchan] is not available for distribution [$(dist_of)] (OKD: stable, candidate)" ;;
+		esac
+		_tprob="$(dist_target_problem "${_CLI_PLATFORM:-$platform}")" || aba_abort "$_tprob"
+		replace-value-conf -n distribution -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
 		# If no arg after --op-sets
@@ -1441,6 +1494,13 @@ if [ "$cur_target" ]; then
 				$_recreated || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
 			fi
 			;;
+	esac
+
+	# ABA installs OKD but has no upgrade, OSUS or virtualization path for it: stop before any cluster call
+	case $cur_target in
+		upgrade|upgrade-mon) cluster_okd_guard "Cluster upgrade ('aba $cur_target')" ;;
+		day2-osus)           cluster_okd_guard "OpenShift Update Service setup ('aba day2-osus')" ;;
+		day2-virt)           cluster_okd_guard "OpenShift Virtualization add-on setup ('aba day2-virt')" ;;
 	esac
 
 	# Command succeeded, so the cluster is clearly installed — create the marker
@@ -1990,6 +2050,24 @@ fi
 	aba_info "Checking Internet connectivity to required sites..."
 	
 	if ! check_internet_connectivity "aba"; then
+		# OKD needs other sites and no Red Hat account
+		if [ "$(dist_of)" = "okd" ]; then
+			aba_abort \
+				"Cannot access required sites: $FAILED_SITES" \
+				"" \
+				"Error details:" \
+				"  $ERROR_DETAILS" \
+				"" \
+				"Ensure you have Internet access to download the required images." \
+				"To get started with ABA run it on a connected workstation/laptop with Fedora, RHEL or CentOS Stream and try again." \
+				"" \
+				"Required sites:                                Other sites:" \
+				"   github.com                                     docker.io" \
+				"   quay.io and *.quay.io                          docker.com" \
+				"   updates.okd.io                                 hub.docker.com" \
+				"   mirror.openshift.com                           index.docker.io" \
+				"   registry.access.redhat.com (operators only)"
+		fi
 		aba_abort \
 			"Cannot access required sites: $FAILED_SITES" \
 			"" \
@@ -2059,8 +2137,12 @@ fi
 	echo_white -n "Fetching available versions ..."
 	# Wait: tip tasks started above via aba_version_fetch_start
 	if ! aba_version_fetch_wait "$ocp_channel"; then
-		error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version")
-		[ -z "$error_msg" ] && error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version_previous")
+		# The tasks were started under "<distribution>:<channel>:..." (aba_version_fetch_start); read the error of the same ones
+		error_msg=$(run_once -e -i "$(dist_of):${ocp_channel}:latest_version")
+		[ -z "$error_msg" ] && error_msg=$(run_once -e -i "$(dist_of):${ocp_channel}:latest_version_previous")
+		if [ "$(dist_of)" = "okd" ]; then
+			aba_abort "Failed to fetch OKD versions from updates.okd.io / github.com:\n$error_msg\n\nPlease check network/DNS and try again."
+		fi
 		aba_abort "Failed to fetch OCP versions from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi
 #	if [ "$ocp_channel" = "stable" ]; then
@@ -2103,7 +2185,8 @@ fi
 	fi
 
 	# Determine any already installed tool versions
-	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+	# Keep the -okd-scos.N suffix: cut to x.y.z, an OKD release would look like another version
+	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+(-okd-scos\.[0-9]+)?")
 	[ "$ocp_version" ] && cur_ver=$ocp_version  # prioritize the current version as defined in aba.conf
 
 	# If openshift-install is already installed, then offer that version also
@@ -2119,7 +2202,7 @@ fi
 		# Exit loop if release version exists
 		if [ "$target_ver" ]; then
 			aba_debug "Validating user input: target_ver=[$target_ver]"
-			if _is_version_string "$target_ver"; then
+			if dist_version_is_valid "$target_ver" "$ocp_channel"; then
 				# Validate version against Cincinnati graph (includes pre-release on candidate channel)
 				minor=$(_ver_minor "$target_ver")
 				aba_debug "Detected x.y.z format, extracting minor: $minor"
@@ -2283,7 +2366,11 @@ fi
 ##############################################################################################################################
 # Determine pull secret
 
-if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
+if [ "$(dist_of)" = "okd" ]; then
+	# OKD needs no Red Hat pull secret; only operator content can call for one
+	_ps_err=$(dist_pull_secret_ensure "$pull_secret_file") || aba_abort "$_ps_err" "$(dist_pull_secret_hint "$pull_secret_file")"
+	aba_info "Pull secret ready at '$pull_secret_file' (OKD needs no Red Hat registry login)."
+elif grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 	if jq empty $pull_secret_file; then
 		aba_info "Pull secret found at '$pull_secret_file'."
 		

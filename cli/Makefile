@@ -100,6 +100,7 @@ govc_tar_file := govc_Linux_$(govc_arch).tar.gz
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 platform := $(strip $(shell echo $(platform)))
+distribution := $(strip $(distribution))
 
 # govc is only needed for VMware platforms
 ifeq ($(platform),vmw)
@@ -236,6 +237,14 @@ rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch
 
 openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
 openshift_install_url	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/$(ocp_client_dir)/$(ocp_version)
+
+# OKD publishes the same tarballs and sha256sum.txt as GitHub release assets, in a
+# directory named after the release tag (= ocp_version). Only the base URL differs.
+ifeq ($(distribution),okd)
+  openshift_install_url	:= https://github.com/okd-project/okd/releases/download/$(ocp_version)
+  rhel9_oc_url      	:= $(openshift_install_url)/$(rhel9_oc_tar_file)
+  rhel8_oc_url		:= $(openshift_install_url)/$(rhel8_oc_tar_file)
+endif
 
 
 ########################################################################

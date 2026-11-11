@@ -13,6 +13,13 @@ echo ""
 tui_deploy_code
 echo ""
 
+# Distribution of the test host's aba.conf (ocp when the key is missing): OKD offers fewer channels
+# and asks for no pull secret. Same helper the TUI uses.
+_DIST=$($_TUI_SSH "cd ~/aba && source ./scripts/include_all.sh >/dev/null 2>&1; dist_of" 2>/dev/null | tail -1)
+_DIST="${_DIST:-ocp}"
+echo "  Distribution: $_DIST"
+echo ""
+
 # ============================================================================
 tui_start_to_menu || { tui_summary; exit 1; }
 
@@ -39,9 +46,22 @@ if echo "$_scr" | grep -qi "Resume Configuration\|Continue with this"; then
 	sleep 3
 fi
 
-# If pull-secret page appears (first run or no pull-secret)
+# The Distribution page is shown once, only when aba.conf has no answer yet: take the default (OpenShift)
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Choose what to install"; then
+	echo "  ✓ PASS: Distribution page appeared (aba.conf had no answer)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_keys Enter
+	sleep 2
+fi
+
+# If pull-secret page appears (first run or no pull-secret; OKD without operators never shows it)
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Pull Secret"; then
+	if [[ "$_DIST" == "okd" ]]; then
+		echo "  ✗ FAIL: Pull Secret page shown for OKD without operators"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
 	echo "  ✓ PASS: Pull Secret page appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter
@@ -57,14 +77,22 @@ tui_wait_for "Channel\|channel" 10
 tui_assert_title "Channel" "Channel dialog title"
 tui_screenshot "wiz-02-channel"
 tui_assert_contains "stable" "stable channel option"
-tui_assert_contains "fast" "fast channel option"
+if [[ "$_DIST" == "okd" ]]; then
+	tui_assert_not_contains "fast" "OKD offers no fast channel"
+else
+	tui_assert_contains "fast" "fast channel option"
+fi
 tui_assert_contains "candidate" "candidate channel option"
 
 # Check help
 tui_press_button "Help"
 sleep 2
 tui_assert_contains "stable" "Channel help mentions stable"
-tui_assert_contains "production" "Channel help mentions production"
+if [[ "$_DIST" == "okd" ]]; then
+	tui_assert_contains "recommended" "OKD channel help mentions recommended"
+else
+	tui_assert_contains "production" "Channel help mentions production"
+fi
 tui_screenshot "wiz-02b-channel-help"
 tui_keys Enter; sleep 1
 

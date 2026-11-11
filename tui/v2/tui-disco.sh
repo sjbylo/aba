@@ -417,8 +417,10 @@ disco_reset() {
 	# Pre-check: verify internet is reachable before offering the switch
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking internet connectivity..." 0 0
 	if ! check_internet_connectivity "aba" quiet 2>/dev/null; then
+		local _need_sites="registry.redhat.io\nand other Red Hat sites"
+		[[ "$(dist_of)" == "okd" ]] && _need_sites="$_ABA_OKD_PROBE_SITES"
 		dlg --backtitle "$(ui_backtitle)" --title "Cannot Switch" \
-			--msgbox "Internet is not available.\n\nConnected mode requires access to registry.redhat.io\nand other Red Hat sites.\n\nRestore internet connectivity and try again." 0 0
+			--msgbox "Internet is not available.\n\nConnected mode requires access to ${_need_sites}.\n\nRestore internet connectivity and try again." 0 0
 		tui_log "DISCO: switch to connected mode blocked — no internet"
 		return 0
 	fi
