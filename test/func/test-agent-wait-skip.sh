@@ -92,6 +92,16 @@ fi
 
 # wait-agent is on the install Make chain only — NOT inside monitor-install
 # (so 'aba mon' does not block on port 8090 after bootstrap).
+# Agent probe is inside Monitor installation, before monitor-install.sh
+# sends its own START|ci_mon. The row must leave N/A before the wait.
+_wa_start=$(awk '/aba_progress "START\|ci_mon"/{print NR; exit}' scripts/wait-agent-up.sh)
+_wa_wait=$(awk '/aba_wait_show "Waiting for Agent/{print NR; exit}' scripts/wait-agent-up.sh)
+if [ -n "$_wa_start" ] && [ -n "$_wa_wait" ] && [ "$_wa_start" -lt "$_wa_wait" ]; then
+	_assert "START|ci_mon is sent before the agent wait" "pass"
+else
+	_assert "START|ci_mon is sent before the agent wait" "fail"
+fi
+
 if ! grep -q 'wait-agent-up.sh' scripts/monitor-install.sh; then
 	_assert "monitor-install.sh does not call wait-agent-up" "pass"
 else

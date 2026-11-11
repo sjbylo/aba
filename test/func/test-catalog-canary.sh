@@ -2,13 +2,13 @@
 # Canary test: verify operator catalog extraction works for recent OCP versions.
 #
 # Calls the production entry point (download-catalog-index.sh) to test the full
-# code path including wrapper logic, caching, and fallback. Auto-detects available
-# OCP catalog versions (4.16+).
+# code path including wrapper logic, caching, and fallback. Versions come from
+# tools/refresh-catalog-indexes.sh --detect (the same list the refresh uses).
 #
 # Usage:
 #   test-catalog-canary.sh                    # test the 3 most recent versions
 #   test-catalog-canary.sh --recent 5         # test the 5 most recent versions
-#   test-catalog-canary.sh --all              # test all available versions (4.16+)
+#   test-catalog-canary.sh --all              # test every version the refresh selects
 #   test-catalog-canary.sh 4.20 4.21          # test specific versions only
 #
 # Exit code: 0 if all pass, 1 if any fail.
@@ -34,19 +34,18 @@ results=()
 
 # --- Version detection ---
 
+# Same minors as catalog refresh, including the step from 5.0 back to 4.x.
 _detect_versions() {
-	local versions=()
-	local minor=16
-	while true; do
-		local ver="4.${minor}"
-		if skopeo inspect --raw "docker://registry.redhat.io/redhat/redhat-operator-index:v${ver}" >/dev/null 2>&1; then
-			versions+=("$ver")
-			minor=$(( minor + 1 ))
-		else
-			break
-		fi
-	done
-	echo "${versions[*]}"
+	local out line ga="" pre=""
+	out=$(tools/refresh-catalog-indexes.sh --detect) || return 1
+	while IFS= read -r line; do
+		case "$line" in
+			ga=*) ga="${line#ga=}" ;;
+			pre=*) pre="${line#pre=}" ;;
+		esac
+	done <<< "$out"
+	[[ -n "$ga" ]] || return 1
+	echo "${ga}${pre:+ ${pre}}"
 }
 
 # --- Argument parsing ---

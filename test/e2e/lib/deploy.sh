@@ -237,6 +237,31 @@ sync_source() {
 	[ "$_user" != "root" ] && _essh "root@${_host}" "rm -f /tmp/aba-deploy.tar.gz" || true
 }
 
+# Install bastion ~/.kvm.conf when the pool copy is missing or empty, then
+# set KVM_STORAGE_POOL. sed -i on an empty file replaces the inode and hides
+# when the file was emptied, so record that state before writing.
+# Usage: _kvm_conf_seed_and_patch <user@host> <storage-pool-path>
+_kvm_conf_seed_and_patch() {
+	local target="$1"
+	local pool_path="$2"
+	local _stat _size
+
+	_stat=$(_essh "$target" 'if [ -e ~/.kvm.conf ]; then stat -c "%s %y" ~/.kvm.conf; else echo missing; fi' 2>/dev/null) || _stat="unreachable"
+	_size="${_stat%% *}"
+	if [[ "$_size" =~ ^[0-9]+$ ]] && [ "$_size" != "0" ]; then
+		_essh "$target" "sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${pool_path}|' ~/.kvm.conf" || true
+		return 0
+	fi
+
+	echo "    kvm.conf on ${target}: ${_stat} -- installing bastion ~/.kvm.conf before storage-pool patch"
+	if [ ! -s "$HOME/.kvm.conf" ]; then
+		echo "    kvm.conf on ${target}: bastion ~/.kvm.conf is missing or empty -- not patched"
+		return 0
+	fi
+	_escp "$HOME/.kvm.conf" "${target}:~/.kvm.conf" || true
+	_essh "$target" "sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${pool_path}|' ~/.kvm.conf" || true
+}
+
 # Push optional extras: notify.sh, vmware.conf, root essentials.
 # Usage: sync_extras <user@host> <user> [pool_num]
 sync_extras() {
@@ -290,15 +315,9 @@ sync_extras() {
 
 	# Patch ~/.kvm.conf with per-pool KVM_STORAGE_POOL from pools.conf
 	if [ -n "${KVM_STORAGE_POOL:-}" ]; then
-		_essh "$target" "
-			if [ -f ~/.kvm.conf ]; then
-				sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${KVM_STORAGE_POOL}|' ~/.kvm.conf
-			fi" || true
+		_kvm_conf_seed_and_patch "$target" "$KVM_STORAGE_POOL"
 		if [ "$user" != "root" ]; then
-			_essh "root@${target#*@}" "
-				if [ -f ~/.kvm.conf ]; then
-					sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${KVM_STORAGE_POOL}|' ~/.kvm.conf
-				fi" || true
+			_kvm_conf_seed_and_patch "root@${target#*@}" "$KVM_STORAGE_POOL"
 		fi
 	fi
 

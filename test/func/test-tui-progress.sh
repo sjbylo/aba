@@ -90,6 +90,22 @@ if [ "${_tp_status[trustca]}" != "77" ]; then
 fi
 echo "PASS: trustca status is 77 (queued start)"
 
+# A later script may START the same step again (agent wait, then monitor).
+_tp_parse_event "START|trustca"
+if [ "${_tp_status[trustca]}" != "77" ]; then
+	echo "FAIL: second START changed status to ${_tp_status[trustca]}"
+	exit 1
+fi
+echo "PASS: second START while In Progress stays In Progress"
+
+_tp_parse_event "DONE|trustca"
+_tp_parse_event "START|trustca"
+if [ "${_tp_status[trustca]}" != "0" ]; then
+	echo "FAIL: START after DONE reopened the step (${_tp_status[trustca]})"
+	exit 1
+fi
+echo "PASS: START after DONE leaves the step Succeeded"
+
 if [ "${_tp_text[access]}" != "Accessing cluster" ]; then
 	echo "FAIL: expected text 'Accessing cluster', got '${_tp_text[access]}'"
 	exit 1

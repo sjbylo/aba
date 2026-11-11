@@ -12,7 +12,8 @@
 # IDEMPOTENT: Yes (re-running overwrites catalogs/ with fresh data)
 #
 # Usage:
-#   tools/refresh-catalog-indexes.sh [--commit]
+#   tools/refresh-catalog-indexes.sh [--detect] [--commit]
+#     --detect   print the version list and exit (no download)
 #     --commit   git add + commit + push the updated catalogs/
 #
 # Workflow:
@@ -34,19 +35,23 @@ DEPTH=6
 do_commit=false
 do_force=false
 do_yes=false
+do_detect=false
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--commit) do_commit=true; shift ;;
 		--force)  do_force=true; shift ;;
 		-y|--yes) do_yes=true; shift ;;
+		--detect) do_detect=true; shift ;;
 		-h|--help)
-			echo "Usage: $0 [--force] [-y] [--commit]"
+			echo "Usage: $0 [--detect] [--force] [-y] [--commit]"
+			echo "  --detect   print ga=, pre=, and versions= lines, then exit"
 			echo "  --force    bypass drift-check safety gate"
 			echo "  -y|--yes   skip confirmation prompts"
 			echo "  --commit   git add + commit + push updated catalogs/"
 			echo "Covers the latest ${DEPTH} GA minor versions from the stable channel"
 			echo "plus any pre-release catalogs for the immediate next minor."
+			echo "At a .0 minor the walk steps to the previous major's tip (5.0 → 4.22)."
 			exit 0
 			;;
 		*) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -113,6 +118,7 @@ if [[ ${#VERSIONS[@]} -eq 0 ]]; then
 fi
 
 echo "Found GA versions: ${VERSIONS[*]}"
+_ga=("${VERSIONS[@]}")
 
 # Detect pre-release versions (immediate next minor beyond latest GA)
 latest_ga="${VERSIONS[-1]}"
@@ -121,18 +127,29 @@ declare -A IS_PRERELEASE
 
 # mapfile on empty output produces ("") not () — check for real content
 _has_prerelease=false
+_pre=()
 for _pv in "${PRERELEASE_VERSIONS[@]}"; do
 	[[ -n "$_pv" ]] || continue
 	_has_prerelease=true
+	_pre+=("$_pv")
 	VERSIONS+=("$_pv")
 	IS_PRERELEASE["$_pv"]=1
 done
 
 if [[ "$_has_prerelease" == "true" ]]; then
-	echo "Found pre-release: ${PRERELEASE_VERSIONS[*]}"
+	echo "Found pre-release: ${_pre[*]}"
 else
 	echo "No pre-release catalogs detected"
 fi
+
+# CI and the canary read these lines. One walker, so 5.0 is not a dead end.
+if [[ "$do_detect" == true ]]; then
+	echo "ga=${_ga[*]}"
+	echo "pre=${_pre[*]}"
+	echo "versions=${VERSIONS[*]}"
+	exit 0
+fi
+
 echo ""
 
 mkdir -p "$CATALOGS_DIR" "$INDEX_DIR"
