@@ -121,23 +121,21 @@ if echo "$_scr" | grep -qi "channel\|stable\|fast\|candidate"; then
 		tui_keys Enter; sleep 1
 	fi
 
-	# Select stable (stay on current) and proceed to version page
-	tui_keys Enter; sleep 3
-	tui_screenshot "pd-02c-version"
-
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "version\|Latest\|4\.[0-9]"; then
-		echo "  ✓ PASS: Version selection page appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-		# Check for Latest option
-		tui_assert_contains "Latest\|latest" "Latest version option"
-
-		# Cancel out
+	# Select stable (stay on current) and proceed to version page.
+	# Channel Next kicks off a network fetch; asserting before it finishes
+	# races on "Fetching versions for 'fast'…" with no Latest row yet.
+	tui_keys Enter; sleep 1
+	tui_wait_gone "Fetching versions" 90 || true
+	if ! tui_wait_for "Latest\|latest\|4\.[0-9]" 60; then
+		echo "  ✗ FAIL: Version page unclear (fetch never finished)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "pd-02c-version-timeout"
 		tui_keys Escape; sleep 1
 	else
-		echo "  ✗ FAIL: Version page unclear"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "pd-02c-version"
+		echo "  ✓ PASS: Version selection page appeared"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_assert_contains "Latest\|latest" "Latest version option"
 		tui_keys Escape; sleep 1
 	fi
 else

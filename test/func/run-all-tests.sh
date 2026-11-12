@@ -169,6 +169,7 @@ unit_tests=(
 integration_tests=(
 	# CLI download pipeline
 	test/func/test-cli-download-urls.sh
+	test/func/test-arch-binaries.sh
 	test/func/test-cli-download-wait.sh
 	test/func/test-cli-download-pipeline.sh
 	test/func/test-download-before-install-race.sh
