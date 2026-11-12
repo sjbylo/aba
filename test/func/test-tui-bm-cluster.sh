@@ -325,28 +325,54 @@ _bm_fix_in_wizard() {
 	tui_wait_for "Review\|Install" 20 || true
 	tui_press_button "Install" || tui_keys Enter
 	sleep 2
-	if ! tui_wait_for "build the agent ISO" 180; then
+	# MAC ask runs under Generate configs. Compact often overlays the yesno on
+	# the progress frame; standard has been seen with the prompt only in Output
+	# for minutes while the main view stays at Generate configs [In Progress].
+	_saw_build=0
+	for _wa in $(seq 1 90); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+			_saw_build=1
+			break
+		fi
+		if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
+			if (( _wa % 10 == 0 )); then
+				tui_keys Space 2>/dev/null || true
+				sleep 1
+				_scr=$(tui_capture)
+				tui_screenshot "bm-${name}-build-output-${_wa}"
+				if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+					_saw_build=1
+					tui_keys q 2>/dev/null || tui_keys Escape
+					sleep 1
+					break
+				fi
+				tui_keys q 2>/dev/null || tui_keys Escape
+				sleep 1
+			fi
+		fi
+		sleep 3
+	done
+	if [[ "$_saw_build" -ne 1 ]]; then
 		echo "  ✗ FAIL: $name did not reach the build ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "bm-${name}-no-build"
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Quit.*Q\|Overall Progress"; then
+			tui_keys q; sleep 1
+			tui_keys Enter 2>/dev/null || true
+			sleep 1
+		fi
 		tui_press_button "Dismiss" || true
 		tui_back_to "Actions" 8 || true
 		return 0
 	fi
 	_scr=$(tui_capture)
 	tui_screenshot "bm-${name}-build-ask"
-	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-		echo "  ✓ PASS: $name install asks to build after the wizard fix"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_press_button "Yes" || tui_keys Enter
-		sleep 2
-	else
-		echo "  ✗ FAIL: $name did not ask to build"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_press_button "Dismiss" || tui_keys Enter
-		tui_back_to "Actions" 8 || true
-		return 0
-	fi
+	echo "  ✓ PASS: $name install asks to build after the wizard fix"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_press_button "Yes" || tui_keys Enter
+	sleep 2
 
 	_saw=0
 	_i=0
