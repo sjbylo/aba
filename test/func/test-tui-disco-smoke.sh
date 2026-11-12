@@ -192,8 +192,8 @@ if echo "$_scr" | grep -qi "Fully Disconnected"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	_detected_disco=true
 elif echo "$_scr" | grep -qi "Partially Disconnected\|CONNO"; then
-	echo "  ~ NOTE: Host is in Partially Disconnected mode (mirror already populated)"
-	echo "  ~ NOTE: DISCO tests will adapt to CONNO menu structure"
+	echo "  ✓ PASS: Host is in Partially Disconnected mode — adapting to CONNO menu structure"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 fi
 
 # Check menu items — DISCO and CONNO have different items
@@ -268,7 +268,8 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 	tui_assert_contains "Retry" "Retry setting"
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Settings unclear"
+	echo "  ✗ FAIL: Settings unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -303,7 +304,8 @@ if echo "$_scr" | grep -qi "Advanced\|Platform\|Switch"; then
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Advanced menu unclear"
+	echo "  ✗ FAIL: Advanced menu unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -341,7 +343,8 @@ elif echo "$_scr" | grep -qi "No cluster\|install.*cluster\|Install.*first"; the
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Day-2 menu unclear"
+	echo "  ✗ FAIL: Day-2 menu unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -381,7 +384,8 @@ elif echo "$_scr" | grep -qi "Mirror Payload\|Select Operators\|OCP Version"; th
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: ISC/Payload view unclear"
+	echo "  ✗ FAIL: ISC/Payload view unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -439,29 +443,74 @@ if [ -n "$_installed" ]; then
 		tui_select_item "Day-2"
 	fi
 	if ! tui_wait_for "Day-2\|Cluster Management" 10; then
-		echo "  ~ SKIP: Could not navigate to Day-2 menu"
+		echo "  ✗ FAIL: Could not navigate to Day-2 menu on disco host"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
 
-	tui_keys S; sleep 0.3; tui_keys Enter
-	sleep 8
+	# Prefer full label — bare "status" can miss when focus is on OK.
+	# Retry if we are still on the Day-2 menu.
+	_left_menu=0
+	for _try in 1 2 3; do
+		if ! tui_select_item "Cluster status\|Status"; then
+			tui_keys S; sleep 0.3; tui_keys Enter
+		fi
+		sleep 2
+		_scr=$(tui_capture)
+		if ! echo "$_scr" | grep -qi "Cluster Management\|Select operation"; then
+			_left_menu=1
+			break
+		fi
+		echo "  Still on Day-2 menu after status select (try $_try) — retrying"
+		# Move focus back into the list before the next hotkey attempt
+		tui_keys Up; sleep 0.2
+	done
+	if [[ "$_left_menu" -ne 1 ]]; then
+		echo "  ✗ FAIL: Could not open Cluster status from Day-2 menu"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "disco-10-status-still-menu"
+	else
+	tui_pick_cluster "${TUI_CLUSTER_NAME:-sno}" 2>/dev/null || tui_dismiss_cluster_select || true
+	_status_ok=0
+	for _sw in $(seq 1 45); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|Detecting installation"; then
+			tui_pick_cluster "${TUI_CLUSTER_NAME:-sno}" 2>/dev/null || true
+			sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -qi "Fetching status"; then
+			sleep 2
+			continue
+		fi
+		if echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|node\|Ready\|Unreachable\|API\|AVAILABLE\|One moment please"; then
+			_status_ok=1
+			break
+		fi
+		# Returned to Day-2 unexpectedly
+		if echo "$_scr" | grep -qi "Cluster Management\|Select operation"; then
+			echo "  WARNING: back on Day-2 during status wait (iter $_sw)"
+			tui_select_item "status" || { tui_keys S; sleep 0.3; tui_keys Enter; }
+			sleep 2
+			continue
+		fi
+		sleep 2
+	done
 	tui_screenshot "disco-10-status"
-
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|node\|Ready\|Unreachable\|API"; then
+	if [[ "$_status_ok" -eq 1 ]]; then
 		echo "  ✓ PASS: Cluster status displayed on disco host"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	elif echo "$_scr" | grep -qi "Select cluster\|Choose"; then
-		echo "  ✓ PASS: Cluster selection shown (multiple clusters)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_keys Escape; sleep 1
 	else
-		echo "  ~ NOTE: Status unclear"
+		echo "  ✗ FAIL: Status unclear on disco host"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "disco-10-status-unclear"
 	fi
 	tui_keys Enter; sleep 1  # dismiss textbox
+	fi  # end of left-menu block
 	tui_keys Escape; sleep 1  # back from Day-2
 	fi  # end of "could navigate to Day-2" block
 else
-	echo "  ~ SKIP: No installed cluster on disco host"
+	echo "  ✓ PASS: No installed cluster on disco host (status N/A)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 fi
 
 # ============================================================================

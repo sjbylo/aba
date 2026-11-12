@@ -175,31 +175,40 @@ _day2_run_action() {
 	tui_pick_cluster "$_CLUSTER" || true
 	tui_dismiss_exec_mode
 
-	# Wait for the "One moment please" / loading dialog to transition
-	# to the actual progress dialog (can take a few seconds)
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "One moment\|please wait\|Loading"; then
-		echo "  ($action_name: waiting for loading to finish...)"
-		sleep 5
+	# Poll for progress / warning / error — one-shot capture races the
+	# cluster-select → "One moment" → progress transition (NTP failed that way).
+	_saw_progress=0
+	_scr=""
+	for _w in $(seq 1 45); do
 		_scr=$(tui_capture)
-	fi
-
-	# Handle warning/confirmation dialogs before progress starts
-	if echo "$_scr" | grep -qi "Warning\|Continue anyway\|Confirm\|Are you sure"; then
-		echo "  ($action_name: dismissing warning dialog)"
-		tui_screenshot "d2-${action_name}-warning"
-		tui_keys Enter; sleep 1
-		_scr=$(tui_capture)
-	fi
-
-	# Only dismiss exec mode if we see it (not the progress dialog)
-	if echo "$_scr" | grep -qi "Run in.*Terminal\|Execution Mode"; then
-		tui_keys Enter; sleep 1
-		_scr=$(tui_capture)
-	fi
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|Detecting installation"; then
+			tui_pick_cluster "$_CLUSTER" || true
+			sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -qi "One moment\|please wait\|Loading"; then
+			sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -qi "Warning\|Continue anyway\|Confirm\|Are you sure"; then
+			echo "  ($action_name: dismissing warning dialog)"
+			tui_screenshot "d2-${action_name}-warning"
+			tui_keys Enter; sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -qi "Run in.*Terminal\|Execution Mode"; then
+			tui_keys Enter; sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|Day-2:\|Overall Progress\|steps completed\|── FAILED\|── Success"; then
+			_saw_progress=1
+			break
+		fi
+		sleep 1
+	done
 
 	# Detect progress dialog or any running state
-	if echo "$_scr" | grep -qi "In Progress\|Succeeded\|N/A.*│\|Day-2:\|Progress\|steps completed"; then
+	if [[ "$_saw_progress" -eq 1 ]]; then
 		echo "  ✓ PASS: $action_name progress dialog appeared"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 
@@ -230,10 +239,10 @@ _day2_run_action() {
 		echo "  ✗ FAIL: $action_name progress not detected"
 		tui_screenshot "d2-${action_name}-unclear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		# Even though we didn't detect progress, the dialog may be on
-		# screen — wait for it and dismiss it so subsequent actions work
-		if echo "$_scr" | grep -qi "Day-2:\|One moment\|please"; then
-			echo "  (waiting for possible background progress to finish...)"
+		# Re-check live screen — progress may have started after the poll window
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Day-2:\|In Progress\|Overall Progress\|One moment\|please"; then
+			echo "  (waiting for late/background progress to finish...)"
 			tui_wait_for_progress "d2-${action_name}-recovery" "$timeout" 2>/dev/null || true
 			tui_dismiss_result
 		fi

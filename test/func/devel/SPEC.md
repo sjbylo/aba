@@ -130,10 +130,13 @@ A FAIL in one test file MUST NOT prevent the next test file from running.
 
 - The test runner (`test-tui-all.sh`) calls each test with `|| true`,
   so it always proceeds to the next test regardless of exit code.
-- Each test file starts its own TUI session (`tui_start_to_menu`) and
-  cleans up after itself (`tui_cleanup`). Tests do not share TUI sessions.
-- Tests MUST NOT assume that a previous test left the TUI in a particular
-  state, menu, or dialog. Always start from a fresh TUI launch.
+- Each test begins with `tui_start_to_menu` and ends with `tui_cleanup`.
+- **TUI session reuse**: `tui_start_to_menu` reuses a live tmux session
+  already on (or returnable to) the Actions main menu. `tui_cleanup`
+  returns to that menu and does **not** exit the TUI (relaunch costs ~20s).
+  `tui_deploy_code` stops the live session only when product code changed.
+- Tests MUST NOT assume a previous test left a particular dialog open.
+  They MAY assume that after `tui_start_to_menu` they are on the main menu.
 
 **Acknowledged dependency**: some destructive tests have an ordering
 dependency — e.g., the cluster test depends on a synced mirror, the
@@ -344,26 +347,27 @@ The test library is designed so that an AI agent can:
 
 ### Startup and Lifecycle
 
-**`tui_start_to_menu [cmd]`** — The primary way to launch the TUI in tests.
-Creates a tmux session on the remote host, runs `abatui`, waits for the splash
-screen to appear, presses Enter to dismiss it, detects the TUI mode
-(CONNO/DISCO/DIRECT), and waits for the main Actions menu to appear.
-Returns 1 if startup fails (e.g., "Internet Access Required" error on disco).
+**`tui_start_to_menu [cmd]`** — Ensure the TUI is on the Actions main menu.
+If a tmux session is already alive and on (or navigable to) the main menu,
+reuses it. Otherwise launches `abatui`, dismisses splash, detects mode
+(CONNO/DISCO/DIRECT), and waits for Actions. Returns 1 on startup failure.
 
 ```bash
 tui_start_to_menu || { tui_summary; exit 1; }
 # TUI is now at the Actions menu, ready for navigation.
 ```
 
-**`tui_cleanup`** — Graceful shutdown at the end of every test. Dismisses any
-lingering dialogs, sends Escape back to the main menu, exits the TUI via the
-Exit button, kills the tmux session, waits for processes to die, and checks
-for stray `abatui` processes (PASS if clean, FAIL if strays found and killed).
+**`tui_cleanup`** — End-of-test cleanup: dismiss dialogs, return to the Actions
+main menu, and **leave the TUI running** (do not exit — relaunch is ~20s).
+PASS when on the main menu. Use `tui_stop` only when a force-kill is required.
 
 ```bash
 tui_cleanup
 tui_summary   # always call after cleanup
 ```
+
+**`tui_leave_on_menu`** / **`tui_on_main_menu`** — Navigate to / detect the
+Actions main menu without exiting. Used by `tui_start_to_menu` and `tui_cleanup`.
 
 **`tui_deploy_code`** — Copies the latest TUI and script code to the remote
 host via `scp`. Call this at the start of every test to ensure the test is
@@ -849,15 +853,17 @@ order — each depends on the state left by the previous test.
 | 19 | **Day-2 Operations** | `test-tui-day2.sh` | OperatorHub, NTP, status, login | `oc get idms`, NTP config applied | ~10 min |
 | 20 | **Upgrade** | `test-tui-upgrade.sh` | Full upgrade: pair resolution → install older → sync → day2 → upgrade | `oc get clusterversion` shows new version | ~90 min |
 | 21 | **Lifecycle** | `test-tui-lifecycle.sh` | Shutdown, startup, clean, delete | Nodes Ready after startup, `.install-complete` gone after delete | ~30 min |
+| 22 | **DISCO Workflow** | `test-tui-disco-workflow.sh` | Full air-gap: bundle → transfer → disco TUI (registry + load + cluster) | Cluster installed on disco host | ~2–3h |
 
-### Standalone / special tests (not in the pipeline)
+### Standalone / special tests (dev / optional)
 
 | Test | File | Purpose |
 |------|------|---------|
-| **DISCO Workflow** | `test-tui-disco-workflow.sh` | Full air-gap: bundle → transfer → disco TUI (registry + load + cluster). |
-| **Progress Smoke** | `test-tui-progress.sh` | Simulated progress events without a real cluster. |
+| **Progress Smoke** | `test-tui-progress.sh` | Simulated progress events without a real cluster. Superseded for CI by Progress Integration. |
 | **Progress Real** | `test-tui-progress-real.sh` | Real `day2.sh` through TUI progress on a down cluster (error path). |
 | **Progress Visual** | `test-tui-progress-visual.sh` | Interactive visual test — run manually on a terminal. |
+
+**Release gate**: full `test-tui-all.sh` (including DISCO Workflow) must pass. Progress Integration covers the progress dialog lifecycle; Progress Smoke/Real/Visual remain optional/dev tools.
 
 ---
 

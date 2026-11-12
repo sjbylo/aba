@@ -653,9 +653,16 @@ _exec_with_progress() {
 	# would skip cleanup entirely)
 	trap '_tp_interrupted=1' INT
 
+	# Read one key from the controlling tty (not stdin). dialog redraws
+	# redirect stdin; keys from tmux/users still arrive on /dev/tty.
+	_tp_read_key() {
+		IFS= read -rsn1 -t "$1" key < /dev/tty 2>/dev/null
+	}
+
 	while true; do
 	_TP_RETRY=0
 	_tp_interrupted=0
+	_tp_user_quit=0
 	_tp_init
 	_tp_reset_state
 
@@ -715,7 +722,7 @@ _exec_with_progress() {
 				_tp_draw "$title"
 				# Check for keypress during auto-complete animation so user input
 				# isn't swallowed by dialog redraws in rapid succession.
-				if IFS= read -rsn1 -t 0.2 key; then
+				if _tp_read_key 0.2; then
 					case "$key" in
 						' ') _tp_show_output ;;
 						q|Q|$'\e') _rc=1; break ;;
@@ -775,10 +782,10 @@ _exec_with_progress() {
 		if _tp_auto_complete_one; then
 			# Check for keypress during auto-complete animation so user input
 			# isn't swallowed by dialog redraws in rapid succession.
-			if IFS= read -rsn1 -t 0.2 key; then
+			if _tp_read_key 0.2; then
 				case "$key" in
 					' ') _tp_show_output ;;
-					q|Q|$'\e') _rc=1; break ;;
+					q|Q|$'\e') _tp_user_quit=1; break ;;
 				esac
 			fi
 			continue
@@ -789,18 +796,24 @@ _exec_with_progress() {
 			continue
 		fi
 
-		if IFS= read -rsn1 -t 0.4 key; then
+		if _tp_read_key 0.4; then
 			case "$key" in
 				' ') _tp_show_output ;;
 				q|Q|$'\e')
 					# Leave before the command finishes. Callers treat 0 as
 					# success and would offer Day-2 on a mirror that was not updated.
-					_rc=1
+					_tp_user_quit=1
 					break
 					;;
 			esac
 		fi
 	done
+
+	# Acknowledge Quit (Q/ESC) / Ctrl+C so the UI matches the live hint.
+	if [ "${_tp_user_quit:-0}" -eq 1 ] || [ "${_tp_interrupted:-0}" -eq 1 ]; then
+		_tp_show_stopped "$title"
+		_rc=1
+	fi
 
 	unset ABA_PROGRESS_FIFO
 	_tp_cleanup

@@ -357,7 +357,19 @@ _bm_fix_in_wizard() {
 			tui_screenshot "bm-${name}-iso-ready"
 			break
 		fi
-		if echo "$_scr" | grep -qi "Error\|FAILED\|Dismiss"; then
+		# Progress success / ISO on disk also prove the build finished.
+		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully"; then
+			_saw=1
+			tui_screenshot "bm-${name}-iso-progress-done"
+			break
+		fi
+		if $_TUI_SSH "test -s ~/aba/$name/iso-agent-based/agent.*.iso" 2>/dev/null; then
+			_saw=1
+			tui_screenshot "bm-${name}-iso-file-ready"
+			break
+		fi
+		if echo "$_scr" | grep -qi "Error\|FAILED" && \
+		   echo "$_scr" | grep -qiE '<[[:space:]]*Dismiss|<[[:space:]]*Retry'; then
 			tui_screenshot "bm-${name}-iso-error"
 			break
 		fi
@@ -368,14 +380,14 @@ _bm_fix_in_wizard() {
 		echo "  ✓ PASS: $name built the agent ISO"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		# No servers for this cluster. No stops the run; the ISO is the result.
-		tui_press_button "No" || tui_keys Tab Enter
+		tui_press_button "No" 2>/dev/null || tui_keys Tab Enter 2>/dev/null || true
 		sleep 2
-		tui_press_button "Dismiss" || tui_keys Enter
+		tui_press_button "Dismiss" 2>/dev/null || tui_press_button "Done" 2>/dev/null || tui_keys Enter 2>/dev/null || true
 		sleep 1
 	else
 		echo "  ✗ FAIL: $name did not build the agent ISO"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_press_button "Dismiss" || true
+		tui_press_button "Dismiss" 2>/dev/null || tui_keys Escape 2>/dev/null || true
 	fi
 	_n=$($_TUI_SSH "grep -cve '^[[:space:]]*$' ~/aba/$name/macs.conf 2>/dev/null || echo 0")
 	if [ "$_n" = "$need" ]; then
