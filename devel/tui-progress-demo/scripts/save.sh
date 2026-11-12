@@ -1,6 +1,7 @@
 #!/bin/bash
 # save.sh — Save images to tar files
-# Emits START/DONE for save steps. PLANs come from plan.sh.
+# `save.sh plan` prints this object's steps. The caller submits them.
+# This script does not know about bundle. Work emits START/DONE only.
 #
 # Env vars control test modes:
 #   SKIP_ASK=1       — skip the interactive prompt
@@ -8,6 +9,22 @@
 #   SIMULATE_FAIL=1  — fail during save step
 
 source "$(dirname "$0")/progress.sh"
+
+save_plan() {
+	cat <<'EOF'
+PLAN|rpms_ext|Install required packages|3
+PLAN|preflight|Pre-flight checks|2
+PLAN|sv_tools|Download CLI tools|5
+PLAN|sv_save|Save images to disk|70
+PLAN|sv_cli_wait|Wait for CLI tools|5
+PLAN|sv_finalize|Create transfer archive|3
+EOF
+}
+
+if [ "${1:-}" = "plan" ]; then
+	save_plan
+	exit 0
+fi
 
 ask() {
 	aba_progress "PROMPT|$1|n"

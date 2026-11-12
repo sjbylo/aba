@@ -6,12 +6,12 @@
 #    The TUI just calls "make install" — no need to chain
 #    "_progress_plan-install install" from the caller.
 #
-# 2. Each _progress_plan-* target only knows its OWN steps.
-#    _progress_plan-sync emits sync PLANs.  It knows nothing about install.
-#    When sync depends on install, _progress_plan-install fires first
-#    (as install's prereq), emitting install PLANs.
-#    Then _progress_plan-sync fires, emitting sync PLANs.
-#    The TUI dialog grows as new PLANs arrive.
+# 2. A parent that always runs a child asks the child for its plan
+#    (`script plan`) and emits the whole list before any work.
+#    Upgrade asks day2.  Bundle asks save.  The child lists only its
+#    own steps and does not know the parent.
+#    Sync does not ask install: install runs only when the mirror is
+#    missing, so install PLANs and sync PLANs still arrive separately.
 #
 # 3. Prerequisite ORDER in sync matters for PLAN timing.
 #    "install" is listed BEFORE "_progress_plan-sync" so that:
@@ -74,12 +74,11 @@ _progress_plan-save:
 	bash $(SCRIPTS)/plan.sh save
 
 # ─── bundle workflow ─────────────────────────────────────
-# Bundle wraps save.  _progress_plan-bundle fires first, pre-declaring ALL shared IDs.
-# Then _progress_plan-save fires — ALL its IDs already exist, so ZERO new rows appear.
-# This demonstrates GLOBAL ID dedup: the receiver discards duplicates silently.
+# One plan, up front. plan.sh bundle asks save.sh for its steps and
+# appends Pack bundle. save.sh is not asked again when the work runs.
 
 .PHONY: bundle
-bundle: _progress_plan-bundle _progress_plan-save .init .rpmsext data/imageset-config.yaml status-preflight
+bundle: _progress_plan-bundle .init .rpmsext data/imageset-config.yaml status-preflight
 	bash $(SCRIPTS)/bundle.sh
 
 .PHONY: _progress_plan-bundle
@@ -95,6 +94,29 @@ uninstall: _progress_plan-uninstall
 .PHONY: _progress_plan-uninstall
 _progress_plan-uninstall:
 	bash $(SCRIPTS)/plan.sh uninstall
+
+# ─── upgrade workflow ────────────────────────────────────
+# One plan, up front. plan.sh upgrade asks day2.sh for its steps and
+# places them between preflight and trigger/wait. No wrapper row.
+# `make day2` is the child on its own: it submits only its own plan.
+
+.PHONY: upgrade
+upgrade: _progress_plan-upgrade
+	bash $(SCRIPTS)/upgrade-preflight.sh
+	bash $(SCRIPTS)/day2.sh
+	bash $(SCRIPTS)/upgrade-finish.sh
+
+.PHONY: _progress_plan-upgrade
+_progress_plan-upgrade:
+	bash $(SCRIPTS)/plan.sh upgrade
+
+.PHONY: day2
+day2: _progress_plan-day2
+	bash $(SCRIPTS)/day2.sh
+
+.PHONY: _progress_plan-day2
+_progress_plan-day2:
+	bash $(SCRIPTS)/plan.sh day2
 
 # ─── shared prerequisites ────────────────────────────────
 

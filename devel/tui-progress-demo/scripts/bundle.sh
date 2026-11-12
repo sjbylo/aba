@@ -1,10 +1,8 @@
 #!/bin/bash
 # bundle.sh — Create an install bundle (wraps save)
 #
-# Demonstrates GLOBAL ID dedup: the bundle plan pre-declares shared
-# IDs (rpms_ext, preflight, sv_tools, sv_save, sv_cli_wait).
-# When save's plan.sh emits the same IDs, the receiver silently
-# discards them — no duplicate rows in the progress dialog.
+# Bundle asks save for its plan (see plan.sh) and submits that list
+# plus Pack bundle before this script runs. save.sh does the work.
 #
 # Env vars:
 #   SKIP_OC_MIRROR=1 — simulate oc-mirror with sleep
@@ -15,12 +13,7 @@ source "$(dirname "$0")/progress.sh"
 printf '\033[1;34m[ABA]\033[0m Creating install bundle ...\n'
 echo
 
-# ─── save runs as a sub-workflow ───
-# save.sh emits START/DONE for shared IDs (preflight, sv_tools, sv_save,
-# sv_cli_wait, sv_finalize).  The receiver already has PLANs for the shared
-# ones from bundle's plan.sh — they display correctly.
-# sv_finalize is NOT in the bundle plan (bundle has bnd_pack instead),
-# so sv_finalize's events are silently absorbed (no PLAN = no UI row).
+# save.sh emits START/DONE for the steps bundle already submitted.
 SKIP_ASK=1 bash "$(dirname "$0")/save.sh"
 _save_rc=$?
 [ "$_save_rc" -ne 0 ] && exit "$_save_rc"
