@@ -382,7 +382,8 @@ if echo "$_scr" | grep -qi "Recommended\|image set\|Image Sets\|ocp\|virt\|ai"; 
 	echo "  ✓ PASS: Recommended Images dialog appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Recommended Images content unclear"
+	echo "  ✗ FAIL: Recommended Images content unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 # Back out without changing
 tui_keys Escape; sleep 1

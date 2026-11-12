@@ -36,7 +36,7 @@ while IFS=$'\t' read -r _key _label <&3; do
 	# Skip items that trigger destructive actions or long-running commands
 	case "$_label" in
 		*Install\ Cluster*|*Save\ images*|*Sync\ images*|*Bundle*|*Wizard*)
-			echo "  ~ SKIP: $_label (would trigger action)"
+			echo "  (safe-skip) $_label (would trigger action)"
 			continue
 			;;
 	esac
@@ -134,6 +134,11 @@ tui_start
 tui_assert_appears "OpenShift Installer" "TUI re-launched cleanly" 15
 tui_assert_contains "Continue" "Shows splash on re-launch"
 tui_screenshot "nav-05-relaunch"
+# Reach Actions so leave-on-menu cleanup has a live session on the main menu.
+# (Section 4 exited the TUI; cleanup must not Escape from splash into a dead pane.)
+tui_keys Enter
+sleep 2
+tui_wait_for "Actions\|Partially Disconnected\|Fully Disconnected\|Direct" 30 || true
 
 # ============================================================================
 # 6. Cleanup

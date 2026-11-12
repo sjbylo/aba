@@ -143,7 +143,8 @@ _nav_sync() {
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "not installed\|no mirror"; then
-		echo "  ~ SKIP: Mirror reported as not installed for sync"
+		echo "  ✗ FAIL: Mirror reported as not installed for sync"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		return 1
 	fi
 
@@ -207,7 +208,8 @@ if [[ "$_sync_state" == "sync" || "$_sync_state" == "load" ]]; then
 	echo "  ✓ PASS: Mirror state confirms sync (last_action=$_sync_state)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 elif [[ -n "$_sync_state" ]]; then
-	echo "  ~ NOTE: Mirror last_action=$_sync_state (expected sync)"
+	echo "  ✗ FAIL: Mirror last_action=$_sync_state (expected sync or load)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 else
 	echo "  ✗ FAIL: No mirror state file — sync may not have executed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))

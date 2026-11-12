@@ -49,7 +49,8 @@ if echo "$_scr" | grep -qi "already installed\|reinstall\|Uninstall"; then
 	tui_screenshot "mc-01-reinstall"
 elif echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; then
 	# No mirror installed — should see local/remote choice
-	echo "  ~ NOTE: Mirror not installed, checking install dialog"
+	echo "  ✗ FAIL: Mirror not installed, checking install dialog"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_screenshot "mc-01-choice"
 	tui_assert_contains "locally\|Install locally\|local" "Local install option"
 	tui_assert_contains "remote\|remote host" "Remote install option"
@@ -91,7 +92,8 @@ elif echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; t
 			# Cancel out
 			tui_keys Escape; sleep 1
 		else
-			echo "  ~ NOTE: Config form not visible"
+			echo "  ✗ FAIL: Config form not visible"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
 	fi
 
@@ -152,17 +154,20 @@ if echo "$_scr" | grep -qi "Bare Metal\|VMware\|KVM"; then
 			echo "  ✓ PASS: vCenter URL populated"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			echo "  ~ NOTE: vCenter URL not populated (vmware.conf may be template)"
+			echo "  ✗ FAIL: vCenter URL not populated (vmware.conf may be template)"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
 
 		# Cancel out without changing anything
 		tui_keys Escape; sleep 1
 	else
-		echo "  ~ NOTE: VMware form not visible — may have gone to a different platform"
+		echo "  ✗ FAIL: VMware form not visible — may have gone to a different platform"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_keys Escape; sleep 1
 	fi
 else
-	echo "  ~ NOTE: Platform dialog not visible"
+	echo "  ✗ FAIL: Platform dialog not visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -183,7 +188,8 @@ if echo "$_scr" | grep -qi "Stop.*Registry\|Start.*Registry\|Uninstall.*Registry
 	tui_assert_contains "Start.*Registry" "Start Mirror Registry item"
 	tui_assert_contains "Uninstall.*Registry" "Uninstall Mirror Registry item"
 else
-	echo "  ~ SKIP: Mirror management items (mirror not installed on this host)"
+	echo "  ✗ FAIL: Mirror management items missing (mirror should be installed)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # Check mode switch items (labels vary by current mode)
@@ -222,7 +228,8 @@ if echo "$_scr" | grep -qi "Feedback\|github\|discussion\|bug\|issue"; then
 	echo "  ✓ PASS: Feedback dialog appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Feedback screen unclear"
+	echo "  ✗ FAIL: Feedback screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Escape; sleep 1
 tui_keys Enter; sleep 1

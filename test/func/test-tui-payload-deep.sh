@@ -86,7 +86,8 @@ if echo "$_scr" | grep -qi "Prepare Upgrade\|upgrade.*version\|target.*version\|
 	# Cancel out
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Prepare Upgrade screen unclear (may be loading)"
+	echo "  ✗ FAIL: Prepare Upgrade screen unclear (may be loading)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -135,11 +136,13 @@ if echo "$_scr" | grep -qi "channel\|stable\|fast\|candidate"; then
 		# Cancel out
 		tui_keys Escape; sleep 1
 	else
-		echo "  ~ NOTE: Version page unclear"
+		echo "  ✗ FAIL: Version page unclear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_keys Escape; sleep 1
 	fi
 else
-	echo "  ~ NOTE: Channel selection unclear"
+	echo "  ✗ FAIL: Channel selection unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -184,7 +187,8 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 		echo "  ✓ PASS: Registry type displayed after toggle: ${_toggled_reg}"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: Could not detect registry type after toggle"
+		echo "  ✗ FAIL: Could not detect registry type after toggle"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	# Toggle back to restore original: cycle until we see the original type again
@@ -232,7 +236,8 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Settings menu unclear"
+	echo "  ✗ FAIL: Settings menu unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -271,7 +276,8 @@ elif echo "$_scr" | grep -qi "No Internet\|no internet\|not available"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Bundle dialog unclear"
+	echo "  ✗ FAIL: Bundle dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -295,7 +301,8 @@ elif echo "$_scr" | grep -qi "No Internet\|no internet"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Save dialog unclear"
+	echo "  ✗ FAIL: Save dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -319,7 +326,8 @@ elif echo "$_scr" | grep -qi "No Internet\|no internet"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Sync dialog unclear"
+	echo "  ✗ FAIL: Sync dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 

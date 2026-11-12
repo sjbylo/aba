@@ -75,7 +75,8 @@ else
 		tui_screenshot "lc-01f-shutdown-result"
 		tui_dismiss_result
 	else
-		echo "  ~ NOTE: Unexpected shutdown screen"
+		echo "  ✗ FAIL: Unexpected shutdown screen"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "lc-01-unexpected"
 	fi
 
@@ -126,7 +127,8 @@ if echo "$_scr" | grep -qi "startup\|Graceful.*start\|start.*cluster\|power.*on"
 	tui_screenshot "lc-03b-startup-result"
 	tui_dismiss_result
 else
-	echo "  ~ NOTE: Unexpected startup screen"
+	echo "  ✗ FAIL: Unexpected startup screen"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_screenshot "lc-03-unexpected"
 fi
 

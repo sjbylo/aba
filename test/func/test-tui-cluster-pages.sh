@@ -46,16 +46,13 @@ if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped";
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 			tui_keys Enter; sleep 1
 		elif echo "$_scr" | grep -qi "Error\|Failed\|failed\|not listening"; then
-			echo "  ✓ PASS: Mirror start failed (env) — gating as skip"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			echo "  ✗ FAIL: Mirror start failed — cluster pages need a running mirror"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			tui_keys Enter; sleep 1
 			tui_back_to "Actions" 5 || true
-			echo "  ~ SKIP: Cluster wizard pages require a running mirror"
-			echo ""
-			echo "--- Cleanup ---"
 			tui_cleanup
 			tui_summary
-			exit 0
+			exit 1
 		else
 			# Dismiss whatever dialog we got
 			tui_keys Enter; sleep 1
@@ -66,47 +63,35 @@ if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped";
 	tui_select_item "Install Cluster"
 	sleep 3
 	_scr=$(tui_capture)
-	# Still stopped after start attempt → skip (do not fail the suite)
 	if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped"; then
-		echo "  ✓ PASS: Mirror still stopped after start attempt"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		echo "  ✗ FAIL: Mirror still stopped after start attempt"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_keys Enter; sleep 1
-		echo "  ~ SKIP: Cluster wizard pages require a running mirror"
-		echo ""
-		echo "--- Cleanup ---"
 		tui_cleanup
 		tui_summary
-		exit 0
+		exit 1
 	fi
 fi
 
 # Release Image Missing — mirror is installed but empty (no images synced yet)
 if echo "$_scr" | grep -qi "Release Image Missing\|no release images\|release.*missing"; then
-	echo "  ✓ PASS: Release Image Missing gate appeared (mirror has no images)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	echo "  ✗ FAIL: Release Image Missing — cluster pages require synced images"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_press_button "Back" 2>/dev/null || tui_keys Escape
 	sleep 1
-	echo "  ~ SKIP: Cluster wizard pages require synced images in the mirror"
-	echo ""
-	echo "--- Cleanup ---"
 	tui_cleanup
 	tui_summary
-	exit 0
+	exit 1
 fi
 
 if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*required"; then
-	echo "  ✓ PASS: Mirror Required gate appeared (mirror not installed)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	# Press "Back" — can't proceed without mirror in CONNO mode
+	echo "  ✗ FAIL: Mirror Required — install a mirror before cluster pages"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_press_button "Back" 2>/dev/null || tui_keys Escape
 	sleep 1
-	echo "  ~ SKIP: Cluster wizard pages require an installed mirror in CONNO mode"
-	echo "  ~ SKIP: Run this test on a host with an installed mirror, or in DIRECT mode"
-	echo ""
-	echo "--- Cleanup ---"
 	tui_cleanup
 	tui_summary
-	exit 0
+	exit 1
 fi
 
 if echo "$_scr" | grep -qi "already installed\|Cluster Already"; then
@@ -213,7 +198,8 @@ if echo "$_scr" | grep -qi "Network\|CIDR\|Subnet\|DNS\|Gateway\|API VIP\|Starti
 	tui_press_button "Next" 2>/dev/null || { tui_keys Tab; sleep 0.3; tui_keys Enter; }
 	sleep 2
 else
-	echo "  ~ NOTE: Network page unclear (may have auto-skipped)"
+	echo "  ✗ FAIL: Network page unclear (may have auto-skipped)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -248,7 +234,8 @@ if echo "$_scr" | grep -qi "Interface\|Port\|MAC\|NIC\|ens\|enp"; then
 	tui_press_button "Next" 2>/dev/null || { tui_keys Tab; sleep 0.3; tui_keys Enter; }
 	sleep 2
 else
-	echo "  ~ NOTE: Interfaces page unclear"
+	echo "  ✗ FAIL: Interfaces page unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -285,7 +272,8 @@ if echo "$_scr" | grep -qi "VM Resources\|CPU\|Memory\|Disk\|vCPU\|RAM"; then
 	tui_press_button "Next" 2>/dev/null || { tui_keys Tab; sleep 0.3; tui_keys Enter; }
 	sleep 2
 elif echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm"; then
-	echo "  ~ SKIP: VM Resources page (bare metal skips this page)"
+	echo "  ✓ PASS: VM Resources page skipped (bare metal path)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 fi
 
 # ============================================================================
@@ -325,7 +313,8 @@ if echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm\|cluster.conf"; th
 		tui_keys Escape; sleep 1
 	fi
 else
-	echo "  ~ NOTE: Review page not visible (may depend on wizard state)"
+	echo "  ✗ FAIL: Review page not visible (may depend on wizard state)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================

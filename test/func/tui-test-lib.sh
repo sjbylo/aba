@@ -446,7 +446,8 @@ tui_button_count() {
 
 # Navigate to a specific button by label and press Enter.
 # Assumes focus starts on the first button (OK/Select/Continue).
-# Usage: tui_press_button "Help"
+# Do NOT use this when focus is on a checklist/form list — Tab first, or use
+# tui_checklist_apply. Usage: tui_press_button "Help"
 tui_press_button() {
 	local target="$1"
 	local -a btns
@@ -467,6 +468,19 @@ tui_press_button() {
 		tui_keys Tab
 		sleep 0.2
 	done
+	tui_keys Enter
+}
+
+# Apply a dialog checklist when focus is on the list.
+# dialog does NOT treat Enter-on-item as OK for our checklists — Enter leaves
+# the dialog open; a later Escape (e.g. _goto_operators) cancels with no Apply.
+# Observed tab order on Operator Sets: list → Back → Apply (Apply is 2nd).
+# One Tab + Enter hits Back and discards; two Tabs + Enter hits Apply.
+tui_checklist_apply() {
+	tui_keys Tab
+	sleep 0.25
+	tui_keys Tab
+	sleep 0.25
 	tui_keys Enter
 }
 
@@ -691,8 +705,7 @@ tui_dismiss_startup() {
 tui_skip_if_disco() {
 	local desc="$1"
 	if tui_is_disco; then
-		echo "  ~ SKIP: $desc (DISCO mode — no internet)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		echo "  (safe-skip) $desc (DISCO mode — no internet)"
 		return 0
 	fi
 	return 1
@@ -704,8 +717,7 @@ tui_skip_if_disco() {
 tui_require_internet() {
 	local desc="$1"
 	if tui_is_disco; then
-		echo "  ~ SKIP: $desc (requires internet, TUI is in DISCO mode)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		echo "  (safe-skip) $desc (requires internet, TUI is in DISCO mode)"
 		return 1
 	fi
 	return 0
@@ -723,12 +735,17 @@ tui_deploy_code() {
 	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
 	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
 		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
-	local _tar
+	local _tar _hash _old_hash
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
 
 	# Build tarball from disk using git ls-files (respects .gitignore)
 	git ls-files --cached --others --exclude-standard -- "${_paths[@]}" \
 		| tar czf "$_tar" -T - 2>/dev/null
+
+	# Content hash — relaunch TUI only when deployed product code actually changed.
+	# Test-only edits do not touch these paths, so the live session can be reused.
+	_hash=$(sha256sum "$_tar" | awk '{print $1}')
+	_old_hash=$($_TUI_SSH "cat ~/.aba/tui-deploy.hash 2>/dev/null" || true)
 
 	# Upload and extract on remote host (overlay, never wipe)
 	scp -q -F "$_TUI_SSH_CFG" "$_tar" "$_TUI_HOST:/tmp/tui-deploy.tar.gz" 2>/dev/null
@@ -736,6 +753,15 @@ tui_deploy_code() {
 
 	rm -f "$_tar"
 	echo "  Code deployed ($(git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | wc -l) files)"
+
+	$_TUI_SSH "mkdir -p ~/.aba && echo '$_hash' > ~/.aba/tui-deploy.hash" 2>/dev/null || true
+	if [[ -n "$_old_hash" && "$_hash" == "$_old_hash" ]]; then
+		echo "  Code unchanged — keeping live TUI session if present"
+	else
+		# Running abatui will not re-source scripts; force next start_to_menu to relaunch.
+		echo "  Code changed — stopping live TUI so next start picks up new code"
+		tui_stop 2>/dev/null || true
+	fi
 
 	# Host leftovers that poison later suites (stale op_sets, bad DC, dead NTP).
 	tui_sanitize_op_sets
@@ -948,12 +974,65 @@ tui_force_type_sno() {
 	tui_force_type sno
 }
 
+# True when the Actions main menu is visible (not Confirm Exit / a submenu).
+tui_on_main_menu() {
+	local _scr
+	_scr=$(tui_capture) || return 1
+	if echo "$_scr" | grep -qi "Confirm Exit\|Exit ABA TUI\|Are you sure.*exit"; then
+		return 1
+	fi
+	# Main menu title plus at least one primary action section/item
+	echo "$_scr" | grep -qi "Actions" || return 1
+	echo "$_scr" | grep -qiE "── Registry ──|── Cluster ──|── Mirror ──|Mirror Payload|Install Cluster|Day-2|Install Registry"
+}
+
+# Navigate back to the Actions main menu without exiting the TUI.
+# Handles Confirm Exit (Continue) if Escape overshoots.
+# Usage: tui_leave_on_menu
+tui_leave_on_menu() {
+	if ! tui_session_alive 2>/dev/null; then
+		return 0
+	fi
+	tui_dismiss_result 2>/dev/null || true
+	# Escape/back until Actions, without confirming exit
+	if ! tui_back_to "Actions" 15; then
+		return 1
+	fi
+	# If still on Confirm Exit, stay in the TUI
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Confirm Exit\|Exit ABA"; then
+		tui_press_button "Continue" 2>/dev/null || { tui_keys Tab; sleep 0.2; tui_keys Enter; }
+		sleep 1
+	fi
+	tui_on_main_menu
+}
+
 # Start TUI, dismiss startup dialogs, detect mode, land on main menu.
-# Combines: tui_start + splash dismiss + mode detection.
+# Reuses a live tmux session already on (or returnable to) the main menu —
+# launching abatui costs ~20s, so tests must not exit the TUI between suites.
 # On failure (e.g. "Internet Access Required" exit), stops TUI and returns 1.
 # Usage: tui_start_to_menu [start_cmd] || { tui_summary; exit 1; }
 tui_start_to_menu() {
 	local cmd="${1:-cd ~/aba && abatui}"
+
+	if tui_session_alive; then
+		if tui_on_main_menu; then
+			echo "  Reusing TUI session (already on main menu)"
+			trap 'tui_leave_on_menu 2>/dev/null' EXIT
+			tui_detect_mode
+			return 0
+		fi
+		echo "  Reusing TUI session — navigating to main menu"
+		if tui_leave_on_menu && tui_on_main_menu; then
+			trap 'tui_leave_on_menu 2>/dev/null' EXIT
+			tui_detect_mode
+			return 0
+		fi
+		echo "  Existing session unusable — relaunching TUI"
+		tui_stop
+	fi
+
 	tui_start "$cmd"
 	tui_dismiss_startup 60 || { tui_stop; return 1; }
 	tui_detect_mode
@@ -1029,7 +1108,8 @@ tui_clear_failed_tasks() {
 	$_TUI_SSH "cd ~/aba && source scripts/include_all.sh && run_once -F 2>/dev/null; true"
 }
 
-# Start the TUI in a fresh tmux session on the test host
+# Start the TUI in a fresh tmux session on the test host.
+# Prefer tui_start_to_menu — it reuses a live session when possible.
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
@@ -1044,66 +1124,36 @@ tui_start() {
 	sleep 0.5
 	$_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT '$cmd'"
 	sleep 2
-	# Safety net: ensure tmux session is killed on unexpected exit
-	trap 'tui_stop 2>/dev/null' EXIT
+	# Leave TUI on main menu on unexpected exit — do not kill (relaunch is ~20s)
+	trap 'tui_leave_on_menu 2>/dev/null' EXIT
 }
 
-# Kill the TUI session
+# Kill the TUI session (force). Prefer tui_leave_on_menu / tui_cleanup.
 tui_stop() {
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 }
 
-# Clean shutdown + stray process check.
-# 1. Try to exit the TUI gracefully (dismiss dialogs, Escape to main, exit)
-# 2. If still alive, force-kill the tmux session
-# 3. Wait for processes to die
-# 4. Check for strays — PASS if clean, FAIL if any remain (and kill them)
-# Call this instead of duplicating cleanup logic in every test.
+# End-of-test cleanup: return to the Actions main menu and leave the TUI running.
+# Launching abatui costs ~20s; suites must not exit between tests.
+# PASS when the session is on the main menu. If the session is already gone
+# (e.g. a test exercised Exit), PASS with a note — the next start will relaunch.
 tui_cleanup() {
-	# Dismiss any result/error dialog first
-	tui_dismiss_result 2>/dev/null
-
-	# Try to escape back to main menu — up to 10 Escapes covers deep wizards
-	for _i in 1 2 3 4 5 6 7 8 9 10; do
-		if ! $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
-			break
-		fi
-		# Check if we reached the main menu
-		if tui_capture | grep -qi "Actions"; then
-			# On the main menu — press Escape once more to exit the TUI
-			tui_keys Escape
-			sleep 2
-			break
-		fi
-		tui_keys Escape
-		sleep 0.5
-	done
-
-	# If session is still alive, try Enter (confirm exit dialog) then force-kill
-	if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
-		tui_keys Enter; sleep 0.5
-		tui_keys Escape; sleep 0.5
-		tui_keys Enter; sleep 0.5
-	fi
-
-	# Force-kill the tmux session if it didn't exit cleanly
-	tui_stop
-	sleep 2
-
-	# Check for strays AFTER the session is gone
-	# Exclude tmux itself (its cmdline contains "abatui" from new-session args)
-	local _strays
-	_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep | grep -v 'tmux '" 2>/dev/null || true)
-	if [ -z "$_strays" ]; then
-		echo "  ✓ PASS: No stray processes"
+	if ! tui_session_alive 2>/dev/null; then
+		echo "  ✓ PASS: Cleanup complete (no TUI session — next test will launch)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Stray processes after cleanup:"
-		echo "$_strays" | sed 's/^/      /'
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; pkill -9 -f 'dialog --' 2>/dev/null; true"
-		sleep 1
+		return 0
 	fi
+
+	if tui_leave_on_menu && tui_on_main_menu; then
+		echo "  ✓ PASS: TUI left on main menu"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		return 0
+	fi
+
+	echo "  ✗ FAIL: Could not return TUI to main menu"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "CLEANUP-NOT-ON-MENU-$(date +%H%M%S)"
+	# Do not kill — leave whatever state for debugging / next start_to_menu recovery
 }
 
 # --- Assertions ---
