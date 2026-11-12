@@ -358,23 +358,26 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 		esac
 	done
 
+	local _install_title
+	_install_title=$(_tui_mirror_install_title "$m_vendor")
+
 	if [[ "$_variant" == "review" ]]; then
 		return 0
 	elif [[ "$_variant" == "local" ]]; then
 		tui_log "Saving mirror config: host=$m_host port=$m_port vendor=$m_vendor"
 		replace-value-conf -q -n reg_ssh_user -v "" -f "$mcf"
 		replace-value-conf -q -n reg_ssh_key -v "" -f "$mcf"
-		_exec_with_progress "aba --dir mirror install --yes" "Install $m_vendor Mirror" _invalidate_mirror_cache
+		_exec_with_progress "aba --dir mirror install --yes" "$_install_title" _invalidate_mirror_cache
 		local rc=$?
-		[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "Install $m_vendor Mirror" _invalidate_mirror_cache && rc=$?
+		[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "$_install_title" _invalidate_mirror_cache && rc=$?
 		return $rc
 	else
 		tui_log "Saving mirror config: host=$m_host ssh=$m_ssh_user key=$m_ssh_key vendor=$m_vendor"
 		replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$mcf"
 		replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$mcf"
-		_exec_with_progress "aba --dir mirror install --yes" "Install $m_vendor Mirror" _invalidate_mirror_cache
+		_exec_with_progress "aba --dir mirror install --yes" "$_install_title" _invalidate_mirror_cache
 		local rc=$?
-		[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "Install $m_vendor Mirror" _invalidate_mirror_cache && rc=$?
+		[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "$_install_title" _invalidate_mirror_cache && rc=$?
 		return $rc
 	fi
 }

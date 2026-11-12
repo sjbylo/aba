@@ -880,6 +880,20 @@ mirror_available() {
 	[[ -f "$ABA_ROOT/mirror/.available" ]]
 }
 
+# Progress-dialog title for a mirror install. mirror.conf may say "auto";
+# that is a choice, not a vendor. Show the vendor install will actually run.
+# Optional arg is the in-memory choice (the config form may not be re-read yet).
+_tui_mirror_install_title() {
+	local _choice="${1:-}"
+	local _vendor
+	if [ -n "$_choice" ]; then
+		_vendor=$(reg_vendor="$_choice" resolved_reg_vendor)
+	else
+		_vendor=$(resolved_reg_vendor)
+	fi
+	printf 'Install %s Mirror\n' "$_vendor"
+}
+
 # Run mirror install (with progress) as a standalone step.
 # Used by TUI paths that detect "mirror not installed" and need to install
 # before sync/load.  Running install separately avoids the Makefile prerequisite
@@ -887,8 +901,8 @@ mirror_available() {
 # Returns 0 on success, non-zero on failure or user cancel.
 _tui_install_mirror() {
 	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
-	local _vendor="${reg_vendor:-auto}"
-	local _label="Install ${_vendor} Mirror"
+	local _label
+	_label=$(_tui_mirror_install_title)
 	_exec_with_progress "aba --dir mirror install --yes" "$_label" _invalidate_mirror_cache
 	local rc=$?
 	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir mirror install" "$_label" _invalidate_mirror_cache && rc=$?
