@@ -5,11 +5,13 @@
 #
 # ─── Key design decisions ───────────────────────────────────────────
 #
-# 1. SEPARATION OF CONCERNS — each _progress_plan-* target only knows its OWN steps.
-#    _progress_plan-install emits install PLANs.  _progress_plan-sync emits sync PLANs.
-#    When "make sync" triggers install as a dependency, _progress_plan-install fires
-#    first (it's a prereq of install), then _progress_plan-sync fires later.
-#    The dialog GROWS as new PLANs arrive — two visible batches.
+# 1. A PARENT ASKS THE CHILD FOR ITS PLAN.
+#    `script plan` prints that object's steps.  The parent submits the
+#    combined list before any work, so the dialog shows the full list
+#    at once.  Upgrade asks day2.  Bundle asks save.  The child does
+#    not know the parent.
+#    Sync does not ask install, because install runs only when the
+#    mirror is missing.  Those plans still arrive as two batches.
 #
 # 2. CONSISTENCY — _progress_plan-install is ALWAYS a prereq of install.
 #    The TUI just calls "make install" or "make sync".  No need to
@@ -198,6 +200,7 @@ _parse_event() {
 			fi
 			;;
 		DONE)        _status[$id]="0"; _real_done[$id]="done" ;;
+		NOOP)        _status[$id]="6"; _real_done[$id]="noop" ;;
 		FAIL)        _status[$id]="1"; _real_done[$id]="fail"; _failed+=("${_text[$id]:-$id}") ;;
 		ERROR)       _errors+=("${arg1:-$id}") ;;
 		DETAIL)      _details+=("${arg1:-$id}") ;;
@@ -669,7 +672,7 @@ show_menu() {
 	_choice=$(dialog --title " ABA TUI Progress Demo " \
 		--cancel-label "Exit" \
 		--menu "\n  PHONY _plan targets · Skipped sweep · PTY + FIFO\n" \
-		26 68 14 \
+		28 76 16 \
 		"install"       "Install registry (cached — RPMs skipped)" \
 		"install-fresh" "Install registry (fresh — all steps run)" \
 		"sync"          "Sync images (cached — RPMs & catalogs skipped)" \
@@ -678,8 +681,9 @@ show_menu() {
 		"save"          "Save images (cached, no prompt)" \
 		"save-prompt"   "Save images (with interactive prompt)" \
 		"save-error"    "Save images (fails during save step)" \
-		"bundle"        "Create bundle (shared IDs — dedup demo)" \
+		"bundle"        "Create bundle (asks save for its plan)" \
 		"bundle-error"  "Create bundle (save fails mid-way)" \
+		"upgrade"       "Upgrade (full plan, including day-2)" \
 		"sync-crash"    "Sync crash (script dies, no FAIL event)" \
 		"uninstall"     "Uninstall registry (all steps run)" \
 		"fresh-all"     "Sync (mirror not installed — installs first)" \
@@ -767,6 +771,13 @@ run_workflow() {
 			wdir_mode="cached"
 			title="Create Install Bundle"
 			envs="SKIP_ASK=1 SKIP_OC_MIRROR=1 SIMULATE_FAIL=1"
+			;;
+		upgrade)
+			# One plan before any work: preflight, day-2's steps, then
+			# trigger and wait. Upgrade asks day2.sh for those steps.
+			make_target="upgrade"
+			wdir_mode="cached"
+			title="Upgrade Cluster"
 			;;
 		sync-crash)
 			# Unexpected crash: oc-mirror (or any tool) dies with no FAIL event.
@@ -958,7 +969,7 @@ run_workflow() {
 while true; do
 	choice=$(show_menu)
 	case "$choice" in
-		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|bundle|bundle-error|sync-crash|uninstall|fresh-all|fresh-bg|verbose)
+		install|install-fresh|sync|sync-catalogs|sync-bg|save|save-prompt|save-error|bundle|bundle-error|upgrade|sync-crash|uninstall|fresh-all|fresh-bg|verbose)
 			run_workflow "$choice" ;;
 		quit|"")
 			break ;;

@@ -6,11 +6,14 @@
 #
 # ─── Key design decisions ───────────────────────────────────────────
 #
-# 1. EACH PLAN TARGET ONLY KNOWS ITS OWN STEPS.
-#    _progress_plan-install emits install PLANs.  _progress_plan-sync emits sync PLANs.
-#    When "make sync" triggers install as a dependency, both plan
-#    targets fire independently.  The progress dialog grows as new
-#    PLANs arrive (two visible batches).
+# 1. A PARENT ASKS THE CHILD FOR ITS PLAN.
+#    The child owns its steps and prints them when called as `script plan`.
+#    It does not know who asked.  The parent submits one combined list
+#    before any work, so the dialog shows the full task list up front.
+#    Upgrade asks day2 (preflight, then day-2, then trigger and wait).
+#    Bundle asks save (save's steps, then Pack bundle).
+#    Sync does not ask install: install runs only when the mirror is
+#    missing, so those two plans still arrive as separate batches.
 #
 # 2. PLAN ORDER = EXECUTION ORDER.
 #    The order of PLANs must match the order Make actually executes
@@ -48,6 +51,18 @@
 #   PROMPT_DONE     — input received, script continuing
 
 source "$(dirname "$0")/progress.sh"
+
+# Submit a child's plan.  The child prints PLAN lines and does not
+# write the FIFO itself, so the parent controls when they are sent.
+_emit_child_plan() {
+	local _line
+	while IFS= read -r _line; do
+		if [ -n "$_line" ]; then
+			aba_progress "$_line"
+		fi
+	done < <(bash "$1" plan)
+	return 0
+}
 
 # Show PTY info banner (appears first in output log)
 echo
@@ -107,33 +122,35 @@ case "$1" in
 	save)
 		# Order matches Make's execution:
 		#   .rpmsext → status-preflight → save.sh
-		# Uses GLOBAL step IDs so parent workflows (bundle) can pre-declare
-		# the same IDs.  The receiver deduplicates by ID — first PLAN wins.
-		aba_progress "PLAN|rpms_ext|Install required packages|3"
-		aba_progress "PLAN|preflight|Pre-flight checks|2"
-		aba_progress "PLAN|sv_tools|Download CLI tools|5"
-		aba_progress "PLAN|sv_save|Save images to disk|70"
-		aba_progress "PLAN|sv_cli_wait|Wait for CLI tools|5"
-		aba_progress "PLAN|sv_finalize|Create transfer archive|3"
+		# The step list lives in save.sh.  Bundle asks for the same list.
+		_emit_child_plan "$(dirname "$0")/save.sh"
 		;;
 
 	bundle)
-		# Bundle wraps save — pre-declares ALL shared IDs so save's
-		# duplicate PLANs are silently absorbed by receiver dedup.
-		# sv_finalize is included (save runs it) BEFORE bnd_pack.
-		# Result: save's plan adds ZERO new rows — complete dedup.
-		aba_progress "PLAN|rpms_ext|Install required packages|3"
-		aba_progress "PLAN|preflight|Preflight checks|2"
-		aba_progress "PLAN|sv_tools|Download CLI tools|5"
-		aba_progress "PLAN|sv_save|Save images|70"
-		aba_progress "PLAN|sv_cli_wait|Wait for CLI tools|5"
-		aba_progress "PLAN|sv_finalize|Create transfer archive|3"
+		# Bundle always runs save.  Ask save for its plan, then append
+		# the pack step.  Save does not know about bundle.
+		_emit_child_plan "$(dirname "$0")/save.sh"
 		aba_progress "PLAN|bnd_pack|Pack bundle|10"
 		;;
 
 	uninstall)
 		aba_progress "PLAN|uninst_remove|Remove registry|10"
 		aba_progress "PLAN|uninst_cleanup|Clean up|3"
+		;;
+
+	day2)
+		_emit_child_plan "$(dirname "$0")/day2.sh"
+		;;
+
+	upgrade)
+		# Upgrade always runs day-2.  Ask day2 for its plan and submit
+		# the whole list before any work.  Order matches execution, so
+		# auto-complete does not mark Trigger or Wait as No-op while
+		# day-2 is still running.  Day-2 does not know about upgrade.
+		aba_progress "PLAN|ug_preflight|Preflight checks|2"
+		_emit_child_plan "$(dirname "$0")/day2.sh"
+		aba_progress "PLAN|ug_trigger|Trigger upgrade|5"
+		aba_progress "PLAN|ug_progress|Wait for upgrade|70"
 		;;
 
 	*)
