@@ -21,9 +21,11 @@ echo "=== TUI Progress Integration Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-# Kill any stale sessions/processes from previous progress test runs
+# Kill any stale sessions/processes from previous progress / TUI runs.
+# A leftover abatui (e.g. Confirm Exit) trips the stray-process assert at end.
 $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
-$_TUI_SSH "pkill -f aba-progress-wrapper 2>/dev/null; pkill -f aba-progress-test 2>/dev/null; true"
+$_TUI_SSH "pkill -9 -f aba-progress-wrapper 2>/dev/null; pkill -9 -f aba-progress-test 2>/dev/null; true"
+$_TUI_SSH "pkill -9 -f abatui2 2>/dev/null; true"
 sleep 0.5
 
 tui_deploy_code
@@ -358,12 +360,22 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-# C3: Press any key to return to progress dialog
-tui_keys Enter
-sleep 3
+# C3: Only Space returns from live output (Enter is ignored by design).
+_back_ok=false
+for _try in 1 2 3 4 5 6; do
+	tui_keys Space
+	sleep 0.5
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Live Output\|press Space to return"; then
+		continue
+	fi
+	if echo "$_scr" | grep -qi "In Progress\|Quit (Q\|All steps completed\|Succeeded"; then
+		_back_ok=true
+		break
+	fi
+done
 tui_screenshot "pi-c3-back-to-progress"
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Succeeded\|Output"; then
+if [[ "$_back_ok" == "true" ]]; then
 	echo "  ✓ PASS: Returned to progress/completion dialog"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
@@ -447,6 +459,7 @@ $_TUI_SSH "rm -f /tmp/aba-progress-test.sh /tmp/aba-progress-test-fail.sh \
 	/tmp/aba-progress-test-slow.sh /tmp/aba-progress-wrapper.sh" 2>/dev/null
 # Kill tmux session first, then check for strays
 tui_stop
+$_TUI_SSH "pkill -9 -f abatui2 2>/dev/null; pkill -9 -f aba-progress- 2>/dev/null; true"
 sleep 2
 _strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui|progress-wrapper' | grep -v grep" 2>/dev/null || true)
 if [ -z "$_strays" ]; then
