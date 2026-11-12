@@ -87,7 +87,7 @@ infoscale-sds-operator InfoScale™ SDS Operator fast
 instana-agent-operator Instana Agent Operator stable
 intel-device-plugins-operator Intel Device Plugins Operator stable
 intel-network-operator Intel Network Operator alpha
-intel-tdx-dcap-operator Intel TDX DCAP Operator alpha
+intel-tdx-dcap-operator Intel TDX DCAP Operator stable
 ipm-controller Intel® Infrastructure Power Manager stable
 jenkins2tekton-operator Jenkins2Tekton Operator stable
 k10-kasten-operator-rhmp Veeam Kasten stable

@@ -139,9 +139,11 @@ echo ""
 echo "--- Test 3: install guard detects stale markers on vmw/kvm ---"
 
 # Recovery is delete then install (clean alone is refused while installed).
+# The tip uses aba_cmd so it matches how this aba was invoked.
 if grep -q '_install_vms_gone' scripts/aba.sh && \
    grep -q 'exists.sh' scripts/aba.sh && \
-   grep -q "delete' then 'aba -d" scripts/aba.sh; then
+   grep -F -q "\$(aba_cmd delete)" scripts/aba.sh && \
+   grep -F -q "\$(aba_cmd install)" scripts/aba.sh; then
 	_pass "aba.sh install guard checks VM existence and suggests delete then install"
 else
 	_fail "aba.sh install guard checks VM existence and suggests delete then install"
