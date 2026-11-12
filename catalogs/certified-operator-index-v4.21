@@ -84,7 +84,7 @@ infoscale-licensing-operator InfoScale™ Licensing Operator fast
 infoscale-sds-operator InfoScale™ SDS Operator fast
 instana-agent-operator Instana Agent Operator stable
 intel-device-plugins-operator Intel Device Plugins Operator stable
-intel-tdx-dcap-operator Intel TDX DCAP Operator alpha
+intel-tdx-dcap-operator Intel TDX DCAP Operator stable
 ipm-controller Intel® Infrastructure Power Manager stable
 k10-kasten-operator-rhmp Veeam Kasten stable
 k8s-triliovault Trilio for Kubernetes 5.4.x
