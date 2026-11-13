@@ -165,7 +165,7 @@ fi
 
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
-aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
+aba_mirror_eta sync
 
 # NOTE: that the cache is always used *except* for mirror-to-mirror (sync) workflows, where it is not used! See reg-save.sh and reg-load.sh.
 # Set TMPDIR path (defer mkdir to just before oc-mirror needs it)

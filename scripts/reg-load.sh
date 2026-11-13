@@ -262,7 +262,7 @@ aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to re
 aba_progress "DONE|ld_registry"
 aba_progress "START|ld_load"
 
-aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
+aba_mirror_eta load
 
 # Now using data_dir so reg_root=$data_dir/quay-install
 # Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
