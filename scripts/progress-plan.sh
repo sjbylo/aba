@@ -45,6 +45,11 @@ case "$1" in
 		# When .available exists, the registry is already installed — nothing to show.
 		# This prevents Skipped items cluttering the dialog for a cached sync.
 		[ -f .available ] && exit 0
+		# In progress immediately. Make still has to extract or download the
+		# registry files before reg-install.sh starts, and that work has no
+		# step of its own. One row covers every vendor.
+		aba_progress "PLAN|reg_prep|Preparation|5"
+		aba_progress "START|reg_prep"
 		aba_progress "PLAN|rpms_ext|Install required packages|5"
 		aba_progress "PLAN|reg_config|Validate configuration|2"
 		aba_progress "PLAN|reg_env|Check environment|2"

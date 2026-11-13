@@ -1227,10 +1227,12 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 				_mirror_config_review || return 1
 				_tui_install_mirror "Install Mirror" || return 1
 			fi
-			confirm_and_execute \
-				"aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
-				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
+			# Same sync the Mirror menu already runs in the progress dialog.
+			local _cmd="aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)"
+			local _title="Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			_exec_with_progress "$_cmd --yes" "$_title" _invalidate_mirror_cache
 			rc=$?
+			[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" _invalidate_mirror_cache && rc=$?
 			if [[ $rc -eq 0 ]]; then
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
 				--msgbox "\nUpgrade images synced to registry.\n\n\
@@ -1241,10 +1243,12 @@ Next steps:\n\n\
 			;;
 		2)
 			_ensure_platform_for_upgrade
-			confirm_and_execute \
-				"aba --dir mirror --upgrade-to $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
-				"Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			# Same save the Mirror menu already runs in the progress dialog.
+			local _cmd="aba --dir mirror --upgrade-to $_target_ver save$(_tui_oc_mirror_retry_suffix)"
+			local _title="Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			_exec_with_progress "$_cmd --yes" "$_title" _invalidate_mirror_cache
 			rc=$?
+			[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" _invalidate_mirror_cache && rc=$?
 			if [[ $rc -eq 0 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
 					--msgbox "\nUpgrade images saved successfully.\n\n\
