@@ -31,8 +31,14 @@ for _d in compact standard ocp; do
 done
 
 _csr_cleanup_markers() {
+	# Drop fake markers we created…
 	for _d in $_csr_created_markers; do
 		$_TUI_SSH "rm -f ~/aba/$_d/.install-complete" >/dev/null 2>&1 || true
+	done
+	# …and delete leftover throwaways from BM/prior runs (keep $_CLUSTER for day2+).
+	for _d in compact standard ocp sno4; do
+		[[ "$_d" == "$_CLUSTER" ]] && continue
+		tui_delete_cluster "$_d" 2>/dev/null || true
 	done
 }
 trap _csr_cleanup_markers EXIT

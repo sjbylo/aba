@@ -1452,6 +1452,31 @@ tui_delete_cluster() {
 	return 0
 }
 
+# Delete every throwaway lab cluster (see tui_lab_cluster_ips) except keepers.
+# Use after a test (or suite stage) no longer needs those VMs/dirs — do not wait
+# for Lifecycle if BM/race left compact|standard|sno4 sitting around.
+# Usage: tui_sweep_throwaway_clusters [keep_name ...]
+#   tui_sweep_throwaway_clusters sno          # free BM leftovers, keep sno
+#   tui_sweep_throwaway_clusters              # delete all throwaways
+tui_sweep_throwaway_clusters() {
+	local _keep=" $* " _name _has
+	echo "  Sweeping throwaway clusters (keep:${_keep:- none})..."
+	for _name in sno sno2 sno3 sno4 compact compact2 standard ocp; do
+		case "$_keep" in
+			*" $_name "*) continue ;;
+		esac
+		_has=$($_TUI_SSH "test -d ~/aba/$_name -o -f ~/aba/$_name/.install-complete && echo yes || echo no" 2>/dev/null || echo no)
+		# Also clear orphan VMs when the dir is already gone
+		if [[ "$_has" != "yes" ]]; then
+			tui_destroy_orphan_vms "$_name" 2>/dev/null || true
+			continue
+		fi
+		echo "  Sweep: deleting '$_name' (no longer needed)"
+		tui_delete_cluster "$_name" || true
+	done
+	return 0
+}
+
 # --- ISC (ImageSetConfiguration) verification helpers ---
 
 # Read the ISC YAML from the remote host.  Caller captures output.
