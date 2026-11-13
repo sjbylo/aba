@@ -4015,3 +4015,31 @@ The 2.0 file is a different build from the stable-4.22 client tarball (`2.0.0-20
 
 **Workaround:** Stay on the `stable-4.22` client tarballs.
 
+---
+
+## #B115: Move progress-plan wording into the script that owns the work
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-11-13
+
+**Problem:** Most `PLAN` lines are written in `scripts/progress-plan.sh`. Save and Day-2 already own theirs: `reg-save.sh plan` and `day2.sh plan` print the lines and exit before the script sources anything, and `progress-plan.sh` sends them. The other workflows should follow that, so the script that runs the work owns the wording.
+
+**Root cause:** The dialog waits about 10 seconds for the first `PLAN`, then falls back to the old full output. Make therefore calls `progress-plan.sh` before the slow prerequisites (registry extract, ISO build, VM boot). The wording and that early send ended up in the same file. The send has to stay early. The words do not.
+
+**Proposed fix:** Keep `progress-plan.sh` as the sender, at the same Makefile target or entry-point call, with the same lines in the same order. Move a list only when it is one contiguous block. Put a `plan` section at the top of the owning script, before `source`, and exit. `bash script plan` must print only `PLAN` lines.
+
+- `reg-sync.sh`, `reg-load.sh`, `reg-uninstall.sh`, `reg-stop.sh`, `reg-start.sh`
+- `day2-config-ntp.sh`, `day2-config-osus.sh`, `day2-config-virt.sh`
+- `cluster-graceful-shutdown.sh`, `cluster-startup.sh`
+
+Leave these assembled in `progress-plan.sh`:
+
+- Install exits early when `.available` exists, and sends `START|reg_prep` between the first row and the rest. The dialog starts drawing on the first row, so that order stays.
+- Bundle and upgrade insert Save or Day-2 in the middle of their own rows. Those inserted lists already live in `reg-save.sh` and `day2.sh`.
+- Cluster install is the Make chain. No one script generates the config, builds the ISO, boots the nodes, and monitors. `monitor-install.sh` owns only the last row. Turn the `PLAN` line now inside that script into a `plan` section, and have both the install plan and `aba mon` ask for it.
+
+Prove the dialog sees the same events: capture `progress-plan.sh` output for each workflow before and after. `test/func/test-progress-events.sh` checks the text, the count, and the order. A `plan` guard below the first `source` is the hazard: `progress-plan.sh` forwards every stdout line, and `cluster-upgrade.sh` and `cluster-graceful-shutdown.sh` treat arguments as the real command.
+
+**Workaround:** None. The dialog already shows these steps.
+

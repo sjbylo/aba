@@ -22,6 +22,9 @@ case "$vendor" in
 	*) aba_abort "Unknown registry vendor '$vendor'. Valid values: quay, docker, $_OMR_VENDOR, existing" ;;
 esac
 
+# Make's registry prerequisite (tar extract or image download) has finished.
+aba_progress "DONE|reg_prep"
+
 # "existing" = externally managed registry; nothing to install
 if [ "$vendor" = "existing" ]; then
 	aba_debug "Registry vendor is 'existing' -- skipping install (externally managed)"

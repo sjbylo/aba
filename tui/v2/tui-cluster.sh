@@ -1933,8 +1933,10 @@ cluster_monitor() {
 	fi
 
 	local _cl="$SELECTED_CLUSTER"
-	confirm_and_execute "aba --dir $_cl mon" "$TUI2_TITLE_CLUSTER_MONITOR"
+	# monitor-install declares its own step, so the progress dialog can show it.
+	_exec_with_progress "aba --dir $_cl mon --yes" "$TUI2_TITLE_CLUSTER_MONITOR"
 	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $_cl mon" "$TUI2_TITLE_CLUSTER_MONITOR" && rc=$?
 
 	# After successful monitor completion in mirror mode, offer to configure OperatorHub
 	if [[ $rc -eq 0 && "$_TUI_MODE" != "DIRECT" && -f "$ABA_ROOT/$_cl/.install-complete" ]]; then
