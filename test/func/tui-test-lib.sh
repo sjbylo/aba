@@ -20,10 +20,18 @@ _TUI_HEIGHT=45
 # Source of truth: .cursor/skills/throwaway-cluster/SKILL.md
 # ---------------------------------------------------------------------------
 TUI_LAB_DOMAIN="example.com"
-TUI_LAB_DNS_NTP="10.0.1.8"		# cluster-node DNS+NTP (NOT bastion 192.168.2.38)
+# DNS must be conno's dnsmasq (10.0.0.10): lab DNS 10.0.1.8 maps bastion.example.com
+# → 10.0.1.5 (other host's registry without the synced ocp_version). ABA's
+# aba-mirror.conf on conno must map bastion → this host's *lab* IP (10.0.0.10),
+# NOT the mgmt NIC (192.168.2.33). Guests use GW 10.0.0.1 (dead in this lab) so
+# off-subnet mirror IPs leave the agent ICMP-only with :8090/:22 closed.
+TUI_LAB_DNS="10.0.0.10"
+TUI_LAB_NTP="10.0.1.8"			# lab chrony (NOT bastion mgmt NIC)
+TUI_LAB_DNS_NTP="$TUI_LAB_DNS"		# compat alias (dig + DNS field defaults)
 TUI_LAB_MACHINE_NETWORK="10.0.0.0/20"
 TUI_LAB_GATEWAY="10.0.0.1"
 TUI_LAB_PORTS="ens160"
+TUI_LAB_MIRROR_IP="10.0.0.10"		# Quay on conno lab NIC (reachable on-link)
 
 # Resolve IPs for a throwaway cluster name (10.0.1.0/24 allocation).
 # Sets: _lab_starting_ip _lab_api_ip _lab_apps_ip _lab_type
@@ -78,11 +86,11 @@ tui_lab_resolve_cluster() {
 	_apps_ip="$_lab_apps_ip"
 	_machine_network="$TUI_LAB_MACHINE_NETWORK"
 	_gateway="$TUI_LAB_GATEWAY"
-	_cluster_dns="$TUI_LAB_DNS_NTP"
-	_cluster_ntp="$TUI_LAB_DNS_NTP"
+	_cluster_dns="$TUI_LAB_DNS"
+	_cluster_ntp="$TUI_LAB_NTP"
 	_ports="$TUI_LAB_PORTS"
 	_domain="$TUI_LAB_DOMAIN"
-	echo "  Lab IPs ($name): type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip apps=$_lab_apps_ip dns/ntp=$TUI_LAB_DNS_NTP"
+	echo "  Lab IPs ($name): type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip apps=$_lab_apps_ip dns=$TUI_LAB_DNS ntp=$TUI_LAB_NTP"
 	return 0
 }
 
@@ -142,9 +150,9 @@ tui_apply_lab_network() {
 		fi
 	fi
 
-	if ! echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
-		echo "  Setting DNS servers to ${TUI_LAB_DNS_NTP}"
-		tui_set_net_field D "$TUI_LAB_DNS_NTP"
+	if ! echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS}"; then
+		echo "  Setting DNS servers to ${TUI_LAB_DNS}"
+		tui_set_net_field D "$TUI_LAB_DNS"
 		pane=$(tui_capture)
 	fi
 
@@ -154,19 +162,19 @@ tui_apply_lab_network() {
 		pane=$(tui_capture)
 	fi
 
-	if ! echo "$pane" | grep -qiE "NTP servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
-		echo "  Setting NTP servers to ${TUI_LAB_DNS_NTP}"
-		tui_set_net_field N "$TUI_LAB_DNS_NTP"
+	if ! echo "$pane" | grep -qiE "NTP servers:[[:space:]]*${TUI_LAB_NTP}"; then
+		echo "  Setting NTP servers to ${TUI_LAB_NTP}"
+		tui_set_net_field N "$TUI_LAB_NTP"
 		pane=$(tui_capture)
 	fi
 
 	# Assert critical fields
 	pane=$(tui_capture)
-	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
-		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS_NTP}"
+	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS}"; then
+		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS}"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS_NTP} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
+		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$pane" | grep -qE "Starting IP:[[:space:]]*${_lab_starting_ip}"; then
@@ -656,6 +664,14 @@ tui_dismiss_startup() {
 			continue
 		fi
 
+		# Podman preflight (registries.d / pull hello) — Continue anyway
+		if echo "$_scr" | grep -qi "Podman Preflight"; then
+			echo "  Dismissing Podman Preflight Warning (Continue anyway)" >&2
+			tui_keys Enter
+			sleep 1
+			continue
+		fi
+
 		# "Internet Access Required" error — TUI will exit after dismiss
 		if echo "$_scr" | grep -qi "Internet Access Required\|Cannot access"; then
 			echo "  WARNING: Internet Access Required dialog appeared" >&2
@@ -890,13 +906,15 @@ tui_ensure_install_prereqs() {
 		# via ens192). VMs on Lab Network (10.0.0.0/20) cannot reach that DNS —
 		# agent then fails: "lookup disco.example.com on 192.168.2.38:53: i/o timeout".
 		# Force lab DNS on the machine network when configured DNS is off-net.
-		_lab_dns=10.0.1.8
+		# Prefer conno dnsmasq so bastion.example.com → local mirror (not lab 10.0.1.5).
+		_lab_dns=10.0.0.10
 		_dns=$(grep "^dns_servers=" aba.conf 2>/dev/null | cut -d= -f2 | sed "s/#.*//;s/[[:space:]]//g")
 		_dns_ok=
+		# Only treat as OK when already pointing at conno DNS (correct bastion mapping).
 		case ",$_dns," in
-			*,10.0.*) _dns_ok=1 ;;
+			*,10.0.0.10,*) _dns_ok=1 ;;
 		esac
-		if [ -z "$_dns_ok" ] && dig +time=1 +tries=1 +short disco.example.com "@$_lab_dns" 2>/dev/null | grep -q .
+		if [ -z "$_dns_ok" ] && dig +time=1 +tries=1 +short bastion.example.com "@$_lab_dns" 2>/dev/null | grep -q .
 		then
 			if grep -q "^dns_servers=" aba.conf; then
 				sed -i "s/^dns_servers=.*/dns_servers=$_lab_dns\\t\\t#/" aba.conf
@@ -905,15 +923,81 @@ tui_ensure_install_prereqs() {
 			fi
 			echo "DNS:${_dns:-empty}->$_lab_dns"
 		fi
+		# --- Mirror A-record on lab DNS (see tui_ensure_bastion_mirror_dns) ---
+		_mir_ip=10.0.0.10
+		_cur=$(dig +time=1 +tries=1 +short bastion.example.com "@$_lab_dns" 2>/dev/null | head -1)
+		if [ -n "$_cur" ] && [ "$_cur" != "$_mir_ip" ]; then
+			echo "address=/bastion.example.com/$_mir_ip" | sudo tee /etc/dnsmasq.d/aba-mirror.conf >/dev/null
+			sudo systemctl reset-failed dnsmasq 2>/dev/null || true
+			sudo systemctl restart dnsmasq 2>/dev/null || true
+			echo "MIRRORDNS:$_cur->$_mir_ip"
+		fi
 	' 2>/dev/null) || true
 	if [[ -n "$_out" ]]; then
 		echo "  Ensured install prereqs: $_out"
 	fi
 }
 
+# Ensure dnsmasq maps bastion.example.com to the lab-reachable Quay IP.
+# ABA add-mirror uses _pick_install_iface (default-route/mgmt NIC) which writes
+# 192.168.2.33 — unreachable from cluster VMs when GW 10.0.0.1 is down.
+tui_ensure_bastion_mirror_dns() {
+	local _cur _want="$TUI_LAB_MIRROR_IP" _dns="$TUI_LAB_DNS"
+	_cur=$($_TUI_SSH "dig +time=1 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
+	if [[ -n "$_cur" && "$_cur" == "$_want" ]]; then
+		echo "  Bastion DNS OK: bastion.example.com → $_want (via $_dns)"
+		return 0
+	fi
+	echo "  Fixing bastion DNS: ${_cur:-unset} → $_want on $_dns"
+	$_TUI_SSH "echo 'address=/bastion.example.com/${_want}' | sudo tee /etc/dnsmasq.d/aba-mirror.conf >/dev/null && sudo systemctl reset-failed dnsmasq 2>/dev/null; sudo systemctl restart dnsmasq" 2>/dev/null || true
+	_cur=$($_TUI_SSH "dig +time=1 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
+	if [[ "$_cur" == "$_want" ]]; then
+		echo "  ✓ Bastion DNS fixed: bastion.example.com → $_want"
+		return 0
+	fi
+	echo "  ✗ WARN: bastion.example.com still resolves to '${_cur:-unset}' (want $_want)" >&2
+	return 1
+}
+
 # Mirror is installed when mirror/.available exists on the test host.
 tui_mirror_available() {
 	$_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null
+}
+
+# True when mirror/.available exists AND port 8443 is listening on the host.
+tui_mirror_listening() {
+	$_TUI_SSH "ss -ltn 2>/dev/null | grep -q ':8443' || netstat -ltn 2>/dev/null | grep -q ':8443'" 2>/dev/null
+}
+
+# After a host wipe (or first run), cluster/mirror UI tests need a local registry.
+# Install via CLI so page-nav tests are not blocked on "Mirror Required".
+# .available alone is not enough — Start can leave a dead registry.
+# Usage: tui_ensure_mirror_installed
+tui_ensure_mirror_installed() {
+	if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+		echo "  Mirror available and listening on :8443"
+		return 0
+	fi
+	if [[ "$(tui_mirror_available)" == "yes" ]] && ! tui_mirror_listening; then
+		echo "  Mirror marked available but :8443 is down — starting via CLI..."
+		$_TUI_SSH "cd ~/aba/mirror && aba start --yes" 2>&1 | tail -20
+		if tui_mirror_listening; then
+			echo "  ✓ Mirror started (listening on :8443)"
+			return 0
+		fi
+		echo "  Start failed — reinstalling local registry..."
+	else
+		echo "  Mirror not installed — installing local registry via CLI (prereq)..."
+	fi
+	if $_TUI_SSH "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1; cd ~/aba/mirror && aba install --yes" 2>&1 | tee /tmp/tui-mirror-install-$$.log | tail -30; then
+		if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+			echo "  ✓ Mirror installed (listening on :8443)"
+			return 0
+		fi
+	fi
+	echo "  ✗ FAIL: Could not install/start local mirror registry" >&2
+	tail -20 /tmp/tui-mirror-install-$$.log 2>/dev/null | sed 's/^/    /' >&2
+	return 1
 }
 
 # Fallback when TUI delete cannot run: aba -d <cluster> delete --yes.
@@ -1232,6 +1316,36 @@ tui_screenshot() {
 # the cluster directory exists — installed OR in-progress OR failed.
 #
 # Navigates: Actions → Day-2 → Delete → select → confirm → wait.
+# Destroy leftover vSphere VMs for a cluster even when ~/aba/<cluster> is gone.
+# Orphan VMs boot an old disk OS and steal the starting_ip — agent never comes up.
+# Usage: tui_destroy_orphan_vms sno
+tui_destroy_orphan_vms() {
+	local cluster="$1"
+	$_TUI_SSH "bash -s" <<EOF || true
+set +e
+cd ~/aba || exit 0
+[ -f vmware.conf ] || exit 0
+set -a; source vmware.conf; set +a
+export GOVC_INSECURE="\${GOVC_INSECURE:-true}"
+command -v govc >/dev/null 2>&1 || exit 0
+# Cluster folder VMs: /Datacenter/vm/<cluster>/*
+_folder="\${VC_FOLDER:-\${GOVC_DATACENTER}/vm}/$cluster"
+_folder=\$(echo "\$_folder" | sed 's|//*|/|g')
+for _vm in \$(govc ls "\$_folder" 2>/dev/null); do
+	echo "  Pre-cleanup: destroying orphan VM \$_vm"
+	govc vm.power -off -force "\$_vm" 2>/dev/null
+	govc vm.destroy "\$_vm" 2>/dev/null
+done
+# Also catch a top-level VM named exactly the cluster (SNO)
+if govc vm.info "$cluster" >/dev/null 2>&1; then
+	echo "  Pre-cleanup: destroying orphan VM $cluster"
+	govc vm.power -off -force "$cluster" 2>/dev/null
+	govc vm.destroy "$cluster" 2>/dev/null
+fi
+govc object.destroy "\$_folder" 2>/dev/null || true
+EOF
+}
+
 # Usage: tui_delete_cluster "sno"
 tui_delete_cluster() {
 	local cluster="$1"
@@ -1241,7 +1355,8 @@ tui_delete_cluster() {
 
 	_has_dir=$($_TUI_SSH "test -d ~/aba/$cluster && echo yes || echo no")
 	if [[ "$_has_dir" != "yes" ]]; then
-		echo "  Pre-cleanup: no ~/aba/$cluster directory — nothing for TUI/aba to delete"
+		echo "  Pre-cleanup: no ~/aba/$cluster directory — sweeping orphan VMs"
+		tui_destroy_orphan_vms "$cluster"
 		return 0
 	fi
 
@@ -1301,6 +1416,9 @@ tui_delete_cluster() {
 	if [[ "$_tui_ok" -ne 1 ]]; then
 		tui_aba_delete_cluster "$cluster" || true
 	fi
+
+	# Always sweep orphans — aba delete under platform=bm skips VMs.
+	tui_destroy_orphan_vms "$cluster"
 
 	return 0
 }

@@ -14,6 +14,10 @@ echo ""
 tui_deploy_code
 echo ""
 
+# Fresh wipe leaves no registry — install before opening the wizard.
+tui_ensure_mirror_installed || { tui_summary; exit 1; }
+echo ""
+
 # ============================================================================
 tui_start_to_menu || { tui_summary; exit 1; }
 
@@ -29,35 +33,20 @@ tui_screenshot "cp-01-entry"
 # Handle gates: "Mirror Required", "Mirror Stopped", "Cluster Already Installed"
 _scr=$(tui_capture)
 
-# Mirror stopped — dismiss and start it via Advanced menu
+# Mirror stopped — prefer CLI start (TUI Start can report success while :8443 is still down)
 if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped"; then
-	echo "  Mirror is stopped — starting it first..."
-	tui_keys Enter; sleep 2  # dismiss the dialog
-	# Already on Actions after dismiss is common; don't fail the test on back_to
+	echo "  Mirror is stopped — ensuring via CLI..."
+	tui_keys Enter; sleep 1  # dismiss the dialog
 	tui_back_to "Actions" 5 || true
-	if tui_select_item "Advanced"; then
-		sleep 1
-		tui_select_item "Start.*Mirror\|Start.*Registry\|Start Mirror" || \
-			tui_select_item "Start.*Registry\|Start"
-		sleep 8
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -qi "started\|Running\|Success\|started successfully"; then
-			echo "  ✓ PASS: Mirror start reported success"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
-			tui_keys Enter; sleep 1
-		elif echo "$_scr" | grep -qi "Error\|Failed\|failed\|not listening"; then
-			echo "  ✗ FAIL: Mirror start failed — cluster pages need a running mirror"
-			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-			tui_keys Enter; sleep 1
-			tui_back_to "Actions" 5 || true
-			tui_cleanup
-			tui_summary
-			exit 1
-		else
-			# Dismiss whatever dialog we got
-			tui_keys Enter; sleep 1
-		fi
-		tui_back_to "Actions" 5 || true
+	if tui_ensure_mirror_installed; then
+		echo "  ✓ PASS: Mirror running after CLI ensure"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: Mirror start failed — cluster pages need a running mirror"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_cleanup
+		tui_summary
+		exit 1
 	fi
 	# Retry Install Cluster
 	tui_select_item "Install Cluster"
@@ -85,13 +74,22 @@ if echo "$_scr" | grep -qi "Release Image Missing\|no release images\|release.*m
 fi
 
 if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*required"; then
-	echo "  ✗ FAIL: Mirror Required — install a mirror before cluster pages"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	echo "  Mirror Required dialog — installing via CLI, then retrying..."
 	tui_press_button "Back" 2>/dev/null || tui_keys Escape
 	sleep 1
-	tui_cleanup
-	tui_summary
-	exit 1
+	tui_back_to "Actions" 5 || true
+	if tui_ensure_mirror_installed; then
+		tui_select_item "Install Cluster"
+		sleep 3
+		_scr=$(tui_capture)
+		tui_screenshot "cp-01-entry-after-mirror"
+	else
+		echo "  ✗ FAIL: Mirror Required — install a mirror before cluster pages"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_cleanup
+		tui_summary
+		exit 1
+	fi
 fi
 
 if echo "$_scr" | grep -qi "already installed\|Cluster Already"; then

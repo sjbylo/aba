@@ -24,6 +24,8 @@ echo ""
 
 tui_deploy_code
 tui_pre_cleanup
+# Guests must resolve bastion → lab Quay IP or agent never opens :8090.
+tui_ensure_bastion_mirror_dns || true
 echo ""
 
 # ============================================================================
@@ -213,11 +215,13 @@ if echo "$_scr" | grep -qi "Terminal\|Run in Terminal\|Execution\|execution"; th
 	sleep 1
 fi
 
-# Wait for install using the common progress helper (60 min timeout)
-echo "  Waiting for cluster install to complete (up to 60 min)..."
+# Wait for install using the common progress helper (90 min).
+# Do NOT force CDROM boot order — empty disks boot the inserted agent ISO;
+# after install the disk is first (desired). Leftover disks → delete the VM first.
+echo "  Waiting for cluster install to complete (up to 90 min)..."
 echo "  (Monitor: ssh to $_TUI_HOST and check 'tmux a -t $_TUI_SESSION')"
 
-if tui_wait_for_progress "cl-06" 3600; then
+if tui_wait_for_progress "cl-06" 5400; then
 	echo "  ✓ PASS: Cluster install completed successfully"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else

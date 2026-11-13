@@ -213,7 +213,7 @@ _check_downloaded() {
 			*.sha256|*.sha256sum.txt) ;;
 			openshift-client-*) _check_members "$f" "$uname_arch" oc kubectl ;;
 			openshift-install-*) _check_members "$f" "$uname_arch" openshift-install ;;
-			oc-mirror-*) _check_members "$f" "$uname_arch" oc-mirror ;;
+			oc-mirror*) _check_members "$f" "$uname_arch" oc-mirror ;;
 			govc_*) _check_members "$f" "$uname_arch" govc ;;
 			kn-*) _check_found "$f" "$uname_arch" 'kn*' ;;
 			tkn-*) _check_members "$f" "$uname_arch" tkn ;;

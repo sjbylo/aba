@@ -50,10 +50,6 @@ starting_ip=10.0.1.201
 machine_network=10.0.0.0
 prefix_length=20
 EOF
-# openshift-install path may be required as order-only; touch home bin stub if missing
-mkdir -p "$HOME/bin"
-touch "$HOME/bin/openshift-install" 2>/dev/null || true
-
 echo "=== Test: unified install chain (no BM stop markers) ==="
 
 # Old markers must not appear in Makefile.cluster
