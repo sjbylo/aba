@@ -95,7 +95,9 @@ systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
 		reg_host="${reg_host:-}"
 		[ -z "$reg_host" ] && exit 0
 
-		# Determine the IP to point the registry hostname at
+		# A-record IP must be reachable from cluster nodes (lab NIC), not the
+		# mgmt/default-route NIC. _pick_install_iface prefers next_hop /
+		# machine_network; see that helper's header comment in include_all.sh.
 		local_iface=$(_pick_install_iface 2>/dev/null || true)
 		if [ -n "$local_iface" ]; then
 			mirror_ip=$(ip -o -4 addr show dev "$local_iface" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)

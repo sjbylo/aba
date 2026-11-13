@@ -4,13 +4,34 @@
 #
 # Requires: root/sudo, dig, dnsmasq installable, chrony installed
 # Run from the ABA root directory.
+#
+# WARNING (--env): Mutates real host DNS/NTP (resolv.conf, dnsmasq, chrony).
+# Do NOT run on conno/disco mid-suite unless you intend to re-setup DNS.
+# Pre-existing /etc/dnsmasq.d/aba-mirror.conf is saved and restored on EXIT.
 
 set -eo pipefail
 
+cd "$(dirname "$0")/../.." || exit 1
 source scripts/include_all.sh
 
 _PASS=0
 _FAIL=0
+
+# Preserve lab mirror A-record across add-mirror / remove-dns (they delete it).
+_MIRROR_BAK=
+if [[ -f /etc/dnsmasq.d/aba-mirror.conf ]]; then
+	_MIRROR_BAK=$(mktemp)
+	sudo cp -a /etc/dnsmasq.d/aba-mirror.conf "$_MIRROR_BAK"
+fi
+_restore_mirror_dns() {
+	if [[ -n "$_MIRROR_BAK" && -f "$_MIRROR_BAK" ]]; then
+		sudo cp -a "$_MIRROR_BAK" /etc/dnsmasq.d/aba-mirror.conf
+		sudo systemctl reset-failed dnsmasq 2>/dev/null || true
+		sudo systemctl restart dnsmasq 2>/dev/null || true
+		rm -f "$_MIRROR_BAK"
+	fi
+}
+trap '_restore_mirror_dns' EXIT
 
 _assert() {
 	local desc="$1"; shift

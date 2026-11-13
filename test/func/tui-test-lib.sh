@@ -939,8 +939,9 @@ tui_ensure_install_prereqs() {
 }
 
 # Ensure dnsmasq maps bastion.example.com to the lab-reachable Quay IP.
-# ABA add-mirror uses _pick_install_iface (default-route/mgmt NIC) which writes
-# 192.168.2.33 — unreachable from cluster VMs when GW 10.0.0.1 is down.
+# Product add-mirror should prefer the lab NIC via _pick_install_iface (next_hop /
+# machine_network); this harness guard still re-asserts after sync/day2 in case
+# an older build or stale aba.conf (e.g. machine_network=/24) rewrites mgmt IP.
 tui_ensure_bastion_mirror_dns() {
 	local _cur _want="$TUI_LAB_MIRROR_IP" _dns="$TUI_LAB_DNS"
 	_cur=$($_TUI_SSH "dig +time=1 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
@@ -957,6 +958,32 @@ tui_ensure_bastion_mirror_dns() {
 	fi
 	echo "  ✗ WARN: bastion.example.com still resolves to '${_cur:-unset}' (want $_want)" >&2
 	return 1
+}
+
+# Fail fast when cluster nodes would resolve the mirror to an unreachable IP.
+# Dig via TUI_LAB_DNS (what install sets on nodes) and probe :8443 on that A-record.
+# Usage: tui_assert_mirror_dns_reachable || return 1
+tui_assert_mirror_dns_reachable() {
+	local _dns="$TUI_LAB_DNS" _want="$TUI_LAB_MIRROR_IP" _got _code
+	_got=$($_TUI_SSH "dig +time=2 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
+	if [[ -z "$_got" ]]; then
+		echo "  ✗ FAIL: bastion.example.com has no A record via $_dns" >&2
+		return 1
+	fi
+	if [[ "$_got" != "$_want" ]]; then
+		echo "  ✗ FAIL: bastion.example.com → $_got via $_dns (want lab Quay $_want)" >&2
+		return 1
+	fi
+	_code=$($_TUI_SSH "curl -sk --connect-timeout 3 -o /dev/null -w '%{http_code}' https://${_got}:8443/v2/ 2>/dev/null || echo fail" 2>/dev/null | tr -d '[:space:]')
+	case "$_code" in
+		200|401|403) ;;
+		*)
+			echo "  ✗ FAIL: Quay at ${_got}:8443 not reachable (HTTP ${_code:-none})" >&2
+			return 1
+			;;
+	esac
+	echo "  ✓ PASS: Mirror DNS bastion.example.com → $_got:8443 (HTTP $_code)"
+	return 0
 }
 
 # Mirror is installed when mirror/.available exists on the test host.

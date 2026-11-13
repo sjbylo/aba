@@ -4167,13 +4167,23 @@ aba-track() {
 # Deduce reasonable defaults for OpenShift cluster net config
 # ===========================================================
 
-# Pick the "install interface" for best-guess defaults:
-# 1) ABA_INSTALL_IFACE if set and usable (exists + UP + has IPv4)
-# 2) otherwise first "real" UP interface with IPv4 (exclude container/virtual)
+# Pick the "install interface" for ABA's best-guess network defaults.
+#
+# WHY: Dual-homed bastions often have the default route on a mgmt NIC
+# (e.g. 192.168.2.33) while Quay/cluster traffic must use the lab NIC
+# (e.g. 10.0.0.10). Using the mgmt IP in dnsmasq (add-mirror) makes guest
+# pulls fail with "no route to host". Prefer the iface that reaches the
+# configured cluster gateway / machine_network instead.
+#
+# Callers: get_next_hop, get_machine_network, get_dns_servers,
+#   scripts/infra-dns.sh add-mirror, tools/setup-dns.sh, tools/setup-ntp.sh
+#
+# Order: ABA_INSTALL_IFACE → route to next_hop → IP in machine_network →
+#   default-route iface → first real UP iface.
+# Reuses ip_in_cidr / apply_cidr_split; next_hop via kernel `ip route get`.
 _pick_install_iface() {
-	local ifc=
+	local ifc= _conf= _nh= _mn= _pl= _ip=
 
-	# Helper: is interface "usable" (exists, UP, has IPv4)
 	_is_usable_iface() {
 		local i="$1"
 		ip link show dev "$i" >/dev/null 2>&1 || return 1
@@ -4183,25 +4193,59 @@ _pick_install_iface() {
 	}
 
 	# 1) User override
-	if [[ -n "${ABA_INSTALL_IFACE:-}" ]]; then
-		if _is_usable_iface "$ABA_INSTALL_IFACE"; then
-			echo "$ABA_INSTALL_IFACE"
+	if [[ -n "${ABA_INSTALL_IFACE:-}" ]] && _is_usable_iface "$ABA_INSTALL_IFACE"; then
+		echo "$ABA_INSTALL_IFACE"
+		return 0
+	fi
+
+	# Cluster-net hints: shell vars, else aba.conf (add-mirror only loads mirror.conf)
+	_nh="${next_hop_address:-}"
+	_mn="${machine_network:-}"
+	_pl="${prefix_length:-}"
+	if [[ -z "$_nh" || -z "$_mn" ]]; then
+		for _conf in ${ABA_CONF:+"$ABA_CONF"} aba.conf ../aba.conf ${ABA_ROOT:+"$ABA_ROOT/aba.conf"}; do
+			[[ -n "$_conf" && -f "$_conf" ]] || continue
+			[[ -n "$_nh" ]] || _nh=$(grep -E '^next_hop_address=' "$_conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//;s/[[:space:]]//g')
+			[[ -n "$_mn" ]] || _mn=$(grep -E '^machine_network=' "$_conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//;s/[[:space:]]//g')
+			[[ -n "$_nh" || -n "$_mn" ]] && break
+		done
+	fi
+	if [[ "$_mn" == */* ]]; then
+		_pl="${_mn#*/}"
+		_mn="${_mn%/*}"
+	fi
+
+	# 2) Iface that reaches the cluster gateway (lab NIC on dual-homed hosts)
+	if [[ -n "$_nh" ]]; then
+		ifc=$(ip route get "$_nh" 2>/dev/null | awk '/dev/ {for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+		if [[ -n "${ifc:-}" ]] && _is_usable_iface "$ifc"; then
+			echo "$ifc"
 			return 0
 		fi
 	fi
 
-	# 2) Default-route interface via kernel route lookup (catches bridges, bonds, etc.)
-	# 'ip route get' does a routing-table lookup (no packets sent) so it works even air-gapped.
+	# 3) Iface with an address inside configured machine_network
+	if [[ -n "$_mn" && -n "$_pl" ]] && echo "$_pl" | grep -qE '^[0-9]+$'; then
+		while read -r ifc; do
+			echo "$ifc" | grep -Eq '^(lo|docker|podman|cni|virbr|br-|veth|tun|tap|zt|wg|flannel|cilium|kube|ovs|vnet|vmnet|dummy|sit|ip6tnl|gre)' && continue
+			_is_usable_iface "$ifc" || continue
+			_ip=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
+			_ip=${_ip%/*}
+			[[ -n "$_ip" ]] && ip_in_cidr "$_ip" "$_mn" "$_pl" || continue
+			echo "$ifc"
+			return 0
+		done < <(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | cut -d@ -f1)
+	fi
+
+	# 4) Default-route iface (single-homed / no cluster net configured yet)
 	ifc=$(ip route get 8.8.8.8 2>/dev/null | awk '/dev/ {for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
 	if [[ -n "${ifc:-}" ]] && _is_usable_iface "$ifc"; then
 		echo "$ifc"
 		return 0
 	fi
 
-	# 3) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
-	# Note: keep this filter conservative; better to return nothing than a wrong veth/bridge.
+	# 5) First "real" UP iface with IPv4
 	while read -r ifc; do
-		# Exclude obvious virtual/container patterns
 		echo "$ifc" | grep -Eq '^(lo|docker|podman|cni|virbr|br-|veth|tun|tap|zt|wg|flannel|cilium|kube|ovs|vnet|vmnet|dummy|sit|ip6tnl|gre)' && continue
 		if _is_usable_iface "$ifc"; then
 			echo "$ifc"
