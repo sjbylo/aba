@@ -1223,7 +1223,9 @@ tui_clear_failed_tasks() {
 # Prefer tui_start_to_menu — it reuses a live session when possible.
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
-	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
+	# Detach viewers first — an attached client racing kill/new-session
+	# caused Smoke to land on Confirm Exit / "tmux session gone".
+	$_TUI_SSH "tmux detach-client -s $_TUI_SESSION 2>/dev/null; tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 	# Only kill stale processes if they exist
 	if $_TUI_SSH "pgrep -f abatui" >/dev/null 2>&1; then
 		$_TUI_SSH "pkill -9 -f abatui; pkill -9 -f 'dialog --'; true" 2>/dev/null

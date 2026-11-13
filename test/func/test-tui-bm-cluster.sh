@@ -561,10 +561,13 @@ if tui_wait_for "wizard\|Retry\|placeholder" 60; then
 	fi
 	tui_press_button "Retry" || true
 	sleep 3
-	if tui_wait_for "placeholder\|wizard" 90; then
+	# Stop dialog uses wizard + Retry; MAC holes show as xx:xx:… (not the word "placeholder").
+	if tui_wait_for "wizard\|Retry\|xx:xx:xx\|placeholder" 90; then
 		_scr=$(tui_capture)
 		tui_screenshot "bm-04-retry"
-		if echo "$_scr" | grep -qi "placeholder" && ! echo "$_scr" | grep -qi "Yes: re-check"; then
+		if echo "$_scr" | grep -qiE "wizard|placeholder|xx:xx:xx:xx:xx:xx" \
+			&& echo "$_scr" | grep -qi "Retry" \
+			&& ! echo "$_scr" | grep -qi "Yes: re-check"; then
 			echo "  ✓ PASS: Retry of the same placeholders stops without asking again"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
