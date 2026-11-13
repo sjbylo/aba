@@ -89,6 +89,19 @@ fi
 sleep 1  # ensure filesystem timestamp advances
 replace-value-conf -n image_source -v mirror -f cluster.conf
 
+# verify-release-image.sh requires an executable ~/bin/openshift-install
+# before it will use the mirror stub below. cli-install-all --wait trusts a
+# finished run_once record and will not replace a missing or empty file.
+if ! "$HOME/bin/openshift-install" version >/dev/null 2>&1; then
+	rm -f "$HOME/bin/openshift-install"
+	run_once -r -i "cli:install:openshift-install" 2>/dev/null || true
+	if ! make -C ../cli openshift-install; then
+		test_fail "could not install ~/bin/openshift-install for mirror mode"
+		echo -e "\n=== Results: $pass pass, $fail fail ==="
+		exit 1
+	fi
+fi
+
 # Mirror install-config runs verify-release-image.sh, which extracts
 # openshift-install from the registry. Stub that binary so the test does
 # not require the current aba.conf ocp_version to be loaded in the mirror.

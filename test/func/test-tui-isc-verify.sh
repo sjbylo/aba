@@ -348,7 +348,9 @@ echo "--- 9. Upgrade target in ISC ---"
 # Ensure an upgrade target is set so this assertion is never soft-skipped.
 # Prefer an existing ISC maxVersion already above ocp_version (known-mirrored),
 # so path validation in reg-create-imageset-config will accept it.
-_upgrade_to=$($_TUI_SSH "grep '^ocp_upgrade_to=' ~/aba/mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
+# mirror.conf often has `ocp_upgrade_to=  # comment` — cut/awk would yield "#".
+_upgrade_to=$($_TUI_SSH "grep '^ocp_upgrade_to=' ~/aba/mirror/mirror.conf 2>/dev/null | sed -n 's/^ocp_upgrade_to=[[:space:]]*\([^#[:space:]]*\).*/\1/p'" || echo "")
+[[ "$_upgrade_to" == "#"* ]] && _upgrade_to=""
 _upgrade_to_was_set=0
 if [[ -z "$_upgrade_to" ]]; then
 	_cur="${_ocp_ver:-}"
@@ -361,9 +363,18 @@ if [[ -z "$_upgrade_to" ]]; then
 	elif [[ -n "$_mirrored" && "$_mirrored" != "$_cur" ]]; then
 		_upgrade_to="$_mirrored"
 	else
-		_maj=$(echo "$_cur" | cut -d. -f1)
-		_min=$(echo "$_cur" | cut -d. -f2)
-		_upgrade_to="${_maj}.$(( ${_min:-0} + 1 )).0"
+		# x.(y+1).0 is often not on the Cincinnati graph (e.g. 4.22.0).
+		# Ask ABA for a reachable next/zstream target from the current version.
+		_ch="${_ocp_ch:-fast}"
+		_upgrade_to=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh >/dev/null && \
+			source <(normalize-aba-conf) && \
+			fetch_upgrade_targets '${_cur}' '${_ch}' 2 2>/dev/null | \
+			awk -F'\t' '/^(next|zstream)/{print \$2; exit}'" || true)
+		if [[ -z "$_upgrade_to" ]]; then
+			_maj=$(echo "$_cur" | cut -d. -f1)
+			_min=$(echo "$_cur" | cut -d. -f2)
+			_upgrade_to="${_maj}.$(( ${_min:-0} + 1 )).0"
+		fi
 	fi
 	$_TUI_SSH "cd ~/aba && \
 		if grep -q '^ocp_upgrade_to=' mirror/mirror.conf; then \
