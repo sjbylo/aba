@@ -156,7 +156,7 @@ aba_info "Now saving (mirror2disk) images from external network to mirror/data/ 
 aba_progress "DONE|sv_tools"
 aba_progress "START|sv_save"
 
-aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
+aba_mirror_eta save
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install

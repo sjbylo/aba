@@ -4461,6 +4461,226 @@ is_valid_dns_label() {
 	fi
 }
 
+# Coarse buckets so a guessed duration does not look measured.
+# Under an hour: nearest 5 minutes. Up to 3 hours: nearest 15. After that: nearest 30.
+# Never below 5 minutes. oc-mirror spends that long starting even for a tiny set.
+_aba_round_minutes() {
+	local n=$1
+	local step=5 half rounded
+	if [ "$n" -gt 180 ]; then
+		step=30
+	elif [ "$n" -ge 60 ]; then
+		step=15
+	fi
+	half=$(( step / 2 ))
+	rounded=$(( (n + half) / step * step ))
+	[ "$rounded" -lt 5 ] && rounded=5
+	printf '%s\n' "$rounded"
+}
+
+# Whole GB once the estimate is at least half a GB, otherwise whole MB.
+_aba_rough_size() {
+	local n=$1
+	local gb=$(( 1024 * 1024 * 1024 ))
+	local mb=$(( 1024 * 1024 ))
+	local whole
+	if [ "$n" -ge $(( gb / 2 )) ]; then
+		whole=$(( (n + gb / 2) / gb ))
+		[ "$whole" -lt 1 ] && whole=1
+		printf '%s GB\n' "$whole"
+	else
+		whole=$(( (n + mb / 2) / mb ))
+		[ "$whole" -lt 1 ] && whole=1
+		printf '%s MB\n' "$whole"
+	fi
+}
+
+# Resolved when this file is sourced, while the relative path still works.
+# A later cd must not make the estimator lookup fail.
+_ABA_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || _ABA_SCRIPT_DIR=
+
+# Imageset size in bytes, or empty. ABA_MIRROR_ETA_BYTES skips the estimator
+# so tests do not need a real imageset.
+_aba_mirror_estimate_bytes() {
+	local bytes=${ABA_MIRROR_ETA_BYTES:-} est= line= estimator=
+	local isc="data/imageset-config.yaml"
+	if [ -n "$bytes" ]; then
+		printf '%s\n' "$bytes"
+		return 0
+	fi
+	estimator="${_ABA_SCRIPT_DIR:-}/estimate-isc-size.sh"
+	[ -x "$estimator" ] && [ -s "$isc" ] || return 0
+	est=$("$estimator" --shell --isc "$isc" 2>/dev/null) || return 0
+	line=$(printf '%s\n' "$est" | sed -n 's/^estimate_bytes=//p' | head -1)
+	printf '%s\n' "$line"
+}
+
+_aba_mirror_rate_file() {
+	printf '%s\n' "${ABA_MIRROR_RATE_FILE:-$HOME/.aba/mirror-rate.sh}"
+}
+
+# One stored number from the last successful mirror of that kind.
+# Prints "<mb/s> <op>" or nothing. save and sync share the network number.
+_aba_mirror_rate_read() {
+	local op=$1 file mb from
+	file=$(_aba_mirror_rate_file)
+	[ -f "$file" ] || return 0
+	if [ "$op" = "load" ]; then
+		mb=$(sed -n 's/^local_mb_s=//p' "$file" | head -1)
+		from=$(sed -n 's/^local_op=//p' "$file" | head -1)
+	else
+		mb=$(sed -n 's/^network_mb_s=//p' "$file" | head -1)
+		from=$(sed -n 's/^network_op=//p' "$file" | head -1)
+	fi
+	case "$mb" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	[ "$mb" -gt 0 ] || return 0
+	case "$from" in
+		save|sync|load) ;;
+		*) from=$op ;;
+	esac
+	printf '%s %s\n' "$mb" "$from"
+}
+
+# Start the clock just before oc-mirror. Stop records only on exit 0.
+aba_mirror_time_start() {
+	_ABA_MIRROR_T0=$(date +%s 2>/dev/null) || _ABA_MIRROR_T0=
+	return 0
+}
+
+# Bytes are the imageset estimate, not the bytes that actually moved.
+# A warm cache makes this rate high. That is the simple guess we keep.
+# save and sync update the network rate. load updates its own.
+aba_mirror_time_stop() {
+	local op=${1:-}
+	local t0=${_ABA_MIRROR_T0:-}
+	local t1= elapsed= bytes= mb_s= file=
+	local network_mb_s= network_op= local_mb_s= local_op=
+	_ABA_MIRROR_T0=
+	case "$op" in
+		save|sync|load) ;;
+		*) return 0 ;;
+	esac
+	case "$t0" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	t1=$(date +%s 2>/dev/null) || return 0
+	elapsed=$(( t1 - t0 ))
+	[ "$elapsed" -gt 0 ] || return 0
+	bytes=$(_aba_mirror_estimate_bytes) || return 0
+	case "$bytes" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	[ "$bytes" -gt 0 ] || return 0
+	mb_s=$(( bytes / elapsed / 1024 / 1024 ))
+	[ "$mb_s" -lt 1 ] && mb_s=1
+
+	file=$(_aba_mirror_rate_file)
+	mkdir -p "$(dirname "$file")" 2>/dev/null || return 0
+	if [ -f "$file" ]; then
+		network_mb_s=$(sed -n 's/^network_mb_s=//p' "$file" | head -1)
+		network_op=$(sed -n 's/^network_op=//p' "$file" | head -1)
+		local_mb_s=$(sed -n 's/^local_mb_s=//p' "$file" | head -1)
+		local_op=$(sed -n 's/^local_op=//p' "$file" | head -1)
+	fi
+	case "$network_mb_s" in ''|*[!0-9]*) network_mb_s= ;; esac
+	case "$local_mb_s" in ''|*[!0-9]*) local_mb_s= ;; esac
+	case "$network_op" in save|sync) ;; *) network_op= ;; esac
+	case "$local_op" in load) ;; *) local_op= ;; esac
+	if [ "$op" = "load" ]; then
+		local_mb_s=$mb_s
+		local_op=load
+	else
+		network_mb_s=$mb_s
+		network_op=$op
+	fi
+	cat > "$file" <<EOF
+network_mb_s=${network_mb_s}
+network_op=${network_op}
+local_mb_s=${local_mb_s}
+local_op=${local_op}
+EOF
+	return 0
+}
+
+# Rough mirror duration from the imageset size estimate.
+# Until a mirror has finished, save/sync use 10 MB/s and load uses 40 MB/s.
+# After that, aba_mirror_time_stop replaces the rate with estimate/time.
+# A missing estimate keeps the old fixed sentence. Always returns 0.
+# Usage: aba_mirror_eta save|sync|load [bytes]
+# The byte count is for tests. Callers omit it and the imageset is read.
+aba_mirror_eta() {
+	local op=${1:-}
+	local bytes=${2:-}
+	local fallback="This can take 5 to 20 minutes or more to complete, much longer for large image sets."
+	local rate secs mins size_txt finish msg start_epoch
+	local mb_s=10 rate_note="" learned=""
+
+	case "$op" in
+		save|sync|load) ;;
+		*) aba_info "$fallback"; return 0 ;;
+	esac
+
+	if [ -z "$bytes" ]; then
+		bytes=$(_aba_mirror_estimate_bytes) || bytes=""
+	fi
+
+	case "$bytes" in
+		''|*[!0-9]*) aba_info "$fallback"; return 0 ;;
+	esac
+	if [ "$bytes" -le 0 ]; then
+		aba_info "$fallback"
+		return 0
+	fi
+
+	# 10 MB/s pull, 40 MB/s local copy, unless a finished mirror taught us better.
+	if [ "$op" = "load" ]; then
+		mb_s=40
+	fi
+	learned=$(_aba_mirror_rate_read "$op") || learned=""
+	if [ -n "$learned" ]; then
+		mb_s=${learned%% *}
+		rate_note=" (from the last ${learned#* })"
+	fi
+	rate=$(( mb_s * 1024 * 1024 ))
+	secs=$(( (bytes + rate - 1) / rate ))
+	mins=$(( (secs + 30) / 60 ))
+	[ "$mins" -lt 1 ] && mins=1
+	mins=$(_aba_round_minutes "$mins")
+	size_txt=$(_aba_rough_size "$bytes")
+
+	start_epoch=${ABA_MIRROR_ETA_NOW:-}
+	case "$start_epoch" in
+		''|*[!0-9]*) start_epoch="" ;;
+	esac
+	if [ -n "$start_epoch" ]; then
+		finish=$(date -d "@$(( start_epoch + mins * 60 ))" "+%b %-d %H:%M" 2>/dev/null) || finish=""
+	else
+		finish=$(date -d "+${mins} minutes" "+%b %-d %H:%M" 2>/dev/null) || finish=""
+	fi
+
+	case "$op" in
+		save)
+			msg="About ${mins} minutes for ~${size_txt} at a rate of ${mb_s}MB/s${rate_note}, if the cache is empty."
+			;;
+		sync)
+			msg="About ${mins} minutes for ~${size_txt} at a rate of ${mb_s}MB/s${rate_note}."
+			;;
+		load)
+			msg="About ${mins} minutes to copy ~${size_txt} into the registry at a rate of ${mb_s}MB/s${rate_note}."
+			;;
+	esac
+	if [ -n "$finish" ]; then
+		msg="$msg Rough finish: ${finish}."
+	fi
+	if [ "$op" = "save" ]; then
+		msg="$msg Cached images finish sooner."
+	fi
+	aba_info "$msg"
+	return 0
+}
+
 calculate_and_show_completion() {
     local num_masters=$1
     local num_workers=$2
@@ -5456,11 +5676,13 @@ _run_oc_mirror_with_retry() {
 
 		aba_debug "Running oc-mirror $action"
 		mkdir -p data
+		aba_mirror_time_start
 		( cd data && umask 0022 && eval "$cmd" )
 		local ret=$?
 		aba_debug "oc-mirror $action exit code: $ret"
 
 		if [ $ret -eq 0 ]; then
+			aba_mirror_time_stop "$action" || true
 			aba_debug "$action completed successfully (ret=0)"
 			failed=
 			break
