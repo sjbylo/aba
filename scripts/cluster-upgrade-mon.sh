@@ -17,6 +17,8 @@ aba_debug "Starting: $0 $* from $PWD"
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
+cluster_okd_guard "Upgrade monitoring ('aba upgrade-mon')"
+
 # Parse optional --to <version> to know what we're waiting for.
 # If not provided, read the desired version from the cluster itself.
 _target_ver=""

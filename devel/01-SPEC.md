@@ -242,6 +242,68 @@ OCP 4.22 dropped vSphere 7.x CSI support, so those clusters use `baremetal:`
 
 ---
 
+## Distribution (ocp | okd)
+
+`distribution` in `aba.conf` selects what ABA installs: OpenShift (`ocp`) or the
+community distribution OKD (`okd`). See ADR-019. Every difference is a branch
+on `dist_of()`; the distribution constants (hosts, repositories, version
+patterns) live in the `dist_*` helpers in `include_all.sh`. The `ocp` side of each branch is the code that
+existed before the key, so OpenShift behaviour is unchanged.
+
+| Key / variable | Values | Default | On `okd` |
+|----------------|--------|---------|----------|
+| `distribution` (`aba.conf`) | `ocp`, `okd` | `ocp` (missing or empty = `ocp`) | Written by `aba --distribution okd`, the TUI wizard, or by hand. Other values are rejected by `verify-aba-conf`. |
+| `ocp_channel` (`aba.conf`) | `stable`, `candidate` (+ `fast`, `eus` on `ocp`) | none | `fast` and `eus` are rejected. `candidate` lists pre-release builds. |
+| `ocp_version` (`aba.conf`) | `X.Y.Z-okd-scos.N`; also `X.Y.Z-okd-scos.ec.N` on `candidate` | none | Must be listed in the channel's update graph (`stable` also accepts a GA release that only GitHub lists). |
+| `pull_secret_file` (`aba.conf`) | file path | `~/.pull-secret.json` | Needed only with `ops` or `op_sets`. Otherwise a missing file is replaced by the OKD placeholder secret (mode 600). |
+| `ops` (`aba.conf`) | operator names | empty | Resolved in the `community-operator` catalog only. |
+| `op_sets` (`aba.conf`) | set names | empty | Rejected by `sync` and `save`. |
+| `ocp_upgrade_to` (`mirror.conf`) | version | empty | `sync` and `save` reject it unless it equals `ocp_version`. `--upgrade-to` is always rejected. |
+| `OCP_SIGNATURE_URL` (environment) | URL ending in `/` | set by ABA | Release signature location for `oc-mirror`. A value set by the user wins. |
+| `OCP_SIGNATURE_VERIFICATION_PK` (environment) | key file path | set by ABA | Key `oc-mirror` verifies with (`templates/okd-release-signing-key.asc`). A value set by the user wins. |
+
+What differs between the two distributions:
+
+| Area | `ocp` | `okd` |
+|------|-------|-------|
+| Release payload | `quay.io/openshift-release-dev/ocp-release` | `quay.io/okd/scos-release` |
+| `oc`, `openshift-install` | `mirror.openshift.com` | Assets of the `okd-project/okd` GitHub release, same file names |
+| `oc-mirror`, `butane`, `mirror-registry` | `mirror.openshift.com` | Unchanged (OKD does not publish them) |
+| Update graph, version lists | `api.openshift.com`, `mirror.openshift.com` | `updates.okd.io`, GitHub releases API |
+| `platform` in the image-set config | `channels` block | `release:` pinned by digest, `graph: false` |
+| Release identity in the mirror | tag `<version>-<arch>` | Digest recorded by `oc-mirror` (`okd_mirror_release_digest`) |
+| Internet probe | `api.openshift.com`, `mirror.openshift.com`, `registry.redhat.io` | `github.com`, `quay.io`, `updates.okd.io`, `mirror.openshift.com` |
+| Pull secret | Required, must hold `registry.redhat.io` | Placeholder unless operators are selected |
+| Operator catalogs | `redhat-`, `certified-`, `community-operator` on `registry.redhat.io` | `community-operator` on `registry.access.redhat.com` |
+| Sigstore config | `aba-sigstore-config.yaml` | `aba-sigstore-config-okd.yaml` (no sigstore for `quay.io/okd`) |
+| `imageDigestSources` | Static template | Taken from the IDMS `oc-mirror` wrote, plus the payload repository |
+| Install-time manifests | None | Samples Operator `Removed`, OperatorHub default sources off (mirror installs only) |
+
+Three states stay separate and a mismatch is an error: the next install
+(`aba.conf`: `distribution`, `ocp_version`), the mirror content (mirror
+`state.sh`: `distribution`, `mirror_release_digest`), and the installed cluster
+(cluster `state.sh`: `distribution`, `release_digest`). Only `okd` is recorded;
+a state without the key is `ocp`. Changing `aba.conf` later does not relabel an
+existing mirror or cluster.
+
+**Invariants**:
+- No release version, digest, or tag of a specific OKD release in scripts,
+  templates, or the TUI. Only distribution constants (hosts, repositories).
+- No Red Hat account on the `okd` side: no `registry.redhat.io` credential,
+  `console.redhat.com` step, or subscription content. Anonymous downloads from
+  Red Hat hosts (`mirror.openshift.com`, `registry.access.redhat.com`) are
+  allowed and are listed in the README.
+- OKD `install-config.yaml` and the release image check read the oc-mirror output in
+  `mirror/data/working-dir` (IDMS file, signature file name). `aba -d mirror clean`
+  deletes it and `aba backup` leaves it out, while the registry stays full; the user
+  re-runs `aba -d mirror sync` afterwards. This is by design: there is no fallback to
+  another copy.
+- An operation ABA does not support for OKD stops with "unsupported for OKD"
+  before it changes anything or contacts a cluster (`cluster_okd_guard`,
+  `okd_conf_guard`); it never falls back to the OpenShift path.
+
+---
+
 ## Catalog Digest Pinning (oc-mirror workaround)
 
 Upstream bug: [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)
@@ -777,6 +839,17 @@ Things ABA intentionally does not do (currently):
   OpenShift clusters using a mirror registry workflow.
 - **ABA does not manage the TUI as a separate product.** The TUI is a convenience
   wrapper around the same Make/script infrastructure.
+- **ABA does not upgrade or operate OKD clusters.** OKD is supported for new
+  installs only. Upgrades (`aba upgrade`, `upgrade-mon`, `--upgrade-to`),
+  `day2-osus`, `day2-virt`, and `aba import` stop with "unsupported for OKD".
+- **ABA does not use Red Hat accounts for OKD.** Operators from the `redhat-` and
+  `certified-` catalogs and Red Hat operator sets (`op_sets`) are unavailable on
+  OKD; only the community catalog is offered. The `fast` and `eus` channels do
+  not exist for OKD.
+- **ABA does not support OKD on other architectures or on vSphere.** Only x86_64
+  and the `bm` and `kvm` platforms are in scope. `distribution=okd` with `platform=vmw`,
+  or on a host that is not x86_64, stops with "not supported for OKD" (`dist_target_problem`:
+  `verify-aba-conf`, and `aba --distribution` / `--platform` in any order).
 
 ---
 

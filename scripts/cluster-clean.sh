@@ -29,6 +29,12 @@ if [ -f .install-complete ] && [ -z "$force" ]; then
 fi
 
 rm -f install-config.yaml agent-config.yaml
+# Install-time manifests ABA generates for OKD from a mirror (names start with 99-aba-); manifests the user put there stay
+# OKD only: for OCP nothing here belongs to ABA. A cluster installed as OKD counts as OKD even if aba.conf changed since.
+if { [ "$(dist_of)" = "okd" ] || [ "$(cluster_installed_distribution 2>/dev/null)" = "okd" ]; } && compgen -G "openshift/99-aba-*.yaml" >/dev/null; then
+	rm -f openshift/99-aba-*.yaml
+	rmdir openshift 2>/dev/null || true
+fi
 rm -rf iso-agent-based*
 rm -f .??*
 rm -f mirror

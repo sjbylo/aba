@@ -122,6 +122,15 @@ _ntp_servers=$(get_ntp_servers 2>/dev/null) || true
 # Detect OCP version
 _ocp_version=$(oc get clusterversion version -o jsonpath='{.status.history[?(@.state=="Completed")].version}' 2>/dev/null | awk '{print $1}') || true
 
+# OKD is not supported by import: the cluster would be recorded without its distribution, read back
+# as OCP, and pass every OKD guard (upgrade, OSUS, virtualization).
+_ocp_image=$(oc get clusterversion version -o jsonpath='{.status.desired.image}' 2>/dev/null) || true
+if okd_release_detected "$_ocp_version" "$_ocp_image"; then
+	aba_abort "aba import is unsupported for OKD in ABA." \
+		"Cluster release: ${_ocp_version:-$_ocp_image}" \
+		"ABA records OKD clusters only when it installs them."
+fi
+
 # --- Auto-detect image_source ---
 if [ -z "$_image_source" ]; then
 	_has_idms=$(oc get imagedigestmirrorset 2>/dev/null | grep -c -v '^NAME' || true)
@@ -170,6 +179,12 @@ _cluster_fqdn="${_cluster_name}.${_base_domain}"
 _prior_platform=""
 if [ -s "$_state_dir/state.sh" ]; then
 	_prior_platform=$(grep '^platform=' "$_state_dir/state.sh" 2>/dev/null | head -1 | cut -d= -f2 | awk '{print $1}')
+fi
+
+# A cluster ABA installed as OKD is never re-imported (the live API may be unreachable here).
+if [ -s "$_state_dir/state.sh" ] && [ "$(cluster_installed_distribution "$_state_dir")" = "okd" ]; then
+	aba_abort "aba import is unsupported for OKD in ABA." \
+		"The existing state of '$_cluster_fqdn' says it was installed as OKD."
 fi
 
 _existing_dir=""

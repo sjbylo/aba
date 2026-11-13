@@ -100,6 +100,10 @@ _resolve_operators_json() {
 	local _certified_pkgs=()
 	local _community_pkgs=()
 
+	# OKD has no redhat- or certified- catalog (they need a Red Hat account): refuse operators
+	# that exist only there, and op_sets=all, before anything is written
+	dist_catalog_reject_blocked_ops "$catalog_ver"
+
 	# Special "all" operator set — mirrors entire redhat catalog
 	if echo "$op_sets" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 		aba_success "Adding all redhat-operator operators (catalog v$catalog_ver) to your image-set config file!" >&2
@@ -108,14 +112,22 @@ _resolve_operators_json() {
 	fi
 
 	# Verify catalog index files exist
-	local _cat_errors=""
-	for _cat in redhat-operator certified-operator community-operator; do
+	local _cat_errors="" _catalogs_offered
+	_catalogs_offered=$(dist_catalogs)
+	for _cat in $_catalogs_offered; do
 		if [ ! -s ".index/${_cat}-index-v${catalog_ver}" ]; then
 			_cat_errors=1
 			aba_warn "Missing operator catalog file: $PWD/.index/${_cat}-index-v${catalog_ver}" >&2
 		fi
 	done
-	if [ "$_cat_errors" ]; then
+	if [ "$_cat_errors" ] && [ "$(dist_of)" = "okd" ]; then
+		aba_abort \
+			"Cannot add required operators to the image-set config file!" \
+			"Your options are:" \
+			"- Refresh the community catalog file by running: 'cd $PWD; rm -f .index/community-operator-index-v${catalog_ver}*' and try again." \
+			"- run 'aba show-operators --refresh' to download the catalog file again." \
+			"- Check access to registry is working: 'curl -IL https://registry.access.redhat.com/v2/'"
+	elif [ "$_cat_errors" ]; then
 		aba_abort \
 			"Cannot add required operators to the image-set config file!" \
 			"Your options are:" \
@@ -138,7 +150,7 @@ _resolve_operators_json() {
 
 		# Find which catalog contains this operator (priority: redhat, certified, community)
 		local _found_cat=""
-		for _cat in redhat-operator certified-operator community-operator; do
+		for _cat in $_catalogs_offered; do
 			if _index_line=$(grep "^$_op " ".index/${_cat}-index-v${catalog_ver}" 2>/dev/null); then
 				_found_cat="$_cat"
 				break
@@ -237,7 +249,7 @@ _resolve_operators_json() {
 	_cj=$(_build_catalog_json "certified" "registry.redhat.io/redhat/certified-operator-index:v${catalog_ver}" "${_certified_pkgs[@]+"${_certified_pkgs[@]}"}")
 	[ -n "$_cj" ] && _catalogs+=("$_cj")
 
-	_cmj=$(_build_catalog_json "community" "registry.redhat.io/redhat/community-operator-index:v${catalog_ver}" "${_community_pkgs[@]+"${_community_pkgs[@]}"}")
+	_cmj=$(_build_catalog_json "community" "$(dist_catalog_ref community-operator "$catalog_ver")" "${_community_pkgs[@]+"${_community_pkgs[@]}"}")
 	[ -n "$_cmj" ] && _catalogs+=("$_cmj")
 
 	# Output final JSON array
@@ -265,6 +277,32 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	{ [ ! "$ocp_channel" ] || [ ! "$ocp_version" ]; } && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
+
+	# OKD names the release by digest and has no channels block. Resolve the digest before
+	# anything is rendered, so a failed lookup leaves an existing ISC untouched. With the
+	# platform excluded the digest is only shown in a comment, so a failed lookup is no reason to stop.
+	export release_ref=""
+	if [ "$(dist_of)" = "okd" ]; then
+		# OKD has no upgrade mode: say so first, before the release is looked up or any OCP upgrade text is printed
+		if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+			okd_conf_guard "Mirroring an upgrade target (ocp_upgrade_to=$ocp_upgrade_to)"
+		fi
+		_ref_rc=0
+		release_ref=$(okd_release_payload_ref "$ocp_version" "$ocp_channel") || _ref_rc=$?
+		if [ $_ref_rc -ne 0 ] && [ "${excl_platform:-}" ]; then
+			release_ref="(not resolved, platform excluded)"
+		elif [ $_ref_rc -eq 1 ]; then
+			aba_abort \
+				"Cannot find the release image digest of OKD $ocp_version (channel $ocp_channel)." \
+				"It is read from the OKD update graph (updates.okd.io) or the release notes on github.com." \
+				"Check that ocp_version in aba.conf is a published OKD build and that both sites can be reached."
+		elif [ $_ref_rc -ne 0 ]; then
+			aba_abort \
+				"Cannot read the release image manifest of OKD $ocp_version from quay.io/okd." \
+				"The image of architecture $ARCH is needed, because the release signature belongs to it." \
+				"Check that quay.io can be reached (no login needed) and that skopeo is installed."
+		fi
+	fi
 
 	# Upgrade mode: export target version variables for the Jinja template
 	export ocp_upgrade_to="${ocp_upgrade_to:-}"
@@ -385,7 +423,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	_tmp_isc=$(mktemp data/imageset-config.yaml.XXXXXX) || aba_abort "Cannot create temp file in data/"
 	scripts/j2 ./templates/imageset-config.yaml.j2 > "$_tmp_isc"
 
-	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
+	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: (true|false)/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
 
 	# Add friendly comments when sections are excluded (aba.conf toggles)
 	if [ "$excl_platform" ]; then

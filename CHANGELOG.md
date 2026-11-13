@@ -42,6 +42,7 @@ Improved OpenShift 5 readiness with enhancements and bug fixes.
 
 - **Input validation func coverage** — `test-normalize-ipv4.sh` and `test-input-validation-all.sh` exercise leading-zero strip, IPv4/CIDR, domain, NTP, hostname, path, and related TUI/CLI validators end-to-end.
 - **AgentConfig summary tests** — `test-agent-config-summary.sh` covers the standalone summary script.
+- **OKD as a second distribution** — `distribution=okd` in `aba.conf` (or `aba --distribution okd`, or the first page of the TUI wizard) installs OKD instead of OpenShift. Channels are `stable` and `candidate`; versions are `X.Y.Z-okd-scos.N`, and `X.Y.Z-okd-scos.ec.N` on `candidate`. The CLIs come from the OKD GitHub releases, the release images from `quay.io/okd`, the update graph from `updates.okd.io`. No Red Hat pull secret is needed unless operators are selected, and operators come from the community catalog only. For OKD, ABA sets `OCP_SIGNATURE_URL` and `OCP_SIGNATURE_VERIFICATION_PK` for `oc-mirror` (a value you set wins; the bundled key expires 2027-03-31). Upgrades, `upgrade-mon`, `--upgrade-to`, `day2-osus`, `day2-virt`, `aba import`, the Red Hat operator catalogs, and operator sets are not supported on OKD and stop with a message. `distribution=okd` with `platform=vmw`, or on a host that is not x86_64, stops with "not supported for OKD". When operators are selected in the TUI and no real pull secret is configured, the TUI reminds you at the end of the selection. OpenShift behaviour is unchanged. See "Using OKD" in the README and ADR-019 (proposed).
 
 ### Changed
 

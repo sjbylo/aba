@@ -237,6 +237,12 @@ else
 	_ver_short=$(_ver_minor "$ocp_version")
 fi
 
+# Catalog indexes an operator is looked up in (OKD: only the catalogs it offers)
+_restore_idx=("$ABA_ROOT"/.index/*-index-v${_ver_short})
+if [[ "$(dist_of)" == "okd" && -n "$_ver_short" ]]; then
+	mapfile -t _restore_idx < <(dist_catalog_index_files "$_ver_short" "$ABA_ROOT/.index")
+fi
+
 # Restore individual operators from ops=
 if [[ -n "${ops:-}" ]]; then
 	IFS=',' read -r -a _ops_arr <<<"$ops"
@@ -244,7 +250,7 @@ if [[ -n "${ops:-}" ]]; then
 		_op="${_op##[[:space:]]}"               # trim leading whitespace
 		_op="${_op%%[[:space:]]}"               # trim trailing whitespace
 		[[ -z "$_op" ]] && continue
-		if [[ -n "$_ver_short" ]] && ! grep -q "^${_op}[[:space:]]" "$ABA_ROOT"/.index/*-index-v${_ver_short} 2>/dev/null; then
+		if [[ -n "$_ver_short" ]] && ! grep -q "^${_op}[[:space:]]" "${_restore_idx[@]}" 2>/dev/null; then
 			continue
 		fi
 		OP_BASKET["$_op"]=1
@@ -268,14 +274,14 @@ if [[ -n "${op_sets:-}" ]]; then
 			_line="${_line#"${_line%%[![:space:]]*}"}"    # Trim leading whitespace
 			_line="${_line%"${_line##*[![:space:]]}"}"    # Trim trailing whitespace
 			[[ -z "$_line" ]] && continue
-			if [[ -n "$_ver_short" ]] && ! grep -q "^${_line}[[:space:]]" "$ABA_ROOT"/.index/*-index-v${_ver_short} 2>/dev/null; then
+			if [[ -n "$_ver_short" ]] && ! grep -q "^${_line}[[:space:]]" "${_restore_idx[@]}" 2>/dev/null; then
 				continue
 			fi
 			OP_BASKET["$_line"]=1
 		done < "$_sf"
 	done
 fi
-unset _ver_short _ops_arr _op _set_arr _s _sf _line
+unset _ver_short _ops_arr _op _set_arr _s _sf _line _restore_idx
 
 _tick "Loading config"
 
@@ -294,6 +300,8 @@ if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
 		export domain="${_domain:-example.com}"
 		machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
 			"$ABA_ROOT/scripts/j2" "$ABA_ROOT/templates/aba.conf.j2" > "$ABA_ROOT/aba.conf" 2>>"$_TUI_LOG_FILE"
+		# The wizard asks for the distribution; the template's ocp is only the default for a CLI user
+		replace-value-conf -q -n distribution -v "" -f "$ABA_ROOT/aba.conf"
 		tui_log "Created aba.conf from template (pull_secret_file set)"
 		# Wait for latest stable tip (-S / -t via helper), then read Cincinnati tip
 		aba_version_fetch_wait stable -S 2>>"$_TUI_LOG_FILE" || true
@@ -309,7 +317,8 @@ fi
 # Pre-fetch catalog indexes in background (uses ocp_version/ocp_channel from aba.conf)
 _ps_path="${pull_secret_file:-$HOME/.pull-secret.json}"
 _ps_path="${_ps_path/#\~/$HOME}"                         # ~/foo → /home/user/foo
-if [[ -f "$_ps_path" ]]; then
+# OKD needs the pull secret file only for operator content
+if [[ -f "$_ps_path" ]] || ! dist_pull_secret_required; then
 	tui_log "Starting background catalog pre-fetch"
 	setsid bash -c "source scripts/include_all.sh 2>/dev/null; aba_prefetch_catalogs" >>"$_TUI_LOG_FILE" 2>&1 &
 	_PREFETCH_PID=$!
@@ -480,7 +489,7 @@ _detect_mode() {
 			local _err_details="${ERROR_DETAILS//$'\n'/\\n}"  # replace newlines with \n for dialog
 			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
 				--no-collapse \
-				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
+				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\n$(_tui_required_sites_text)\n\nExiting..." 0 0
 			_tui_redirect_restore
 			clear
 			if [[ -n "${_PREFETCH_PID:-}" ]]; then
@@ -869,6 +878,9 @@ Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit.
 			exit 0
 			;;
 		2)
+			# OKD needs a pull secret only for operator content
+			_guide_ps="Red Hat registry credentials"
+			[[ "$(dist_of)" == "okd" ]] && _guide_ps="Only for operator content (OKD)"
 			show_help "$TUI2_TITLE_HELP" \
 "ABA TUI — Quick Guide
 
@@ -878,7 +890,7 @@ environments.
 
 Setup wizard:
   1. Base domain     — Auto-detected; verify on first run
-  2. Pull secret     — Red Hat registry credentials
+  2. Pull secret     — ${_guide_ps}
   3. Version         — OCP channel and version
   4. Platform        — Bare-metal, VMware, or KVM
   5. Operators       — Pick operators for the mirror

@@ -1615,7 +1615,7 @@ _resolve_minor_to_patch() {
 	local _channel="${2:-stable}"
 
 	# Already x.y.z or x.y.z-rc.N? Return as-is
-	if _is_version_string "$_ver"; then
+	if dist_version_is_valid "$_ver" "$_channel"; then
 		echo "$_ver"
 		return 0
 	fi
@@ -1806,14 +1806,42 @@ _require_podman() {
 # Generic troubleshooting hints for catalog download failures.
 _tui_catalog_error_hints() {
 	local _h="To fix, check:"
-	_h="${_h}\n  - Internet connectivity (can you reach registry.redhat.io?)"
-	_h="${_h}\n  - Pull secret is valid and not expired"
+	if [[ "$(dist_of)" == "okd" ]]; then
+		# OKD reads the community catalog anonymously: no account, no pull secret
+		_h="${_h}\n  - Internet connectivity (can you reach registry.access.redhat.com?)"
+	else
+		_h="${_h}\n  - Internet connectivity (can you reach registry.redhat.io?)"
+		_h="${_h}\n  - Pull secret is valid and not expired"
+	fi
 	_h="${_h}\n  - Podman rootless setup (/etc/subuid, /etc/subgid)"
 	_h="${_h}\n  - Sufficient disk space for container storage"
 	_h="${_h}\n  - DNS resolution is working"
 	_h="${_h}\n"
 	_h="${_h}\nAfter fixing, retry the same action."
 	echo "$_h"
+}
+
+# The sites listed on the "Internet Access Required" page. The text keeps the
+# literal \n sequences: dialog breaks the lines. OKD lists what it uses.
+_tui_required_sites_text() {
+	if [[ "$(dist_of)" != "okd" ]]; then
+		printf '%s' 'Required sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com'
+		return 0
+	fi
+	local -a _req=($_ABA_OKD_PROBE_SITES) _oth=(docker.io docker.com hub.docker.com index.docker.io)
+	local _i _txt='Required sites:                    Other sites:'
+	for _i in "${!_req[@]}"; do
+		_txt+=$(printf '\\n  %-35s%s' "${_req[$_i]}" "${_oth[$_i]:-}")
+	done
+	printf '%s' "$_txt\n  registry.access.redhat.com (operators only)"
+}
+
+# Say so instead of running an operation ABA does not do for OKD. Succeeds when it
+# blocked; fails (nothing shown) for OpenShift. Usage: _tui_okd_unsupported <operation>
+_tui_okd_unsupported() {
+	[[ "$(dist_of)" == "okd" ]] || return 1
+	dlg --backtitle "$(ui_backtitle)" --msgbox "$(printf "$TUI2_MSG_OKD_UNSUPPORTED" "$1")" 0 0
+	return 0
 }
 
 # Ensure catalog indexes are available for a given OCP version.
@@ -1829,7 +1857,10 @@ tui_ensure_catalogs_ready() {
 	# If at least one catalog index exists for this version, proceed immediately
 	local _have_files=false
 	local _f
-	for _f in .index/*-operator-index-v${version_short}; do
+	# OKD counts only the catalogs it offers (a shipped redhat index is no use there)
+	local _idx_list=".index/*-operator-index-v${version_short}"
+	[[ "$(dist_of)" == "okd" ]] && _idx_list="$(dist_catalog_index_files "$version_short" .index)"
+	for _f in $_idx_list; do
 		[[ -s "$_f" ]] && { _have_files=true; break; }
 	done
 
@@ -1847,7 +1878,7 @@ tui_ensure_catalogs_ready() {
 	# prefetch ran before pull secret was ready). run_once -i skips "done" tasks
 	# even if they failed — reset clears the cached failure so they re-run.
 	local _cat _exit_code
-	for _cat in redhat-operator certified-operator community-operator; do
+	for _cat in $(dist_catalogs); do
 		_exit_code=$(run_once -E -i "catalog:${version_short}:${_cat}" 2>/dev/null) || continue
 		if [[ "$_exit_code" != "0" ]]; then
 			tui_log "Resetting failed catalog task: catalog:${version_short}:${_cat} (exit=$_exit_code)"

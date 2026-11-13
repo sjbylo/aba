@@ -32,6 +32,20 @@ _RHOAI_GITHUB_API="https://api.github.com/repos/red-hat-data-services/rhoai-disc
 _RHOAI_CACHE_DIR="$HOME/.aba/cache/rhoai"
 
 # ---------------------------------------------------------------------------
+# _image_set_for_dist <set_name>
+#   Returns 0 if the set can be used with the current distribution.
+#   The OpenShift and AI sets pull from registry.redhat.io, which needs a
+#   Red Hat account, so OKD does not offer them; the okd set is OKD only.
+# ---------------------------------------------------------------------------
+_image_set_for_dist() {
+	if [ "$(dist_of)" = "okd" ]; then
+		[[ "$1" != "ocp" && "$1" != "ai" ]]
+	else
+		[[ "$1" != "okd" ]]
+	fi
+}
+
+# ---------------------------------------------------------------------------
 # _image_set_is_dynamic <set_name>
 #   Returns 0 if the set is dynamic (fetched at runtime), 1 if static.
 # ---------------------------------------------------------------------------
@@ -60,6 +74,11 @@ _image_set_display_name() {
 _image_set_static_images() {
 	local set_file="${ABA_ROOT:-.}/templates/image-set-$1"
 	[ -f "$set_file" ] || return 1
+	if [ "$(dist_of)" = "okd" ]; then
+		# registry.redhat.io needs a Red Hat account: take the anonymous images only
+		sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$set_file" | grep -v '^registry\.redhat\.io/' || true
+		return 0
+	fi
 	sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$set_file"
 }
 
@@ -251,6 +270,7 @@ image_set_list() {
 	for set_file in "${ABA_ROOT:-.}"/templates/image-set-*; do
 		[ -f "$set_file" ] || continue
 		set_name="${set_file##*image-set-}"
+		_image_set_for_dist "$set_name" || continue
 		display=$(_image_set_display_name "$set_name")
 
 		if _image_set_marker_exists "$set_name" "$img_file"; then
@@ -287,6 +307,7 @@ image_set_add() {
 	local set_file="${ABA_ROOT:-.}/templates/image-set-$set_name"
 
 	[ -f "$set_file" ] || { aba_debug "image_set_add: no template for '$set_name'"; return 1; }
+	_image_set_for_dist "$set_name" || { aba_warn "Image set '$set_name' is not available for distribution $(dist_of)." >&2; return 1; }
 
 	# Get the image list
 	local images=""

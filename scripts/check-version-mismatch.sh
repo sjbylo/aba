@@ -19,6 +19,13 @@ fi
 install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 source <(normalize-aba-conf)
+
+# An OKD ISC pins the release by digest and has no channels block to compare with ocp_version
+if [ "$(dist_of)" = "okd" ]; then
+	aba_debug "distribution=okd: no channel range to compare, skipping the version check"
+	exit 0
+fi
+
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 # mirror.conf is optional — the version comparison only needs aba.conf values
 if [ -f mirror.conf ]; then

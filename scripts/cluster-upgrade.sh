@@ -12,6 +12,8 @@ aba_debug "Starting: $0 $* from $PWD"
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
+cluster_okd_guard "Cluster upgrade ('aba upgrade')"
+
 # Parse flags
 target_ver=
 opt_force=

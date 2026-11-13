@@ -1,0 +1,11 @@
+Real OKD data used by test-ocp-version-tips.sh (anonymous read-only GETs, 2026-11-09):
+	graph_<channel>-<minor>.json   https://updates.okd.io/api/updates/graph?channel=<channel>-<minor>&arch=amd64 (unchanged)
+	releases_p<N>.json             https://api.github.com/repos/okd-project/okd/releases?per_page=100&page=<N>
+	                               (228 releases in 3 pages: 100/100/28; only tag_name, name, prerelease, draft,
+	                               created_at, published_at kept, values untouched, page order untouched)
+Facts these files carry: candidate-5.0 and candidate-5.1 list only -okd-scos.ec.N builds; 27 of 71 GA tags
+are not in any stable graph; the ec builds are GitHub pre-releases.
+	release_<tag>.json             https://api.github.com/repos/okd-project/okd/releases/tags/<tag> (same day; used by test-okd-release-ref.sh)
+	                               one real release each: 4.19.0-okd-scos.19 (a GA build from page 2 of the list), 4.21.0-okd-scos.11
+	                               (the lab pin), 4.20.0-okd-scos.ec.7 (a pre-release). Only tag_name, name, prerelease, draft and the
+	                               top of body (up to and including the "Pull From:" line) are kept, values untouched.

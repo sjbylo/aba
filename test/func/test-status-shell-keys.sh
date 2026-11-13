@@ -54,6 +54,14 @@ for key in "${expected_keys[@]}"; do
 	fi
 done
 
+# OCP output carries no OKD key: distribution and release digests are recorded only for OKD
+if echo "$output" | grep -q -E '^(distribution|release_digest|mirror_release_digest|transfer_distribution|transfer_release_digest)='; then
+	echo "✗ FAIL: OKD-only key found in the --shell output of an OCP tree"
+	failed=1
+else
+	echo "✓ PASS: no OKD-only key in the --shell output of an OCP tree"
+fi
+
 # Verify output is sourceable (no syntax errors)
 if bash -c "eval '$output'" 2>/dev/null; then
 	echo "✓ PASS: output is sourceable by bash"

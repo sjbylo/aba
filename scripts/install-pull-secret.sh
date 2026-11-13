@@ -12,6 +12,14 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
+# OKD needs no Red Hat account: a pull secret matters only for operator content,
+# otherwise the OKD placeholder stands in for it.
+if [ "$(dist_of)" = "okd" ]; then
+	_ps_err=$(dist_pull_secret_ensure "$pull_secret_file") || aba_abort "$_ps_err" "$(dist_pull_secret_hint "$pull_secret_file")"
+	aba_info "Pull secret ready at $pull_secret_file"
+	exit 0
+fi
+
 # Pull secret file exists
 if [ -s "$pull_secret_file" ]; then
 	# ... contains expected registry

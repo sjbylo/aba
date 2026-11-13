@@ -44,6 +44,8 @@ source <(normalize-mirror-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration validated"
 
+okd_mirror_conf_guards
+
 # Pre-flight: verify internet access and pull secret before proceeding
 require_internet_and_pull_secret
 
@@ -135,6 +137,12 @@ aba_debug "oc-mirror is ready"
 # Ensure the RH pull secret files are located in the right places
 aba_debug "Creating containers auth file"
 scripts/create-containers-auth.sh || exit 1
+
+# oc-mirror reads the per-user sigstore file: keep it right for the distribution (quay.io/okd has no attachments)
+ensure_sigstore_distribution_config
+
+# OKD release signatures are not on mirror.openshift.com: point oc-mirror at the CI bucket and key
+ensure_release_signature_env
 
 mkdir -p data
 
@@ -251,6 +259,26 @@ if [ "$_is_upgrade" ]; then
 	  "architecture": "${ARCH:-amd64}",
 	  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
 	  "digest_isc_sha256": "${_digest_isc_sha}"
+	}
+	METADATA
+	_bundle_files+=("mirror/data/aba-transfer-metadata.json")
+elif [ "$(dist_of)" = "okd" ]; then
+	# An OKD bundle always carries its release identity: its ISC has no channels, so nothing else
+	# says which release the archives hold.
+	_okd_digest=$(_isc_release_digest data/imageset-config.yaml)
+	[ -n "$_okd_digest" ] || [ "${excl_platform:-}" = "true" ] || \
+		aba_warn "No release digest found in data/imageset-config.yaml; the bundle will not say which OKD release it holds."
+	_digest_isc_sha=""
+	[ -f "data/imageset-config-digest.yaml" ] && _digest_isc_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
+	cat > data/aba-transfer-metadata.json <<-METADATA
+	{
+	  "ocp_version": "${ocp_version}",
+	  "ocp_channel": "${ocp_channel:-stable}",
+	  "architecture": "${ARCH:-amd64}",
+	  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+	  "digest_isc_sha256": "${_digest_isc_sha}",
+	  "distribution": "okd",
+	  "release_digest": "${_okd_digest}"
 	}
 	METADATA
 	_bundle_files+=("mirror/data/aba-transfer-metadata.json")

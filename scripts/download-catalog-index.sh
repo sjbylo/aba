@@ -9,7 +9,8 @@
 # CALLED BY: download-catalogs-start.sh via run_once (never directly by user)
 # CWD:       ABA repo root (resolved from script location via symlink-safe pwd -P)
 # REQUIRES:  podman, jq, curl, skopeo; container auth (via create-containers-auth.sh);
-#            internet access to registry.redhat.io
+#            internet access to registry.redhat.io (OKD: registry.access.redhat.com,
+#            community-operator only, no account needed)
 # ARGS:      <catalog_name> <version_short>
 #            catalog_name:   redhat-operator | certified-operator | community-operator
 #            version_short:  e.g. "4.21" (major.minor only)
@@ -126,12 +127,22 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
+# The distribution decides which catalogs exist and where they are pulled from
+# (OKD: community catalog only, from the host that needs no account)
+_cat_host=registry.redhat.io
+if [ "$(dist_of)" = "okd" ]; then
+	[[ " $(dist_catalogs) " == *" $catalog_name "* ]] || aba_abort \
+		"The $catalog_name catalog is not available on OKD: it needs a Red Hat account." \
+		"OKD can only use the community-operator catalog (registry.access.redhat.com, anonymous)."
+	_cat_host=registry.access.redhat.com
+fi
+
 # Check connectivity to registry
-aba_debug "Checking connectivity to registry.redhat.io"
+aba_debug "Checking connectivity to $_cat_host"
 _reg_err=""
-if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 2>&1 >/dev/null); then
-	aba_debug "registry.redhat.io check failed: $_reg_err"
-	aba_abort "Cannot access registry.redhat.io - check internet connection"
+if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL http://$_cat_host/v2 2>&1 >/dev/null); then
+	aba_debug "$_cat_host check failed: $_reg_err"
+	aba_abort "Cannot access $_cat_host - check internet connection"
 fi
 
 # Verify prerequisites
@@ -142,7 +153,7 @@ if ! command -v jq >/dev/null 2>&1; then
 	aba_abort "jq is required but not installed"
 fi
 
-catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
+catalog_url="$(dist_catalog_ref "$catalog_name" "$ocp_ver_major")"
 remote_ref="docker://${catalog_url}"
 content_layer_file=".index/.${catalog_name}-index-v${ocp_ver_major}.content-layer-digest"
 

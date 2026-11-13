@@ -30,8 +30,17 @@ echo "=== TUI version tip spot-check ==="
 echo "  Host: $_TUI_HOST  channel: $_CHANNEL"
 echo ""
 
+# Distribution of the test host's aba.conf: the tip tasks are named <distribution>:<channel>:...
+_DIST=$($_TUI_SSH "cd ~/aba && source ./scripts/include_all.sh >/dev/null 2>&1; dist_of" 2>/dev/null | tail -1)
+_DIST="${_DIST:-ocp}"
+if [[ "$_DIST" == "okd" && "$_CHANNEL" == "fast" ]]; then
+	echo "OKD has no fast channel (use CHANNEL=stable|candidate)" >&2
+	exit 1
+fi
+echo "  Distribution: $_DIST"
+
 # Fresh tip tasks on the test host (avoid sticky run_once tips)
-$_TUI_SSH "rm -rf \"\$HOME/.aba/runner/ocp:${_CHANNEL}:latest_version\"*" 2>/dev/null || true
+$_TUI_SSH "rm -rf \"\$HOME/.aba/runner/${_DIST}:${_CHANNEL}:latest_version\"*" 2>/dev/null || true
 
 # Expected ladder from the same code the TUI uses
 echo "--- Resolve expected tips (fetch_*) ---"

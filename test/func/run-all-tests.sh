@@ -87,9 +87,14 @@ unit_tests=(
 	test/func/test-normalize-ipv4.sh
 	test/func/test-input-validation-all.sh
 	test/func/test-ocp-major-render.sh
+	test/func/test-okd-install-config.sh
 	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh
 	test/func/test-resource-pool-resolution.sh
+	test/func/test-distribution-helpers.sh
+	test/func/test-tui-distribution.sh
+	test/func/test-okd-release-ref.sh
+	test/func/test-okd-isc-script.sh
 
 	# Cluster / VM
 	test/func/test-cluster-readiness.sh
@@ -127,13 +132,22 @@ unit_tests=(
 
 	# Mirror / registry
 	test/func/test-mirror-payload-warnings.sh
+	test/func/test-image-sets-okd.sh
 	test/func/test-mirror-status-shell-keys.sh
 	test/func/test-mirror-status-derived-flags.sh
 	test/func/test-reg-stale-report.sh
 	test/func/test-reg-generate-password.sh
 	test/func/test-reg-check-v2-auth.sh
+	test/func/test-okd-release-image.sh
+	test/func/test-sigstore-config.sh
+	test/func/test-okd-release-signature.sh
+	test/func/test-okd-pull-secret.sh
+	test/func/test-okd-first-run.sh
 	test/func/test-reg-idempotent-install.sh
 	test/func/test-state-management.sh
+	test/func/test-okd-state-identity.sh
+	test/func/test-okd-mirror-flows.sh
+	test/func/test-okd-lifecycle-guards.sh
 
 	# Bundle / backup
 	test/func/test-primed-bundle-scenarios.sh
@@ -149,6 +163,7 @@ unit_tests=(
 	test/func/test-day2-wait-gate-abort.sh
 	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
+	test/func/test-okd-catalogs.sh
 	test/func/test-estimate-isc-size.sh
 	test/func/test-mirror-disk-space.sh
 	test/func/test-additional-image-sizes.sh
@@ -161,6 +176,7 @@ unit_tests=(
 
 	# CLI tools
 	test/func/test-extra-clis.sh
+	test/func/test-cli-download-pipeline-okd.sh
 )
 
 # ─────────────────────────────────────────────────────────────────────────────

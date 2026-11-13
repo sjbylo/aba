@@ -534,6 +534,152 @@ ocp_major_of() {
 	printf '%s\n' "${ver%%.*}"
 }
 
+# --- Distribution (ocp | okd) -------------------------------------------------
+# One named helper per distribution-specific constant, so callers never branch on
+# the distribution themselves. The ocp branch of each helper returns
+# exactly what the code did before the distribution key existed; an unknown value
+# is treated as ocp (verify-aba-conf rejects it separately).
+
+# Release tag of an OKD (SCOS) build, e.g. X.Y.Z-okd-scos.N. Anchored on purpose:
+# the ocp_version regex in verify-aba-conf is not.
+_ABA_OKD_VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+-okd-scos\.[0-9]+$'
+# The candidate channel also lists pre-release builds, X.Y.Z-okd-scos.ec.N
+_ABA_OKD_CANDIDATE_VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+-okd-scos\.(ec\.)?[0-9]+$'
+
+# Distribution constants (the OKD counterparts of mirror.openshift.com and
+# quay.io/openshift-release-dev). Nothing here depends on a release.
+ABA_OKD_GRAPH_API="https://updates.okd.io/api/updates/graph"
+ABA_OKD_RELEASES_API="https://api.github.com/repos/okd-project/okd/releases"
+_ABA_OKD_DOWNLOAD_BASE="https://github.com/okd-project/okd/releases/download"
+_ABA_OKD_PAYLOAD_REPO="quay.io/okd/scos-release"
+
+# Prints "ocp" or "okd". The variable (set by normalize-aba-conf when aba.conf has
+# the key) wins; a fresh shell such as a run_once task (`bash -lc 'source
+# include_all.sh; ...'`) has no variable, so it falls back to reading aba.conf in
+# the current directory. A missing or empty key means ocp (aba.conf files from
+# before this key existed).
+dist_of() {
+	local d="${distribution:-}"
+	[ -n "$d" ] || d="$(fetch_value distribution aba.conf 2>/dev/null)" || true
+	d="${d#"${d%%[![:space:]]*}"}"; d="${d%"${d##*[![:space:]]}"}"
+	printf '%s\n' "${d:-ocp}"
+}
+
+# Is $1 a well-formed release version for the current distribution? $2 is the
+# channel: OKD pre-release builds (-okd-scos.ec.N) are well-formed on candidate
+# only; without a channel, or on any other, only the release form is. $2 does not
+# matter for ocp.
+dist_version_is_valid() {
+	if [ "$(dist_of)" = "okd" ]; then
+		[[ "${1:-}" =~ $(_okd_version_re "${2:-}") ]]
+	else
+		_is_version_string "${1:-}"
+	fi
+}
+
+# The version pattern an OKD channel holds: release builds, plus the pre-release
+# builds on candidate.
+_okd_version_re() {
+	if [ "${1:-}" = "candidate" ]; then
+		printf '%s\n' "$_ABA_OKD_CANDIDATE_VERSION_RE"
+	else
+		printf '%s\n' "$_ABA_OKD_VERSION_RE"
+	fi
+}
+
+# Repository that holds the release payload images.
+dist_release_payload_repo() {
+	if [ "$(dist_of)" = "okd" ]; then
+		printf '%s\n' "$_ABA_OKD_PAYLOAD_REPO"
+	else
+		printf '%s\n' "quay.io/openshift-release-dev/ocp-release"
+	fi
+}
+
+# Tag of the release image inside the mirror registry for version $1.
+# OKD releases are identified by digest, which cannot be derived from the version:
+# it is the one oc-mirror recorded for the mirror (okd_mirror_release_digest).
+dist_release_image_ref() {
+	local ver="${1:?Usage: dist_release_image_ref <version>}"
+	if [ "$(dist_of)" = "okd" ]; then
+		okd_mirror_release_digest "$ver"
+	else
+		printf '%s\n' "${ver}-$(uname -m)"
+	fi
+}
+
+# Directory holding the CLI tarballs and sha256sum.txt for version $1.
+dist_cli_base_url() {
+	local ver="${1:?Usage: dist_cli_base_url <version>}"
+	local dir=ocp
+	if [ "$(dist_of)" = "okd" ]; then
+		printf '%s\n' "${_ABA_OKD_DOWNLOAD_BASE}/${ver}"
+	else
+		# Same rule as cli/Makefile: engineering candidates live under ocp-dev-preview
+		[[ "$ver" == *-ec.* ]] && dir=ocp-dev-preview
+		printf '%s\n' "https://mirror.openshift.com/pub/openshift-v$(ocp_major_of "$ver")/$(uname -m)/clients/${dir}/${ver}"
+	fi
+}
+
+# Checksum file next to the CLI tarballs for version $1.
+dist_cli_sha256_url() {
+	local ver="${1:?Usage: dist_cli_sha256_url <version>}"
+	printf '%s\n' "$(dist_cli_base_url "$ver")/sha256sum.txt"
+}
+
+# Update-graph (Cincinnati) endpoint.
+dist_graph_api() {
+	if [ "$(dist_of)" = "okd" ]; then
+		printf '%s\n' "$ABA_OKD_GRAPH_API"
+	else
+		printf '%s\n' "$ABA_GRAPH_API"
+	fi
+}
+
+# Succeeds when a Red Hat pull secret is needed. OCP always needs one. OKD pulls
+# the release from quay.io/okd anonymously; only operator content (ops/op_sets)
+# can come from a registry that wants credentials.
+dist_pull_secret_required() {
+	if [ "$(dist_of)" = "okd" ]; then
+		[ -n "${ops:-}" ] || [ -n "${op_sets:-}" ]
+	else
+		return 0
+	fi
+}
+
+# Succeeds when $1 is an update channel the distribution publishes.
+dist_channel_is_valid() {
+	local chan="${1:-}"
+	if [ "$(dist_of)" = "okd" ]; then
+		[[ "$chan" =~ ^(stable|candidate)$ ]]
+	else
+		[[ "$chan" =~ ^(fast|stable|candidate|eus)$ ]]
+	fi
+}
+
+# Succeeds when the image-set config of the distribution carries a channels block
+# (OCP does; OKD releases are not selected by channel there). Takes no argument.
+dist_supports_channels() {
+	[ "$(dist_of)" != "okd" ]
+}
+
+# OKD is installed on bm and kvm, on x86_64 only; VMware vSphere (platform vmw) and other
+# architectures are not supported. Takes the platform ($1); the distribution in effect is
+# dist_of and the architecture is ARCH. Prints the reason and returns 1 when the combination
+# cannot be used; always succeeds for OCP.
+dist_target_problem() {
+	[ "$(dist_of)" = "okd" ] || return 0
+	if [ "${1:-}" = "vmw" ]; then
+		echo "platform [vmw] (VMware vSphere) is not supported for OKD in ABA (use: bm, kvm)"
+		return 1
+	fi
+	if [ "${ARCH:-amd64}" != "amd64" ]; then
+		echo "architecture [${ARCH}] is not supported for OKD in ABA (x86_64 only)"
+		return 1
+	fi
+	return 0
+}
+
 # If machine_network is a CIDR (10.0.0.0/20), split it in the current shell
 # into machine_network (address) and prefix_length. No-op when already split.
 # Not a normalize output (ADR-005): callers that validate or use the prefix
@@ -730,6 +876,22 @@ verify-aba-conf() {
 	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo "$ocp_channel" | grep -q -E "^(fast|stable|candidate|eus)$" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo "$platform"    | grep -q -E "^(bm|vmw|kvm)$" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo "${distribution:-ocp}" | grep -q -E "^(ocp|okd)$" || { echo_red "Error: distribution incorrectly set in aba.conf (use: ocp, okd): [${distribution:-}]" >&2; ret=1; }
+	# The value the file names first (what a fresh shell reads) and the value normalize left in the variable (last one wins)
+	# must agree: a key given twice, or a value with a leading space, would otherwise run the other distribution silently
+	local _dfile; _dfile="$(fetch_value distribution aba.conf 2>/dev/null)" || true
+	[ "$_dfile" = "${distribution:-}" ] || { echo_red "Error: distribution in aba.conf is ambiguous (key given twice or value with spaces): [$_dfile] vs [${distribution:-}]" >&2; ret=1; }
+	# The ocp_version/ocp_channel checks above are OCP-shaped (the version regex is unanchored), so OKD gets its own exact checks
+	if [ "${distribution:-ocp}" = "okd" ]; then
+		dist_version_is_valid "$ocp_version" "$ocp_channel" || { echo_red "Error: ocp_version incorrectly set for distribution okd in aba.conf: [$ocp_version] (expected X.Y.Z-okd-scos.N, or X.Y.Z-okd-scos.ec.N on the candidate channel)" >&2; ret=1; }
+		dist_channel_is_valid "$ocp_channel" || { echo_red "Error: ocp_channel [$ocp_channel] is not available for distribution okd (use: stable, candidate)" >&2; ret=1; }
+		local _tprob; _tprob="$(dist_target_problem "$platform")" || { echo_red "Error: $_tprob" >&2; ret=1; }
+	fi
+	# OKD pulls its release anonymously: a pull secret file is needed only for operator content.
+	# Without one, use the template default as the home of the OKD placeholder.
+	if [ "$(dist_of)" = "okd" ] && ! dist_pull_secret_required; then
+		[ "$pull_secret_file" ] || export pull_secret_file="$HOME/.pull-secret.json"
+	fi
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -1793,6 +1955,63 @@ cluster_installed_platform() {
 	printf '%s\n' "$_plat"
 }
 
+# Distribution this cluster was installed with (ocp, okd).
+# Only OKD clusters record it in clusterstate/state.sh, so a state without the key is ocp.
+# Usage: cluster_installed_distribution [cluster-dir]
+# Prints the value and returns 0, or returns 1 if there is no cluster state.
+cluster_installed_distribution() {
+	local _dir="${1:-$PWD}" _state _dist
+	if [ -s "$_dir/clusterstate/state.sh" ]; then
+		_state="$_dir/clusterstate/state.sh"
+	elif [ -s "$_dir/state.sh" ]; then
+		_state="$_dir/state.sh"
+	else
+		return 1
+	fi
+	_dist=$(grep '^distribution=' "$_state" 2>/dev/null | head -1 | cut -d= -f2-) || true
+	_dist=${_dist%%#*}
+	_dist=${_dist//[\'\" ]/}
+	[ "$_dist" = "okd" ] && printf '%s\n' okd || printf '%s\n' ocp
+}
+
+# Operations ABA does not support for OKD stop here with a clear message, before anything is
+# changed or any cluster is contacted. The two guards differ only in what they ask:
+#   cluster_okd_guard  the distribution the cluster was installed with (its state.sh)
+#   okd_conf_guard     the distribution set in aba.conf, for the next install or mirror content
+# Usage: cluster_okd_guard <operation> [cluster-dir] ; okd_conf_guard <operation> [hint ...]
+cluster_okd_guard() {
+	local _op="${1:?Usage: cluster_okd_guard <operation> [cluster-dir]}"
+	[ "$(cluster_installed_distribution "${2:-$PWD}" 2>/dev/null)" = "okd" ] || return 0
+	aba_abort "$_op is unsupported for OKD in ABA." \
+		"This cluster was installed as OKD. ABA installs OKD but does not upgrade it or set up Red Hat services on it."
+}
+
+okd_conf_guard() {
+	local _op="${1:?Usage: okd_conf_guard <operation> [hint ...]}"
+	shift
+	[ "$(dist_of)" = "okd" ] || return 0
+	[ $# -gt 0 ] || set -- "aba.conf has distribution=okd. ABA installs OKD but does not upgrade it or set up Red Hat services on it."
+	aba_abort "$_op is unsupported for OKD in ABA." "$@"
+}
+
+# Is this the release of an OKD cluster? $1 = version, $2 = release image the cluster runs.
+okd_release_detected() {
+	[[ "${1:-}" == *-okd-scos.* ]] && return 0
+	[ -n "${_ABA_OKD_PAYLOAD_REPO:-}" ] && [[ "${2:-}" == *"$_ABA_OKD_PAYLOAD_REPO"* ]]
+}
+
+# Digest of the release an OKD cluster is installed from, as the installer that built the ISO reports
+# it ("release image <repo>@sha256:..."), the same for direct, proxy and mirror installs. It names the
+# release the installer pins (the multi-arch index), not the per-arch child that a mirror records in
+# mirror_release_digest. Prints nothing when the installer is missing or reports no digest.
+okd_installed_release_digest() {
+	local _d=""
+	if which openshift-install >/dev/null 2>&1; then
+		_d=$(openshift-install version 2>/dev/null | grep '^release image' | grep -o 'sha256:[0-9a-f]\{64\}' | head -1) || true
+	fi
+	printf '%s\n' "$_d"
+}
+
 # Quick TCP probe of cluster API (3s timeout).
 # Extracts the server endpoint from the given kubeconfig (or $KUBECONFIG).
 # Returns 0 if reachable, 1 if not. Use before slow oc calls to fail fast.
@@ -1835,6 +2054,17 @@ externalize_cluster_state() {
 	chmod 700 "$_state_dir"
 	chmod 700 "$(dirname "$_state_dir")"
 
+	# OKD only: the distribution and release this cluster was installed with. The first state written
+	# for a cluster decides; a later change of aba.conf must not relabel an installed cluster.
+	local _dist="" _digest=""
+	if [ -s "$_state_dir/state.sh" ]; then
+		_dist=$(cluster_installed_distribution "$_state_dir")
+		_digest=$(grep '^release_digest=' "$_state_dir/state.sh" 2>/dev/null | head -1 | cut -d= -f2-) || true
+	else
+		_dist=$(dist_of)
+		[ "$_dist" = "okd" ] && _digest=$(okd_installed_release_digest)
+	fi
+
 	# Write state.sh (lowercase vars, sourceable)
 	cat > "$_state_dir/state.sh" <<-EOF
 	cluster_name=$cluster_name
@@ -1850,6 +2080,13 @@ externalize_cluster_state() {
 	installed_from="$PWD"
 	installed_on="$(date -Iseconds)"
 	EOF
+	if [ "$_dist" = "okd" ]; then
+		[ -n "$_digest" ] || aba_warn "The release digest of this OKD cluster is unknown; release_digest was left empty in its state."
+		cat >> "$_state_dir/state.sh" <<-EOF
+		distribution=okd
+		release_digest=$_digest
+		EOF
+	fi
 
 	# Copy auth files
 	[ -f "$_assets_dir/auth/kubeconfig" ] && cp -p "$_assets_dir/auth/kubeconfig" "$_state_dir/"
@@ -1999,6 +2236,9 @@ _state_override_mirror() {
 	# they track what's actually in the mirror registry (set by reg-sync.sh / reg-load.sh).
 	local _status="reg_host reg_port reg_path reg_root reg_user reg_pw mirror_ocp_version mirror_ocp_upgrade_from last_action last_action_at"
 	local _field _sval _cval _drifted=""
+
+	# The digest of the mirrored OKD release, when the state records one (an OCP state has none)
+	_status="$_status mirror_release_digest"
 
 	source "$_state"
 
@@ -3100,6 +3340,8 @@ _ocp_version_ttl() {
 
 # return 0 if v contains prerelease suffix (has '-') else 1
 _is_prerelease() {
+	# OKD builds always carry a suffix (-okd-scos.N) but are releases, not pre-releases
+	[[ "$1" =~ $_ABA_OKD_VERSION_RE ]] && return 1
 	[[ "$1" == *-* ]]
 }
 
@@ -3117,6 +3359,7 @@ _ver_minor() {
 ############################################
 fetch_latest_minor_version() {
 	local channel="${1:-stable}"
+	[ "$(dist_of)" = "okd" ] && { _okd_head_minor "$channel"; return; }
 	local major
 	major="$(ocp_major_of "${ocp_version:-}")"
 	[ -n "$major" ] || major=4
@@ -3156,6 +3399,15 @@ _fetch_graph_cached() {
 	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
 	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
 
+	if [ "$(dist_of)" = "okd" ]; then
+		# Own endpoint and cache file: an OKD graph must never replace (or be read as) an OCP one
+		cache_file="${ABA_CACHE_DIR}/graph_okd_${chann_minor}_${ARCH}.json"
+		url="$(dist_graph_api)?channel=${chann_minor}&arch=${ARCH}"
+		_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _okd_validate_graph || return 0
+		cat "$cache_file"
+		return 0
+	fi
+
 	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
 	cat "$cache_file"
 }
@@ -3169,6 +3421,8 @@ _fetch_graph_cached() {
 fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
+
+	[ "$(dist_of)" = "okd" ] && { _okd_list_versions "$channel" "$minor"; return; }
 
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
@@ -3305,6 +3559,8 @@ fetch_latest_version() {
 	local channel="${1:-stable}"
 	local minor v prev offer newer
 
+	[ "$(dist_of)" = "okd" ] && { _okd_fetch_latest_version "$channel"; return; }
+
 	if [[ "$channel" = "candidate" ]]; then
 		offer="$(_candidate_offer | sed -n '1p' || true)"
 		if _is_version_string "$offer"; then
@@ -3344,6 +3600,8 @@ fetch_latest_z_version() {
 	local minor="$2"
 	local v prev
 
+	[ "$(dist_of)" = "okd" ] && { _okd_fetch_latest_z_version "$channel" "$minor"; return; }
+
 	[[ -n "$minor" ]] || minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || return 1
 
@@ -3369,6 +3627,8 @@ fetch_latest_z_version() {
 fetch_previous_version() {
 	local channel="${1:-stable}"
 	local minor prev v offer newer cdn_tip
+
+	[ "$(dist_of)" = "okd" ] && { _okd_fetch_previous_version "$channel"; return; }
 
 	if [[ "$channel" = "candidate" ]]; then
 		offer="$(_candidate_offer | sed -n '2p' || true)"
@@ -3404,6 +3664,8 @@ fetch_older_version() {
 	local channel="${1:-stable}"
 	local minor prev older v offer newer cdn_tip
 
+	[ "$(dist_of)" = "okd" ] && { _okd_fetch_older_version "$channel"; return; }
+
 	if [[ "$channel" = "candidate" ]]; then
 		offer="$(_candidate_offer | sed -n '3p' || true)"
 		_is_version_string "$offer" && echo "$offer" && return 0
@@ -3426,6 +3688,282 @@ fetch_older_version() {
 	v="$(fetch_all_versions "$channel" "$older" | tail -n1)"
 	_is_version_string "$v" && echo "$v" && return 0
 	return 1
+}
+
+############################################
+# OKD resolver (distribution=okd)
+# OKD has no mirror.openshift.com CDN, so the CDN-based stack above is not used.
+# Which minors exist comes from the GA releases (not prerelease, not draft) of
+# okd-project/okd on GitHub; the builds of one minor come from the OKD update
+# graph. Latest / Previous / Older are the newest build of the head minor and of
+# the one and two minors before it, the same meaning as for OCP.
+# Channels: stable holds the release builds (X.Y.Z-okd-scos.N). candidate holds
+# what its graphs list, which today are the pre-release builds
+# (X.Y.Z-okd-scos.ec.N), and release builds if a graph lists them. A channel
+# answers from its graph only, except that stable also accepts a GA release the
+# graph has not caught up with.
+############################################
+
+# The releases answer of GitHub is bulky (assets, bodies); keep what the resolver
+# reads. Fails when the body is not a list of release objects.
+_okd_validate_releases() {
+	local f="$1"
+	jq -ce 'if type == "array" then [.[] | {tag_name, prerelease, draft}] else error("not a list") end' "$f" > "$f.r" 2>/dev/null \
+		&& mv -f "$f.r" "$f"
+	local rc=$?
+	rm -f "$f.r"
+	return $rc
+}
+
+# The answer for one release (releases/tags/<tag>) must be a release object; keep
+# the tag and the "Pull From" line(s) of the notes, which is all the resolver reads.
+_okd_validate_release() {
+	local f="$1"
+	jq -ce 'if type == "object" and (.tag_name | type) == "string" then {tag_name, body: ([(.body // "") | split("\n")[] | select(startswith("Pull From:"))] | join("\n"))} else error("not a release") end' "$f" > "$f.r" 2>/dev/null \
+		&& mv -f "$f.r" "$f"
+	local rc=$?
+	rm -f "$f.r"
+	return $rc
+}
+
+# A graph answer must carry a list of nodes
+_okd_validate_graph() {
+	jq -e '.nodes | type == "array"' "$1" >/dev/null 2>&1
+}
+
+# GA release tags, oldest first. The GitHub list is paged: follow the pages (one
+# cache entry each) until a short or empty page, at most 10 pages. A page that
+# cannot be fetched ends the walk with what the earlier pages gave. Prints
+# nothing (rc 0) when the first page fails.
+_okd_ga_tags() {
+	local ttl page=1 cache_file n
+	ttl="$(parse_duration "$ABA_CACHE_TTL")"
+	while [[ $page -le 10 ]]; do
+		cache_file="${ABA_CACHE_DIR}/okd_releases_p${page}.json"
+		_fetch_cached "${ABA_OKD_RELEASES_API}?per_page=100&page=${page}" "$cache_file" "$ttl" _okd_validate_releases || break
+		jq -r '.[] | select((.prerelease // false) == false and (.draft // false) == false) | .tag_name' "$cache_file" 2>/dev/null
+		n="$(jq 'length' "$cache_file" 2>/dev/null)" || break
+		[[ "$n" -ge 100 ]] || break
+		page=$(( page + 1 ))
+	done | grep -E "$_ABA_OKD_VERSION_RE" | _semver_sort || true
+}
+
+# major.minor of every GA release, oldest first (a minor repeats once per build)
+_okd_ga_minors() {
+	_okd_ga_tags | awk -F. '{print $1 "." $2}'
+}
+
+# Oldest first. Release builds sort by build number; a pre-release build (ec.N)
+# sorts before every release build of the same X.Y.Z, by its number.
+_okd_sort() {
+	awk -F'[.-]' '{ printf "%08d %08d %08d %d %08d %s\n", $1, $2, $3, ($0 ~ /\.ec\./) ? 0 : 1, $NF, $0 }' | sort | cut -d' ' -f6
+}
+
+# Builds of channel-minor that the graph lists, oldest first
+_okd_all_versions() {
+	local channel="${1:-stable}"
+	local minor="${2:-}"
+
+	[[ -n "$minor" ]] || minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 0
+
+	_fetch_graph_cached "$channel" "$minor" | jq -r '.nodes[].version' 2>/dev/null \
+		| grep -E "$(_okd_version_re "$channel")" | grep "^${minor}\." | _okd_sort || true
+}
+
+# What a user may pick for channel-minor: the graph builds, and on stable also
+# the GA releases of the minor that the graph does not list.
+_okd_list_versions() {
+	local channel="${1:-stable}"
+	local minor="${2:-}"
+
+	[[ -n "$minor" ]] || minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 0
+
+	if [[ "$channel" = "stable" ]]; then
+		{ _okd_all_versions "$channel" "$minor"; _okd_ga_tags | grep "^${minor}\." || true; } | sort -u | _okd_sort || true
+	else
+		_okd_all_versions "$channel" "$minor"
+	fi
+}
+
+# Does channel list version $1?
+_okd_verify_release() {
+	local ver="$1" channel="$2" minor="$3"
+
+	[[ "$ver" =~ $(_okd_version_re "$channel") ]] || return 1
+	_okd_all_versions "$channel" "$minor" | grep -qxF "$ver" && return 0
+
+	[[ "$channel" = "stable" ]] || return 1
+	_okd_ga_tags | grep -qxF "$ver"
+}
+
+# Newest build of channel-minor. stable: the graph can trail a fresh GitHub
+# release, so fall back to the GA tags of that minor. Other channels: graph only.
+_okd_tip() {
+	local channel="$1" minor="$2" v
+
+	v="$(_okd_all_versions "$channel" "$minor" | tail -n1)"
+	[[ -n "$v" || "$channel" != "stable" ]] || v="$(_okd_ga_tags | grep "^${minor}\." | tail -n1 || true)"
+	printf '%s\n' "$v"
+}
+
+# One minor back; at X.0 the newest minor of the previous major
+_okd_prev_minor() {
+	local minor="$1" prev maj
+
+	prev="$(_prev_minor "$minor")"
+	if [[ -n "$prev" ]]; then
+		echo "$prev"
+		return 0
+	fi
+
+	maj="${minor%%.*}"
+	[[ "$maj" =~ ^[0-9]+$ && "$maj" -gt 1 ]] || { echo ""; return 0; }
+	_okd_ga_minors | grep "^$(( maj - 1 ))\." | tail -n1 || true
+}
+
+# Newest minor of the channel. stable: newest GA minor. candidate: candidate-<minor>
+# graphs appear before the first GA, so walk forward from the GA minor (one jump
+# to the next major allowed), like the OCP candidate walk.
+_okd_head_minor() {
+	local channel="${1:-stable}"
+	local best n jump steps=0 crossed=0
+
+	best="$(_okd_ga_minors | tail -n1)"
+	[[ -n "$best" ]] || return 0
+
+	if [[ "$channel" = "candidate" ]]; then
+		while [[ $steps -lt 6 ]]; do
+			steps=$(( steps + 1 ))
+			n="$(_next_minor "$best")"
+			if [[ -n "$(_okd_all_versions candidate "$n" | tail -n1)" ]]; then
+				best="$n"
+				continue
+			fi
+			[[ $crossed -eq 0 ]] || break
+			crossed=1
+			jump="$(_next_major "$best")"
+			[[ -n "$(_okd_all_versions candidate "$jump" | tail -n1)" ]] || break
+			best="$jump"
+		done
+	fi
+
+	printf '%s\n' "$best"
+}
+
+_okd_fetch_latest_version() {
+	local channel="${1:-stable}"
+	local minor v
+
+	minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+
+	# The head minor comes from releases that exist, so it always has a newest build
+	v="$(_okd_tip "$channel" "$minor")"
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+_okd_fetch_previous_version() {
+	local channel="${1:-stable}"
+	local minor prev v
+
+	minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+	prev="$(_okd_prev_minor "$minor")"
+	[[ -n "$prev" ]] || return 1
+
+	v="$(_okd_tip "$channel" "$prev")"
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+_okd_fetch_older_version() {
+	local channel="${1:-stable}"
+	local minor prev older v
+
+	minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+	prev="$(_okd_prev_minor "$minor")"
+	[[ -n "$prev" ]] || return 1
+	older="$(_okd_prev_minor "$prev")"
+	[[ -n "$older" ]] || return 1
+
+	v="$(_okd_tip "$channel" "$older")"
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+_okd_fetch_latest_z_version() {
+	local channel="${1:-stable}"
+	local minor="${2:-}"
+	local v prev
+
+	[[ -n "$minor" ]] || minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+
+	v="$(_okd_tip "$channel" "$minor")"
+	if [[ -z "$v" ]]; then
+		prev="$(_okd_prev_minor "$minor")"
+		[[ -n "$prev" ]] || return 1
+		v="$(_okd_tip "$channel" "$prev")"
+	fi
+
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+# Is $2 a digest reference into payload repo $1?
+_okd_is_payload_ref() {
+	[[ "$2" == "$1"@sha256:* ]] && [[ "${2#*@sha256:}" =~ ^[0-9a-f]{64}$ ]]
+}
+
+# Payload pull spec as published for OKD build $1 in channel $2: the update graph node,
+# else the "Pull From" line of the notes of that GitHub release (one request for the tag). Only a digest of the payload
+# repo is accepted, so a tag or another repository in either source is ignored.
+# For some builds this is a manifest list, not the image of one architecture.
+_okd_release_payload_spec() {
+	local ver="$1" channel="$2" minor repo ref rel
+	minor="$(echo "$ver" | cut -d. -f1-2)"
+	repo="$(dist_release_payload_repo)"
+
+	while read -r ref; do
+		_okd_is_payload_ref "$repo" "$ref" && { echo "$ref"; return 0; }
+	done < <(_fetch_graph_cached "$channel" "$minor" 2>/dev/null \
+		| jq -r --arg v "$ver" '.nodes[] | select(.version == $v) | .payload' 2>/dev/null)
+
+	# Not in the graph: ask GitHub for this one release (any age; no list page involved)
+	rel="${ABA_CACHE_DIR}/okd_release_${ver}.json"
+	_fetch_cached "${ABA_OKD_RELEASES_API}/tags/${ver}" "$rel" "$(parse_duration "$ABA_CACHE_TTL")" _okd_validate_release || return 1
+	jq -e --arg t "$ver" '.tag_name == $t' "$rel" >/dev/null 2>&1 || { rm -f "$rel"; return 1; }
+	while read -r ref; do
+		_okd_is_payload_ref "$repo" "$ref" && { echo "$ref"; return 0; }
+	done < <(jq -r --arg t "$ver" 'select(.tag_name == $t) | .body // empty' "$rel" 2>/dev/null \
+		| tr -d '\r' | sed -n 's/^Pull From: *//p')
+	return 1
+}
+
+# Pull spec (<payload repo>@sha256:<digest>) of the release image of OKD build $1 in
+# channel $2 (default stable) for the architecture of this host: the image of that
+# architecture, never the manifest list, because that is the digest the release
+# signature belongs to. The registry is read anonymously (skopeo, like the catalog code).
+# Prints nothing and returns 1 when no digest is published, 2 when one is published but
+# its manifest cannot be read or has no single image for this architecture.
+okd_release_payload_ref() {
+	local ver="${1:-}" channel="${2:-stable}" spec raw child
+	[ "$(dist_of)" = "okd" ] || return 1
+	dist_version_is_valid "$ver" "$channel" || return 1
+	spec="$(_okd_release_payload_spec "$ver" "$channel")" || return 1
+
+	raw="$(timeout 60 skopeo inspect --raw "docker://$spec" 2>/dev/null)" || return 2
+	if [[ "$(jq -r 'if has("manifests") then "list" else "image" end' <<< "$raw" 2>/dev/null)" == "image" ]]; then
+		echo "$spec"
+		return 0
+	fi
+	child="$(jq -r --arg a "$ARCH" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest] | unique | if length == 1 then .[0] else empty end' <<< "$raw" 2>/dev/null)"
+	_okd_is_payload_ref "${spec%@*}" "${spec%@*}@${child}" || return 2
+	echo "${spec%@*}@${child}"
 }
 
 
@@ -3782,6 +4320,12 @@ resolve_cluster_channel() {
 	local major
 	major=$(echo "$ver" | cut -d. -f1-2)
 
+	# OKD has no channel in its ISC (the release is pinned by digest) and no tag to probe: aba.conf decides
+	if [ "$(dist_of)" = "okd" ]; then
+		echo "${ocp_channel:-stable}-${major}"
+		return
+	fi
+
 	local isc_file="../${image_source:-mirror}/data/imageset-config.yaml"
 	local prefix=""
 
@@ -3837,6 +4381,8 @@ verify_release_version_exists() {
 
 	# Check the channel the caller asked for. An rc on stable must fail here,
 	# or the TUI will save it and oc-mirror will find no release.
+
+	[ "$(dist_of)" = "okd" ] && { _okd_verify_release "$ver" "$channel" "$minor"; return; }
 
 	local all_versions
 	all_versions=$(_fetch_graph_cached "$channel" "$minor" 2>/dev/null | jq -r '.nodes[].version' 2>/dev/null) || return 1
@@ -5045,6 +5591,84 @@ catalog_source_name() {
 	fi
 }
 
+# Operator catalogs the distribution offers, in lookup priority. OKD has only
+# the community catalog: the redhat- and certified- catalogs are served by
+# registry.redhat.io, which needs a Red Hat account.
+dist_catalogs() {
+	if [ "$(dist_of)" = "okd" ]; then
+		echo "community-operator"
+	else
+		echo "redhat-operator certified-operator community-operator"
+	fi
+}
+
+# Image of operator catalog $1 (e.g. community-operator) for the major.minor version $2.
+# Fails when the distribution does not offer that catalog.
+dist_catalog_ref() {
+	local cat="${1:?Usage: dist_catalog_ref <catalog> <version_short>}" ver="${2:?Usage: dist_catalog_ref <catalog> <version_short>}"
+	if [ "$(dist_of)" = "okd" ]; then
+		[[ " $(dist_catalogs) " == *" $cat "* ]] || return 1
+		# registry.redhat.io wants an account; the access host serves the community catalog anonymously
+		printf '%s\n' "registry.access.redhat.com/redhat/${cat}-index:v${ver}"
+	else
+		printf '%s\n' "registry.redhat.io/redhat/${cat}-index:v${ver}"
+	fi
+}
+
+# Paths (one per line) of the catalog index files of the distribution for minor
+# version $1 in directory $2 (default: .index of the aba root).
+dist_catalog_index_files() {
+	local ver="${1:?Usage: dist_catalog_index_files <version_short> [dir]}" dir="${2:-${ABA_ROOT:-.}/.index}" cat
+	for cat in $(dist_catalogs); do
+		printf '%s\n' "${dir}/${cat}-index-v${ver}"
+	done
+}
+
+# OKD only: abort when ops/op_sets name an operator that lives only in a catalog
+# that needs a Red Hat account. Looks the names up in the indexes already on disk
+# (downloaded or shipped); a name found nowhere is left to the image-set config step.
+# Usage: dist_catalog_reject_blocked_ops <version_short>...
+dist_catalog_reject_blocked_ops() {
+	[ "$(dist_of)" = "okd" ] || return 0
+	local ver op oset cat dir f found tpl
+	local -a want=() blocked=()
+	if echo "${op_sets:-}" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
+		blocked+=("op_sets=all (the whole redhat-operator catalog)")
+	fi
+	for oset in $(echo "${op_sets:-}" | tr "," " "); do
+		tpl="templates/operator-set-${oset}"
+		[ -s "$tpl" ] && want+=($(sed -e 's/#.*//' -e '/^\s*$/d' -e 's/^\s*//g' -e 's/\s*$//g' "$tpl"))
+	done
+	want+=($(echo "${ops:-}" | tr "," " "))
+	for ver in "$@"; do
+		for op in "${want[@]}"; do
+			found=
+			for cat in $(dist_catalogs); do
+				for dir in .index catalogs ../catalogs; do
+					f="${dir}/${cat}-index-v${ver}"
+					[ -s "$f" ] && grep -q "^$op " "$f" && found=1
+				done
+			done
+			[ -n "$found" ] && continue
+			for cat in redhat-operator certified-operator; do
+				for dir in .index catalogs ../catalogs; do
+					f="${dir}/${cat}-index-v${ver}"
+					if [ -s "$f" ] && grep -q "^$op " "$f"; then
+						[[ " ${blocked[*]} " == *" $op ($cat) "* ]] || blocked+=("$op ($cat)")
+						break 2
+					fi
+				done
+			done
+		done
+	done
+	[ ${#blocked[@]} -eq 0 ] && return 0
+	aba_abort \
+		"Not available on OKD: ${blocked[*]}" \
+		"These operators come from catalogs on registry.redhat.io, which needs a Red Hat account." \
+		"OKD can only use the community-operator catalog (registry.access.redhat.com, anonymous)." \
+		"Remove them from ops/op_sets, or pick operators listed by: aba show-ops --community"
+}
+
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)
@@ -5066,7 +5690,7 @@ download_all_catalogs() {
 	fi
 	[[ -z "$ttl" ]] && ttl="$(parse_duration "${CATALOG_CACHE_TTL:-12h}")"
 
-	local catalogs=(redhat-operator certified-operator community-operator)
+	local catalogs=($(dist_catalogs))
 	local running=0
 
 	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
@@ -5116,7 +5740,10 @@ wait_for_all_catalogs() {
 	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
 	CATALOG_ERROR=""
 	local _failed_cat=""
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
+	if [ "$(dist_of)" = "okd" ]; then
+		# Only the community catalog is downloaded on OKD
+		run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator" || _failed_cat="community-operator"
+	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
 		_failed_cat="redhat-operator"
 	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
 		_failed_cat="certified-operator"
@@ -5292,6 +5919,122 @@ _isc_additional_count() {
 	[ -f "$_isc" ] || { echo 0; return 0; }
 	yaml2json < "$_isc" | \
 		jq -r '[.mirror.additionalImages[]?.name] | length' 2>/dev/null || echo 0
+}
+
+# Release version an ISC mirrors: maxVersion of the platform channels block when there is one, else
+# the version in the transfer metadata (an OKD ISC pins the release by digest and has no channels).
+# Usage: _isc_release_version <isc-path> [metadata-path]
+# Prints: the version, or an empty line when neither source has one
+_isc_release_version() {
+	local _isc="${1:?Usage: _isc_release_version <isc-path> [metadata-path]}" _meta="${2:-}" _ver=""
+	[ -f "$_isc" ] && _ver=$(yaml2json < "$_isc" | jq -r '.mirror.platform.channels[0].maxVersion // empty' 2>/dev/null) || true
+	if [ -z "$_ver" ] && [ -f "$_meta" ]; then
+		_ver=$(grep '"ocp_version"' "$_meta" 2>/dev/null | head -1 | sed 's/.*: *"//; s/".*//') || true
+	fi
+	printf '%s\n' "$_ver"
+}
+
+# Digest of the release payload an ISC pins in platform.release (prints nothing for a tag or no release).
+# Usage: _isc_release_digest <isc-path>
+_isc_release_digest() {
+	local _isc="${1:?Usage: _isc_release_digest <isc-path>}"
+	[ -f "$_isc" ] || return 0
+	yaml2json < "$_isc" | jq -r '(.mirror.platform.release // "") | capture("@(?<d>sha256:[0-9a-f]{64})$").d // empty' 2>/dev/null || true
+}
+
+# Value of one key of a transfer metadata file (empty when the file or key is missing).
+# Usage: _transfer_meta_value <metadata-path> <key>
+_transfer_meta_value() {
+	local _meta="${1:?Usage: _transfer_meta_value <metadata-path> <key>}" _key="${2:?}"
+	[ -f "$_meta" ] || return 0
+	grep "\"${_key}\"" "$_meta" 2>/dev/null | head -1 | sed 's/.*: *"//; s/".*//' || true
+}
+
+# Distribution of the content the mirror registry holds, from its state.sh (ocp, okd).
+# Only OKD is recorded, so a missing state or key reads as ocp.
+# Usage: mirror_recorded_distribution [state-file]
+mirror_recorded_distribution() {
+	local _state="${1:-${regcreds_dir:-}/state.sh}" _dist=""
+	[ -s "$_state" ] && _dist=$(grep '^distribution=' "$_state" 2>/dev/null | head -1 | cut -d= -f2-) || true
+	_dist=${_dist//[\'\" ]/}
+	[ "$_dist" = "okd" ] && printf '%s\n' okd || printf '%s\n' ocp
+}
+
+# Stop when the mirror already holds the other distribution. aba.conf (what is mirrored and installed
+# next) and the mirror content (its state.sh) are separate; they must agree before images are added.
+# A registry with no content yet takes either.
+# Usage: mirror_distribution_guard [state-file]
+mirror_distribution_guard() {
+	local _state="${1:-${regcreds_dir:-}/state.sh}" _rec _cur
+	[ -s "$_state" ] || return 0
+	grep -q '^mirror_ocp_version=.' "$_state" || return 0
+	_rec=$(mirror_recorded_distribution "$_state")
+	_cur=$(dist_of)
+	[ "$_rec" = "$_cur" ] && return 0
+	aba_abort "The mirror registry holds ${_rec^^} content, but aba.conf has distribution=$_cur." \
+		"Releases of two distributions are not mixed in one registry." \
+		"Use another mirror (reg_host or reg_path), or uninstall this one first: aba -d mirror uninstall"
+}
+
+# Record in the mirror state.sh which distribution and release the registry now holds.
+# Written only for OKD: an OCP state.sh keeps exactly the keys it always had.
+# Usage: okd_record_mirror_state <state-file> <release-digest>
+okd_record_mirror_state() {
+	local _state="${1:?Usage: okd_record_mirror_state <state-file> <release-digest>}" _digest="${2:-}"
+	[ "$(dist_of)" = "okd" ] || return 0
+	replace-value-conf -q -n distribution -v okd -f "$_state"
+	if [ -n "$_digest" ]; then
+		replace-value-conf -q -n mirror_release_digest -v "$_digest" -f "$_state"
+	elif [ "${excl_platform:-}" != "true" ]; then
+		aba_warn "The release digest of the mirrored OKD release is unknown; mirror_release_digest was not recorded."
+	fi
+}
+
+# What an OKD mirror does not do, checked before sync or save starts: no upgrade target, and no
+# Red Hat operator sets (they come from catalogs that need a Red Hat account).
+okd_mirror_conf_guards() {
+	if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "${ocp_version:-}" ]; then
+		okd_conf_guard "Mirroring an upgrade target (ocp_upgrade_to=$ocp_upgrade_to)"
+	fi
+	[ -z "${op_sets:-}" ] || okd_conf_guard "Red Hat operator sets (op_sets=$op_sets)" \
+		"They come from catalogs that need a Red Hat account. Remove them with: aba --op-sets"
+}
+
+# An OKD bundle must be the release aba.conf selects, and its metadata and ISC must name the same one.
+# Usage: okd_bundle_release_check <metadata-path> <isc-path>
+okd_bundle_release_check() {
+	local _meta="${1:?Usage: okd_bundle_release_check <metadata-path> <isc-path>}" _isc="${2:?}" _ver _md _id
+	[ "$(dist_of)" = "okd" ] || return 0
+	_ver=$(_transfer_meta_value "$_meta" ocp_version)
+	if [ -n "$_ver" ] && [ "$_ver" != "${ocp_version:-}" ]; then
+		okd_conf_guard "Loading an upgrade (the bundle holds $_ver, aba.conf has ocp_version=${ocp_version:-})" \
+			"Select the bundle's release instead: aba --version $_ver"
+	fi
+	_md=$(_transfer_meta_value "$_meta" release_digest)
+	_id=$(_isc_release_digest "$_isc")
+	if [ -n "$_md" ] && [ -n "$_id" ] && [ "$_md" != "$_id" ]; then
+		aba_abort "The release digest in the transfer metadata differs from the one in imageset-config.yaml." \
+			"metadata: $_md" "ISC:      $_id" \
+			"Re-copy mirror/data/*.tar from the connected host."
+	fi
+}
+
+# Stop when a transfer bundle is not of the distribution aba.conf selects. Only OKD bundles say what
+# they hold (distribution in the metadata); a bundle without the key is an OCP bundle.
+# Usage: bundle_distribution_guard [metadata-path]
+bundle_distribution_guard() {
+	local _meta="${1:-data/aba-transfer-metadata.json}" _bundle _cur
+	_cur=$(dist_of)
+	_bundle=$(_transfer_meta_value "$_meta" distribution)
+	[ -n "$_bundle" ] || _bundle=ocp
+	[ "$_bundle" = "$_cur" ] && return 0
+	if [ "$_cur" = "okd" ]; then
+		aba_abort "This transfer bundle does not carry an OKD release identity." \
+			"It is an OCP bundle, or it was saved before the release was recorded." \
+			"On the connected host (distribution=okd in aba.conf) run: aba -d mirror save, then copy mirror/data/*.tar again."
+	fi
+	aba_abort "This transfer bundle holds OKD content, but aba.conf has distribution=$_cur." \
+		"Select OKD and try again: aba --distribution okd"
 }
 
 # --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
@@ -5623,6 +6366,19 @@ validate_pull_secret() {
 		return 1
 	fi
 	
+	# OKD needs no Red Hat registry login: only the shape of the file (and real
+	# credentials when operators are selected) matters.
+	if [ "$(dist_of)" = "okd" ]; then
+		local _okd_ps_err
+		[ -s "$pull_secret_file" ] || { aba_error "Pull secret file is empty: $pull_secret_file"; return 1; }
+		if _okd_ps_err=$(dist_pull_secret_problem "$pull_secret_file"); then
+			aba_success "Pull secret is usable (OKD needs no Red Hat registry login)"
+			return 0
+		fi
+		aba_error "$_okd_ps_err"
+		return 1
+	fi
+
 	# Check that pull secret contains registry.redhat.io
 	if ! jq -e '.auths["registry.redhat.io"]' "$pull_secret_file" >/dev/null 2>&1; then
 		echo_red "[ABA] Error: No registry.redhat.io entry in pull secret" >&2
@@ -5809,6 +6565,64 @@ ensure_sigstore_mirror_config() {
 	aba_debug "Sigstore mirror config: $mirror_file ($mirror_host_port)"
 }
 
+# Keep the per-user sigstore file in line with the distribution.  The file is installed once
+# (./install) as the OCP one and users may edit it, so it is only replaced while it is still
+# byte-for-byte a stock file: OCP -> OKD variant when the distribution is okd, and back.
+# Run from the ABA root or a directory with a templates/ link (e.g. mirror/).
+ensure_sigstore_distribution_config() {
+	local cur="$HOME/.config/containers/registries.d/aba-sigstore.yaml"
+	local ocp_tmpl=templates/aba-sigstore-config.yaml okd_tmpl=templates/aba-sigstore-config-okd.yaml
+	local from to
+
+	[ -f "$cur" ] || return 0
+	if [ "$(dist_of)" = "okd" ]; then
+		from=$ocp_tmpl to=$okd_tmpl
+	else
+		from=$okd_tmpl to=$ocp_tmpl
+	fi
+	[ -f "$from" ] && [ -f "$to" ] || return 0
+
+	if diff -q "$cur" "$from" >/dev/null 2>&1; then
+		cp "$to" "$cur"
+		aba_info "Updated $cur for distribution $(dist_of)"
+	elif [ "$(dist_of)" = "okd" ] && ! grep -q 'quay\.io/okd' "$cur"; then
+		# An edited file may enable sigstore for quay.io as a whole; quay.io/okd has no attachments
+		aba_warn "$cur was edited and is left as is." \
+			"For OKD add:  docker: quay.io/okd: use-sigstore-attachments: false" \
+			"(stock file: $okd_tmpl)"
+	fi
+	return 0
+}
+
+# OKD only: tell oc-mirror where the release signatures are and who signed them.
+# mirror.openshift.com has no signatures for OKD; they are on the OpenShift CI bucket and are
+# signed with the CI release key (shipped in templates/). oc-mirror appends "sha256=<digest>/signature-N"
+# to the base URL as is, so the URL must end with "/". A value the user already set wins.
+# Run from the ABA root or a directory with a templates/ link (e.g. mirror/).
+ensure_release_signature_env() {
+	[ "$(dist_of)" = "okd" ] || return 0
+	local key=""
+
+	if [ -z "${OCP_SIGNATURE_VERIFICATION_PK:-}" ]; then
+		# oc-mirror runs in data/, so the key path must not be relative
+		key=$(readlink -f templates/okd-release-signing-key.asc)
+		[ -s "$key" ] || aba_abort \
+			"Release signing key not found: templates/okd-release-signing-key.asc" \
+			"oc-mirror needs it to verify the OKD release signature." \
+			"Restore the file from the ABA installation, or set OCP_SIGNATURE_VERIFICATION_PK to a key file."
+	fi
+
+	if [ -z "${OCP_SIGNATURE_URL:-}" ]; then
+		export OCP_SIGNATURE_URL="https://storage.googleapis.com/openshift-ci-release/releases/signatures/openshift/release/"
+	elif [[ "$OCP_SIGNATURE_URL" != */ ]]; then
+		aba_warn "OCP_SIGNATURE_URL ($OCP_SIGNATURE_URL) does not end with '/'." \
+			"oc-mirror appends the release digest to it as is and will not find the signature."
+	fi
+	[ -n "$key" ] && export OCP_SIGNATURE_VERIFICATION_PK="$key"
+	aba_debug "Release signatures: $OCP_SIGNATURE_URL key: $OCP_SIGNATURE_VERIFICATION_PK"
+	return 0
+}
+
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
 	command -v oc-mirror >/dev/null && return 0
@@ -5861,6 +6675,52 @@ ensure_openshift_install() {
 	run_once -w -m "Installing openshift-install" -i "$TASK_INST_OPENSHIFT_INSTALL"
 }
 
+# Digest (sha256:<64 hex>) of the OKD release image that oc-mirror put into the mirror for
+# version $1 (default $ocp_version).  An OKD release is addressed by digest: the mirror
+# tags it by version only (never <version>-<arch>) and the digest the upstream installer
+# reports belongs to an index the mirror does not hold.  The digest is read from what
+# oc-mirror wrote: the signature it stored is named <version>-sha256-<digest>; the
+# signature ConfigMap (the file 'aba day2' applies) is the fallback when the name is
+# absent.  Run from a cluster dir (mirror/data/...) or from the mirror dir (data/...).
+# This is the one place to change once the digest is recorded in the mirror state.
+# Prints the digest; on failure prints the reason on stderr and returns 1.
+okd_mirror_release_digest() {
+	local ver="${1:-${ocp_version:-}}" wd f d
+	local -a found=()
+	if [ -z "$ver" ]; then
+		echo "No release version given" >&2
+		return 1
+	fi
+	if [ -d data/working-dir ]; then
+		wd=data/working-dir
+	elif [ -d mirror/data/working-dir ]; then
+		wd=mirror/data/working-dir
+	else
+		echo "No oc-mirror output found: run 'aba -d mirror sync' (or 'load') first" >&2
+		return 1
+	fi
+	for f in "$wd/signatures/${ver}-sha256-"*; do
+		d="${f##*-sha256-}"
+		[[ "$d" =~ ^[0-9a-f]{64}$ ]] && found+=("sha256:$d")
+	done
+	# The ConfigMap names no version, so it only answers when there is no per-version record at all
+	if [ ${#found[@]} -eq 0 ] && ! compgen -G "$wd/signatures/*" >/dev/null && [ -s "$wd/cluster-resources/signature-configmap.json" ]; then
+		# keys are sha256-<digest>-<n>
+		mapfile -t found < <(jq -r '(.binaryData // {}) | keys[] | capture("^sha256-(?<d>[0-9a-f]{64})-[0-9]+$").d | "sha256:" + .' \
+			"$wd/cluster-resources/signature-configmap.json" 2>/dev/null)
+	fi
+	mapfile -t found < <(printf '%s\n' "${found[@]}" | sed '/^$/d' | sort -u)
+	if [ ${#found[@]} -eq 0 ]; then
+		echo "oc-mirror has not recorded a release image for $ver under $wd: run 'aba -d mirror sync' (or 'load') for this version" >&2
+		return 1
+	fi
+	if [ ${#found[@]} -gt 1 ]; then
+		echo "oc-mirror recorded more than one release image under $wd (${found[*]}); cannot tell which one is $ver" >&2
+		return 1
+	fi
+	printf '%s\n' "${found[0]}"
+}
+
 # Check if the OCP release image is available in the mirror registry.
 # Pure curl — no skopeo or openshift-install needed.
 # Handles both Docker (Basic auth) and Quay (Bearer token exchange).
@@ -5886,6 +6746,17 @@ check_release_image() {
 	_release_check_err=""
 	_release_check_extra=()
 	_registry_auth_ok=false
+
+	# OKD: the mirror holds the release under the digest oc-mirror recorded; no <version>-<arch> tag exists.
+	# Before the first sync/load nothing is recorded: the registry itself is still checked, and the
+	# release is asked for by a digest that cannot exist, so the answer is "not in the registry" as on OCP.
+	if [ "$(dist_of)" = "okd" ]; then
+		if ! _tag=$(dist_release_image_ref "$ocp_version" 2>&1); then
+			_release_check_extra+=("$_tag")
+			_tag="sha256:$(printf '0%.0s' {1..64})"
+		fi
+		_manifest_url="https://$reg_host:$reg_port/v2/$_repo/manifests/$_tag"
+	fi
 
 	local _b64auth _userpass _curl_opts
 	aba_debug "Running: jq -r '.auths[\"$reg_host:$reg_port\"].auth' $_authfile"
@@ -6228,6 +7099,12 @@ aba_inet_check_reset() {
 	run_once -r -i "aba:check:api.openshift.com" 2>/dev/null || true
 	run_once -r -i "aba:check:mirror.openshift.com" 2>/dev/null || true
 	run_once -r -i "aba:check:registry.redhat.io" 2>/dev/null || true
+	if [ "$(dist_of)" = "okd" ]; then
+		local _site
+		for _site in $_ABA_OKD_PROBE_SITES; do
+			run_once -r -i "aba:check:${_site}" 2>/dev/null || true
+		done
+	fi
 }
 
 # Re-check internet with TTL cache (returns cached result within TTL seconds)
@@ -6251,6 +7128,13 @@ aba_version_fetch_channel() {
 	local _ch="${1:-stable}"
 	local _ttl
 	_ttl="$(_ocp_version_ttl)"
+	if [ "$(dist_of)" = "okd" ]; then
+		# Own task ids so OKD tips never share a run_once result with the OCP ones
+		run_once -i "okd:${_ch}:latest_version"          -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
+		run_once -i "okd:${_ch}:latest_version_previous" -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
+		run_once -i "okd:${_ch}:latest_version_older"    -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
+		return 0
+	fi
 	run_once -i "ocp:${_ch}:latest_version"          -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
 	run_once -i "ocp:${_ch}:latest_version_previous" -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
 	run_once -i "ocp:${_ch}:latest_version_older"    -t "$_ttl" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
@@ -6261,6 +7145,13 @@ aba_version_fetch_channel() {
 # (shared Cincinnati cache via _fetch_graph_cached) when aba.conf has no ocp_version yet.
 aba_version_fetch_start() {
 	local _ch
+	if [ "$(dist_of)" = "okd" ]; then
+		# OKD publishes no fast channel
+		for _ch in stable candidate; do
+			aba_version_fetch_channel "$_ch"
+		done
+		return 0
+	fi
 	for _ch in stable fast candidate; do
 		aba_version_fetch_channel "$_ch"
 	done
@@ -6274,6 +7165,12 @@ aba_version_fetch_wait() {
 	local _ttl rc=0
 	shift || true
 	_ttl="$(_ocp_version_ttl)"
+	if [ "$(dist_of)" = "okd" ]; then
+		run_once -q -w "$@" -i "okd:${_ch}:latest_version" -t "$_ttl" || rc=1
+		run_once -q -w "$@" -i "okd:${_ch}:latest_version_previous" -t "$_ttl" || rc=1
+		run_once -q -w "$@" -i "okd:${_ch}:latest_version_older" -t "$_ttl" || true
+		return "$rc"
+	fi
 	run_once -q -w "$@" -i "ocp:${_ch}:latest_version" -t "$_ttl" || rc=1
 	run_once -q -w "$@" -i "ocp:${_ch}:latest_version_previous" -t "$_ttl" || rc=1
 	run_once -q -w "$@" -i "ocp:${_ch}:latest_version_older" -t "$_ttl" || true
@@ -6466,6 +7363,138 @@ cli_download_extra_clis() {
 	return 0
 }
 
+# Sites OKD needs: release payload (quay.io), CLI and release lists (github.com),
+# update graph (updates.okd.io), oc-mirror and mirror-registry downloads
+# (mirror.openshift.com). No Red Hat account site: registry.redhat.io is not used.
+_ABA_OKD_PROBE_SITES="github.com quay.io updates.okd.io mirror.openshift.com"
+
+# Pull secret handed out by the OKD project for installs that need none
+# (README of github.com/okd-project/okd). It holds no credential; it only
+# satisfies the installer's "pull secret required" check.
+_ABA_OKD_FAKE_PULL_SECRET='{"auths":{"fake":{"auth":"aWQ6cGFzcwo="}}}'
+
+# Succeeds when file $1 holds exactly the OKD placeholder pull secret.
+_is_placeholder_pull_secret() {
+	[ "$(jq -cS . "$1" 2>/dev/null)" = "$(jq -cS . <<< "$_ABA_OKD_FAKE_PULL_SECRET")" ]
+}
+
+# OKD: prints why pull secret file $1 cannot be used and returns 1; returns 0 when
+# it is usable. A missing file is a problem only when operators are selected
+# (dist_pull_secret_required); otherwise the placeholder stands in for it.
+dist_pull_secret_problem() {
+	local f="${1:?Usage: dist_pull_secret_problem <file>}"
+	if [ ! -s "$f" ]; then
+		dist_pull_secret_required || return 0
+		echo "No pull secret found at $f (needed because operators are selected in ops/op_sets)"
+		return 1
+	fi
+	if ! jq empty "$f" 2>/dev/null; then
+		echo "Pull secret at $f has invalid JSON syntax"
+		return 1
+	fi
+	if ! jq -e '(.auths // {}) | length > 0' "$f" >/dev/null 2>&1; then
+		echo "Pull secret at $f has no registry credentials (expected an 'auths' entry)"
+		return 1
+	fi
+	if dist_pull_secret_required && _is_placeholder_pull_secret "$f"; then
+		echo "Pull secret at $f is the OKD placeholder, but operators (ops/op_sets) need credentials for the registries that host them"
+		return 1
+	fi
+	return 0
+}
+
+# OKD: as dist_pull_secret_problem, and when the file is missing and no operators
+# are selected, writes the OKD placeholder there so the tools that read the file
+# keep working. Prints the problem on stdout and returns 1 when unusable.
+dist_pull_secret_ensure() {
+	local f="${1:?Usage: dist_pull_secret_ensure <file>}"
+	dist_pull_secret_problem "$f" || return 1
+	if [ ! -s "$f" ]; then
+		( umask 077; printf '%s\n' "$_ABA_OKD_FAKE_PULL_SECRET" > "$f" ) || { echo "Cannot write $f"; return 1; }
+		aba_info "No pull secret at $f: using the OKD placeholder (OKD needs no Red Hat pull secret without operators)." >&2
+	fi
+	return 0
+}
+
+# Hint printed with a pull secret problem on OKD.
+dist_pull_secret_hint() {
+	printf '%s\n' "OKD needs a pull secret only for operator content (ops/op_sets): save a Docker config JSON with credentials for the registries that host your operator images to ${1:?Usage: dist_pull_secret_hint <file>}"
+}
+
+# OKD flavour of check_internet_connectivity: same task ids, result variables
+# and output shape, other sites.
+_check_internet_connectivity_okd() {
+	local prefix="$1" site err_msg
+
+	# Start: all probes in parallel (5-min TTL). Wait: loop below.
+	for site in $_ABA_OKD_PROBE_SITES; do
+		run_once -t 300 -i "${prefix}:check:${site}" -- curl -sL --head --connect-timeout 8 --max-time 15 "https://${site}/"
+	done
+
+	FAILED_SITES=""
+	ERROR_DETAILS=""
+	for site in $_ABA_OKD_PROBE_SITES; do
+		if ! run_once -w -q -S -i "${prefix}:check:${site}"; then
+			[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+			FAILED_SITES="${FAILED_SITES}${site}"
+			err_msg=$(run_once -e -i "${prefix}:check:${site}" | head -1)
+			[[ -z "$err_msg" ]] && err_msg="Connection failed"
+			[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
+			ERROR_DETAILS="${ERROR_DETAILS}  ${site}: $err_msg"
+		fi
+	done
+	[[ -z "$FAILED_SITES" ]]
+}
+
+# OKD flavour of require_internet_and_pull_secret. No Red Hat account: the pull
+# secret matters only for operator content, and a mirror (sync) run must have a
+# valid mirror registry secret because the images are pushed with it.
+_require_internet_and_pull_secret_okd() {
+	local fallback_ps="${1:-}"
+	local errors=() hints=() down="" site _inet_err _ps_err
+
+	# Quick probe (5s timeout) of what the release payload and version lists need
+	for site in quay.io/v2/ github.com/; do
+		if ! _inet_err=$(curl -sIL --connect-timeout 5 --max-time 10 "https://${site}" 2>&1 >/dev/null); then
+			down="${down:+$down, }${site%%/*}"
+			aba_debug "Internet check failed: $_inet_err"
+		fi
+	done
+	if [ -n "$down" ]; then
+		errors+=("No internet access (cannot reach $down)")
+		hints+=("The 'save' and 'sync' commands require a connected host with internet access.")
+	fi
+
+	if ! _ps_err=$(dist_pull_secret_ensure "$pull_secret_file"); then
+		errors+=("$_ps_err")
+		hints+=("$(dist_pull_secret_hint "$pull_secret_file")")
+	fi
+
+	if [ -n "$fallback_ps" ]; then
+		_ps_err=""
+		if [ ! -s "$fallback_ps" ]; then
+			_ps_err="Mirror registry credentials not found at $fallback_ps"
+		elif ! jq -e '(.auths // {}) | length > 0' "$fallback_ps" >/dev/null 2>&1; then
+			_ps_err="Mirror registry credentials at $fallback_ps are not valid (expected JSON with an 'auths' entry)"
+		fi
+		if [ -n "$_ps_err" ]; then
+			errors+=("$_ps_err")
+			hints+=("Install a mirror registry ('aba -d mirror install') or register yours ('aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>') first.")
+		fi
+	fi
+
+	[ ${#errors[@]} -eq 0 ] && return 0
+
+	if [ ${#errors[@]} -eq 1 ]; then
+		aba_abort "${errors[0]}" "${hints[@]}"
+	fi
+	local i lines=()
+	for i in "${!errors[@]}"; do
+		lines+=("  $(( i + 1 )). ${errors[$i]}")
+	done
+	aba_abort "Cannot proceed — the following issues must be resolved:" "${lines[@]}" "" "${hints[@]}"
+}
+
 # Check internet connectivity to required sites
 # Usage: check_internet_connectivity <prefix> [quiet]
 #   prefix: Task ID prefix (e.g., "aba" for shared CLI/TUI probes)
@@ -6475,6 +7504,12 @@ cli_download_extra_clis() {
 check_internet_connectivity() {
 	local prefix="$1"
 	local quiet="${2:-false}"
+
+	# OKD needs other sites (and no Red Hat account)
+	if [ "$(dist_of)" = "okd" ]; then
+		_check_internet_connectivity_okd "$prefix"
+		return
+	fi
 	
 	# Check if we need to run the checks (not cached)
 	local need_check=false
@@ -6528,6 +7563,11 @@ check_internet_connectivity() {
 # Requires: $pull_secret_file set (from normalize-aba-conf)
 # Args:     $1 (optional) — fallback pull secret path (e.g. mirror-specific pull secret for sync)
 require_internet_and_pull_secret() {
+	if [ "$(dist_of)" = "okd" ]; then
+		_require_internet_and_pull_secret_okd "$@"
+		return
+	fi
+
 	local fallback_ps="${1:-}"
 	local errors=()
 	local has_internet=true

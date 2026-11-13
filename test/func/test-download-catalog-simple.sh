@@ -11,6 +11,24 @@ source scripts/include_all.sh
 
 echo "=== Test: download-catalog-index.sh ==="
 echo ""
+echo "=== OKD (no network): community catalog only, from the anonymous host ==="
+_okd_ref=$(distribution=okd dist_catalog_ref community-operator 4.21)
+if [[ "$_okd_ref" != "registry.access.redhat.com/redhat/community-operator-index:v4.21" ]]; then
+	echo "✗ OKD community catalog ref is '$_okd_ref'"
+	exit 1
+fi
+if distribution=okd dist_catalog_ref redhat-operator 4.21 >/dev/null 2>&1; then
+	echo "✗ OKD must not offer the redhat-operator catalog"
+	exit 1
+fi
+_okd_rc=0
+_okd_out=$(_ABA_SKIP_AUTH=1 distribution=okd scripts/download-catalog-index.sh certified-operator 4.21 2>&1) || _okd_rc=$?
+if [[ "$_okd_rc" -eq 0 ]] || ! grep -q "Red Hat account" <<< "$_okd_out"; then
+	echo "✗ OKD must refuse the certified-operator catalog with a clear message (rc=$_okd_rc)"
+	exit 1
+fi
+echo "✓ OKD: community catalog from registry.access.redhat.com; redhat-/certified- refused"
+echo ""
 
 # Get OCP version from aba.conf (single source of truth)
 source <(normalize-aba-conf)

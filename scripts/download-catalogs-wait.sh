@@ -19,8 +19,17 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Read mirror.conf for ocp_upgrade_to (if set)
 [ -s mirror.conf ] && source <(normalize-mirror-conf)
 
+# OKD without operators has no catalog to wait for
+if [ "$(dist_of)" = "okd" ] && [ -z "${ops:-}" ] && [ -z "${op_sets:-}" ]; then
+	aba_progress "NOOP|catalogs_dl"
+	exit 0
+fi
+
 # Build version list (current + target if cross-minor upgrade)
 read -ra _versions_to_wait <<< "$(_catalog_versions_to_mirror)"
+
+# OKD: refuse operators that only exist in catalogs needing a Red Hat account
+dist_catalog_reject_blocked_ops "${_versions_to_wait[@]}"
 
 # Populate .index/ from shipped catalogs if live versions don't exist yet
 _populate_shipped_indexes
@@ -29,7 +38,7 @@ _populate_shipped_indexes
 # kick off background refreshes but don't block.
 _have_all=true
 for _ver in "${_versions_to_wait[@]}"; do
-	for catalog in redhat-operator certified-operator community-operator; do
+	for catalog in $(dist_catalogs); do
 		[[ -s ".index/${catalog}-index-v${_ver}" ]] || { _have_all=false; break 2; }
 	done
 done
@@ -63,7 +72,7 @@ if [[ "$_have_all" != true ]]; then
 	_catalogs_progress=true
 else
 	for _ver in "${_versions_to_wait[@]}"; do
-		for catalog in redhat-operator certified-operator community-operator; do
+		for catalog in $(dist_catalogs); do
 			if ! run_once -p -i "catalog:${_ver}:${catalog}"; then
 				_catalogs_progress=true
 				break 2
@@ -74,7 +83,7 @@ fi
 [[ "$_catalogs_progress" == true ]] && aba_progress "START|catalogs_dl"
 
 for _ver in "${_versions_to_wait[@]}"; do
-	for catalog in redhat-operator certified-operator community-operator; do
+	for catalog in $(dist_catalogs); do
 		task_id="catalog:${_ver}:${catalog}"
 
 		if ! run_once $_skip_val -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then

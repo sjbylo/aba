@@ -47,6 +47,31 @@ trap cleanup EXIT INT TERM
 rm -rf ~/.aba/runner/aba:check:* 2>/dev/null || true
 
 ##############################################################
+echo "Test 0: OKD probes the OKD sites and never Red Hat's (curl mocked)"
+echo "----------------------------------------------"
+
+_okd_shim=$(mktemp -d)
+printf '#!/bin/bash\necho "$*" >> "$CURL_LOG"\n' > "$_okd_shim/curl"
+chmod +x "$_okd_shim/curl"
+CURL_LOG="$_okd_shim/curl.log" RUN_ONCE_DIR="$_okd_shim/runner" PATH="$_okd_shim:$PATH" distribution=okd \
+	bash -c 'source scripts/include_all.sh 2>/dev/null; check_internet_connectivity okdprobe quiet'
+okd_probes=$(cat "$_okd_shim/curl.log")
+rm -rf "$_okd_shim"
+
+okd_ok=true
+for site in github.com quay.io updates.okd.io mirror.openshift.com; do
+	echo "$okd_probes" | grep -q "https://$site/" || { echo "✗ FAIL: OKD did not probe $site"; okd_ok=false; }
+done
+if echo "$okd_probes" | grep -q "redhat.io\|api.openshift.com"; then
+	echo "✗ FAIL: OKD probed a Red Hat account site"
+	okd_ok=false
+fi
+$okd_ok || exit 1
+echo "✓ PASS: OKD probes github.com, quay.io, updates.okd.io, mirror.openshift.com only"
+
+echo ""
+
+##############################################################
 echo "Test 1: Single site failure (api.openshift.com)"
 echo "----------------------------------------------"
 

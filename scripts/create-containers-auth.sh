@@ -43,6 +43,11 @@ merge_container_auth() {
 	mv "$tmp" "$dest"
 }
 
+# OKD: no Red Hat pull secret needed unless operators are selected; the OKD placeholder stands in for a missing one
+if [ "$(dist_of)" = "okd" ] && [ "$public_pull_secret_file_needed" ] && [ "$pull_secret_file" ] && [ ! -s "$pull_secret_file" ]; then
+	_ps_err=$(dist_pull_secret_ensure "$pull_secret_file") || aba_abort "$_ps_err" "$(dist_pull_secret_hint "$pull_secret_file")"
+fi
+
 if [ "$public_pull_secret_file_needed" ] && [ ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then
 		aba_abort "pull_secret_file not defined in aba.conf"

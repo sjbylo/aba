@@ -2,7 +2,7 @@
 # =============================================================================
 # TUI v2 — DIRECT Mode (connected, no mirror)
 # =============================================================================
-# Minimal wizard (pull secret, channel, version, platform, operators) then action menu.
+# Minimal wizard (distribution, pull secret, channel, version, platform, operators) then action menu.
 # Adapted from v1 wizard flow.
 #
 # Design decisions:
@@ -43,8 +43,14 @@ direct_main() {
 
 # Check if minimum config exists for DIRECT mode
 _direct_config_complete() {
+	# aba.conf without an answer for the distribution is asked once (wizard)
+	_direct_distribution_missing && return 1
 	[[ -n "${ocp_channel:-}" ]] || return 1
 	[[ -n "${ocp_version:-}" ]] || return 1
+	# OKD needs a pull secret file only for operator content
+	if [[ "$(dist_of)" == "okd" ]] && ! dist_pull_secret_required; then
+		return 0
+	fi
 	local ps_file="${pull_secret_file:-}"
 	ps_file="${ps_file/#\~/$HOME}"                # ~/foo → /home/user/foo
 	[[ -n "$ps_file" && -f "$ps_file" ]] || return 1
@@ -87,7 +93,7 @@ tui_change_version() {
 					_ver_short=$(_ver_minor "$ocp_version")
 					tui_log "Starting catalog downloads for OpenShift $_ver_short"
 					local _cat
-					for _cat in redhat-operator certified-operator community-operator; do
+					for _cat in $(dist_catalogs); do
 						run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
 					done
 					download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
@@ -110,6 +116,21 @@ tui_change_version() {
 
 direct_wizard() {
 	tui_log "Running DIRECT wizard"
+
+	# The distribution is asked once: only while aba.conf has no answer for it
+	local _dist_asked=false
+	if _direct_distribution_missing; then
+		while :; do
+			_direct_distribution
+			case "$DIALOG_RC" in
+				next) _dist_asked=true; break ;;
+				repeat) ;;
+				*) return 1 ;;
+			esac
+		done
+		# The pull secret step tells "dialog shown" from "skipped" by DIALOG_RC
+		DIALOG_RC=""
+	fi
 
 	# Resume dialog: if channel+version exist, offer to continue or reconfigure (CONNO / DIRECT only)
 	if [[ "$_TUI_MODE" == "CONNO" || "$_TUI_MODE" == "DIRECT" ]] && \
@@ -139,16 +160,41 @@ direct_wizard() {
 	local step="pull_secret"
 	local _ver_short=""
 	local _has_back=false
+	# Where Back on the channel page goes (default: the pull secret page)
+	local _back_step="pull_secret"
+	if $_dist_asked; then
+		_has_back=true
+		_back_step="distribution"
+	fi
 
 	while :; do
 		case "$step" in
+		distribution)
+			_direct_distribution
+			case "$DIALOG_RC" in
+				next) step="pull_secret"; DIALOG_RC="" ;;
+				repeat) ;;
+				*) return 1 ;;
+			esac
+			;;
 		pull_secret)
+			# OKD pulls its release anonymously: no pull secret to ask for unless operators need one
+			if [[ "$(dist_of)" == "okd" ]] && ! dist_pull_secret_required; then
+				tui_log "OKD: no pull secret needed, skipping the step"
+				step="channel"
+				continue
+			fi
 			if _direct_pull_secret; then
 				# Back button on channel only if pull_secret dialog was shown
 				# (auto-skip sets DIALOG_RC="next" without showing any dialog)
-				[[ "${DIALOG_RC:-}" != "next" ]] && _has_back=true
+				[[ "${DIALOG_RC:-}" != "next" ]] && { _has_back=true; _back_step="pull_secret"; }
 				# Start redhat-operator catalog ASAP (uses core task IDs)
 				"$ABA_ROOT/scripts/create-containers-auth.sh" >>"$_TUI_LOG_FILE" 2>&1 || true
+				# OKD has no redhat catalog; its operator catalogs start with the operator step
+				if [[ "$(dist_of)" == "okd" ]]; then
+					step="channel"
+					continue
+				fi
 				local _ps_ver=""
 				if [[ -f "$ABA_ROOT/aba.conf" ]]; then
 					source <(normalize-aba-conf) 2>/dev/null || true
@@ -157,7 +203,7 @@ direct_wizard() {
 				if [[ ! "$_ps_ver" == *.*.* ]]; then
 					# Wait for version fetch started at TUI boot (should be done by now)
 					aba_version_fetch_wait stable || true
-					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
+					_ps_ver=$(run_once -o -i "$(dist_of):stable:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
 				fi
 				if [[ "$_ps_ver" == *.*.* ]]; then
 					local _cat_ver
@@ -177,7 +223,7 @@ direct_wizard() {
 				next) step="version" ;;
 				back)
 					if $_has_back; then
-						step="pull_secret"
+						step="$_back_step"
 					else
 						return 1
 					fi
@@ -203,7 +249,7 @@ direct_wizard() {
 					if [[ "$_TUI_MODE" != "DIRECT" ]]; then
 						tui_log "Starting catalog downloads for OpenShift $_ver_short"
 						local _cat
-						for _cat in redhat-operator certified-operator community-operator; do
+						for _cat in $(dist_catalogs); do
 							run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
 						done
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
@@ -253,12 +299,90 @@ direct_wizard() {
 	return 0
 }
 
+# --- Distribution (ocp | okd) ---
+# True while aba.conf has no answer for the distribution (key missing or empty).
+_direct_distribution_missing() {
+	[[ -z "${distribution:-}" && -z "$(fetch_value distribution "$ABA_ROOT/aba.conf" 2>/dev/null)" ]]
+}
+
+# Record the choice like platform: in aba.conf at once (background tasks read it
+# from there) and in this shell.
+_direct_set_distribution() {
+	local _d="$1"
+	distribution="$_d"
+	export distribution
+	replace-value-conf -q -n distribution -v "$_d" -f "$ABA_ROOT/aba.conf"
+	tui_log "Selected distribution: $_d"
+
+	# A release or channel of the other distribution is not a default for OKD (a first run fills in OpenShift ones)
+	if [[ "$_d" == "okd" ]]; then
+		if ! dist_version_is_valid "${ocp_version:-}"; then
+			ocp_version=""
+			replace-value-conf -q -n ocp_version -v "" -f "$ABA_ROOT/aba.conf"
+		fi
+		if ! dist_channel_is_valid "${ocp_channel:-}"; then
+			ocp_channel=""
+			replace-value-conf -q -n ocp_channel -v "" -f "$ABA_ROOT/aba.conf"
+		fi
+	fi
+}
+
+_direct_distribution() {
+	DIALOG_RC=""
+	tui_log "DIRECT wizard: distribution"
+
+	local _default_tag=O
+	[[ "${distribution:-}" == "okd" ]] && _default_tag=K
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISTRIBUTION" \
+		--default-item "$_default_tag" \
+		--default-button ok \
+		--cancel-label "$TUI2_BTN_EXIT" \
+		--help-button \
+		--ok-label "$TUI2_BTN_NEXT" \
+		--menu "$TUI2_MSG_DISTRIBUTION_PROMPT" 0 0 2 \
+		"O" "OpenShift (Red Hat)" \
+		"K" "OKD (community)" \
+		2>"$_TUI_TMP"
+	local rc=$?
+
+	case "$rc" in
+		0)
+			local _tag
+			_tag=$(<"$_TUI_TMP")
+			case "$_tag" in
+				K) _direct_set_distribution okd ;;
+				*) _direct_set_distribution ocp ;;
+			esac
+			DIALOG_RC="next"
+			;;
+		2)
+			show_help "$TUI2_HELP_TITLE_DISTRIBUTION" \
+"• OpenShift: Red Hat OpenShift, needs a Red Hat pull secret
+
+• OKD: the community distribution of OpenShift, no Red Hat account needed.
+Channels stable and candidate only; no upgrade, no Red Hat operator catalogs."
+			DIALOG_RC="repeat"
+			;;
+		*)
+			DIALOG_RC=""
+			;;
+	esac
+}
+
 # --- Pull Secret ---
 _direct_pull_secret() {
 	tui_log "DIRECT wizard: pull secret"
 
 	local ps_file="${pull_secret_file:-$HOME/.pull-secret.json}"
 	ps_file="${ps_file/#\~/$HOME}"                # ~/foo → /home/user/foo
+
+	# OKD asks for a pull secret only for operator content, and says so
+	local _ps_title="$TUI2_TITLE_PULL_SECRET" _ps_info="$TUI2_MSG_PULL_SECRET_INFO"
+	if [[ "$(dist_of)" == "okd" ]]; then
+		_ps_title="$TUI2_TITLE_PULL_SECRET_OKD"
+		_ps_info="$(dist_pull_secret_hint "$ps_file")\n\nThen select 'Enter file path' below."
+	fi
 
 	# Auto-skip if pull secret already present and valid JSON.
 	# DIALOG_RC="next" so the wizard advances forward; when navigating back
@@ -274,7 +398,7 @@ _direct_pull_secret() {
 
 	if [[ -f "$ps_file" ]]; then
 		# Already exists — confirm or re-enter
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET" \
+		dlg --backtitle "$(ui_backtitle)" --title "$_ps_title" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--menu "$(printf "$TUI2_MSG_PULL_SECRET_FOUND" "$ps_file")" 0 0 0 \
@@ -295,10 +419,10 @@ _direct_pull_secret() {
 	fi
 
 	# Info dialog: how to get the pull secret
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET" \
+	dlg --backtitle "$(ui_backtitle)" --title "$_ps_title" \
 		--yes-label "Enter file path" \
 		--no-label "$TUI2_BTN_EXIT" \
-		--yesno "$TUI2_MSG_PULL_SECRET_INFO" 0 0
+		--yesno "$_ps_info" 0 0
 	local rc=$?
 	if [[ $rc -ne 0 ]]; then
 		_print_pull_secret_instructions "$ps_file"
@@ -349,6 +473,10 @@ _direct_pull_secret() {
 # Store pull secret instructions for display after TUI exits (survives clear)
 _print_pull_secret_instructions() {
 	local _ps_path="${1:-~/.pull-secret.json}"
+	if [[ "$(dist_of)" == "okd" ]]; then
+		printf -v _TUI_EXIT_MESSAGE '  %s\n\n  Then re-run: abatui\n' "$(dist_pull_secret_hint "$_ps_path")"
+		return 0
+	fi
 	_TUI_EXIT_MESSAGE="\
   Pull secret required. Download yours from:
 
@@ -374,6 +502,12 @@ _direct_channel() {
 	fast)      _default_tag=f ;;
 	candidate) _default_tag=c ;;
 	esac
+	# A channel the distribution does not publish (e.g. fast on OKD) is not offered: start on stable
+	dist_channel_is_valid "${_PENDING_CH:-${ocp_channel:-stable}}" || _default_tag=s
+
+	local _ch_items=("s" "stable    — Recommended")
+	dist_channel_is_valid fast && _ch_items+=("f" "fast      — Latest GA")
+	dist_channel_is_valid candidate && _ch_items+=("c" "candidate — Preview")
 
 	local _back_args=()
 	local _cancel_label="$TUI2_BTN_BACK"
@@ -389,10 +523,8 @@ _direct_channel() {
 		"${_back_args[@]}" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
-		--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
-		"s" "stable    — Recommended" \
-		"f" "fast      — Latest GA" \
-		"c" "candidate — Preview" \
+		--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 $(( ${#_ch_items[@]} / 2 )) \
+		"${_ch_items[@]}" \
 		2>"$_TUI_TMP"
 	local rc=$?
 
@@ -414,12 +546,19 @@ _direct_channel() {
 			aba_version_fetch_channel "$_PENDING_CH"
 			;;
 		2)
-			show_help "$TUI2_HELP_TITLE_CHANNEL" \
+			if [[ "$(dist_of)" == "okd" ]]; then
+				show_help "$TUI2_HELP_TITLE_CHANNEL" \
+"• stable: recommended, the releases OKD publishes as stable
+
+• candidate: pre-release versions for testing only"
+			else
+				show_help "$TUI2_HELP_TITLE_CHANNEL" \
 "• stable — recommended for production, well-tested
 
 • fast — latest GA release, receives z-stream updates before stable
 
 • candidate — pre-release versions for testing only"
+			fi
 			DIALOG_RC="repeat"
 			;;
 		1|255)
@@ -439,11 +578,16 @@ _direct_version() {
 	# Use the pending channel from _direct_channel() for lookups.
 	# ocp_channel is never modified — title bar stays at the old value.
 	local _ch="${_PENDING_CH:-${ocp_channel:-stable}}"
+	# run_once ids carry the distribution (OKD tips never share a result with OpenShift ones)
+	local _dist
+	_dist="$(dist_of)"
+	local _ver_fmt="x.y, x.y.z, or x.y.z-rc.N"
+	[[ "$_dist" == "okd" ]] && _ver_fmt="x.y or x.y.z-okd-scos.N"
 
 	# Wait for version data if needed
 	local need_wait=0
-	run_once -p -i "ocp:${_ch}:latest_version" || need_wait=1
-	run_once -p -i "ocp:${_ch}:latest_version_previous" || need_wait=1
+	run_once -p -i "${_dist}:${_ch}:latest_version" || need_wait=1
+	run_once -p -i "${_dist}:${_ch}:latest_version_previous" || need_wait=1
 
 	if [[ $need_wait -eq 1 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
@@ -456,9 +600,9 @@ _direct_version() {
 	local latest previous older
 	# run_once -o returns the full log (stdout + stderr merged);
 	# extract only the last valid version string, discarding error messages.
-	latest=$(run_once -o -i "ocp:${_ch}:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
-	previous=$(run_once -o -i "ocp:${_ch}:latest_version_previous" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
-	older=$(run_once -o -i "ocp:${_ch}:latest_version_older" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
+	latest=$(run_once -o -i "${_dist}:${_ch}:latest_version" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
+	previous=$(run_once -o -i "${_dist}:${_ch}:latest_version_previous" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
+	older=$(run_once -o -i "${_dist}:${_ch}:latest_version_older" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]' | tail -1)
 
 	if [[ -z "$latest" ]]; then
 		# Fallback: use existing version from aba.conf or allow manual entry
@@ -473,7 +617,7 @@ _direct_version() {
 		local _ver=""
 		while :; do
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
-				--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "" \
+				--inputbox "Enter OpenShift version (${_ver_fmt}):" 0 0 "" \
 				2>"$_TUI_TMP"
 			local man_rc=$?
 			if [[ $man_rc -ne 0 ]]; then
@@ -483,7 +627,7 @@ _direct_version() {
 			_ver=$(<"$_TUI_TMP")
 			_ver="${_ver##[[:space:]]}"    # trim leading whitespace
 			_ver="${_ver%%[[:space:]]}"    # trim trailing whitespace
-			if _is_version_string "$_ver"; then
+			if dist_version_is_valid "$_ver" "$_ch"; then
 				if ! verify_release_version_exists "$_ver" "$_ch" 2>/dev/null; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Version $_ver not found in the $_ch channel.\n\nCheck the version number and try again." 0 0
@@ -509,6 +653,9 @@ _direct_version() {
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Version not found: $_input_minor\nChannel: $_ch\n\nNo releases found for this minor version." 0 0
 				_ver=""
+			elif [[ "$_dist" == "okd" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Invalid version format.\n\nExpected: ${_ver_fmt}" 0 0
 			else
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
@@ -575,7 +722,7 @@ _direct_version() {
 				m)
 					while :; do
 						dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
-							--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${_ver:-$latest}" \
+							--inputbox "Enter OpenShift version (${_ver_fmt}):" 0 0 "${_ver:-$latest}" \
 							2>"$_TUI_TMP"
 						if [[ $? -ne 0 ]]; then
 							DIALOG_RC="repeat"
@@ -584,7 +731,7 @@ _direct_version() {
 						_ver=$(<"$_TUI_TMP")
 						_ver="${_ver##[[:space:]]}"  # trim leading whitespace
 						_ver="${_ver%%[[:space:]]}"  # trim trailing whitespace
-						if _is_version_string "$_ver"; then
+						if dist_version_is_valid "$_ver" "$_ch"; then
 							if ! verify_release_version_exists "$_ver" "$_ch" 2>/dev/null; then
 								dlg --backtitle "$(ui_backtitle)" --msgbox \
 									"Version $_ver not found in the $_ch channel.\n\nCheck the version number and try again." 0 0
@@ -605,6 +752,9 @@ _direct_version() {
 							dlg --backtitle "$(ui_backtitle)" --msgbox \
 								"Version not found: $_input_minor\nChannel: $_ch\n\nNo releases found for this minor version." 0 0
 							_ver=""
+						elif [[ "$_dist" == "okd" ]]; then
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Invalid version format.\n\nExpected: ${_ver_fmt}" 0 0
 						else
 							dlg --backtitle "$(ui_backtitle)" --msgbox \
 								"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
@@ -722,7 +872,7 @@ _direct_operators_step() {
 			0)
 				# Reset failed catalog tasks so they re-download on retry
 				local _cat
-				for _cat in redhat-operator certified-operator community-operator; do
+				for _cat in $(dist_catalogs); do
 					run_once -r -i "catalog:${_cat_ver}:${_cat}" 2>/dev/null || true
 				done
 				download_all_catalogs "$_cat_ver" >>"$_TUI_LOG_FILE" 2>&1
@@ -799,6 +949,10 @@ _direct_save_config() {
 			export domain
 			machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
 				"$ABA_ROOT/scripts/j2" "$ABA_ROOT/templates/aba.conf.j2" > "$ABA_ROOT/aba.conf" 2>>"$_TUI_LOG_FILE"
+			# The new file must carry the choice already made (the template says ocp)
+			if [[ -n "${distribution:-}" ]]; then
+				replace-value-conf -q -n distribution -v "$distribution" -f "$ABA_ROOT/aba.conf"
+			fi
 		fi
 	fi
 

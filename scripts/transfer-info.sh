@@ -90,6 +90,8 @@ fi
 
 # Fill in from metadata JSON if present (supplements ISC when platform is commented out)
 _created=""
+_distribution=""
+_release_digest=""
 if [[ -f "$_meta_file" ]]; then
 	_meta_ver=$(grep '"ocp_version"' "$_meta_file" 2>/dev/null | sed 's/.*: *"//; s/".*//' || true)
 	_meta_chan=$(grep '"ocp_channel"' "$_meta_file" 2>/dev/null | sed 's/.*: *"//; s/".*//' || true)
@@ -99,6 +101,11 @@ if [[ -f "$_meta_file" ]]; then
 	fi
 	if [[ -z "$_ocp_version" && -n "$_meta_ver" ]]; then
 		_ocp_version="$_meta_ver"
+	fi
+	# Only OKD bundles say what they hold; a bundle without the key is OCP and shows as before
+	if [[ "$(_transfer_meta_value "$_meta_file" distribution)" == "okd" ]]; then
+		_distribution="okd"
+		_release_digest=$(_transfer_meta_value "$_meta_file" release_digest)
 	fi
 fi
 
@@ -114,6 +121,10 @@ if [[ "$_shell_mode" == "true" ]]; then
 	echo "transfer_operator_count=$_operator_count"
 	echo "transfer_operators=\"$_operators\""
 	echo "transfer_created=\"$_created\""
+	if [[ -n "$_distribution" ]]; then
+		echo "transfer_distribution=$_distribution"
+		echo "transfer_release_digest=$_release_digest"
+	fi
 else
 	if [[ "$_source" == "transfer" ]]; then
 		aba_info "Transfer config: $_transfer_tar"
@@ -125,7 +136,10 @@ else
 	if [[ -n "$_upgrade_to" ]]; then
 		local_ver="$_ocp_version → $_upgrade_to"
 	fi
-	aba_info "OCP: $local_ver ($_ocp_channel)"
+	_label="OCP"
+	[[ -n "$_distribution" ]] && _label="OKD"
+	aba_info "$_label: $local_ver ($_ocp_channel)"
+	[[ -n "$_release_digest" ]] && aba_info "Release digest: $_release_digest"
 
 	if [[ $_operator_count -gt 0 ]]; then
 		aba_info "Operators ($_operator_count): $(echo "$_operators" | sed 's/,/, /g')"

@@ -10,9 +10,9 @@ fail=0
 
 # Extract the URL that make would use for oc-mirror.rhel9.tar.gz
 _url_for() {
-	local ver="$1" maj="$2"
+	local ver="$1" maj="$2" dist="${3:-}"
 	# -B forces rebuild even if target exists, -n dry-run only
-	make -sC cli -Bn download-oc-mirror ocp_version="$ver" ocp_major="$maj" 2>&1 \
+	make -sC cli -Bn download-oc-mirror ocp_version="$ver" ocp_major="$maj" ${dist:+distribution=$dist} 2>&1 \
 		| grep "Downloading.*oc-mirror.rhel9" | head -1 | sed 's/.*Downloading //'
 }
 
@@ -98,6 +98,37 @@ if [ "$got" = "$expect" ]; then
 	echo "PASS: no version → pinned ($pin)"
 else
 	echo "FAIL: no version: expected $expect, got $got"
+	fail=1
+fi
+
+# OKD → pinned channel: the OKD project publishes no oc-mirror, whatever the release
+for pair in "4.21.0-okd-scos.11 4" "4.20.0-okd-scos.3 4" "5.0.0-okd-scos.5 5"; do
+	set -- $pair
+	got=$(_url_for "$1" "$2" okd)
+	expect="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${pin}/oc-mirror.rhel9.tar.gz"
+	if [ "$got" = "$expect" ]; then
+		echo "PASS: OKD $1 → pinned ($pin)"
+	else
+		echo "FAIL: OKD $1: expected $expect, got $got"
+		fail=1
+	fi
+done
+
+# OKD sha256sum.txt for oc-mirror is the one next to the pinned tarball
+got=$(make -sC cli -Bn download-oc-mirror ocp_version=4.21.0-okd-scos.11 distribution=okd 2>&1 | grep -c "mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${pin}/sha256sum.txt")
+if [ "$got" -ge 1 ]; then
+	echo "PASS: OKD oc-mirror checksum file is the pinned channel's"
+else
+	echo "FAIL: OKD oc-mirror checksum file is not the pinned channel's"
+	fail=1
+fi
+
+# OKD must never reach the dev-preview probe (no EC tag exists for it)
+got=$(make -sC cli -Bn download-oc-mirror ocp_version=4.21.0-okd-scos.11 distribution=okd 2>&1 | grep -c "ocp-dev-preview" || true)
+if [ "$got" = "0" ]; then
+	echo "PASS: OKD never resolves to ocp-dev-preview"
+else
+	echo "FAIL: OKD resolved to ocp-dev-preview"
 	fail=1
 fi
 
