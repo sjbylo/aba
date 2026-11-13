@@ -235,6 +235,17 @@ else
 	if [[ "$_gone" == "yes" ]]; then
 		echo "  ✓ PASS: Cluster '$_CLUSTER' deleted (no .install-complete)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  TUI delete left .install-complete — forcing aba/TUI delete"
+		tui_delete_cluster "$_CLUSTER" || true
+		_gone=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
+		if [[ "$_gone" == "yes" ]]; then
+			echo "  ✓ PASS: Cluster '$_CLUSTER' deleted after fallback"
+			_TUI_PASS=$(( _TUI_PASS + 1 ))
+		else
+			echo "  ✗ FAIL: Cluster '$_CLUSTER' still installed after delete"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		fi
 	fi
 fi
 

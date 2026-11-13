@@ -43,8 +43,18 @@ tui_pre_cleanup
 echo ""
 
 tui_start_to_menu || { tui_summary; _restore_platform; exit 1; }
-# tui_start_to_menu installs its own EXIT trap. Keep the platform restore with it.
-trap 'tui_stop 2>/dev/null; _bm_sim_cleanup; _restore_platform' EXIT
+# tui_start_to_menu installs its own EXIT trap. Keep platform restore + BM
+# leftovers cleanup (compact/standard/sno4) even if the test aborts mid-run.
+_bm_exit_cleanup() {
+	tui_stop 2>/dev/null || true
+	_bm_sim_cleanup
+	_restore_platform
+	# Do not leave ISO/dir leftovers consuming lab IPs for later suites.
+	tui_delete_cluster "$_CLUSTER" 2>/dev/null || true
+	tui_delete_cluster compact 2>/dev/null || true
+	tui_delete_cluster standard 2>/dev/null || true
+}
+trap '_bm_exit_cleanup' EXIT
 
 # Delete while aba.conf is still the saved platform, so vmw/kvm VMs are
 # destroyed. Bare metal has none. The directory and cluster.conf stay.
@@ -689,6 +699,9 @@ echo "--- 6. Delete clears state and leaves the directory ---"
 # Restore vmw first so delete destroys a sim VM if one is still on.
 _restore_platform
 tui_delete_cluster "$_CLUSTER" || true
+# Compact/standard were ISO-only — free them now (suite still needs sno).
+tui_delete_cluster compact || true
+tui_delete_cluster standard || true
 if $_TUI_SSH "test -d ~/aba/$_CLUSTER && test -f ~/aba/$_CLUSTER/cluster.conf && test ! -f ~/aba/$_CLUSTER/agent-config.yaml"; then
 	echo "  ✓ PASS: delete kept the directory and cleared generated state"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
@@ -705,5 +718,7 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
+# Normal exit: clear EXIT trap work already done above (avoid double delete).
+trap '_bm_sim_cleanup; _restore_platform' EXIT
 tui_cleanup
 tui_summary

@@ -9,7 +9,12 @@
 # Environment variables:
 #   TUI_TEST_HOST     - Target host (default: conno.example.com)
 #   TUI_CLUSTER_NAME  - Cluster name for install/day2/upgrade tests (default: sno)
-#   TUI_SKIP_DELETE   - Set to 1 to skip cluster deletion
+#   TUI_SKIP_DELETE   - Set to 1 to skip cluster deletion / throwaway sweeps
+#
+# Cluster lifetime (full mode): Cluster Install creates $TUI_CLUSTER_NAME;
+# day2/upgrade/lifecycle reuse it; Lifecycle deletes it. BM uses sno4 /
+# compact / standard and must free them before day2 (suite sweeps after BM).
+# Suite EXIT also sweeps all throwaways unless TUI_SKIP_DELETE=1.
 #
 # Pipeline order:
 #   1.  smoke          - splash, menus, buttons, exit
@@ -67,6 +72,21 @@ fi
 echo "PID=$$ test=test-tui-all started=$(date +%Y%m%d-%H%M%S)" >&8
 # Tell child tests that the parent already holds the lock
 export _TUI_LOCK_HELD=1
+
+# Cleanup helpers (delete throwaways when no longer needed / on suite EXIT).
+# shellcheck disable=SC1091
+source test/func/tui-test-lib.sh
+
+_tui_all_exit_sweep() {
+	if [[ "${TUI_SKIP_DELETE:-0}" == "1" ]]; then
+		echo "Suite EXIT: TUI_SKIP_DELETE=1 — leaving clusters"
+		return 0
+	fi
+	echo ""
+	echo "Suite EXIT: sweeping throwaway clusters on ${_TUI_HOST}..."
+	tui_sweep_throwaway_clusters || true
+}
+trap '_tui_all_exit_sweep' EXIT
 
 _total_pass=0
 _total_fail=0
@@ -146,14 +166,29 @@ if [[ "$_QUICK" == "true" ]]; then
 	_total_skip=8
 else
 	# --- Destructive tests (full mode only, pipeline order) ---
+	# Cluster ownership: Cluster Install creates $TUI_CLUSTER_NAME (sno);
+	# day2 / upgrade / lifecycle reuse it; Lifecycle deletes it. BM uses
+	# sno4/compact/standard and must free them before day2 (below).
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
 	_run_test "BM Cluster Install" "test/func/test-tui-bm-cluster.sh" || true
+	# Free BM leftovers immediately — keep only the shared sno for day2+.
+	if [[ "${TUI_SKIP_DELETE:-0}" != "1" ]]; then
+		echo ""
+		echo "  Post-BM: freeing sno4/compact/standard (keeping ${TUI_CLUSTER_NAME})"
+		tui_sweep_throwaway_clusters "${TUI_CLUSTER_NAME}" || true
+	fi
 	_run_test "Cluster-Select Race" "test/func/test-tui-cluster-select-race.sh" || true
 	_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 	_run_test "Day-2 Operations" "test/func/test-tui-day2.sh" || true
 	_run_test "Upgrade" "test/func/test-tui-upgrade.sh" || true
 	_run_test "Lifecycle" "test/func/test-tui-lifecycle.sh" || true
+	# Lifecycle should have deleted sno; force-sweep if it failed mid-delete.
+	if [[ "${TUI_SKIP_DELETE:-0}" != "1" ]]; then
+		echo ""
+		echo "  Post-Lifecycle: ensuring throwaways are gone"
+		tui_sweep_throwaway_clusters || true
+	fi
 	# Air-gap workflow - always part of full mode (release gate)
 	TUI_TEST_HOST= _run_test "DISCO Workflow" "test/func/test-tui-disco-workflow.sh" || true
 fi
@@ -172,5 +207,11 @@ echo "  Total PASS: $_total_pass"
 echo "  Total FAIL: $_total_fail"
 [[ $_total_skip -gt 0 ]] && echo "  Skipped:    $_total_skip test(s)"
 echo "========================================"
+
+# Successful path already swept; disarm EXIT trap to avoid a second pass.
+trap - EXIT
+if [[ "${TUI_SKIP_DELETE:-0}" != "1" ]]; then
+	tui_sweep_throwaway_clusters || true
+fi
 
 [[ $_total_fail -eq 0 ]]
