@@ -102,7 +102,14 @@ tui_keys Enter; sleep 1
 # ============================================================================
 echo ""
 echo "--- 5. Settings submenu ---"
-tui_back_to "Actions" 3
+# Esc from the main menu opens Confirm Exit; recover before Configure.
+tui_back_to "Actions" 8 || true
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Confirm Exit\|Exit ABA"; then
+	echo "  (dismissing Confirm Exit before Settings)"
+	tui_press_button "Continue" 2>/dev/null || { tui_keys Tab; sleep 0.2; tui_keys Enter; }
+	sleep 1
+fi
 tui_select_item "Configure"
 tui_assert_appears "Settings" "Settings dialog appeared" 5
 tui_assert_title "Settings" "Settings dialog title"
