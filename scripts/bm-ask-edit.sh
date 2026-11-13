@@ -145,6 +145,18 @@ _bm_mac_report() {
 	printf '%s\n' "$_rpt"
 }
 
+# Compact config lines for the CLI ask and the progress dialog.
+# MAC addresses stay in macs_report, so that line of the summary is left out.
+_bm_agent_summary() {
+	local _bin _sum
+	[ -f agent-config.yaml ] || return 0
+	_bin=$(dirname "$0")/agent-config-summary.sh
+	[ -x "$_bin" ] || return 0
+	_sum=$("$_bin" agent-config.yaml 2>/dev/null) || return 0
+	[ -n "$_sum" ] || return 0
+	printf '%s\n' "$_sum" | grep -v '^MAC:' || true
+}
+
 # Question and Yes/No lines. Counts come from the macs_status eval above.
 _bm_tui_mac_question() {
 	if grep -F -q "$BM_MAC_PLACEHOLDER" agent-config.yaml 2>/dev/null; then
@@ -164,20 +176,25 @@ _bm_tui_mac_question() {
 		"  No: stop this run and go back to the Cluster Install wizard"
 }
 
-# Full ask body. CLI keeps file paths and the re-run command.
+# Full ask body. CLI keeps file paths, the compact summary, and the re-run command.
+# The progress dialog shows this same summary before its question.
 _bm_mac_ask() {
-	local _rpt _q _yes_help _no_help
+	local _rpt _q _yes_help _no_help _sum _body
 	_rpt=$(_bm_mac_report)
+	_sum=$(_bm_agent_summary)
 	if _bm_in_tui; then
 		_q=$(_bm_tui_mac_question)
-		printf '%s\n' \
-			"======== Bare-metal MAC check ========" \
-			"" \
-			"$_rpt" \
-			"" \
-			"agent-config.yaml: $PWD/agent-config.yaml" \
-			"" \
-			"$_q"
+		_body=$(printf '%s\n' "======== Bare-metal MAC check ========
+
+$_rpt
+
+agent-config.yaml: $PWD/agent-config.yaml")
+		if [ -n "$_sum" ]; then
+			_body=$(printf '%s\n\n%s' "$_body" "$_sum")
+		fi
+		printf '%s\n' "$_body
+
+$_q"
 		return 0
 	fi
 	_yes_help="Yes: build the agent ISO."
@@ -187,12 +204,16 @@ _bm_mac_ask() {
 Edit macs.conf or agent-config.yaml now, then Yes.
 Yes: re-check. Continue only when every required MAC is a real address."
 	fi
-	printf '%s\n' "======== Bare-metal MAC check ========
+	_body=$(printf '%s\n' "======== Bare-metal MAC check ========
 
 $_rpt
 
 agent-config.yaml: $PWD/agent-config.yaml
-macs.conf:         $PWD/macs.conf
+macs.conf:         $PWD/macs.conf")
+	if [ -n "$_sum" ]; then
+		_body=$(printf '%s\n\n%s' "$_body" "$_sum")
+	fi
+	printf '%s\n' "$_body
 
 ${_yes_help}
 No: stop this run. ${_no_help}"

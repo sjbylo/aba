@@ -167,10 +167,12 @@ if [[ "$_excl_plat" == "false" ]]; then
 		echo "  ✓ PASS: Graph is enabled"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: Graph not enabled (may be intentional)"
+		echo "  ✗ FAIL: Graph not enabled in ISC (expected graph: true)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else
-	echo "  ~ NOTE: excl_platform=$_excl_plat — platform excluded by config"
+	echo "  ✗ FAIL: excl_platform=$_excl_plat after forcing false — platform inclusion skipped"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -221,7 +223,8 @@ if [[ "$_excl_ops" == "false" ]]; then
 		echo "  ✓ PASS: Operators section present in ISC"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	elif echo "$_isc_with_ops" | grep -q "operators:"; then
-		echo "  ~ NOTE: Operators section exists but may be commented out"
+		echo "  ✗ FAIL: Operators section exists but may be commented out"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
 		echo "  ✗ FAIL: Operators section missing in ISC"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -243,7 +246,8 @@ if [[ "$_excl_ops" == "false" ]]; then
 		echo "  ✓ PASS: Correct operator catalog reference (v${_ver_short})"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: Catalog reference format may differ"
+		echo "  ✗ FAIL: Catalog reference format may differ"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	# Verify packages section structure
@@ -341,21 +345,66 @@ tui_set_aba_conf excl_additional false
 echo ""
 echo "--- 9. Upgrade target in ISC ---"
 
-# Read current upgrade target
-_upgrade_to=$($_TUI_SSH "grep '^ocp_upgrade_to=' ~/aba/mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
-
-if [[ -n "$_upgrade_to" ]]; then
-	_regen_isc
-	_isc_upgrade=$(_read_isc)
-	if echo "$_isc_upgrade" | grep -q "maxVersion: $_upgrade_to\|$_upgrade_to"; then
-		echo "  ✓ PASS: Upgrade target $_upgrade_to found in ISC"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+# Ensure an upgrade target is set so this assertion is never soft-skipped.
+# Prefer an existing ISC maxVersion already above ocp_version (known-mirrored),
+# so path validation in reg-create-imageset-config will accept it.
+# mirror.conf often has `ocp_upgrade_to=  # comment` — cut/awk would yield "#".
+_upgrade_to=$($_TUI_SSH "grep '^ocp_upgrade_to=' ~/aba/mirror/mirror.conf 2>/dev/null | sed -n 's/^ocp_upgrade_to=[[:space:]]*\([^#[:space:]]*\).*/\1/p'" || echo "")
+[[ "$_upgrade_to" == "#"* ]] && _upgrade_to=""
+_upgrade_to_was_set=0
+if [[ -z "$_upgrade_to" ]]; then
+	_cur="${_ocp_ver:-}"
+	[[ -n "$_cur" ]] || _cur=$($_TUI_SSH "grep '^ocp_version=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
+	_isc_max=$(echo "$(_read_isc)" | grep 'maxVersion:' | head -1 | awk '{print $2}' | tr -d '\r')
+	# Prefer a version already mirrored (state.sh) so path validation accepts it
+	_mirrored=$($_TUI_SSH "grep -E '^(mirror_ocp_version|ocp_version)=' ~/.aba/mirror/*/state.sh 2>/dev/null | head -1 | cut -d= -f2 | tr -d \"'\\\"\"" || true)
+	if [[ -n "$_isc_max" && "$_isc_max" != "$_cur" ]]; then
+		_upgrade_to="$_isc_max"
+	elif [[ -n "$_mirrored" && "$_mirrored" != "$_cur" ]]; then
+		_upgrade_to="$_mirrored"
 	else
-		echo "  ✗ FAIL: Upgrade target $_upgrade_to not in ISC"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		# x.(y+1).0 is often not on the Cincinnati graph (e.g. 4.22.0).
+		# Ask ABA for a reachable next/zstream target from the current version.
+		_ch="${_ocp_ch:-fast}"
+		_upgrade_to=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh >/dev/null && \
+			source <(normalize-aba-conf) && \
+			fetch_upgrade_targets '${_cur}' '${_ch}' 2 2>/dev/null | \
+			awk -F'\t' '/^(next|zstream)/{print \$2; exit}'" || true)
+		if [[ -z "$_upgrade_to" ]]; then
+			_maj=$(echo "$_cur" | cut -d. -f1)
+			_min=$(echo "$_cur" | cut -d. -f2)
+			_upgrade_to="${_maj}.$(( ${_min:-0} + 1 )).0"
+		fi
 	fi
+	$_TUI_SSH "cd ~/aba && \
+		if grep -q '^ocp_upgrade_to=' mirror/mirror.conf; then \
+			sed -i 's/^ocp_upgrade_to=.*/ocp_upgrade_to=${_upgrade_to}/' mirror/mirror.conf; \
+		else \
+			echo 'ocp_upgrade_to=${_upgrade_to}' >> mirror/mirror.conf; \
+		fi"
+	_upgrade_to_was_set=1
+	echo "  Set temporary ocp_upgrade_to=$_upgrade_to for ISC check"
+fi
+
+_regen_isc
+_isc_upgrade=$(_read_isc)
+if echo "$_isc_upgrade" | grep -qE "maxVersion:[[:space:]]*${_upgrade_to}([[:space:]]|$)"; then
+	echo "  ✓ PASS: Upgrade target $_upgrade_to found in ISC"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: No upgrade target configured, skipping"
+	echo "  ✗ FAIL: Upgrade target $_upgrade_to not in ISC"
+	echo "    maxVersion lines: $(echo "$_isc_upgrade" | grep -E 'maxVersion|minVersion' | head -5)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
+# Restore if we injected a temporary target (full mirror.conf restore happens in step 12)
+if [[ "$_upgrade_to_was_set" -eq 1 ]]; then
+	$_TUI_SSH "cd ~/aba && \
+		if grep -q '^ocp_upgrade_to=' mirror/mirror.conf.isc-backup 2>/dev/null; then \
+			_prev=\$(grep '^ocp_upgrade_to=' mirror/mirror.conf.isc-backup | head -1); \
+			sed -i \"s/^ocp_upgrade_to=.*/\${_prev}/\" mirror/mirror.conf; \
+		else \
+			sed -i '/^ocp_upgrade_to=/d' mirror/mirror.conf; \
+		fi" || true
 fi
 
 # ============================================================================
@@ -404,7 +453,8 @@ if [[ -n "$_ocp_ver" ]] && echo "$_scr" | grep -qi "$_ocp_ver"; then
 	echo "  ✓ PASS: View shows OCP version $_ocp_ver"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: OCP version not visible in current View page"
+	echo "  ✗ FAIL: OCP version not visible in current View page"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # Dismiss View

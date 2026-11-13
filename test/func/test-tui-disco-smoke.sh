@@ -20,12 +20,29 @@ echo ""
 
 tui_deploy_code
 
-# Force DISCO mode by creating .bundle marker (cleaned up at the end)
+# Force DISCO only when a real payload exists (imageset + mirror_*.tar).
+# After a host wipe, .bundle alone → "Bundle incomplete" or "Image Archives
+# Needed" → Exit kills the TUI. Smoke then runs in native CONNO mode (lab
+# disco has internet). DISCO Workflow covers the full air-gap path.
 _had_bundle=$($_TUI_SSH "test -f ~/aba/.bundle && echo yes || echo no" 2>/dev/null)
 _had_available=$($_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null)
-if [[ "$_had_bundle" != "yes" ]]; then
-	$_TUI_SSH "touch ~/aba/.bundle" 2>/dev/null
-	echo "  Created .bundle marker to force DISCO mode"
+_has_archives=$($_TUI_SSH "ls ~/aba/mirror/data/mirror_*.tar >/dev/null 2>&1 && echo yes || echo no" 2>/dev/null)
+_has_isc=$($_TUI_SSH "test -s ~/aba/mirror/data/imageset-config.yaml && echo yes || echo no" 2>/dev/null)
+_force_disco=no
+if [[ "$_has_archives" == "yes" && "$_has_isc" == "yes" ]]; then
+	_force_disco=yes
+	if [[ "$_had_bundle" != "yes" ]]; then
+		$_TUI_SSH "touch ~/aba/.bundle" 2>/dev/null
+		echo "  Created .bundle marker to force DISCO mode (archives present)"
+	fi
+else
+	echo "  No mirror archives on disco — smoke runs in native mode (no forced .bundle)"
+	# Drop a stale .bundle left from a prior wipe so TUI does not abort
+	if [[ "$_had_bundle" == "yes" && "$_has_archives" != "yes" ]]; then
+		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null
+		echo "  Removed stale .bundle (no archives)"
+		_had_bundle=no
+	fi
 fi
 # If mirror is installed but .available is missing, create it to prevent
 # the wizard gate from trying to auto-install (and failing on stale state).
@@ -39,7 +56,7 @@ echo ""
 
 # Cleanup helper: restore markers we created
 _disco_cleanup() {
-	if [[ "$_had_bundle" != "yes" ]]; then
+	if [[ "$_force_disco" == "yes" && "$_had_bundle" != "yes" ]]; then
 		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null
 		echo "  Removed .bundle marker"
 	fi
@@ -111,8 +128,31 @@ for _gate_i in 1 2 3 4 5; do
 		continue
 	fi
 
-	# Bundle payload summary
-	if echo "$_scr" | grep -qi "Install Bundle\|payload summary\|Disconnected.*payload"; then
+	# Light bundle / wipe: no mirror_*.tar — Exit and continue in native mode
+	if echo "$_scr" | grep -qi "Image Archives Needed\|mirror_\*\.tar\|light\* install bundle"; then
+		echo "  Image Archives Needed — Exit to native mode (Workflow transfers archives)"
+		tui_press_button "Exit" 2>/dev/null || tui_keys Tab Enter
+		sleep 2
+		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null || true
+		tui_stop 2>/dev/null || true
+		tui_start
+		tui_keys Enter; sleep 3
+		continue
+	fi
+
+	# Bundle incomplete after wipe
+	if echo "$_scr" | grep -qi "Cannot Proceed\|Bundle incomplete\|no imageset-config"; then
+		echo "  Bundle incomplete — clearing .bundle and relaunching native"
+		tui_keys Enter; sleep 1
+		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null || true
+		tui_stop 2>/dev/null || true
+		tui_start
+		tui_keys Enter; sleep 3
+		continue
+	fi
+
+	# Bundle payload summary (title "ABA Install Bundle", not "install bundle was detected")
+	if echo "$_scr" | grep -qi "ABA Install Bundle\|payload summary\|Disconnected.*payload summary"; then
 		echo "  ✓ PASS: ABA Install Bundle info dialog appeared"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_keys Enter; sleep 5
@@ -124,8 +164,9 @@ for _gate_i in 1 2 3 4 5; do
 done
 
 # The DISCO wizard gate may auto-launch mirror config, install, and load.
-# Keep dismissing dialogs until the main menu appears.
-for _menu_i in 1 2 3 4 5 6 7 8 9 10; do
+# Smoke is non-destructive: a full image load takes hours, so Quit long-running
+# Load/Install progress and land on the main menu. DISCO Workflow covers load.
+for _menu_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 	_scr=$(tui_capture)
 	# Menu reached?
 	if echo "$_scr" | grep -q "── Registry ──\|── Cluster ──\|── Advanced ──"; then
@@ -142,9 +183,26 @@ for _menu_i in 1 2 3 4 5 6 7 8 9 10; do
 		tui_keys Enter; sleep 3
 		continue
 	fi
-	# Progress dialog — wait for it
+	# Load (or long install) progress — Quit so smoke can exercise the menu.
+	# Wizard shows "One moment please" first, then the progress frame with Quit.
+	if echo "$_scr" | grep -qiE "Load images to mirror|Overall Progress|One moment please"; then
+		if echo "$_scr" | grep -qiE "Quit.*Q|Q/ESC|In Progress"; then
+			echo "  Wizard auto-load/install in progress — Quitting for smoke (Workflow covers load)"
+			tui_keys q; sleep 1
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qiE "Stopped|Dismiss|Continue"; then
+				tui_press_button "Dismiss" 2>/dev/null || tui_keys Enter
+				sleep 2
+			fi
+			continue
+		fi
+		# Spinner before progress keys exist — wait briefly for Quit to appear
+		sleep 3
+		continue
+	fi
+	# Short registry install progress — wait a bit
 	if echo "$_scr" | grep -qi "Progress\|Installing\|Loading\|%\|In Progress\|Succeeded"; then
-		sleep 15
+		sleep 10
 		continue
 	fi
 	# Completion dialog — dismiss
@@ -158,7 +216,7 @@ for _menu_i in 1 2 3 4 5 6 7 8 9 10; do
 		sleep 3
 		continue
 	fi
-	# Confirmation dialogs — dismiss
+	# Confirmation dialogs — dismiss (Enter accepts Load; smoke will Quit progress above)
 	if echo "$_scr" | grep -qi "Continue\|Confirm\|Load images"; then
 		tui_keys Enter; sleep 5
 		continue
@@ -171,8 +229,14 @@ for _menu_i in 1 2 3 4 5 6 7 8 9 10; do
 	# Try Escape to break out of stuck dialogs
 	tui_keys Escape; sleep 3
 done
-# If we still haven't reached the menu after all attempts, try back_to
+# If we still haven't reached the menu after all attempts, try back_to / Quit once more
 if ! tui_capture | grep -q "── Registry ──\|── Cluster ──\|── Advanced ──"; then
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qiE "Overall Progress|Load images to mirror|Quit.*Q"; then
+		tui_keys q; sleep 1
+		tui_press_button "Dismiss" 2>/dev/null || tui_keys Enter
+		sleep 2
+	fi
 	tui_back_to "Registry\|Cluster\|Advanced\|Actions" 10
 fi
 
@@ -192,8 +256,8 @@ if echo "$_scr" | grep -qi "Fully Disconnected"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	_detected_disco=true
 elif echo "$_scr" | grep -qi "Partially Disconnected\|CONNO"; then
-	echo "  ~ NOTE: Host is in Partially Disconnected mode (mirror already populated)"
-	echo "  ~ NOTE: DISCO tests will adapt to CONNO menu structure"
+	echo "  ✓ PASS: Host is in Partially Disconnected mode — adapting to CONNO menu structure"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 fi
 
 # Check menu items — DISCO and CONNO have different items
@@ -268,7 +332,8 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 	tui_assert_contains "Retry" "Retry setting"
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Settings unclear"
+	echo "  ✗ FAIL: Settings unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -303,7 +368,8 @@ if echo "$_scr" | grep -qi "Advanced\|Platform\|Switch"; then
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Advanced menu unclear"
+	echo "  ✗ FAIL: Advanced menu unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -341,7 +407,8 @@ elif echo "$_scr" | grep -qi "No cluster\|install.*cluster\|Install.*first"; the
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Day-2 menu unclear"
+	echo "  ✗ FAIL: Day-2 menu unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -381,7 +448,8 @@ elif echo "$_scr" | grep -qi "Mirror Payload\|Select Operators\|OCP Version"; th
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: ISC/Payload view unclear"
+	echo "  ✗ FAIL: ISC/Payload view unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -439,29 +507,74 @@ if [ -n "$_installed" ]; then
 		tui_select_item "Day-2"
 	fi
 	if ! tui_wait_for "Day-2\|Cluster Management" 10; then
-		echo "  ~ SKIP: Could not navigate to Day-2 menu"
+		echo "  ✗ FAIL: Could not navigate to Day-2 menu on disco host"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
 
-	tui_keys S; sleep 0.3; tui_keys Enter
-	sleep 8
+	# Prefer full label — bare "status" can miss when focus is on OK.
+	# Retry if we are still on the Day-2 menu.
+	_left_menu=0
+	for _try in 1 2 3; do
+		if ! tui_select_item "Cluster status\|Status"; then
+			tui_keys S; sleep 0.3; tui_keys Enter
+		fi
+		sleep 2
+		_scr=$(tui_capture)
+		if ! echo "$_scr" | grep -qi "Cluster Management\|Select operation"; then
+			_left_menu=1
+			break
+		fi
+		echo "  Still on Day-2 menu after status select (try $_try) — retrying"
+		# Move focus back into the list before the next hotkey attempt
+		tui_keys Up; sleep 0.2
+	done
+	if [[ "$_left_menu" -ne 1 ]]; then
+		echo "  ✗ FAIL: Could not open Cluster status from Day-2 menu"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "disco-10-status-still-menu"
+	else
+	tui_pick_cluster "${TUI_CLUSTER_NAME:-sno}" 2>/dev/null || tui_dismiss_cluster_select || true
+	_status_ok=0
+	for _sw in $(seq 1 45); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|Detecting installation"; then
+			tui_pick_cluster "${TUI_CLUSTER_NAME:-sno}" 2>/dev/null || true
+			sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -qi "Fetching status"; then
+			sleep 2
+			continue
+		fi
+		if echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|node\|Ready\|Unreachable\|API\|AVAILABLE\|One moment please"; then
+			_status_ok=1
+			break
+		fi
+		# Returned to Day-2 unexpectedly
+		if echo "$_scr" | grep -qi "Cluster Management\|Select operation"; then
+			echo "  WARNING: back on Day-2 during status wait (iter $_sw)"
+			tui_select_item "status" || { tui_keys S; sleep 0.3; tui_keys Enter; }
+			sleep 2
+			continue
+		fi
+		sleep 2
+	done
 	tui_screenshot "disco-10-status"
-
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|node\|Ready\|Unreachable\|API"; then
+	if [[ "$_status_ok" -eq 1 ]]; then
 		echo "  ✓ PASS: Cluster status displayed on disco host"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	elif echo "$_scr" | grep -qi "Select cluster\|Choose"; then
-		echo "  ✓ PASS: Cluster selection shown (multiple clusters)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_keys Escape; sleep 1
 	else
-		echo "  ~ NOTE: Status unclear"
+		echo "  ✗ FAIL: Status unclear on disco host"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "disco-10-status-unclear"
 	fi
 	tui_keys Enter; sleep 1  # dismiss textbox
+	fi  # end of left-menu block
 	tui_keys Escape; sleep 1  # back from Day-2
 	fi  # end of "could navigate to Day-2" block
 else
-	echo "  ~ SKIP: No installed cluster on disco host"
+	echo "  ✓ PASS: No installed cluster on disco host (status N/A)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 fi
 
 # ============================================================================

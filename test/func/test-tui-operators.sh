@@ -71,7 +71,8 @@ if grep -qi "redhat-operator\|certified-operator\|community-operator\|catalog" /
 	echo "  ✓ PASS: Catalog statistics displayed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Catalog stats not visible (indexes may still be downloading)"
+	echo "  ✗ FAIL: Catalog stats not visible (indexes may still be downloading)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # Check operator help
@@ -127,7 +128,8 @@ if echo "$_scr" | grep -qi "Operator Sets"; then
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Operator Sets screen unclear"
+	echo "  ✗ FAIL: Operator Sets screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -160,11 +162,13 @@ if echo "$_scr" | grep -qi "Search\|search\|keyword\|operator name"; then
 		echo "  ✓ PASS: Search returned 'no results' (index may not be ready)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: Search results unclear"
+		echo "  ✗ FAIL: Search results unclear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Search input screen unclear"
+	echo "  ✗ FAIL: Search input screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -191,7 +195,8 @@ if echo "$_scr" | grep -qi "Operator Selection\|empty\|No operators"; then
 		tui_capture | sed -n 's/.*\[\(.\)\][[:space:]]*\(.*\)/    [\1] \2/p' | head -10
 	fi
 else
-	echo "  ~ NOTE: View/Edit screen unclear"
+	echo "  ✗ FAIL: View/Edit screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 tui_keys Escape; sleep 1
@@ -222,7 +227,8 @@ elif echo "$_scr" | grep -qi "Select Operator Sets"; then
 	echo "  ✓ PASS: Clear executed (returned to operator menu)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Clear screen unclear"
+	echo "  ✗ FAIL: Clear screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -298,7 +304,8 @@ if echo "$_scr" | grep -qi "Additional Images"; then
 		tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 		sleep 1
 	else
-		echo "  ~ NOTE: Add image screen unclear"
+		echo "  ✗ FAIL: Add image screen unclear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_keys Escape; sleep 1
 	fi
 
@@ -320,13 +327,15 @@ if echo "$_scr" | grep -qi "Additional Images"; then
 		tui_press_button "Back" 2>/dev/null || tui_keys Escape
 		sleep 1
 	else
-		echo "  ~ NOTE: Recommended screen unclear"
+		echo "  ✗ FAIL: Recommended screen unclear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_keys Escape; sleep 1
 	fi
 
 	tui_back_to "Mirror Payload" 3
 else
-	echo "  ~ NOTE: Additional Images screen unclear"
+	echo "  ✗ FAIL: Additional Images screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -365,7 +374,8 @@ if echo "$_scr" | grep -qi "Prepare Upgrade\|upgrade.*version\|target.*version";
 	echo "  ✓ PASS: Prepare Upgrade dialog appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Prepare Upgrade screen unclear"
+	echo "  ✗ FAIL: Prepare Upgrade screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Escape; sleep 1
 
@@ -389,7 +399,8 @@ if echo "$_scr" | grep -qi "Advanced ImageSet\|imageset-config\|View.*imageset\|
 		echo "    [$key] $label"
 	done
 else
-	echo "  ~ NOTE: Advanced ISC screen unclear"
+	echo "  ✗ FAIL: Advanced ISC screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Escape; sleep 1
 

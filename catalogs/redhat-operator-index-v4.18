@@ -27,7 +27,7 @@ cluster-logging Red Hat OpenShift Logging stable-6.4
 cluster-observability-operator Cluster Observability Operator stable
 clusterresourceoverride ClusterResourceOverride Operator stable
 compliance-operator Compliance Operator stable
-container-security-operator Container Security stable-3.18
+container-security-operator Red Hat Quay Container Security Operator stable-3.18
 costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
@@ -109,8 +109,8 @@ pf-status-relay-operator pf-status-relay-operator stable
 policy-controller-operator Policy Controller Operator stable
 power-monitoring-operator Power monitoring for Red Hat OpenShift tech-preview
 ptp-operator PTP Operator stable
-quay-bridge-operator Quay Bridge Operator stable-3.18
-quay-operator Quay stable-3.18
+quay-bridge-operator Red Hat Quay Bridge Operator stable-3.18
+quay-operator Red Hat Quay stable-3.18
 recipe Recipe stable-4.18
 red-hat-camel-k Red Hat Integration - Camel K 1.10.x
 red-hat-hawtio-operator HawtIO Operator v2
@@ -118,7 +118,7 @@ redhat-oadp-operator OADP Operator stable-1.4
 rhacs-operator Advanced Cluster Security for Kubernetes stable
 rhbk-operator Red Hat build of Keycloak Operator stable-v26.6
 rhcl-operator Red Hat Connectivity Link stable
-rhdh Red Hat Developer Hub Operator fast
+rhdh Red Hat Developer Hub Operator fast-2.1
 rhods-operator Red Hat OpenShift AI stable
 rhpam-kogito-operator RHPAM Kogito Operator 7.x
 rh-service-binding-operator Service Binding Operator stable

@@ -582,6 +582,12 @@ _record_result() {
 
 	_results[$suite]="$rc"
 
+	# Pass/fail only. Skip (3) and infra requeue (99, returned above) do not
+	# move a suite. A write failure must not stop the dispatcher.
+	if [ "$rc" -ne 3 ]; then
+		_e2e_history_record "$suite" "$rc" || true
+	fi
+
 	if [ "$rc" -eq 0 ]; then
 		_print_box "1;42;97" "✔  PASS  ${suite}  pool ${pool_num}"
 	elif [ "$rc" -eq 3 ]; then
@@ -837,19 +843,150 @@ _force_clean_suite() {
 	echo "    $_raw: cleaned"
 }
 
+# --- Recent pass/fail, used only to order a full-suite queue ------------------
+# Bastion-local. Missing or unreadable: the queue keeps its existing order.
+# Lines older than four days are dropped on write and ignored on read.
+
+_E2E_SUITE_HISTORY_SECS=$(( 4 * 24 * 60 * 60 ))
+
+_e2e_history_path() {
+	printf '%s\n' "${E2E_SUITE_HISTORY:-$HOME/.aba/e2e-suite-history}"
+}
+
+# Append one result and drop lines older than four days.
+# Usage: _e2e_history_record <suite> <rc>
+_e2e_history_record() {
+	local suite="$1" rc="$2"
+	local path now outcome dir tmp cutoff
+
+	[[ "$suite" =~ ^[A-Za-z0-9._-]+$ ]] || return 0
+	path=$(_e2e_history_path)
+	dir=$(dirname "$path")
+	mkdir -p "$dir" 2>/dev/null || return 0
+	now=$(date +%s) || return 0
+	if [ "$rc" -eq 0 ]; then
+		outcome=pass
+	else
+		outcome=fail
+	fi
+	cutoff=$(( now - _E2E_SUITE_HISTORY_SECS ))
+	tmp=$(mktemp "$dir/.e2e-suite-history.XXXXXX") || return 0
+	{
+		if [ -f "$path" ]; then
+			awk -v cut="$cutoff" 'NF >= 3 && $1+0 >= cut { print }' "$path"
+		fi
+		printf '%s %s %s\n' "$now" "$suite" "$outcome"
+	} > "$tmp" && mv -f "$tmp" "$path" || rm -f "$tmp"
+	return 0
+}
+
+# Print suite names: recent failures first (more failures ahead), names with
+# no history in their input order, then suites that only passed. The last
+# group is shuffled so one green suite is not pinned to pool 1.
+# Usage: _e2e_order_by_history name [name...]
+_e2e_order_by_history() {
+	local path now cutoff epoch suite outcome name f ran
+	local -a in=("$@") front=() mid=() back=() ordered=()
+	local -A fails=() runs=()
+
+	if [ ${#in[@]} -eq 0 ]; then
+		return 0
+	fi
+	path=$(_e2e_history_path)
+	# A missing file, a directory, or an unreadable path is "no history".
+	if [ ! -f "$path" ] || [ ! -r "$path" ]; then
+		printf '%s\n' "${in[@]}"
+		return 0
+	fi
+	now=$(date +%s) || { printf '%s\n' "${in[@]}"; return 0; }
+	cutoff=$(( now - _E2E_SUITE_HISTORY_SECS ))
+	while read -r epoch suite outcome; do
+		[[ "$epoch" =~ ^[0-9]+$ ]] || continue
+		[ "$epoch" -ge "$cutoff" ] || continue
+		[[ "$suite" =~ ^[A-Za-z0-9._-]+$ ]] || continue
+		case "$outcome" in
+			pass) runs[$suite]=$(( ${runs[$suite]:-0} + 1 )) ;;
+			fail)
+				fails[$suite]=$(( ${fails[$suite]:-0} + 1 ))
+				runs[$suite]=$(( ${runs[$suite]:-0} + 1 ))
+				;;
+		esac
+	done < "$path"
+
+	for name in "${in[@]}"; do
+		f=${fails[$name]:-0}
+		ran=${runs[$name]:-0}
+		if [ "$f" -gt 0 ]; then
+			front+=("$name")
+		elif [ "$ran" -gt 0 ]; then
+			back+=("$name")
+		else
+			mid+=("$name")
+		fi
+	done
+
+	if [ ${#front[@]} -gt 1 ]; then
+		local -a sorted=()
+		local i=0
+		while IFS= read -r name; do
+			[ -n "$name" ] || continue
+			sorted+=("$name")
+		done < <(
+			i=0
+			for name in "${front[@]}"; do
+				printf '%05d %05d %s\n' $(( 100000 - ${fails[$name]:-0} )) "$i" "$name"
+				i=$(( i + 1 ))
+			done | sort -s -k1,1n -k2,2n | cut -d' ' -f3-
+		)
+		[ ${#sorted[@]} -eq ${#front[@]} ] && front=("${sorted[@]}")
+	fi
+
+	if [ ${#back[@]} -gt 1 ]; then
+		local -a shuffled=()
+		while IFS= read -r name; do
+			[ -n "$name" ] || continue
+			shuffled+=("$name")
+		done < <(printf '%s\n' "${back[@]}" | shuf)
+		[ ${#shuffled[@]} -eq ${#back[@]} ] && back=("${shuffled[@]}")
+	fi
+
+	[ ${#front[@]} -gt 0 ] && ordered+=("${front[@]}")
+	[ ${#mid[@]} -gt 0 ] && ordered+=("${mid[@]}")
+	[ ${#back[@]} -gt 0 ] && ordered+=("${back[@]}")
+	printf '%s\n' "${ordered[@]}"
+}
+
 # --- Build work queue from suites_to_run minus completed/running --------------
 
 _build_work_queue() {
 	_work_queue=()
+	local _pending=() suite running _p
 	for suite in "${suites_to_run[@]}"; do
 		[ -n "${_completed[$suite]:-}" ] && continue
-		local running=""
+		running=""
 		for _p in "${!_busy_pools[@]}"; do
 			[ "${_busy_pools[$_p]}" = "$suite" ] && running=1 && break
 		done
 		[ -n "$running" ] && continue
-		_work_queue+=("$suite")
+		_pending+=("$suite")
 	done
+
+	# Full-suite runs only. A named list and --resume keep the given order.
+	# If the history sort drops a name, keep the unsorted queue.
+	if [ -n "${CLI_ALL:-}" ] && [ ${#_pending[@]} -gt 1 ]; then
+		local _ordered=() _name
+		while IFS= read -r _name; do
+			[ -n "$_name" ] || continue
+			_ordered+=("$_name")
+		done < <(_e2e_order_by_history "${_pending[@]}")
+		if [ ${#_ordered[@]} -eq ${#_pending[@]} ]; then
+			if [ "${_ordered[*]}" != "${_pending[*]}" ]; then
+				echo "  Queue (last 4 days): ${_ordered[*]}"
+			fi
+			_pending=("${_ordered[@]}")
+		fi
+	fi
+	[ ${#_pending[@]} -gt 0 ] && _work_queue=("${_pending[@]}")
 }
 
 # --loop: when the queue drains, immediately feed the next batch onto free pools.

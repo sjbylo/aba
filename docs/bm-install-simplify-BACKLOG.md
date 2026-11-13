@@ -44,7 +44,7 @@ Add the helpers in section B1 in this same commit, and call them from the three 
 
 ### A2. Short summary of agent-config.yaml before Yes
 
-`scripts/agent-config-summary.sh` is the standalone summary (`[-s|-v] [agent-config.yaml]`). It reads the file with `yaml2json` and formats the lines with `jq`. The review ask does not call it yet. Do not shell the install ask out to the example script in a cluster directory. That file is only a guide for the shape.
+`scripts/agent-config-summary.sh` is the standalone summary (`[-s|-v] [agent-config.yaml]`). It reads the file with `yaml2json` and formats the lines with `jq`. The review ask prints that compact summary before the question, on the CLI and in the progress dialog, and leaves out the MAC line, because `macs_report` already lists the addresses. Do not shell the install ask out to the example script in a cluster directory. That file is only a guide for the shape.
 
 The review ask in `scripts/bm-ask-edit.sh` prints the path and stops:
 
@@ -117,8 +117,7 @@ Own commit. Do not include these hunks in the bare-metal commit.
 
 `ABA_TARGET_DIR` is set only when `scripts/aba.sh` entered the directory via `aba -d` / `--dir`. It is unset when the user is already in that directory.
 
-- `aba_cmd [words...]` — command for the current directory. `aba <words>` when `ABA_TARGET_DIR` is unset. `aba -d $(basename "$PWD") <words>` when it is set.
-- `aba_cmd_for <dir> [words...]` — command for a named directory, which may not be cwd (`aba status` listing other clusters, a directory just created, an imported cluster). If `<dir>` is this cwd and `ABA_TARGET_DIR` is unset, same as `aba_cmd`. Otherwise `aba -d <dir> <words>`.
+- `aba_cmd [words...]` — command for the current directory. `aba <words>` when `ABA_TARGET_DIR` is unset. `aba -d $(basename "$PWD") <words>` when it is set. Tips for another directory stay written as `aba -d <name>`.
 
 The helper functions are added with the bare-metal commit (section A), because those prompts need them. This commit only changes the other call sites.
 

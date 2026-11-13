@@ -2575,10 +2575,9 @@ unset _kc _tmp
 	_tui_redirect_activate
 }
 
-# Pre-flight: check for upgrade gates that require manual acknowledgment.
-# Shows gate info in a TUI dialog so the user can review and decide.
-# Returns 0=proceed, 1=cancel.  This prevents --yes (progressbox mode)
-# from silently bypassing the Upgradeable=False safety gate.
+# Pre-flight: show Upgradeable=False so the user can fix it, then retry a
+# normal upgrade. Continue does not pass --force. Force stays a separate,
+# explicit bypass. Returns 0=proceed, 1=cancel.
 _upgrade_preflight_check() {
 	local cluster_dir="$1"
 	local _adm_out _kc
@@ -2592,7 +2591,7 @@ _upgrade_preflight_check() {
 	if echo "$_adm_out" | grep -q "Upgradeable=False"; then
 		local _wrapped _header _text
 		_wrapped=$(echo "$_adm_out" | fold -s -w 72 | sed 's/$/\\n/' | tr -d '\n')
-		_header="The cluster reports Upgradeable=False.\nThis may require admin acknowledgment before upgrading.\n\nReview the details and only continue if you have\nresolved any required actions:\n\n"
+		_header="The cluster reports Upgradeable=False.\nA normal upgrade will not start while this gate is in place.\n\nRead the details below and fix what they ask for,\nthen click Continue.\nContinue starts a normal upgrade. It does not bypass the gate.\nIf the issues are still present, the upgrade stops.\n\nForce on the upgrade menu is the only bypass,\nand only when you turn it on yourself.\n\n"
 		_text="${_header}${_wrapped}"
 		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Gate Detected" \
 			--yes-label "Continue" --no-label "Cancel" \

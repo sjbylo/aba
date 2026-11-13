@@ -1,4 +1,35 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.5...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.6...HEAD)
+
+---
+
+## [1.4.6](https://github.com/sjbylo/aba/releases/tag/v1.4.6) - 2026-11-13
+
+General improvements and fixes
+
+
+### Added
+
+- **Lab helpers to delete a shared-IP cluster** — `test/func/delete-lab-sno.sh` and `test/func/test-delete-sno.sh` run `aba delete` on conno and disco when the cluster directory is still there, so a VM left on one host does not keep the starting IP (sno is 10.0.1.201). Neither script is part of `run-all-tests.sh`.
+
+### Changed
+
+- **MAC ask shows the agent-config summary** — Before Yes, the bare-metal review prints the compact cluster, IP, and NIC lines from `agent-config.yaml`, on the command line and in the progress dialog. MAC addresses stay in the MAC report.
+- **Current-directory tips follow how you got here** — Next-step lines use `aba_cmd`. Already in the directory, they print `aba install`. After `aba -d`, they print `aba -d <name> install`. Help text and README examples still show `--dir` / `-d`.
+- **`aba ocp-ver` drops Older candidate** — List only Latest and Previous tips; the third candidate offer slot was often an uninteresting interim `-ec` and cluttered the summary.
+- **Upgrade and bundle progress lists the child steps up front** — Upgrade draws preflight, the day-2 steps, Trigger upgrade, and Wait for upgrade before any of that work. The "Update mirror resources" wrapper is gone, so Trigger and Wait stay pending while day-2 runs. A connected cluster or `--skip-day2` omits the day-2 steps. Bundle draws save's steps the same way, then packs the bundle.
+- **E2E full-suite queue runs recent failures first** — A four-day pass/fail log reorders `run --all` so recent failures run first and clean passes go last. A named suite list and `--resume` keep the order you gave. A missing log leaves the existing order.
+- **Catalog indexes refreshed** — Operator catalog indexes updated where the channel list changed: certified 4.19–5.0 and Red Hat 4.18–5.0.
+
+### Fixed
+
+- **Candidate Previous/Older empty after GA catch-up** — `_candidate_offer` now includes the stable CDN minor and keeps candidate tips even when they already match fast/stable (e.g. `5.0.1`), so `aba ocp-ver` / TUI suggestions are not left blank when channels have converged.
+- **Previous tip stays on the same major** — After 5.0 GA, the floating `openshift-v4` release file publishes 5.x, so Previous lost the 4.x tip. Tips now use the highest channel directory of the same major. `aba ocp-ver` looks up stable, fast, and candidate together.
+- **Parallel catalog extract keeps a live container** — Each download swept every `aba-catalog-*` container at startup, so one version could delete another's mount mid-copy. The sweep now leaves a container whose process is still running.
+- **Catalog refresh uses one version walk** — The GitHub workflow had its own minor countdown and aborted on stable 5.0. It now uses `tools/refresh-catalog-indexes.sh --detect`, which steps from `5.0` to `4.22`. The catalog canary reads that same list.
+- **Monitor installation starts before the agent wait** — The agent probe runs before `monitor-install.sh`, so that row stayed N/A during "Waiting for Agent". The probe now sends `START|ci_mon`. A second start from the monitor script leaves the row In Progress.
+- **Day-2 CatalogSources are named per OpenShift minor** (Contributed by @mateuszslugocki) — An upgrade mirror can carry two minors of the same catalog family. Day-2 names each CatalogSource from the image's minor. The catalog that matches the cluster's completed version keeps the standard name, so Subscriptions follow the cluster. Set `catalog_versions=all` in `mirror.conf` (upgrade mode) to mirror both the source minor and the `ocp_upgrade_to` minor. The default remains the target minor only.
+- **Quitting the progress dialog is a stop** — Q, Escape, or Ctrl-C shows "Stopped before all steps finished" and the command returns failure. A quit during mirror sync does not continue into Day-2.
+- **Space leaves the progress live-output view** — Space inside that view is read from the terminal, so it returns to the dialog. Enter does not.
 
 ---
 
@@ -82,6 +113,7 @@ Mainly improvements, fixes and refactoring
 ### Fixed
 
 - **OCP version tips miss next-major GA / sticky forever** — `Latest`/`Previous`/`Older` now prefer a GA next-major Cincinnati tip when the CDN floating tip lags (e.g. `5.0.0` while CDN still on 4.22), step Previous/Older across majors at `X.0`, and refresh via `run_once -t` (`ABA_CACHE_TTL`) instead of caching the first successful tip forever. Shared helpers: `_cdn_tip_version`, `_peek_next_major_ga`, `aba_version_fetch_channel`/`_wait`.
+- **Previous empty after 5.0 tips under openshift-v4** — `_cdn_tip_version` now keeps same-major floating tips only; when `openshift-v4/.../ocp/stable` publishes `5.x`, it falls back to the highest `stable-4.Y` release.txt so `--version p` / Previous still resolve (e.g. `4.22.22`).
 - **Catalog refresh skipped GA next-major** — `tools/refresh-catalog-indexes.sh` now starts from `fetch_latest_version` (peek-aware) and walks with `_channel_prev_minor`, so GA `5.0` is included when CDN still tips `4.22`; prerelease probes reuse `_next_minor` / `_next_major`.
 - **Bundle NAS temp cleanup** — `bundles/v2` startup cleans all stale staging dirs under the NAS temp area (not only the current bundle name), so failed builds of other versions do not linger.
 - **Clean while installed orphans VMs** — `make clean` / `aba clean` now refuse when `.install-complete` exists (use `aba delete` first). `cluster-clean.sh` owns cleanup; delete passes `force=1` after VMs are gone. Stale-VM install guard suggests `delete` then `install`.

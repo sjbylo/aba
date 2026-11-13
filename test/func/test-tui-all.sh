@@ -28,9 +28,11 @@
 #  --- destructive (full mode only) ---
 #  14.  mirror         - mirror install + sync (destructive, ~15 min)
 #  15.  cluster        - cluster wizard + install (destructive, ~45 min)
-#  16.  day2           - OperatorHub, NTP, OSUS (~10 min)
-#  17.  upgrade        - version selection + upgrade (~45 min)
-#  18.  lifecycle      - shutdown, startup, clean, delete (~30 min)
+#  16.  cluster-select - Detecting/Select-cluster race (after BM leftovers)
+#  17.  day2           - OperatorHub, NTP, OSUS (~10 min)
+#  18.  upgrade        - version selection + upgrade (~45 min)
+#  19.  lifecycle      - shutdown, startup, clean, delete (~30 min)
+#  20.  disco-workflow - air-gap bundle→load→cluster (~2-3h; always in full mode)
 
 set -o pipefail
 
@@ -42,6 +44,7 @@ for arg in "$@"; do
 	case "$arg" in
 		--quick) _QUICK=true ;;
 		--no-delete) _NO_DELETE=true ;;
+		--with-disco|--all) ;; # accepted; disco is always included in full mode
 	esac
 done
 
@@ -84,18 +87,28 @@ _run_test() {
 	echo "$output"
 
 	# Extract PASS/FAIL counts from output
-	local _p _f
+	local _p _f _soft
 	_p=$(echo "$output" | grep 'PASS:' | tail -1 | grep -oE '[0-9]+')
 	_f=$(echo "$output" | grep 'FAIL:' | tail -1 | grep -oE '[0-9]+')
 	_p=${_p:-0}
 	_f=${_f:-0}
+	# Soft markers are never allowed — treat each as an extra failure
+	_soft=$(echo "$output" | grep -cE '  ~ (NOTE|SKIP):' || true)
+	if [[ "$_soft" -gt 0 ]]; then
+		echo ""
+		echo "  ✗ SOFT-ERROR POLICY: $name emitted $_soft soft NOTE/SKIP line(s):"
+		echo "$output" | grep -E '  ~ (NOTE|SKIP):' | sed 's/^/    /'
+		_f=$(( _f + _soft ))
+		rc=1
+	fi
 	_total_pass=$(( _total_pass + _p ))
 	_total_fail=$(( _total_fail + _f ))
 
-	if [[ $rc -eq 0 ]]; then
+	if [[ $rc -eq 0 && "$_f" -eq 0 ]]; then
 		_results+=("  ✓ $name: ${_p} pass, ${_f} fail")
 	else
 		_results+=("  ✗ $name: ${_p} pass, ${_f} fail (EXIT $rc)")
+		rc=1
 	fi
 
 	return $rc
@@ -129,17 +142,20 @@ _run_test "Progress Integration" "test/func/test-tui-progress-integration.sh" ||
 
 if [[ "$_QUICK" == "true" ]]; then
 	echo ""
-	echo "  (--quick mode: skipping destructive mirror, cluster, bm-cluster, day2-deep, day2, upgrade, lifecycle)"
-	_total_skip=7
+	echo "  (--quick mode: skipping destructive mirror, cluster, bm-cluster, day2-deep, day2, upgrade, lifecycle, disco-workflow)"
+	_total_skip=8
 else
 	# --- Destructive tests (full mode only, pipeline order) ---
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
 	_run_test "BM Cluster Install" "test/func/test-tui-bm-cluster.sh" || true
+	_run_test "Cluster-Select Race" "test/func/test-tui-cluster-select-race.sh" || true
 	_run_test "Day-2 Deep" "test/func/test-tui-day2-deep.sh" || true
 	_run_test "Day-2 Operations" "test/func/test-tui-day2.sh" || true
 	_run_test "Upgrade" "test/func/test-tui-upgrade.sh" || true
 	_run_test "Lifecycle" "test/func/test-tui-lifecycle.sh" || true
+	# Air-gap workflow - always part of full mode (release gate)
+	TUI_TEST_HOST= _run_test "DISCO Workflow" "test/func/test-tui-disco-workflow.sh" || true
 fi
 
 # --- Summary ---

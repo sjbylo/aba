@@ -109,6 +109,7 @@ generate_isc() {
 	if grep -q "^ocp_upgrade_to=" "$mirror_conf" 2>/dev/null; then
 		sed -i "s|^ocp_upgrade_to=.*|ocp_upgrade_to=|" "$mirror_conf"
 	fi
+	sed -i "s|^catalog_versions=.*|catalog_versions=|" "$mirror_conf"
 
 	for arg in "$@"; do
 		local key="${arg%%=*}"
@@ -116,7 +117,7 @@ generate_isc() {
 
 		# Mirror.conf keys go to mirror.conf, rest to aba.conf
 		case "$key" in
-			ocp_upgrade_to)
+			ocp_upgrade_to|catalog_versions)
 				if grep -q "^#*${key}=" "$mirror_conf" 2>/dev/null; then
 					sed -i "s|^#*${key}=.*|${key}=${val}|" "$mirror_conf"
 				else
@@ -146,8 +147,9 @@ generate_isc() {
 
 	# Run in mirror/ with force to always regenerate
 	local rc=0
+	_isc_stderr="$tmpdir/stderr.log"
 	(cd "$MIRROR_DIR" && INFO_ABA= scripts/reg-create-imageset-config.sh -f force) \
-		2>"$tmpdir/stderr.log" || rc=$?
+		2>"$_isc_stderr" || rc=$?
 
 	# Restore original configs immediately
 	cp "$tmpdir/aba.conf.orig" "$ABA_ROOT/aba.conf"
@@ -176,20 +178,19 @@ trap final_cleanup EXIT
 
 # --- pre-flight ---
 
-if [ ! -d "$MIRROR_DIR/.index" ]; then
-	echo "ERROR: catalog indexes not found at $MIRROR_DIR/.index/"
-	echo "Run 'aba -d mirror catalog' first."
-	exit 2
-fi
+# Shipped catalogs/ are copied below when a fresh tree has no .index yet.
+mkdir -p "$MIRROR_DIR/.index"
 
 # Ensure all 3 catalog indexes exist for the target version.
 # Prior tests (e.g. test-aba-root-cleanup) may have wiped .index/.
 # Copy from shipped catalogs/ (no network needed).
-for _cat in redhat-operator certified-operator community-operator; do
-	if [ ! -s "$MIRROR_DIR/.index/${_cat}-index-v4.22" ] && [ -s "$ABA_ROOT/catalogs/${_cat}-index-v4.22" ]; then
-		mkdir -p "$MIRROR_DIR/.index"
-		cp "$ABA_ROOT/catalogs/${_cat}-index-v4.22" "$MIRROR_DIR/.index/"
-	fi
+for _ver in 4.21 4.22; do
+	for _cat in redhat-operator certified-operator community-operator; do
+		if [ ! -s "$MIRROR_DIR/.index/${_cat}-index-v${_ver}" ] && [ -s "$ABA_ROOT/catalogs/${_cat}-index-v${_ver}" ]; then
+			mkdir -p "$MIRROR_DIR/.index"
+			cp "$ABA_ROOT/catalogs/${_cat}-index-v${_ver}" "$MIRROR_DIR/.index/"
+		fi
+	done
 done
 
 OCP_VER="4.22.3"
@@ -313,6 +314,82 @@ assert_contains "Has shortestPath" "$_isc" "shortestPath: true"
 assert_contains "Channel is stable-${OCP_MAJOR}" "$_isc" "name: stable-${OCP_MAJOR}"
 
 [[ $VERBOSE -eq 1 ]] && echo "--- ISC ---" && cat "$_isc" && echo "---"
+
+# ============================================================================
+echo ""
+echo "=== Test 6b: Upgrade mode (cross minor), catalog_versions=all ==="
+# ============================================================================
+# By default only the target minor's catalogs are in the ISC. With
+# catalog_versions=all the source minor's catalogs are added too, for a
+# cluster installed on the source minor from the same archive.
+_x_src="4.21.17" _x_tgt="4.22.18"
+if [ -s "$MIRROR_DIR/.index/redhat-operator-index-v4.21" ] && [ -s "$MIRROR_DIR/.index/redhat-operator-index-v4.22" ]; then
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt"
+	assert_contains "Default: target minor redhat catalog" "$_isc" "redhat-operator-index:v4.22$"
+	assert_not_contains "Default: no source minor catalog" "$_isc" "redhat-operator-index:v4.21$"
+
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=all"
+	_x_ops=$(count_operators "$_isc")
+
+	assert_file_valid_yaml_operators "Exactly one operators key" "$_isc"
+	assert_contains "Channel is stable-4.22" "$_isc" "name: stable-4.22"
+	assert_contains "Has source minor redhat catalog" "$_isc" "redhat-operator-index:v4.21$"
+	assert_contains "Has target minor redhat catalog" "$_isc" "redhat-operator-index:v4.22$"
+	assert_eq "Two catalogs present" "2" "$(grep -c '^\s*- catalog:' "$_isc" || true)"
+
+	generate_isc "ocp_version=$_x_tgt" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+	_tgt_ops=$(count_operators "$_isc")
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform="
+	_src_ops=$(count_operators "$_isc")
+	assert_eq "Operators of both minors included" "$(( _src_ops + _tgt_ops ))" "$_x_ops"
+
+	_x_cert=$(awk '{print $1}' "$MIRROR_DIR/.index/certified-operator-index-v4.21" | grep -m1 -xFf <(awk '{print $1}' "$MIRROR_DIR/.index/certified-operator-index-v4.22"))
+	_x_comm=$(awk '{print $1}' "$MIRROR_DIR/.index/community-operator-index-v4.21" | grep -m1 -xFf <(awk '{print $1}' "$MIRROR_DIR/.index/community-operator-index-v4.22"))
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=" "ops=web-terminal,${_x_cert},${_x_comm}" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=all"
+	assert_eq "Six catalogs present (3 per minor)" "6" "$(grep -c '^\s*- catalog:' "$_isc" || true)"
+
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=all" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=all"
+	assert_contains "op_sets=all: source minor catalog" "$_isc" "redhat-operator-index:v4.21$"
+	assert_contains "op_sets=all: target minor catalog" "$_isc" "redhat-operator-index:v4.22$"
+	assert_file_valid_yaml_operators "op_sets=all: exactly one operators key" "$_isc"
+
+	[[ $VERBOSE -eq 1 ]] && echo "--- ISC ---" && cat "$_isc" && echo "---"
+
+	# An unknown value must not turn on both catalogs.
+	generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=$_x_tgt" "catalog_versions=both"
+	assert_contains "Unknown value: target catalog kept" "$_isc" "redhat-operator-index:v4.22$"
+	assert_not_contains "Unknown value: source catalog not added" "$_isc" "redhat-operator-index:v4.21$"
+	if grep -q "Unknown value catalog_versions=both" "$_isc_stderr"; then
+		PASS=$(( PASS + 1 ))
+		echo "  PASS: Unknown catalog_versions value is warned"
+	else
+		FAIL=$(( FAIL + 1 ))
+		echo "  FAIL: Unknown catalog_versions value produced no warning"
+	fi
+
+	# The second catalog index is missing. Resolution runs in a subshell, so the
+	# parent must see the failure and stop instead of writing a partial ImageSet.
+	if generate_isc "ocp_version=$_x_src" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=4.99.1" "catalog_versions=all"; then
+		FAIL=$(( FAIL + 1 ))
+		echo "  FAIL: Missing catalog index should abort"
+	elif grep -q "Operator resolution failed" "$_isc_stderr"; then
+		PASS=$(( PASS + 1 ))
+		echo "  PASS: Missing catalog index aborts the parent"
+	else
+		FAIL=$(( FAIL + 1 ))
+		echo "  FAIL: Missing catalog index exited without the parent abort"
+		[[ $VERBOSE -eq 1 ]] && cat "$_isc_stderr"
+	fi
+else
+	echo "  SKIP: needs v4.21 and v4.22 indexes in $MIRROR_DIR/.index/"
+fi
+
+# ============================================================================
+echo ""
+echo "=== Test 6c: catalog_versions=all on one minor does not duplicate ==="
+# ============================================================================
+generate_isc "ocp_version=$OCP_VER" "ocp_channel=stable" "op_sets=ocp" "ops=" "excl_platform=" "ocp_upgrade_to=${OCP_MAJOR}.5" "catalog_versions=all" "excl_operators=" "excl_additional="
+assert_eq "Same minor: one redhat catalog" "1" "$(grep -c "redhat-operator-index:v${OCP_MAJOR}$" "$_isc" || true)"
 
 # ============================================================================
 echo ""

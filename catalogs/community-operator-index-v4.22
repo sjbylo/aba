@@ -142,6 +142,7 @@ file-integrity-console-plugin File Integrity Console Plugin stable-4.22
 flink-kubernetes-operator Flink Kubernetes Operator alpha
 flux Flux stable
 flux-operator Flux Operator stable
+flyway-operator Flyway Operator stable-v0.7
 fossul-operator Fossul Operator alpha
 fqdn-egress-operator FQDN Egress Operator stable
 frappe-operator Frappe Operator alpha
@@ -190,7 +191,7 @@ konflux-operator Konflux stable-v0.2
 konveyor-operator Konveyor Operator alpha
 korrel8r Korrel8r stable
 krkn-operator-acm Krkn Operator ACM stable-acm
-krkn-operator Krkn Operator stable-ocp
+krkn-operator Krkn Operator stable-ocp-1.1
 kuadrant-operator Kuadrant Operator stable
 kube-green kube-green alpha
 kubeheal-operator KubeHeal AIOps Self-Healing Platform alpha

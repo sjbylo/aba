@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 [ -f .install-complete ] && \
 	aba_abort "This cluster has already been deployed successfully!" \
-		"To re-install:  aba -d $(basename "$PWD") delete" \
-		"Then:           aba -d $(basename "$PWD") install"
+		"To re-install:  $(aba_cmd delete)" \
+		"Then:           $(aba_cmd install)"
 
 exit 0

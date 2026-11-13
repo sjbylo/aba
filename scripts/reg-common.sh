@@ -203,7 +203,7 @@ reg_detect_existing() {
 			exit 0
 		else
 			aba_abort "Registry at $reg_host is unreachable but state.sh still exists." \
-				"If the registry was removed externally, run 'aba -d $(basename "$PWD") uninstall' to clean up, then re-install." \
+				"If the registry was removed externally, run '$(aba_cmd uninstall)' to clean up, then re-install." \
 				"If the host is temporarily down, wait and retry."
 		fi
 	fi
@@ -213,8 +213,8 @@ reg_detect_existing() {
 	if probe_host "$reg_url/health/instance" "Quay registry health endpoint" 2>/dev/null; then
 		aba_abort \
 			"Existing Quay registry found at $reg_url/health/instance" \
-			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
-			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
+			"If this is your registry, register it with: $(aba_cmd register --pull-secret-mirror '<file>' --ca-cert '<file>')" \
+			"The pull secret can also be created via '$(aba_cmd password)'" \
 			"See the README.md for further information."
 	fi
 
@@ -223,8 +223,8 @@ reg_detect_existing() {
 	if probe_host --any "$reg_url/v2/" "Docker registry API" 2>/dev/null; then
 		aba_abort \
 			"Existing registry found at $reg_url" \
-			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
-			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
+			"If this is your registry, register it with: $(aba_cmd register --pull-secret-mirror '<file>' --ca-cert '<file>')" \
+			"The pull secret can also be created via '$(aba_cmd password)'" \
 			"See the README.md for further information."
 	fi
 
@@ -233,8 +233,8 @@ reg_detect_existing() {
 	if probe_host "$reg_url/" "registry root endpoint" 2>/dev/null; then
 		aba_abort \
 			"Endpoint found at $reg_url/" \
-			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
-			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
+			"If this is your registry, register it with: $(aba_cmd register --pull-secret-mirror '<file>' --ca-cert '<file>')" \
+			"The pull secret can also be created via '$(aba_cmd password)'" \
 			"See the README.md for further information."
 	fi
 }
@@ -416,7 +416,7 @@ reg_setup_data_dir() {
 				"Data directory '$reg_root' on host '$reg_host' is already in use by mirror workdir '$_sf_mirror'." \
 				"Each registry instance of the same vendor needs its own data directory." \
 				"Use --data-dir to specify a unique path:" \
-				"  aba -d $(basename "$PWD") install --data-dir ~/my-data-dir"
+				"  $(aba_cmd install --data-dir '~/my-data-dir')"
 		fi
 	done
 }
@@ -921,7 +921,7 @@ reg_pre_install_stale_check() {
 			"Stale registry state detected on $_where before install:" \
 			"$_stale" \
 			"A previous install was not fully cleaned up." \
-			"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+			"Run '$(aba_cmd uninstall)' first, or clean up manually."
 	fi
 }
 
@@ -1565,7 +1565,7 @@ reg_remote_post_install() {
 		aba_abort \
 			"Registry on $reg_host is not responding on port $reg_port after 60s." \
 			"Check firewall rules and that the registry service started correctly." \
-			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+			"Credentials saved. After fixing: $(aba_cmd verify)"
 	fi
 
 	# Phase 2: Single auth check — NO retry to avoid Quay brute-force lockout.
@@ -1575,7 +1575,7 @@ reg_remote_post_install() {
 		aba_abort \
 			"Registry on $reg_host is reachable but authentication failed." \
 			"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
-			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+			"Credentials saved. After fixing: $(aba_cmd verify)"
 	fi
 }
 

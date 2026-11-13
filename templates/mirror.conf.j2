@@ -50,3 +50,8 @@ data_dir=~				# Optional: Absolute path to storage for images and temporary file
 					# When set, 'aba imagesetconf' generates a single-channel ISC with
 					# shortestPath from aba.conf:ocp_version to this target version.
 					# Leave commented out for normal (non-upgrade) mirroring.
+
+#catalog_versions=			# Upgrade mode only: set to 'all' to mirror the operator catalogs of both
+					# the aba.conf:ocp_version minor and the ocp_upgrade_to minor (default: only
+					# the target minor). Use it when the registry gets its content only from this
+					# archive, e.g. one bundle to install a cluster and upgrade it later.

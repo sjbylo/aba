@@ -7,8 +7,11 @@
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
+_CLUSTER="${TUI_CLUSTER_NAME:-sno}"
+
 echo "=== TUI Day-2 Deep Test ==="
 echo "  Host: $_TUI_HOST"
+echo "  Cluster: $_CLUSTER"
 echo ""
 
 tui_deploy_code
@@ -63,18 +66,10 @@ tui_select_item "status"
 sleep 3
 tui_screenshot "d2d-02a-cluster-select"
 
-# Handle cluster selection dialog (if multiple clusters)
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
-	echo "  ✓ PASS: Cluster selection dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	# Just press Enter to select the default
-	tui_keys Enter
-	sleep 8  # Status check takes time (API calls)
-else
-	# Single cluster — goes directly to status check
-	sleep 5
-fi
+# Wait out Detecting… / Select-cluster (BM leftovers can delay the picker)
+tui_pick_cluster "$_CLUSTER" || true
+# Status check takes time (API calls)
+sleep 8
 
 tui_screenshot "d2d-02b-status"
 _scr=$(tui_capture)
@@ -102,7 +97,8 @@ elif echo "$_scr" | grep -qi "Unreachable\|unreachable\|shut.*down"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Status display unclear"
+	echo "  ✗ FAIL: Status display unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Enter; sleep 1
 	tui_keys Escape; sleep 1
 fi
@@ -131,16 +127,17 @@ if echo "$_scr" | grep -qi "cincinnati\|OSUS\|Update Service\|not found\|Warning
 	# Cancel — don't actually install OSUS
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 	sleep 1
-elif echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
+elif echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster\|Detecting installation"; then
 	echo "  ✓ PASS: OSUS shows cluster selection first"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_keys Enter; sleep 3  # select default cluster
+	tui_pick_cluster "$_CLUSTER" || true
 	tui_screenshot "d2d-03b-osus-warn"
 	# Cancel whatever appears next
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 	sleep 1
 else
-	echo "  ~ NOTE: OSUS dialog unclear"
+	echo "  ✗ FAIL: OSUS dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -166,7 +163,8 @@ elif echo "$_scr" | grep -qi "Select cluster"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Virt dialog unclear"
+	echo "  ✗ FAIL: Virt dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -189,9 +187,34 @@ if echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
 	tui_keys Enter; sleep 5  # takes time to fetch versions
 fi
 
+# Fetch may show "Fetching..." then either the picker or "Upgrade Check Failed".
+# Poll so we don't Escape mid-fetch and leave a failure msgbox up.
+_upgrade_outcome=""
+for _uw in $(seq 1 45); do
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Upgrade Check Failed\|Failed to query\|Cluster API is not reachable"; then
+		_upgrade_outcome=failed
+		break
+	fi
+	if echo "$_scr" | grep -qi "target version\|Current.*4\.\|Z-stream\|Minor\|Manual entry\|No.*available\|No.*versions"; then
+		_upgrade_outcome=picker
+		break
+	fi
+	if echo "$_scr" | grep -qi "Fetching available upgrade\|One moment\|please wait"; then
+		sleep 1
+		continue
+	fi
+	sleep 1
+done
 tui_screenshot "d2d-05b-upgrade-picker"
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Upgrade\|target version\|Current\|Z-stream\|Minor\|No.*available\|Manual entry"; then
+
+if [[ "$_upgrade_outcome" == "failed" ]] || echo "$_scr" | grep -qi "Upgrade Check Failed\|Failed to query"; then
+	echo "  ✓ PASS: Upgrade check reported error (cluster may be down)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_press_button "OK" 2>/dev/null || tui_keys Enter
+	sleep 1
+elif [[ "$_upgrade_outcome" == "picker" ]] || echo "$_scr" | grep -qi "Upgrade\|target version\|Current\|Z-stream\|Minor\|No.*available\|Manual entry"; then
 	echo "  ✓ PASS: Upgrade version picker appeared"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
@@ -228,17 +251,20 @@ if echo "$_scr" | grep -qi "Upgrade\|target version\|Current\|Z-stream\|Minor\|N
 
 	# Cancel upgrade
 	tui_keys Escape; sleep 1
+	# Async failure dialog can still appear after cancel — dismiss it
+	if tui_capture | grep -qi "Upgrade Check Failed\|Failed to query"; then
+		tui_press_button "OK" 2>/dev/null || tui_keys Enter
+		sleep 1
+	fi
 elif echo "$_scr" | grep -qi "No.*available\|No.*versions"; then
 	echo "  ✓ PASS: No upgrade versions available (expected)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
-elif echo "$_scr" | grep -qi "Failed\|failed\|error"; then
-	echo "  ✓ PASS: Upgrade check reported error (cluster may be down)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Upgrade screen unclear"
+	echo "  ✗ FAIL: Upgrade screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
+	tui_press_button "OK" 2>/dev/null || tui_keys Enter 2>/dev/null || true
 fi
 
 # ============================================================================
@@ -246,9 +272,18 @@ fi
 # ============================================================================
 echo ""
 echo "--- 6. Shutdown confirmation ---"
-tui_wait_for "Day-2\|Cluster Management" 5
+# Ensure Day-2 menu — upgrade failure msgbox previously left us stranded
+if ! tui_capture | grep -qi "Day-2\|Cluster Management"; then
+	tui_back_to "Actions" 5
+	tui_select_item "Day-2"
+fi
+if ! tui_wait_for "Day-2\|Cluster Management" 10; then
+	echo "  ✗ FAIL: Cannot reach Day-2 menu for Shutdown"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "d2d-06-no-day2"
+else
 
-tui_select_item "shutdown\|Shutdown"
+tui_select_item "Shutdown\|shutdown"
 sleep 3
 tui_screenshot "d2d-06-shutdown"
 
@@ -263,9 +298,11 @@ elif echo "$_scr" | grep -qi "Shutdown\|shutdown\|Confirm\|execution mode"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Shutdown dialog unclear"
+	echo "  ✗ FAIL: Shutdown dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
+fi  # end Day-2 menu reachable
 
 # ============================================================================
 # 7. Delete confirmation (cancel)
@@ -293,7 +330,8 @@ elif echo "$_scr" | grep -qi "Delete\|delete\|destroy\|Confirm\|Are you sure"; t
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Delete dialog unclear"
+	echo "  ✗ FAIL: Delete dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 

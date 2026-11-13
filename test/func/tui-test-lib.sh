@@ -20,10 +20,18 @@ _TUI_HEIGHT=45
 # Source of truth: .cursor/skills/throwaway-cluster/SKILL.md
 # ---------------------------------------------------------------------------
 TUI_LAB_DOMAIN="example.com"
-TUI_LAB_DNS_NTP="10.0.1.8"		# cluster-node DNS+NTP (NOT bastion 192.168.2.38)
+# DNS must be conno's dnsmasq (10.0.0.10): lab DNS 10.0.1.8 maps bastion.example.com
+# → 10.0.1.5 (other host's registry without the synced ocp_version). ABA's
+# aba-mirror.conf on conno must map bastion → this host's *lab* IP (10.0.0.10),
+# NOT the mgmt NIC (192.168.2.33). Guests use GW 10.0.0.1 (dead in this lab) so
+# off-subnet mirror IPs leave the agent ICMP-only with :8090/:22 closed.
+TUI_LAB_DNS="10.0.0.10"
+TUI_LAB_NTP="10.0.1.8"			# lab chrony (NOT bastion mgmt NIC)
+TUI_LAB_DNS_NTP="$TUI_LAB_DNS"		# compat alias (dig + DNS field defaults)
 TUI_LAB_MACHINE_NETWORK="10.0.0.0/20"
 TUI_LAB_GATEWAY="10.0.0.1"
 TUI_LAB_PORTS="ens160"
+TUI_LAB_MIRROR_IP="10.0.0.10"		# Quay on conno lab NIC (reachable on-link)
 
 # Resolve IPs for a throwaway cluster name (10.0.1.0/24 allocation).
 # Sets: _lab_starting_ip _lab_api_ip _lab_apps_ip _lab_type
@@ -78,11 +86,11 @@ tui_lab_resolve_cluster() {
 	_apps_ip="$_lab_apps_ip"
 	_machine_network="$TUI_LAB_MACHINE_NETWORK"
 	_gateway="$TUI_LAB_GATEWAY"
-	_cluster_dns="$TUI_LAB_DNS_NTP"
-	_cluster_ntp="$TUI_LAB_DNS_NTP"
+	_cluster_dns="$TUI_LAB_DNS"
+	_cluster_ntp="$TUI_LAB_NTP"
 	_ports="$TUI_LAB_PORTS"
 	_domain="$TUI_LAB_DOMAIN"
-	echo "  Lab IPs ($name): type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip apps=$_lab_apps_ip dns/ntp=$TUI_LAB_DNS_NTP"
+	echo "  Lab IPs ($name): type=$_lab_type starting=$_lab_starting_ip api=$_lab_api_ip apps=$_lab_apps_ip dns=$TUI_LAB_DNS ntp=$TUI_LAB_NTP"
 	return 0
 }
 
@@ -142,9 +150,9 @@ tui_apply_lab_network() {
 		fi
 	fi
 
-	if ! echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
-		echo "  Setting DNS servers to ${TUI_LAB_DNS_NTP}"
-		tui_set_net_field D "$TUI_LAB_DNS_NTP"
+	if ! echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS}"; then
+		echo "  Setting DNS servers to ${TUI_LAB_DNS}"
+		tui_set_net_field D "$TUI_LAB_DNS"
 		pane=$(tui_capture)
 	fi
 
@@ -154,19 +162,19 @@ tui_apply_lab_network() {
 		pane=$(tui_capture)
 	fi
 
-	if ! echo "$pane" | grep -qiE "NTP servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
-		echo "  Setting NTP servers to ${TUI_LAB_DNS_NTP}"
-		tui_set_net_field N "$TUI_LAB_DNS_NTP"
+	if ! echo "$pane" | grep -qiE "NTP servers:[[:space:]]*${TUI_LAB_NTP}"; then
+		echo "  Setting NTP servers to ${TUI_LAB_NTP}"
+		tui_set_net_field N "$TUI_LAB_NTP"
 		pane=$(tui_capture)
 	fi
 
 	# Assert critical fields
 	pane=$(tui_capture)
-	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS_NTP}"; then
-		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS_NTP}"
+	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS}"; then
+		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS}"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS_NTP} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
+		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$pane" | grep -qE "Starting IP:[[:space:]]*${_lab_starting_ip}"; then
@@ -446,7 +454,8 @@ tui_button_count() {
 
 # Navigate to a specific button by label and press Enter.
 # Assumes focus starts on the first button (OK/Select/Continue).
-# Usage: tui_press_button "Help"
+# Do NOT use this when focus is on a checklist/form list — Tab first, or use
+# tui_checklist_apply. Usage: tui_press_button "Help"
 tui_press_button() {
 	local target="$1"
 	local -a btns
@@ -467,6 +476,19 @@ tui_press_button() {
 		tui_keys Tab
 		sleep 0.2
 	done
+	tui_keys Enter
+}
+
+# Apply a dialog checklist when focus is on the list.
+# dialog does NOT treat Enter-on-item as OK for our checklists — Enter leaves
+# the dialog open; a later Escape (e.g. _goto_operators) cancels with no Apply.
+# Observed tab order on Operator Sets: list → Back → Apply (Apply is 2nd).
+# One Tab + Enter hits Back and discards; two Tabs + Enter hits Apply.
+tui_checklist_apply() {
+	tui_keys Tab
+	sleep 0.25
+	tui_keys Tab
+	sleep 0.25
 	tui_keys Enter
 }
 
@@ -642,6 +664,14 @@ tui_dismiss_startup() {
 			continue
 		fi
 
+		# Podman preflight (registries.d / pull hello) — Continue anyway
+		if echo "$_scr" | grep -qi "Podman Preflight"; then
+			echo "  Dismissing Podman Preflight Warning (Continue anyway)" >&2
+			tui_keys Enter
+			sleep 1
+			continue
+		fi
+
 		# "Internet Access Required" error — TUI will exit after dismiss
 		if echo "$_scr" | grep -qi "Internet Access Required\|Cannot access"; then
 			echo "  WARNING: Internet Access Required dialog appeared" >&2
@@ -691,8 +721,7 @@ tui_dismiss_startup() {
 tui_skip_if_disco() {
 	local desc="$1"
 	if tui_is_disco; then
-		echo "  ~ SKIP: $desc (DISCO mode — no internet)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		echo "  (safe-skip) $desc (DISCO mode — no internet)"
 		return 0
 	fi
 	return 1
@@ -704,8 +733,7 @@ tui_skip_if_disco() {
 tui_require_internet() {
 	local desc="$1"
 	if tui_is_disco; then
-		echo "  ~ SKIP: $desc (requires internet, TUI is in DISCO mode)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		echo "  (safe-skip) $desc (requires internet, TUI is in DISCO mode)"
 		return 1
 	fi
 	return 0
@@ -723,12 +751,17 @@ tui_deploy_code() {
 	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
 	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
 		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
-	local _tar
+	local _tar _hash _old_hash
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
 
 	# Build tarball from disk using git ls-files (respects .gitignore)
 	git ls-files --cached --others --exclude-standard -- "${_paths[@]}" \
 		| tar czf "$_tar" -T - 2>/dev/null
+
+	# Content hash — relaunch TUI only when deployed product code actually changed.
+	# Test-only edits do not touch these paths, so the live session can be reused.
+	_hash=$(sha256sum "$_tar" | awk '{print $1}')
+	_old_hash=$($_TUI_SSH "cat ~/.aba/tui-deploy.hash 2>/dev/null" || true)
 
 	# Upload and extract on remote host (overlay, never wipe)
 	scp -q -F "$_TUI_SSH_CFG" "$_tar" "$_TUI_HOST:/tmp/tui-deploy.tar.gz" 2>/dev/null
@@ -736,6 +769,15 @@ tui_deploy_code() {
 
 	rm -f "$_tar"
 	echo "  Code deployed ($(git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | wc -l) files)"
+
+	$_TUI_SSH "mkdir -p ~/.aba && echo '$_hash' > ~/.aba/tui-deploy.hash" 2>/dev/null || true
+	if [[ -n "$_old_hash" && "$_hash" == "$_old_hash" ]]; then
+		echo "  Code unchanged — keeping live TUI session if present"
+	else
+		# Running abatui will not re-source scripts; force next start_to_menu to relaunch.
+		echo "  Code changed — stopping live TUI so next start picks up new code"
+		tui_stop 2>/dev/null || true
+	fi
 
 	# Host leftovers that poison later suites (stale op_sets, bad DC, dead NTP).
 	tui_sanitize_op_sets
@@ -864,13 +906,15 @@ tui_ensure_install_prereqs() {
 		# via ens192). VMs on Lab Network (10.0.0.0/20) cannot reach that DNS —
 		# agent then fails: "lookup disco.example.com on 192.168.2.38:53: i/o timeout".
 		# Force lab DNS on the machine network when configured DNS is off-net.
-		_lab_dns=10.0.1.8
+		# Prefer conno dnsmasq so bastion.example.com → local mirror (not lab 10.0.1.5).
+		_lab_dns=10.0.0.10
 		_dns=$(grep "^dns_servers=" aba.conf 2>/dev/null | cut -d= -f2 | sed "s/#.*//;s/[[:space:]]//g")
 		_dns_ok=
+		# Only treat as OK when already pointing at conno DNS (correct bastion mapping).
 		case ",$_dns," in
-			*,10.0.*) _dns_ok=1 ;;
+			*,10.0.0.10,*) _dns_ok=1 ;;
 		esac
-		if [ -z "$_dns_ok" ] && dig +time=1 +tries=1 +short disco.example.com "@$_lab_dns" 2>/dev/null | grep -q .
+		if [ -z "$_dns_ok" ] && dig +time=1 +tries=1 +short bastion.example.com "@$_lab_dns" 2>/dev/null | grep -q .
 		then
 			if grep -q "^dns_servers=" aba.conf; then
 				sed -i "s/^dns_servers=.*/dns_servers=$_lab_dns\\t\\t#/" aba.conf
@@ -879,15 +923,81 @@ tui_ensure_install_prereqs() {
 			fi
 			echo "DNS:${_dns:-empty}->$_lab_dns"
 		fi
+		# --- Mirror A-record on lab DNS (see tui_ensure_bastion_mirror_dns) ---
+		_mir_ip=10.0.0.10
+		_cur=$(dig +time=1 +tries=1 +short bastion.example.com "@$_lab_dns" 2>/dev/null | head -1)
+		if [ -n "$_cur" ] && [ "$_cur" != "$_mir_ip" ]; then
+			echo "address=/bastion.example.com/$_mir_ip" | sudo tee /etc/dnsmasq.d/aba-mirror.conf >/dev/null
+			sudo systemctl reset-failed dnsmasq 2>/dev/null || true
+			sudo systemctl restart dnsmasq 2>/dev/null || true
+			echo "MIRRORDNS:$_cur->$_mir_ip"
+		fi
 	' 2>/dev/null) || true
 	if [[ -n "$_out" ]]; then
 		echo "  Ensured install prereqs: $_out"
 	fi
 }
 
+# Ensure dnsmasq maps bastion.example.com to the lab-reachable Quay IP.
+# ABA add-mirror uses _pick_install_iface (default-route/mgmt NIC) which writes
+# 192.168.2.33 — unreachable from cluster VMs when GW 10.0.0.1 is down.
+tui_ensure_bastion_mirror_dns() {
+	local _cur _want="$TUI_LAB_MIRROR_IP" _dns="$TUI_LAB_DNS"
+	_cur=$($_TUI_SSH "dig +time=1 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
+	if [[ -n "$_cur" && "$_cur" == "$_want" ]]; then
+		echo "  Bastion DNS OK: bastion.example.com → $_want (via $_dns)"
+		return 0
+	fi
+	echo "  Fixing bastion DNS: ${_cur:-unset} → $_want on $_dns"
+	$_TUI_SSH "echo 'address=/bastion.example.com/${_want}' | sudo tee /etc/dnsmasq.d/aba-mirror.conf >/dev/null && sudo systemctl reset-failed dnsmasq 2>/dev/null; sudo systemctl restart dnsmasq" 2>/dev/null || true
+	_cur=$($_TUI_SSH "dig +time=1 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
+	if [[ "$_cur" == "$_want" ]]; then
+		echo "  ✓ Bastion DNS fixed: bastion.example.com → $_want"
+		return 0
+	fi
+	echo "  ✗ WARN: bastion.example.com still resolves to '${_cur:-unset}' (want $_want)" >&2
+	return 1
+}
+
 # Mirror is installed when mirror/.available exists on the test host.
 tui_mirror_available() {
 	$_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null
+}
+
+# True when mirror/.available exists AND port 8443 is listening on the host.
+tui_mirror_listening() {
+	$_TUI_SSH "ss -ltn 2>/dev/null | grep -q ':8443' || netstat -ltn 2>/dev/null | grep -q ':8443'" 2>/dev/null
+}
+
+# After a host wipe (or first run), cluster/mirror UI tests need a local registry.
+# Install via CLI so page-nav tests are not blocked on "Mirror Required".
+# .available alone is not enough — Start can leave a dead registry.
+# Usage: tui_ensure_mirror_installed
+tui_ensure_mirror_installed() {
+	if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+		echo "  Mirror available and listening on :8443"
+		return 0
+	fi
+	if [[ "$(tui_mirror_available)" == "yes" ]] && ! tui_mirror_listening; then
+		echo "  Mirror marked available but :8443 is down — starting via CLI..."
+		$_TUI_SSH "cd ~/aba/mirror && aba start --yes" 2>&1 | tail -20
+		if tui_mirror_listening; then
+			echo "  ✓ Mirror started (listening on :8443)"
+			return 0
+		fi
+		echo "  Start failed — reinstalling local registry..."
+	else
+		echo "  Mirror not installed — installing local registry via CLI (prereq)..."
+	fi
+	if $_TUI_SSH "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1; cd ~/aba/mirror && aba install --yes" 2>&1 | tee /tmp/tui-mirror-install-$$.log | tail -30; then
+		if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+			echo "  ✓ Mirror installed (listening on :8443)"
+			return 0
+		fi
+	fi
+	echo "  ✗ FAIL: Could not install/start local mirror registry" >&2
+	tail -20 /tmp/tui-mirror-install-$$.log 2>/dev/null | sed 's/^/    /' >&2
+	return 1
 }
 
 # Fallback when TUI delete cannot run: aba -d <cluster> delete --yes.
@@ -948,12 +1058,65 @@ tui_force_type_sno() {
 	tui_force_type sno
 }
 
+# True when the Actions main menu is visible (not Confirm Exit / a submenu).
+tui_on_main_menu() {
+	local _scr
+	_scr=$(tui_capture) || return 1
+	if echo "$_scr" | grep -qi "Confirm Exit\|Exit ABA TUI\|Are you sure.*exit"; then
+		return 1
+	fi
+	# Main menu title plus at least one primary action section/item
+	echo "$_scr" | grep -qi "Actions" || return 1
+	echo "$_scr" | grep -qiE "── Registry ──|── Cluster ──|── Mirror ──|Mirror Payload|Install Cluster|Day-2|Install Registry"
+}
+
+# Navigate back to the Actions main menu without exiting the TUI.
+# Handles Confirm Exit (Continue) if Escape overshoots.
+# Usage: tui_leave_on_menu
+tui_leave_on_menu() {
+	if ! tui_session_alive 2>/dev/null; then
+		return 0
+	fi
+	tui_dismiss_result 2>/dev/null || true
+	# Escape/back until Actions, without confirming exit
+	if ! tui_back_to "Actions" 15; then
+		return 1
+	fi
+	# If still on Confirm Exit, stay in the TUI
+	local _scr
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Confirm Exit\|Exit ABA"; then
+		tui_press_button "Continue" 2>/dev/null || { tui_keys Tab; sleep 0.2; tui_keys Enter; }
+		sleep 1
+	fi
+	tui_on_main_menu
+}
+
 # Start TUI, dismiss startup dialogs, detect mode, land on main menu.
-# Combines: tui_start + splash dismiss + mode detection.
+# Reuses a live tmux session already on (or returnable to) the main menu —
+# launching abatui costs ~20s, so tests must not exit the TUI between suites.
 # On failure (e.g. "Internet Access Required" exit), stops TUI and returns 1.
 # Usage: tui_start_to_menu [start_cmd] || { tui_summary; exit 1; }
 tui_start_to_menu() {
 	local cmd="${1:-cd ~/aba && abatui}"
+
+	if tui_session_alive; then
+		if tui_on_main_menu; then
+			echo "  Reusing TUI session (already on main menu)"
+			trap 'tui_leave_on_menu 2>/dev/null' EXIT
+			tui_detect_mode
+			return 0
+		fi
+		echo "  Reusing TUI session — navigating to main menu"
+		if tui_leave_on_menu && tui_on_main_menu; then
+			trap 'tui_leave_on_menu 2>/dev/null' EXIT
+			tui_detect_mode
+			return 0
+		fi
+		echo "  Existing session unusable — relaunching TUI"
+		tui_stop
+	fi
+
 	tui_start "$cmd"
 	tui_dismiss_startup 60 || { tui_stop; return 1; }
 	tui_detect_mode
@@ -973,27 +1136,39 @@ tui_dismiss_cluster_select() {
 }
 
 # Wait out "Detecting installation status…" then pick $1 from a Select-cluster
-# menu when multiple leftovers exist. Prefer exact name match over first entry.
+# menu when multiple leftovers exist. Prefer name match over first entry.
+# Returns once the picker is gone or a post-select screen appears.
 # Usage: tui_pick_cluster sno
 tui_pick_cluster() {
 	local cluster="${1:?}"
 	local _scr _i
-	for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+	for _i in $(seq 1 60); do
 		_scr=$(tui_capture)
-		echo "$_scr" | grep -qi "Detecting installation status" || break
-		sleep 2
-	done
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
-		if echo "$_scr" | grep -qi "$cluster"; then
-			tui_select_item "$cluster" 2>/dev/null || tui_keys Enter
-		else
-			echo "  WARNING: cluster '$cluster' not in picker — accepting default" >&2
-			tui_keys Enter
+		# Splash while TUI probes leftover cluster dirs (e.g. after BM tests)
+		if echo "$_scr" | grep -qi "Detecting installation status"; then
+			sleep 2
+			continue
+		fi
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
+			if echo "$_scr" | grep -qi "$cluster"; then
+				tui_select_item "$cluster" 2>/dev/null || tui_keys Enter
+			else
+				echo "  WARNING: cluster '$cluster' not in picker — accepting default" >&2
+				tui_keys Enter
+			fi
+			sleep 1
+			tui_wait_gone "Select cluster|select.*cluster|Detecting installation status" 10 || true
+			return 0
+		fi
+		# Already past the picker (do NOT match Day-2 "── Configuration ──" —
+		# that is the menu behind the dialog and caused early return before Select).
+		if echo "$_scr" | grep -qiE "Choose execution mode|Run in Terminal|Run in TUI|Executing|Progress.*step|Overall Progress|In Progress|── Success ──|── FAILED ──|Current:.*\[|Select target version|Cluster Operators|One moment please"; then
+			return 0
 		fi
 		sleep 1
-		tui_wait_gone "Select cluster|select.*cluster" 8 || true
-	fi
+	done
+	echo "  WARNING: tui_pick_cluster timed out waiting for picker/progress" >&2
+	return 1
 }
 
 # Dismiss an execution mode dialog if present.
@@ -1017,7 +1192,8 @@ tui_clear_failed_tasks() {
 	$_TUI_SSH "cd ~/aba && source scripts/include_all.sh && run_once -F 2>/dev/null; true"
 }
 
-# Start the TUI in a fresh tmux session on the test host
+# Start the TUI in a fresh tmux session on the test host.
+# Prefer tui_start_to_menu — it reuses a live session when possible.
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
@@ -1032,66 +1208,36 @@ tui_start() {
 	sleep 0.5
 	$_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT '$cmd'"
 	sleep 2
-	# Safety net: ensure tmux session is killed on unexpected exit
-	trap 'tui_stop 2>/dev/null' EXIT
+	# Leave TUI on main menu on unexpected exit — do not kill (relaunch is ~20s)
+	trap 'tui_leave_on_menu 2>/dev/null' EXIT
 }
 
-# Kill the TUI session
+# Kill the TUI session (force). Prefer tui_leave_on_menu / tui_cleanup.
 tui_stop() {
 	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 }
 
-# Clean shutdown + stray process check.
-# 1. Try to exit the TUI gracefully (dismiss dialogs, Escape to main, exit)
-# 2. If still alive, force-kill the tmux session
-# 3. Wait for processes to die
-# 4. Check for strays — PASS if clean, FAIL if any remain (and kill them)
-# Call this instead of duplicating cleanup logic in every test.
+# End-of-test cleanup: return to the Actions main menu and leave the TUI running.
+# Launching abatui costs ~20s; suites must not exit between tests.
+# PASS when the session is on the main menu. If the session is already gone
+# (e.g. a test exercised Exit), PASS with a note — the next start will relaunch.
 tui_cleanup() {
-	# Dismiss any result/error dialog first
-	tui_dismiss_result 2>/dev/null
-
-	# Try to escape back to main menu — up to 10 Escapes covers deep wizards
-	for _i in 1 2 3 4 5 6 7 8 9 10; do
-		if ! $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
-			break
-		fi
-		# Check if we reached the main menu
-		if tui_capture | grep -qi "Actions"; then
-			# On the main menu — press Escape once more to exit the TUI
-			tui_keys Escape
-			sleep 2
-			break
-		fi
-		tui_keys Escape
-		sleep 0.5
-	done
-
-	# If session is still alive, try Enter (confirm exit dialog) then force-kill
-	if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
-		tui_keys Enter; sleep 0.5
-		tui_keys Escape; sleep 0.5
-		tui_keys Enter; sleep 0.5
-	fi
-
-	# Force-kill the tmux session if it didn't exit cleanly
-	tui_stop
-	sleep 2
-
-	# Check for strays AFTER the session is gone
-	# Exclude tmux itself (its cmdline contains "abatui" from new-session args)
-	local _strays
-	_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui' | grep -v grep | grep -v 'tmux '" 2>/dev/null || true)
-	if [ -z "$_strays" ]; then
-		echo "  ✓ PASS: No stray processes"
+	if ! tui_session_alive 2>/dev/null; then
+		echo "  ✓ PASS: Cleanup complete (no TUI session — next test will launch)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Stray processes after cleanup:"
-		echo "$_strays" | sed 's/^/      /'
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		$_TUI_SSH "pkill -9 -f abatui 2>/dev/null; pkill -9 -f 'dialog --' 2>/dev/null; true"
-		sleep 1
+		return 0
 	fi
+
+	if tui_leave_on_menu && tui_on_main_menu; then
+		echo "  ✓ PASS: TUI left on main menu"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		return 0
+	fi
+
+	echo "  ✗ FAIL: Could not return TUI to main menu"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "CLEANUP-NOT-ON-MENU-$(date +%H%M%S)"
+	# Do not kill — leave whatever state for debugging / next start_to_menu recovery
 }
 
 # --- Assertions ---
@@ -1170,6 +1316,36 @@ tui_screenshot() {
 # the cluster directory exists — installed OR in-progress OR failed.
 #
 # Navigates: Actions → Day-2 → Delete → select → confirm → wait.
+# Destroy leftover vSphere VMs for a cluster even when ~/aba/<cluster> is gone.
+# Orphan VMs boot an old disk OS and steal the starting_ip — agent never comes up.
+# Usage: tui_destroy_orphan_vms sno
+tui_destroy_orphan_vms() {
+	local cluster="$1"
+	$_TUI_SSH "bash -s" <<EOF || true
+set +e
+cd ~/aba || exit 0
+[ -f vmware.conf ] || exit 0
+set -a; source vmware.conf; set +a
+export GOVC_INSECURE="\${GOVC_INSECURE:-true}"
+command -v govc >/dev/null 2>&1 || exit 0
+# Cluster folder VMs: /Datacenter/vm/<cluster>/*
+_folder="\${VC_FOLDER:-\${GOVC_DATACENTER}/vm}/$cluster"
+_folder=\$(echo "\$_folder" | sed 's|//*|/|g')
+for _vm in \$(govc ls "\$_folder" 2>/dev/null); do
+	echo "  Pre-cleanup: destroying orphan VM \$_vm"
+	govc vm.power -off -force "\$_vm" 2>/dev/null
+	govc vm.destroy "\$_vm" 2>/dev/null
+done
+# Also catch a top-level VM named exactly the cluster (SNO)
+if govc vm.info "$cluster" >/dev/null 2>&1; then
+	echo "  Pre-cleanup: destroying orphan VM $cluster"
+	govc vm.power -off -force "$cluster" 2>/dev/null
+	govc vm.destroy "$cluster" 2>/dev/null
+fi
+govc object.destroy "\$_folder" 2>/dev/null || true
+EOF
+}
+
 # Usage: tui_delete_cluster "sno"
 tui_delete_cluster() {
 	local cluster="$1"
@@ -1179,7 +1355,8 @@ tui_delete_cluster() {
 
 	_has_dir=$($_TUI_SSH "test -d ~/aba/$cluster && echo yes || echo no")
 	if [[ "$_has_dir" != "yes" ]]; then
-		echo "  Pre-cleanup: no ~/aba/$cluster directory — nothing for TUI/aba to delete"
+		echo "  Pre-cleanup: no ~/aba/$cluster directory — sweeping orphan VMs"
+		tui_destroy_orphan_vms "$cluster"
 		return 0
 	fi
 
@@ -1239,6 +1416,9 @@ tui_delete_cluster() {
 	if [[ "$_tui_ok" -ne 1 ]]; then
 		tui_aba_delete_cluster "$cluster" || true
 	fi
+
+	# Always sweep orphans — aba delete under platform=bm skips VMs.
+	tui_destroy_orphan_vms "$cluster"
 
 	return 0
 }
@@ -1369,6 +1549,8 @@ tui_wait_for_progress() {
 	local ss_interval="${3:-120}"
 	local _start _elapsed _last_ss _scr _inner_retries=0 _max_inner=3
 	local _saw_progress=0
+	local _ever_in_progress=0
+	local _saw_error=0
 	local _menu_pat="── Mirror ──\|── Registry ──\|── Cluster ──\|── Advanced ──\|── Configuration ──\|── Lifecycle ──\|── Cleanup ──\|── Transfer ──\|── Status ──"
 
 	_start=$(date +%s)
@@ -1403,24 +1585,56 @@ tui_wait_for_progress() {
 			_last_ss=$_elapsed
 		fi
 
+		# Detecting / Select-cluster are NOT progress. Auto-clear them or we
+		# sit for the full timeout (seen in upgrade day-2 OperatorHub).
+		if echo "$_scr" | grep -qi "Detecting installation status"; then
+			echo "  ... '$label' waiting out installation-status detect (${_elapsed}s)"
+			sleep 2
+			continue
+		fi
+		if echo "$_scr" | grep -qiE "Select cluster|select.*cluster|choose.*cluster"; then
+			# Prefer the test cluster when known; bare Enter picks the first radiolist row.
+			echo "  Dismissing cluster select during '$label' (${_elapsed}s)"
+			if [[ -n "${TUI_CLUSTER_NAME:-${_CLUSTER:-}}" ]]; then
+				tui_pick_cluster "${TUI_CLUSTER_NAME:-$_CLUSTER}" || tui_keys Enter
+			else
+				tui_keys Enter
+			fi
+			sleep 1
+			tui_wait_gone "Select cluster|select.*cluster" 8 || true
+			# Do not mark _saw_progress — wait for a real execution dialog.
+			continue
+		fi
+
+		# Version picker / fetching splash are NOT progress (upgrade hang:
+		# wait treated "Upgrade Cluster" menu as in-progress for 90 min).
+		if echo "$_scr" | grep -qi "Fetching available upgrade versions\|Select target version"; then
+			if [[ $_saw_progress -eq 1 ]]; then
+				echo "  WARNING: '$label' — still on version picker (${_elapsed}s); not real progress"
+				_saw_progress=0
+			fi
+			if (( _elapsed >= 45 )); then
+				echo "  ERROR: '$label' stuck on version picker after ${_elapsed}s"
+				tui_screenshot "${label}-stuck-version-picker"
+				return 3
+			fi
+			sleep 2
+			continue
+		fi
+
 		# Phase 1: wait for the screen to leave the menu (progress/dialog appears)
 		# Use specific execution keywords — avoid generic words like "Upgrade"
 		# that appear in menus and buttons.
 		if [[ $_saw_progress -eq 0 ]]; then
-			if echo "$_scr" | grep -qi "Executing\|Progress.*step\|Running.*step\|Syncing.*mirror\|Installing\|Graceful.*shut\|Shutdown.*progress\|Startup.*progress\|All steps completed\|steps completed successfully\|Press.*ENTER.*return\|ENTER to return\|── Success ──\|── FAILED ──"; then
+			if echo "$_scr" | grep -qi "Executing\|Progress.*step\|Running.*step\|Syncing.*mirror\|Installing\|Graceful.*shut\|Shutdown.*progress\|Startup.*progress\|All steps completed\|steps completed successfully\|Press.*ENTER.*return\|ENTER to return\|── Success ──\|── FAILED ──\|In Progress\|Overall Progress"; then
 				_saw_progress=1
 			elif ! echo "$_scr" | grep -q "$_menu_pat"; then
 				_saw_progress=1
 			else
-				# Still on menu — wait briefly for operation to start
+				# Still on menu — do NOT soft-PASS. Wait until timeout.
 				if (( _elapsed >= 10 )); then
 					echo "  WARNING: '$label' — still on menu after ${_elapsed}s"
 					tui_screenshot "${label}-still-on-menu"
-				fi
-				# After 20s assume the menu IS the result (quick operation)
-				if (( _elapsed >= 20 )); then
-					echo "  Progress '$label' — assuming quick completion (${_elapsed}s)"
-					return 0
 				fi
 				sleep 2
 				continue
@@ -1430,17 +1644,21 @@ tui_wait_for_progress() {
 		# Error/failure dialog first — titles like "…: Error ───" must not be
 		# mistaken for success (and must win over later menu/success checks).
 		if echo "$_scr" | grep -qiE '(:[[:space:]]*Error[[:space:]])|Error.*─|─.*Error|─.*FAILED|FAILED.*─|A step failed'; then
+			_saw_error=1
 			echo "  Error detected during '$label' (${_elapsed}s)"
 			tui_screenshot "${label}-error"
-			_tui_capture_output "$label"
 
+			# Retry only when the Retry button is actually pressable.
 			if echo "$_scr" | grep -qi "Retry" && [[ $_inner_retries -lt $_max_inner ]]; then
 				_inner_retries=$(( _inner_retries + 1 ))
 				echo "  Pressing TUI Retry button ($_inner_retries/$_max_inner)..."
-				tui_press_button "Retry"
-				sleep 3
-				continue
+				if tui_press_button "Retry"; then
+					sleep 3
+					continue
+				fi
+				echo "  Retry button not pressable — treating as failure"
 			fi
+			_tui_capture_output "$label"
 			return 1
 		fi
 
@@ -1456,12 +1674,20 @@ tui_wait_for_progress() {
 			return 0
 		fi
 
+		# Track real execution so we never q-quit on the first paint.
+		if echo "$_scr" | grep -qi "In Progress"; then
+			_ever_in_progress=1
+		fi
+
 		# Completed with errors: progress dialog done, "Quit" button visible.
 		# Do not quit while a step is In Progress, or while a later step is
 		# still N/A. Review can already say No-op in the gap after the ISO
 		# step finishes and before stage/boot leave N/A. q in that gap aborts
 		# the install. A Failed step leaves the rest N/A on purpose, so that
 		# case still quits.
+		#
+		# Also: never q in the first ~25s. day2 OperatorHub was aborted at
+		# ~14s (Stopped) when an early frame matched No-op/Succeeded.
 		if echo "$_scr" | grep -qi "Quit.*Q\|Q.*ESC"; then
 			if echo "$_scr" | grep -qi "Failed\|No-op\|Done\|Skipped\|Succeeded"; then
 				if echo "$_scr" | grep -qi "In Progress"; then
@@ -1470,6 +1696,11 @@ tui_wait_for_progress() {
 				fi
 				if echo "$_scr" | grep -q "N/A" && ! echo "$_scr" | grep -qi "Failed"; then
 					sleep 5
+					continue
+				fi
+				if (( _elapsed < 25 )); then
+					echo "  ... '$label' Quit visible too early (${_elapsed}s, in_progress=${_ever_in_progress:-0}) — waiting"
+					sleep 3
 					continue
 				fi
 				local _has_fail=0
@@ -1486,14 +1717,20 @@ tui_wait_for_progress() {
 			fi
 		fi
 
-		# Back at any menu — only trust this if enough time has passed
-		# (avoids false positives from brief menu flash between dialogs)
+		# Back at menu after starting progress is NOT success (soft-PASS removed).
+		# Error dialogs often dismiss to the menu; that must remain a failure.
 		if echo "$_scr" | grep -q "$_menu_pat"; then
-			if (( _elapsed >= 10 )); then
-				echo "  Progress '$label' returned to menu (${_elapsed}s)"
-				return 0
+			if [[ $_saw_error -eq 1 ]]; then
+				echo "  Progress '$label' returned to menu after error (${_elapsed}s)"
+				tui_screenshot "${label}-menu-after-error"
+				return 1
 			fi
-			# < 10s: likely a menu flash, keep waiting
+			if [[ $_saw_progress -eq 1 ]] && (( _elapsed >= 10 )); then
+				echo "  Progress '$label' returned to menu without verified success (${_elapsed}s)"
+				tui_screenshot "${label}-menu-without-success"
+				return 1
+			fi
+			# Brief menu flash before progress starts
 			sleep 2
 			continue
 		fi
