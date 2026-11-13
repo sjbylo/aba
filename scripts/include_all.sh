@@ -1900,20 +1900,6 @@ aba_cmd() {
 	fi
 }
 
-# Command for a directory that may not be the current one.
-# When <dir> is this directory and -d was not used, same as aba_cmd.
-aba_cmd_for() {
-	local _dir="$1"
-	shift
-	local _base
-	_base=$(basename "$_dir")
-	if [ "$_base" = "$(basename "$PWD")" ] && [ -z "${ABA_TARGET_DIR:-}" ]; then
-		aba_cmd "$@"
-	else
-		_aba_cmd_line "$_base" "$@"
-	fi
-}
-
 # Display post-install summary and next steps.
 # Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
 # and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
@@ -2035,7 +2021,7 @@ _state_override_mirror() {
 		touch "$ABA_TMP/drift.$$"
 		aba_warn \
 			"mirror.conf differs from installed registry: $_drifted" \
-			"Using installed values. To change, run 'aba -d $(basename "$PWD") uninstall' first, then edit mirror.conf."
+			"Using installed values. To change, run '$(aba_cmd uninstall)' first, then edit mirror.conf."
 	fi
 }
 
@@ -2967,8 +2953,53 @@ _next_major() {
 	echo "$(( x + 1 )).0"
 }
 
+# Version field from a cached release.txt. Empty when the file has none.
+_cdn_release_txt_version() {
+	local file="$1"
+	[ -s "$file" ] || return 0
+	grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$file" 2>/dev/null | awk '{print $2}' | head -n1
+}
+
+# Echo ver only when its first component is major. A 5.x tip is not a 4.x tip.
+_cdn_version_for_major() {
+	local ver="$1" major="$2"
+	[[ -n "$ver" && "${ver%%.*}" == "$major" ]] || return 0
+	echo "$ver"
+}
+
+# Highest channel-MAJOR.Y tip under openshift-vMAJOR (e.g. stable-4.22 → 4.22.22).
+# Used when the floating ocp/<channel> tip has crossed into another major.
+_cdn_scoped_tip_version() {
+	local channel="${1:-stable}"
+	local major="$2"
+	local index_url index_cache tip_dir tip_url tip_cache latest_ver
+
+	[[ "$major" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+
+	index_url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/"
+	index_cache="${ABA_CACHE_DIR}/ocp_index_v${major}_${ARCH}.html"
+	_fetch_cached "$index_url" "$index_cache" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+
+	# Directory links look like href="stable-4.22/"; pick highest Y for this major.
+	# href=" stops unstable-4.22 from matching the stable-4.22 pattern.
+	tip_dir="$(grep -Eo "href=\"${channel}-${major}\.[0-9]+/\"" "$index_cache" 2>/dev/null \
+		| sed -E 's/^href="([^"]+)\/"$/\1/' \
+		| sort -t. -k2,2n \
+		| tail -n1)"
+	[[ -n "$tip_dir" ]] || { echo ""; return 0; }
+
+	tip_url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/${tip_dir}/release.txt"
+	tip_cache="${ABA_CACHE_DIR}/release_${tip_dir}_${ARCH}.txt"
+	_fetch_cached "$tip_url" "$tip_cache" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+
+	latest_ver="$(_cdn_release_txt_version "$tip_cache")"
+	_cdn_version_for_major "$latest_ver" "$major"
+}
+
 # Full Version: string from CDN release.txt for channel + major (openshift-vN/...).
-# Cincinnati is channel-tip truth; CDN is only the floating download anchor (can lag).
+# Cincinnati is channel-tip truth; CDN is only the floating download anchor (can lag
+# or, after a major GA, publish the next major under the previous tree —
+# e.g. openshift-v4/.../ocp/stable → 5.0.1). Same-major tips only.
 _cdn_tip_version() {
 	local channel="${1:-stable}"
 	local major="$2"
@@ -2979,11 +3010,16 @@ _cdn_tip_version() {
 	url="https://mirror.openshift.com/pub/openshift-v${major}/${ARCH}/clients/ocp/${channel}/release.txt"
 	cache_file="${ABA_CACHE_DIR}/release_${channel}_v${major}_${ARCH}.txt"
 
-	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
+	if _fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" ""; then
+		latest_ver="$(_cdn_version_for_major "$(_cdn_release_txt_version "$cache_file")" "$major")"
+		if [[ -n "$latest_ver" ]]; then
+			echo "$latest_ver"
+			return 0
+		fi
+	fi
 
-	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
-	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
-	echo "$latest_ver"
+	# Floating tip empty or wrong major → highest channel-MAJOR.Y under this tree.
+	_cdn_scoped_tip_version "$channel" "$major"
 }
 
 # CDN floating-tip minor for a specific major. Rejects cross-contaminated tips
@@ -3172,26 +3208,33 @@ _version_has_cross_minor_edge() {
 
 ############################################
 # Candidate versions to offer, newest first, at most 3.
-# Starts at the newest stable minor and steps forward with _next_minor.
-# The first empty minor jumps once, via _next_major, then the next empty
-# minor stops. A minor is kept only when its newest build has an upgrade
-# edge from another minor and fast does not already list that same build.
+# Starts at the newest stable CDN minor (inclusive), then steps forward
+# with _next_minor. The first empty minor jumps once via _next_major; the
+# next empty minor stops. Keep a minor when its newest candidate build has
+# an upgrade edge from another minor — including when that build already
+# matches fast/stable (post-GA catch-up). Showing the same tip under
+# candidate is intentional so Latest/Previous/Older are not left empty.
 # This is not fetch_upgrade_targets: that walk starts from an installed
 # version and stops when that version is absent from the next graph.
 ############################################
 _candidate_offer_compute() {
-	local anchor minor head fast_head jump
+	local anchor minor head jump
 	local -a heads=()
 	local crossed=0 steps=0
 	local n i start
 
 	anchor="$(fetch_latest_minor_version stable)"
 	[[ -n "$anchor" ]] || return 0
-	minor="$anchor"
+	minor=""
 
 	while [[ $steps -lt 6 ]]; do
-		minor="$(_next_minor "$minor")"
-		[[ -n "$minor" ]] || break
+		# Inclusive: first pass is the stable CDN minor; then step forward.
+		if [[ -z "$minor" ]]; then
+			minor="$anchor"
+		else
+			minor="$(_next_minor "$minor")"
+			[[ -n "$minor" ]] || break
+		fi
 		steps=$(( steps + 1 ))
 
 		head="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
@@ -3208,9 +3251,6 @@ _candidate_offer_compute() {
 
 		_is_version_string "$head" || continue
 		_version_has_cross_minor_edge "$head" || continue
-
-		fast_head="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
-		[[ "$head" == "${fast_head:-}" ]] && continue
 
 		heads+=("$head")
 	done
@@ -4940,6 +4980,71 @@ _catalog_versions_to_mirror() {
 	echo "${_versions[*]}"
 }
 
+# --- CatalogSource Naming Helpers (day2) ---
+# In upgrade mode the ISC holds the operator catalogs of two minors and oc-mirror
+# writes one CatalogSource file per catalog image, named by digest, not version.
+# These helpers give the catalogs of one family distinct names.
+
+# Print the OCP minor (e.g. 4.21) of an operator catalog image, or nothing if unknown.
+# Uses the image tag (:v4.21) or else the catalog label com.redhat.index.delivery.version,
+# which survives oc-mirror's catalog rebuild.
+# Usage: catalog_image_minor <image> [<authfile>] [<ca_file>]
+catalog_image_minor() {
+	local _image="$1" _authfile="${2:-}" _ca_file="${3:-}"
+	local _label="" _cert_dir=""
+	local _skopeo_args=()
+
+	if [[ "$_image" =~ :v([0-9]+\.[0-9]+)$ ]]; then
+		echo "${BASH_REMATCH[1]}"
+		return 0
+	fi
+
+	[ -s "$_authfile" ] && _skopeo_args+=(--authfile "$_authfile")
+	if [ -s "$_ca_file" ]; then
+		_cert_dir=$(mktemp -d)
+		cp "$_ca_file" "$_cert_dir/ca.crt"
+		_skopeo_args+=(--cert-dir "$_cert_dir")
+	fi
+
+	aba_debug "Running: skopeo inspect --format '{{index .Labels \"com.redhat.index.delivery.version\"}}' ${_skopeo_args[*]} docker://$_image"
+	_label=$(skopeo inspect --format '{{index .Labels "com.redhat.index.delivery.version"}}' "${_skopeo_args[@]}" "docker://$_image") || _label=""
+	[ "$_cert_dir" ] && rm -rf "$_cert_dir"
+
+	_label="${_label#v}"
+	[[ "$_label" =~ ^[0-9]+\.[0-9]+$ ]] && echo "$_label"
+	return 0
+}
+
+# Print the minor whose catalog keeps the standard CatalogSource name: the cluster's
+# minor if one of the catalogs matches it, else the lowest catalog minor.
+# Usage: catalog_source_preferred_minor <cluster_minor> <catalog_minor>...
+catalog_source_preferred_minor() {
+	local _cluster_minor="$1"; shift
+	local _m
+
+	for _m in "$@"; do
+		[ "$_m" ] && [ "$_m" = "$_cluster_minor" ] && { echo "$_m"; return 0; }
+	done
+	printf '%s\n' "$@" | sed '/^$/d' | sort -V | head -1
+}
+
+# Print the CatalogSource name for one catalog file.
+# A family with one catalog keeps the standard name (e.g. redhat-operators). With
+# catalogs of several minors, the preferred minor keeps it and the others get a
+# -v<major>-<minor> suffix, or -<file_id> when their minor is unknown.
+# Usage: catalog_source_name <standard_name> <catalog_minor> <preferred_minor> <family_count> <file_id>
+catalog_source_name() {
+	local _name="$1" _minor="$2" _preferred="$3" _count="$4" _file_id="$5"
+
+	if [ "$_count" -le 1 ] || { [ "$_minor" ] && [ "$_minor" = "$_preferred" ]; }; then
+		echo "$_name"
+	elif [ "$_minor" ]; then
+		echo "${_name}-v${_minor//./-}"
+	else
+		echo "${_name}-${_file_id}"
+	fi
+}
+
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)
@@ -5227,7 +5332,7 @@ _run_oc_mirror_with_retry() {
 		local _ocp_ver_major
 		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 		# For upgrades, the ISC may reference the TARGET version's catalog (e.g. v4.21)
-		# not the base version's (v4.20). Pin both.
+		# not the base version's (v4.20), or both with catalog_versions=all. Pin both.
 		local _upgrade_ver_major=""
 		if [ "${ocp_upgrade_to:-}" ]; then
 			_upgrade_ver_major=$(echo "$ocp_upgrade_to" | cut -d. -f1-2)

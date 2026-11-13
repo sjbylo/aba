@@ -574,15 +574,17 @@ e2e_run "aba install --step iso is rejected" \
 e2e_run "install rule does not read target=" \
 	"! grep -q 'filter-out install' templates/Makefile.cluster"
 
+# make -n still runs a recipe that contains $(MAKE). That extract calls tar
+# on ~/bin/openshift-install. This step only checks the graph, so leave that file.
 e2e_run "Dry-run aba iso" \
-	"cd $MAC_DIR && timeout 90 make -n iso > \$HOME/tmp/e2e-tests/bm-make-iso.out 2>&1"
+	"cd $MAC_DIR && timeout 90 make -n -o \$HOME/bin/openshift-install iso > \$HOME/tmp/e2e-tests/bm-make-iso.out 2>&1"
 e2e_run "iso does not reach the monitor" \
 	"! grep -q 'monitor-install.sh' \$HOME/tmp/e2e-tests/bm-make-iso.out"
 e2e_run "iso still builds the image" \
 	"grep -q 'generate-image.sh' \$HOME/tmp/e2e-tests/bm-make-iso.out"
 
 e2e_run "Dry-run aba install" \
-	"cd $MAC_DIR && timeout 90 make -n install > \$HOME/tmp/e2e-tests/bm-make-full.out 2>&1"
+	"cd $MAC_DIR && timeout 90 make -n -o \$HOME/bin/openshift-install install > \$HOME/tmp/e2e-tests/bm-make-full.out 2>&1"
 e2e_run "install still runs the monitor" \
 	"grep -q 'monitor-install.sh' \$HOME/tmp/e2e-tests/bm-make-full.out"
 

@@ -37,9 +37,12 @@ _scoped_files=$(git ls-files | grep -v \
 # KCS-     = Red Hat Knowledge Centered Service articles
 # BZ-      = Red Hat Bugzilla
 # OCPBUGS- = Red Hat public OCP bug tracker (JIRA)
+# RHSA-    = Red Hat Security Advisory
+# RHBA-    = Red Hat Bug Advisory
+# RHEA-    = Red Hat Enhancement Advisory
 # OPTIND-  = false positive: bash $((OPTIND-1)) arithmetic expression
 # LICENSE- = false positive: Apache LICENSE-2.0 URL path component
-_allowlist_prefixes='KCS-|BZ-|OCPBUGS-|OPTIND-|LICENSE-'
+_allowlist_prefixes='KCS-|BZ-|OCPBUGS-|RHSA-|RHBA-|RHEA-|OPTIND-|LICENSE-'
 
 echo "--- Check 1: Internal ticket IDs ([A-Z]{4,}-[0-9]+) ---"
 _internal_ticket_failed=0
@@ -55,7 +58,7 @@ while IFS= read -r _file; do
 	fi
 done <<< "$_scoped_files"
 if [ "$_internal_ticket_failed" -eq 0 ]; then
-	test_pass "No internal ticket IDs in shipped files (allowlist: KCS-, BZ-, OCPBUGS-)"
+	test_pass "No internal ticket IDs in shipped files (allowlist: KCS-, BZ-, OCPBUGS-, RHSA-, RHBA-, RHEA-)"
 else
 	failed=$((failed + _internal_ticket_failed))
 	echo -e "${RED}Found $_internal_ticket_failed file(s) with non-allowlisted internal ticket IDs${NC}"

@@ -110,6 +110,8 @@ unit_tests=(
 	test/func/test-image-digest.sh
 	test/func/test-reg-port.sh
 	test/func/test-day2-ntp-order.sh
+	test/func/test-catalog-source-naming.sh
+	test/func/test-catalog-container-sweep.sh
 	test/func/test-agent-wait-skip.sh
 	test/func/test-bm-continuous-install.sh
 	test/func/test-bm-prompt-dialog.sh
@@ -167,6 +169,7 @@ unit_tests=(
 integration_tests=(
 	# CLI download pipeline
 	test/func/test-cli-download-urls.sh
+	test/func/test-arch-binaries.sh
 	test/func/test-cli-download-wait.sh
 	test/func/test-cli-download-pipeline.sh
 	test/func/test-download-before-install-race.sh
@@ -176,6 +179,7 @@ integration_tests=(
 	# Catalog / ISC
 	test/func/test-catalog-canary.sh
 	test/func/test-catalog-temp-cleanup.sh
+	test/func/test-catalog-container-sweep-live.sh
 	test/func/test-download-catalog-simple.sh
 	test/func/test-isc-generation.sh
 	test/func/test-show-ops.sh

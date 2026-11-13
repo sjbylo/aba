@@ -239,7 +239,43 @@ repo).
 
 ---
 
-## 3. Release Checklist
+## 3. Simulate a bare-metal install on vSphere
+
+A `platform=bm` install does not create, upload to, or power on hypervisors. On the lab, the same cluster can still be booted from its agent ISO by a vSphere VM. These two scripts do that. They are for developers and testers only. ABA and Make never call them.
+
+The cluster stays `platform=bm`. Neither script changes Make stamps (`.iso-uploaded`, `.vms-ready`, and the rest), so the bare-metal install chain still treats the hypervisor steps as a no-op. `aba delete` does not remove these VMs. Use `bm-sim-delete.sh` for that.
+
+Needs `vmware.conf` in the cluster directory (`aba -d <cluster> vmw` writes it) and `govc` on `PATH` or in `~/bin`.
+
+### Boot the agent ISO
+
+Build the ISO first (`aba -d <cluster> iso`). The cluster directory also needs `cluster.conf` and either `macs.conf` or a `mac_prefix`.
+
+```bash
+tools/bm-sim-boot.sh              # cluster directory is the current directory
+tools/bm-sim-boot.sh ocp          # name under the ABA root, or an absolute path
+```
+
+`bm-sim-boot.sh` uploads `iso-agent-based/agent.<arch>.iso` and runs `vmw-refresh.sh`, which deletes any existing VMs for that cluster, creates them again, attaches the ISO, and powers them on. Then watch the install:
+
+```bash
+aba -d ocp mon
+```
+
+### Remove the VMs
+
+```bash
+tools/bm-sim-delete.sh            # cluster directory is the current directory
+tools/bm-sim-delete.sh ocp        # directory, or just the name if the directory is already gone
+```
+
+`bm-sim-delete.sh` powers off and destroys VMs named `<cluster>` or `<cluster>-*`, and the vCenter folder when `VC_FOLDER` is set. A missing VM is success. It does not delete the cluster directory, DNS records, or the ISO.
+
+The bare-metal MAC matrix suite (`test/e2e/suites/suite-bm-mac-matrix.sh`) and the TUI bare-metal cluster test call these same scripts: boot after `aba iso`, then delete the VMs.
+
+---
+
+## 4. Release Checklist
 
 See the [prep-for-release skill](../.cursor/skills/prep-for-release/SKILL.md)
 for the full step-by-step procedure, and `build/release.sh --help` for

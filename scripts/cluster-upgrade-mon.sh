@@ -65,7 +65,7 @@ _cv_prog=$(echo "$_cv_init" | jq -r '.status.conditions[] | select(.type=="Progr
 if [ "$_cv_ver" = "$_target_ver" ] && [ "$_cv_prog" = "False" ]; then
 	aba_success "Cluster is already at version $_target_ver (no upgrade in progress)"
 	echo
-	aba_info "If CatalogSources need updating, run: aba -d $(basename "$PWD") day2"
+	aba_info "If CatalogSources need updating, run: $(aba_cmd day2)"
 	exit 0
 fi
 
@@ -86,7 +86,7 @@ _on_interrupt() {
 	echo
 	echo
 	aba_info "Monitor interrupted — the upgrade continues in the background."
-	aba_info "Resume monitoring:  aba -d $(basename "$PWD") upgrade-mon"
+	aba_info "Resume monitoring:  $(aba_cmd upgrade-mon)"
 	aba_info "Check status:       oc adm upgrade status"
 	exit 0
 }
@@ -137,7 +137,7 @@ while true; do
 		echo
 		oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 		echo
-		aba_info "Next step: run 'aba -d $(basename "$PWD") day2' to update CatalogSources for v$(_ver_minor "$_target_ver")"
+		aba_info "Next step: run '$(aba_cmd day2)' to update CatalogSources for v$(_ver_minor "$_target_ver")"
 		exit 0
 	fi
 

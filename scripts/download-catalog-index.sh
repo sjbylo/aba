@@ -21,7 +21,9 @@
 #   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml Helper YAML for reference
 # SIDE EFFECTS: Catalog image remains cached in podman storage (pull cache for future runs).
 #               Sweeps stale temp dirs (.aba-catalog-*, render-*) older than 24h at startup.
-#               Sweeps stale aba-catalog-* containers from previous interrupted runs.
+#               Sweeps aba-catalog-* containers whose owner pid is no longer running.
+#               A container whose pid is still alive is left alone, so one parallel
+#               download cannot unmount another's copy.
 # IDEMPOTENT: Yes — checks content layer digest before downloading. If the remote
 #             catalog data layer hasn't changed and the local index exists, exits 0
 #             immediately (~2s probe vs ~15s full download).
@@ -43,6 +45,36 @@
 #   6. Sort and write to temp file, validate, atomic rename to final location
 #   7. Record expected operator count
 #   8. Generate helper YAML for reference
+
+# Owner pid is the trailing number on aba-catalog-<catalog>-v<minor>-<pid>
+# and the same name with -retry. Every parallel download sweeps at startup.
+# A live pid means another script is still extracting; deleting that container
+# unmounts the copy. Pid 0 is rejected: kill -0 0 signals this process group
+# and would look alive. A reused pid can keep a stale container until that
+# process exits; that is rarer than deleting a live extract.
+_catalog_container_owner_pid() {
+	local name="$1" pid
+	pid="${name##*-}"
+	if [ "$pid" = "retry" ]; then
+		name="${name%-retry}"
+		pid="${name##*-}"
+	fi
+	if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+		printf '%s\n' "$pid"
+		return 0
+	fi
+	return 1
+}
+
+# True when the container name belongs to a process that is still running.
+_catalog_container_in_use() {
+	local pid
+	pid=$(_catalog_container_owner_pid "$1") || return 1
+	kill -0 "$pid" 2>/dev/null
+}
+
+# Tests source this file to call the checks above. Do not extract a catalog.
+[ "${BASH_SOURCE[0]}" != "$0" ] && return 0
 
 # Derive aba root from script location (this script is in scripts/)
 # Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
@@ -167,9 +199,14 @@ _get_content_layer_digest() {
 #
 # Net effect: repeat runs go from ~15s to ~1s per catalog (3 catalogs = ~3s vs ~45s).
 
-# Sweep stale containers and temp dirs from previous interrupted runs.
-# Must run before the fast-path exit so cleanup happens even when cached.
+# Sweep containers left by interrupted runs. Must run before the fast-path
+# exit so a cached catalog still cleans up. Skip a live owner: a fast-path
+# run used to delete the container another version was copying from.
 podman ps -a --format '{{.Names}}' | grep '^aba-catalog-' | while read -r _stale; do
+	if _catalog_container_in_use "$_stale"; then
+		aba_debug "Leaving live catalog container $_stale"
+		continue
+	fi
 	podman rm -f "$_stale" >/dev/null 2>&1
 done
 find "$ABA_TMP" -maxdepth 1 \( -name 'catalog-*' -o -name 'list-ops-*' -o -name 'render-registry-*' -o -name 'render-unpack-*' \) -mmin +1440 -exec rm -rf {} + 2>/dev/null || true

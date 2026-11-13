@@ -126,14 +126,16 @@ if [[ "$_found_logging" == "true" ]]; then
 	done
 fi
 
-if [[ "$_found_logging" == "true" ]]; then
+	if [[ "$_found_logging" == "true" ]]; then
 	# Toggle logging on with Space — cursor should now be on it
 	tui_keys Space
 	sleep 0.5
 	tui_screenshot "od-02b-logging-toggled"
-	# Press OK/Next to apply
-	tui_keys Enter
-	sleep 3
+	# Tab → Apply, Enter. Bare Enter does not submit this checklist.
+	tui_checklist_apply
+	# Wait until Operator Sets dialog is gone (menu or companion prompt)
+	tui_wait_gone "Use spacebar to toggle" 15 || true
+	sleep 1
 	# Dismiss companion images dialog if it appears
 	if tui_capture | grep -qi "companion\|Recommended\|image sets"; then
 		echo "  (companion images prompt appeared — pressing Skip)"
@@ -162,37 +164,41 @@ if [[ "$_found_logging" == "true" ]]; then
 	# Return to operators menu for subsequent tests
 	_goto_operators
 else
-	echo "  ~ SKIP: Could not find 'logging' in operator sets list"
+	echo "  ✗ FAIL: Could not find 'logging' in operator sets list"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 _logging_count="$_count"
 
 # ============================================================================
-# 3. Add another operator set: "obs" (observability)
+# 3. Add another operator set: "quay" (must NOT overlap logging's unique ops).
+# obs includes cluster-logging/loki/cincinnati — removing logging while obs stays
+# checked re-adds those ops and the basket count never drops (false FAIL).
 # ============================================================================
 echo ""
-echo "--- 3. Add operator set: obs ---"
+echo "--- 3. Add operator set: quay ---"
 _goto_operators
 tui_keys 1; sleep 0.5; tui_keys Enter
 tui_wait_for "Operator Sets\|checklist\|\\[" 10
 
-# Navigate to obs
-_found_obs=false
-# Reset to top first
+# quay is below the fold (after net/obs/ocp/odf) — scroll until visible
+_found_quay=false
 for i in $(seq 1 30); do tui_keys Up; sleep 0.1; done
-for i in $(seq 1 30); do
-	if tui_capture | grep -qi "obs.*Observab"; then
-		_found_obs=true
+sleep 0.3
+for i in $(seq 1 40); do
+	if tui_capture | grep -qE '\[.\][[:space:]]*quay[[:space:]]'; then
+		_found_quay=true
 		break
 	fi
-	tui_keys Down; sleep 0.3
+	tui_keys Down; sleep 0.15
 done
 
-if [[ "$_found_obs" == "true" ]]; then
+if [[ "$_found_quay" == "true" ]]; then
 	tui_keys Space; sleep 0.5
-	tui_screenshot "od-03-obs-toggled"
-	tui_keys Enter
-	sleep 3
+	tui_screenshot "od-03-quay-toggled"
+	tui_checklist_apply
+	tui_wait_gone "Use spacebar to toggle" 15 || true
+	sleep 1
 	# Dismiss companion images if shown
 	if tui_capture | grep -qi "companion\|Recommended\|image sets"; then
 		echo "  (companion images prompt appeared — pressing Skip)"
@@ -203,14 +209,15 @@ if [[ "$_found_obs" == "true" ]]; then
 	sleep 1
 	_count=$(tui_capture | grep -oP 'View/Edit Selection \(\K[0-9]+' || echo "0")
 	if [[ "$_count" -gt "${_logging_count:-0}" ]]; then
-		echo "  ✓ PASS: Added obs set, basket now has $_count operators (was $_logging_count)"
+		echo "  ✓ PASS: Added quay set, basket now has $_count operators (was $_logging_count)"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ✗ FAIL: Basket did not grow after adding obs set (count: $_count)"
+		echo "  ✗ FAIL: Basket did not grow after adding quay set (count: $_count)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else
-	echo "  ~ SKIP: Could not find 'obs' in operator sets list"
+	echo "  ✗ FAIL: Could not find 'quay' in operator sets list"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 _both_count="$_count"
@@ -239,10 +246,12 @@ if echo "$_scr" | grep -qi "Operator Selection\|operator\|\\[X\\]\|\\[ \\]"; the
 		echo "  ✓ PASS: Logging operators visible in basket"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: No logging-related operator names visible in first screen"
+		echo "  ✗ FAIL: No logging-related operator names visible in first screen"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else
-	echo "  ~ NOTE: Basket view screen unclear"
+	echo "  ✗ FAIL: Basket view screen unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Escape; sleep 1
 
@@ -255,26 +264,36 @@ _goto_operators
 tui_keys 1; sleep 0.5; tui_keys Enter
 tui_wait_for "Operator Sets\|checklist\|\\[" 10
 
-# Find logging (should be [X] now) and toggle off
+# Find logging by position (same as add) — dialog uses [*] for checked, not [X]
 _found_logging=false
 for i in $(seq 1 30); do tui_keys Up; sleep 0.1; done
-for i in $(seq 1 35); do
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "logging"; then
+sleep 0.5
+_scr=$(tui_capture)
+_all_items=$(echo "$_scr" | grep '\[.\]' | sed 's/.*\[.\][[:space:]]*//' | awk '{print $1}')
+_pos=0
+while IFS= read -r _item; do
+	if [[ "$_item" == "logging" ]]; then
 		_found_logging=true
 		break
 	fi
-	tui_keys Down; sleep 0.3
-done
+	_pos=$(( _pos + 1 ))
+done <<< "$_all_items"
+if [[ "$_found_logging" == "true" ]]; then
+	for _d in $(seq 1 "$_pos"); do
+		tui_keys Down; sleep 0.15
+	done
+fi
 
 if [[ "$_found_logging" == "true" ]]; then
-	# Verify it's checked [X]
+	# Verify it's checked — dialog checklist uses [*] (or legacy [X])
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -i "logging" | grep -q '\[X\]'; then
-		echo "  Logging set is [X] (checked) — toggling off"
+	if echo "$_scr" | grep -qiE '\[(\*|X)\][[:space:]]*logging' >/dev/null; then
+		echo "  Logging set is checked — toggling off"
 		tui_keys Space; sleep 0.5
 		tui_screenshot "od-05-logging-off"
-		tui_keys Enter; sleep 3
+		tui_checklist_apply
+		tui_wait_gone "Use spacebar to toggle" 15 || true
+		sleep 1
 		# Check if companion dialog appears (shouldn't for removal)
 		if tui_capture | grep -qi "companion\|Recommended"; then
 			tui_press_button "Skip" 2>/dev/null || tui_keys Escape
@@ -287,14 +306,29 @@ if [[ "$_found_logging" == "true" ]]; then
 			echo "  ✓ PASS: Removed logging set, basket decreased: $_both_count → $_count"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			echo "  ✗ FAIL: Basket did not decrease after removing logging (count: $_count)"
-			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			# Count can lag; confirm logging-unique packages left the basket.
+			# cincinnati may remain — other sets (e.g. quay) also include it.
+			tui_keys 3; sleep 0.5; tui_keys Enter
+			sleep 2
+			tui_screenshot "od-05b-basket-after-remove"
+			_scr=$(tui_capture)
+			if ! echo "$_scr" | grep -qiE 'cluster-logging|loki-operator'; then
+				echo "  ✓ PASS: Logging operators gone from basket (count still $_count)"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+			else
+				echo "  ✗ FAIL: Basket did not decrease after removing logging (count: $_count); logging ops still listed"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			fi
+			tui_keys Escape; sleep 1
 		fi
 	else
-		echo "  ~ NOTE: Logging set not checked — may already be off"
+		echo "  ✗ FAIL: Logging set not checked after it was added to the basket"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "od-05-logging-not-checked"
 	fi
 else
-	echo "  ~ SKIP: Could not find 'logging' in operator sets list"
+	echo "  ✗ FAIL: Could not find 'logging' in operator sets list"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -334,11 +368,13 @@ if echo "$_scr" | grep -qi "Search\|keyword\|operator name"; then
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_keys Escape; sleep 1
 	else
-		echo "  ~ NOTE: Search results unclear"
+		echo "  ✗ FAIL: Search results unclear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_keys Escape; sleep 1
 	fi
 else
-	echo "  ~ NOTE: Search input not found"
+	echo "  ✗ FAIL: Search input not found"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -367,11 +403,13 @@ if echo "$_scr" | grep -qi "Search\|keyword"; then
 		echo "  ✓ PASS: Search returned 'no results' for 'compliance'"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: Compliance search results unclear"
+		echo "  ✗ FAIL: Compliance search results unclear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Search input not found"
+	echo "  ✗ FAIL: Search input not found"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -445,7 +483,8 @@ if echo "$_scr" | grep -qi "empty\|No operators\|no.*selected"; then
 	echo "  ✓ PASS: Empty basket message shown"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Empty basket view unclear"
+	echo "  ✗ FAIL: Empty basket view unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_keys Enter 2>/dev/null; tui_keys Escape; sleep 1
 

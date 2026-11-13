@@ -1,146 +1,184 @@
-#!/bin/bash -e
-# Integration test: aba bundle -o - produces clean tar output
-# Verifies that stdout contains ONLY tar data, no text messages
+#!/bin/bash
+# Test: aba bundle --out - writes only a tar stream on stdout.
 #
-# NOTE: This test is SKIPPED in automated runs because:
-# - It takes 5-20 minutes (downloads images from network)
-# - It's tested in end-to-end tests separately
-# - Run manually with: test/func/test-bundle-tar-output.sh
+# The slow part of `aba bundle` is `make -C mirror save`, which mirrors
+# whatever ImageSetConfiguration is in the tree. The default config is the
+# OpenShift release payload plus operators (the old "5-20 minutes"). This
+# test plants a one-image config instead. That is enough to prove the
+# stdout contract: messages stay on stderr, and the archive contains the
+# saved image set.
+#
+# Runs in a temp repo. The working tree's mirror/data is not modified.
 
-echo "SKIPPED: Bundle test takes too long for automated runs (5-20 minutes)"
-echo "Run manually if needed: test/func/test-bundle-tar-output.sh"
-exit 0
+cd "$(dirname "$0")/../.." || exit 1
 
-cd "$(dirname "$0")/../.."
+ROOT=$PWD
+IMAGE=registry.access.redhat.com/ubi9/ubi-micro:latest
 
-# Acquire test lock to prevent concurrent test runs
-TEST_LOCK_FILE="$HOME/.aba/test-bundle.lock"
-mkdir -p "$HOME/.aba"
-exec 200>"$TEST_LOCK_FILE"
-if ! flock -n 200; then
-	echo "Error: Another bundle test is running. Please wait." >&2
-	exit 1
-fi
-# Lock released on exit
+pass=0
+fail=0
+_pass() { pass=$(( pass + 1 )); printf "  \033[32mPASS\033[0m  %s\n" "$*"; }
+_fail() { fail=$(( fail + 1 )); printf "  \033[31mFAIL\033[0m  %s\n" "$*"; }
 
-echo "=== Test: aba bundle -o - (tar output validation) ==="
-echo "Working directory: $PWD"
-echo ""
+WORK=$(mktemp -d /tmp/aba-bundle-tar.XXXXXX)
+REPO=$WORK/repo
+TAR=$WORK/bundle.tar
+ERR=$WORK/stderr.log
+EXT=$WORK/extract
 
-# Set ABA_ROOT for scripts that still need it (temporary during transition)
-export ABA_ROOT="$PWD"
+# backup.sh updates this on success. Put the user's stamp back afterwards.
+_prev_backup=$HOME/.aba.previous.backup
+_prev_mtime=
+[ -f "$_prev_backup" ] && _prev_mtime=$(stat -c %Y "$_prev_backup")
+_real_isc=$ROOT/mirror/data/imageset-config.yaml
+_real_isc_mtime=
+[ -f "$_real_isc" ] && _real_isc_mtime=$(stat -c %Y "$_real_isc")
 
-source scripts/include_all.sh
-
-# Clean up previous state to force fresh download
-echo "Cleaning up previous state..."
-rm -rf ~/.aba/runner/cli:install:oc-mirror
-rm -rf .index/*-operator-index-*
-
-# Test 1: Verify tar output is valid
-echo ""
-echo "Test 1: Bundle output is valid tar format"
-echo "-----------------------------------------"
-
-temp_tar=$(mktemp /tmp/aba-bundle-test.XXXXXX.tar)
-trap "rm -f $temp_tar" EXIT
-
-# Note: This test requires images to be already downloaded/saved (takes 5-20 minutes)
-# The test verifies tar output format, not the complete mirror process
-aba_info "Note: This test requires a complete mirror setup. If it times out, run 'aba -d mirror save' first." >&2
-
-# Use timeout to prevent hanging (5 minutes should be enough if images are cached)
-if ! timeout 300 ./aba bundle -o - > "$temp_tar" 2>/dev/null; then
-	exit_code=$?
-	if [ $exit_code -eq 124 ]; then
-		aba_abort "Test 1 FAILED: aba bundle command timed out after 5 minutes (images may not be cached)"
-	else
-		aba_abort "Test 1 FAILED: aba bundle command failed with exit code $exit_code"
+cleanup() {
+	rm -rf "$WORK"
+	if [ -n "$_prev_mtime" ] && [ -f "$_prev_backup" ]; then
+		touch -d "@$_prev_mtime" "$_prev_backup"
 	fi
-fi
+}
+trap cleanup EXIT
 
-# Verify it's a tar file
-if ! file "$temp_tar" | grep -q "tar archive"; then
-	file "$temp_tar"
-	aba_abort "Test 1 FAILED: Output is not a tar archive"
-fi
+echo "=== aba bundle --out - (one-image ISC) ==="
+echo "Image: $IMAGE"
+echo
 
-aba_success "Test 1 PASSED: Output is valid tar format" >&2
+mkdir -p "$REPO/mirror/data"
 
-# Test 2: Verify no text leakage in tar output
-echo ""
-echo "Test 2: No text messages in tar output"
-echo "---------------------------------------"
+# scripts/ must be a real directory. make-bundle.sh resolves itself with
+# pwd -P, and a symlink would send the bundle back into this working tree.
+cp -a "$ROOT/scripts" "$REPO/scripts"
+ln -s scripts/aba.sh "$REPO/aba"
 
-# Check for common text patterns that shouldn't be in a tar file
-if strings "$temp_tar" | grep -q "^\[ABA\]"; then
-	aba_abort "Test 2 FAILED: Found [ABA] messages in tar output"
-fi
+# aba.conf is written below. Do not symlink it: a redirect would follow the
+# link and overwrite the working tree's config.
+for _item in install others templates tui Makefile README.md VERSION \
+	CHANGELOG.md LICENSE Troubleshooting.md .index tools cli rpms catalogs; do
+	ln -s "$ROOT/$_item" "$REPO/$_item"
+done
+ln -s "$ROOT/mirror/Makefile" "$REPO/mirror/Makefile"
 
-if strings "$temp_tar" | head -20 | grep -qE "^(Error|Warning|INFO|DEBUG):"; then
-	aba_abort "Test 2 FAILED: Found error/warning messages in tar output"
-fi
-
-aba_success "Test 2 PASSED: No text leakage detected" >&2
-
-# Test 3: Verify tar contents are reasonable
-echo ""
-echo "Test 3: Tar contents validation"
-echo "--------------------------------"
-
-# List tar contents
-if ! tar -tf "$temp_tar" >/dev/null 2>&1; then
-	aba_abort "Test 3 FAILED: Cannot list tar contents"
-fi
-
-# Check for expected directories/files
-expected_paths=(
-	"aba/"
-	"bin/"
-)
-
-for path in "${expected_paths[@]}"; do
-	if ! tar -tf "$temp_tar" | grep -q "^$path"; then
-		aba_warn "Expected path '$path' not found in tar (may be normal)" >&2
-	else
-		aba_success "✓ Found: $path" >&2
-	fi
+# Reuse installer blobs already on disk. save still checks they exist, and
+# downloading the Quay tarball again is about 1 GB.
+_arch=$(uname -m)
+case "$_arch" in
+	x86_64) _mr=mirror-registry-amd64.tar.gz ;;
+	aarch64) _mr= ;;
+	*) _mr=mirror-registry-${_arch}.tar.gz ;;
+esac
+for _blob in $_mr docker-reg-image.tgz omr-image.tgz; do
+	[ -n "$_blob" ] && [ -f "$ROOT/mirror/$_blob" ] && ln -s "$ROOT/mirror/$_blob" "$REPO/mirror/$_blob"
 done
 
-aba_success "Test 3 PASSED: Tar contents are valid" >&2
+# Copy aba.conf and turn off the release payload and operators. If the
+# imageset guard ever regenerates, save then fails fast instead of mirroring
+# the whole release. ask=false so the "continue without release images"
+# prompt does not block.
+sed \
+	-e 's/^excl_platform=.*/excl_platform=true/' \
+	-e 's/^excl_operators=.*/excl_operators=true/' \
+	-e 's/^op_sets=.*/op_sets=/' \
+	-e 's/^ops=.*/ops=/' \
+	-e 's/^ask=.*/ask=false/' \
+	"$ROOT/aba.conf" > "$REPO/aba.conf"
 
-# Test 4: Verify tar can be extracted
-echo ""
-echo "Test 4: Tar extraction test"
-echo "----------------------------"
+# Newer than .created, so reg-create-imageset-config.sh keeps this file.
+cat > "$REPO/mirror/data/imageset-config.yaml" <<EOF
+# File generated by ABA
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: $IMAGE
+EOF
+touch -d '2000-01-01 00:00:00' "$REPO/mirror/data/.created"
+touch "$REPO/mirror/data/imageset-config.yaml"
 
-temp_dir=$(mktemp -d /tmp/aba-extract-test.XXXXXX)
-trap "rm -rf $temp_dir $temp_tar" EXIT
+# aba treats the current directory as the repo when a top-level Makefile is
+# here. cd into the temp repo or this command bundles the working tree.
+echo "Running: aba -y bundle --out -"
+if ! ( cd "$REPO" && timeout --kill-after=20 600 ./aba -y bundle --out - >"$TAR" 2>"$ERR" ); then
+	_rc=$?
+	if [ "$_rc" -eq 124 ]; then
+		_fail "aba bundle --out - timed out after 10 minutes"
+	else
+		_fail "aba bundle --out - exited $_rc"
+	fi
+	echo "---- stderr (last 60 lines) ----"
+	tail -n 60 "$ERR"
+	echo ""
+	echo "Results: $pass passed, $fail failed"
+	exit 1
+fi
+_pass "aba bundle --out - exited 0"
 
-if ! tar -xf "$temp_tar" -C "$temp_dir" 2>/dev/null; then
-	aba_abort "Test 4 FAILED: Cannot extract tar file"
+if file "$TAR" | grep -q 'tar archive'; then
+	_pass "stdout is a tar archive"
+else
+	_fail "stdout is not a tar archive ($(file -b "$TAR"))"
 fi
 
-# Verify some content was extracted
-if [ -z "$(ls -A "$temp_dir")" ]; then
-	aba_abort "Test 4 FAILED: Extracted directory is empty"
+# A log line on stdout would sit in front of the archive and tar would reject it.
+if tar -tf "$TAR" >/dev/null 2>"$WORK/tar-tf.err"; then
+	_pass "stdout is a readable tar stream"
+else
+	_fail "tar cannot read stdout"
+	cat "$WORK/tar-tf.err"
 fi
 
-aba_success "Test 4 PASSED: Tar extracts successfully" >&2
+if grep -q '\[ABA\]' "$ERR"; then
+	_pass "progress messages went to stderr"
+else
+	_fail "stderr has no [ABA] messages"
+fi
 
-# Cleanup
-rm -rf "$temp_dir" "$temp_tar"
+# The archive's own files contain the text "[ABA]" inside scripts. That is
+# not a leaked log line. A leaked line is one that tar itself does not store,
+# so it shows up when the stream is read as text in front of the ustar header.
+_head=$(head -c 5 "$TAR" || true)
+if [ "$_head" = "[ABA]" ]; then
+	_fail "stdout starts with an [ABA] log line"
+else
+	_pass "stdout does not start with a log line"
+fi
 
-# All tests passed
-echo ""
-echo "========================================="
-aba_success "✓ ALL BUNDLE TESTS PASSED" >&2
-echo "========================================="
-echo ""
-echo "Summary:"
-echo "  - Bundle creates valid tar output"
-echo "  - No text leakage in tar stream"
-echo "  - Tar contents are valid"
-echo "  - Tar can be extracted"
-echo ""
+if tar -tf "$TAR" | grep -q '^aba/mirror/data/imageset-config.yaml$'; then
+	_pass "archive contains the imageset config"
+else
+	_fail "archive is missing aba/mirror/data/imageset-config.yaml"
+fi
 
+if tar -xOf "$TAR" aba/mirror/data/imageset-config.yaml | grep -q "$IMAGE"; then
+	_pass "archived imageset is the one-image config"
+else
+	_fail "archived imageset does not name $IMAGE"
+fi
+
+if tar -tf "$TAR" | grep -qE '^aba/mirror/data/mirror_[0-9]+\.tar$'; then
+	_pass "archive contains the saved image-set tar"
+else
+	_fail "archive is missing mirror/data/mirror_*.tar"
+fi
+
+mkdir -p "$EXT"
+if tar -xf "$TAR" -C "$EXT" && [ -n "$(ls -A "$EXT")" ]; then
+	_pass "archive extracts"
+else
+	_fail "archive did not extract"
+fi
+
+if [ -n "$_real_isc_mtime" ]; then
+	_now=$(stat -c %Y "$_real_isc")
+	if [ "$_now" = "$_real_isc_mtime" ]; then
+		_pass "working tree imageset was left alone"
+	else
+		_fail "working tree imageset-config.yaml changed"
+	fi
+fi
+
+echo ""
+echo "Results: $pass passed, $fail failed"
+exit "$fail"

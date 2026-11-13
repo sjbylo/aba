@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.4.5
+ABA_VERSION=1.4.6
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20261109204500
+ABA_BUILD=20261113085115
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -341,7 +341,7 @@ source <(cd "$ABA_ROOT" && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*|*" status "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" ocp-ver "*|*" ocp-versions "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*|*" status "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -431,25 +431,38 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
-		_prev_s="" ; _prev_f="" ; _prev_c=""
-		_lat_s="" ; _lat_f="" ; _lat_c=""
-		_old_c=""
 		echo_yellow "Available OpenShift versions:"
-		_lat_s=$(fetch_latest_version stable) || true
-		_lat_f=$(fetch_latest_version fast) || true
-		_lat_c=$(fetch_latest_version candidate) || true
+		# Same lookups as the serial walk. Channels overlap; within a channel
+		# latest runs first so previous reuses the files just cached.
+		# Candidate previous reads the offer file latest just wrote.
+		_ov_dir=$(mktemp -d "$ABA_TMP/ocp-ver-XXXX")
+		(
+			fetch_latest_version stable > "$_ov_dir/lat_s" || true
+			fetch_previous_version stable > "$_ov_dir/prev_s" || true
+		) &
+		(
+			fetch_latest_version fast > "$_ov_dir/lat_f" || true
+			fetch_previous_version fast > "$_ov_dir/prev_f" || true
+		) &
+		(
+			fetch_latest_version candidate > "$_ov_dir/lat_c" || true
+			fetch_previous_version candidate > "$_ov_dir/prev_c" || true
+		) &
+		wait
+		_lat_s=$(cat "$_ov_dir/lat_s" 2>/dev/null) || true
+		_lat_f=$(cat "$_ov_dir/lat_f" 2>/dev/null) || true
+		_lat_c=$(cat "$_ov_dir/lat_c" 2>/dev/null) || true
+		_prev_s=$(cat "$_ov_dir/prev_s" 2>/dev/null) || true
+		_prev_f=$(cat "$_ov_dir/prev_f" 2>/dev/null) || true
+		_prev_c=$(cat "$_ov_dir/prev_c" 2>/dev/null) || true
+		rm -rf "$_ov_dir"
 		[ -n "$_lat_s" ] && echo_white  "Latest stable:      $_lat_s"
 		[ -n "$_lat_f" ] && echo_white  "Latest fast:        $_lat_f"
 		[ -n "$_lat_c" ] && echo_white  "Latest candidate:   $_lat_c"
 		echo
-		_prev_s=$(fetch_previous_version stable) || true
-		_prev_f=$(fetch_previous_version fast) || true
-		_prev_c=$(fetch_previous_version candidate) || true
 		[ -n "$_prev_s" ] && echo_white  "Previous stable:    $_prev_s"
 		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
 		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
-		_old_c=$(fetch_older_version candidate) || true
-		[ -n "$_old_c" ] && [ "$_old_c" != "$_prev_c" ] && [ "$_old_c" != "$_lat_c" ] && echo_white "Older candidate:    $_old_c"
 
 		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 		[ "$os_inst" ] && \
@@ -779,7 +792,7 @@ for i in imgs:
 				aba_abort \
 					"reg_host is locked to '$_h_state_host' by installed state." \
 					"The -H flag cannot override an installed/registered registry." \
-					"To change the registry host, run 'aba -d $(basename "$WORK_DIR") unregister' (or 'uninstall') first."
+					"To change the registry host, run '$(aba_cmd unregister)' (or 'uninstall') first."
 			fi
 		fi
 		# force will skip over asking to edit the conf file
@@ -1765,15 +1778,15 @@ if [ "$cur_target" ]; then
 				esac
 				if [ "$_install_vms_gone" ]; then
 					aba_warn "Cluster was installed but VMs no longer exist (deleted outside ABA?)."
-					aba_info "To re-install: 'aba -d $(basename "$PWD") delete' then 'aba -d $(basename "$PWD") install'."
+					aba_info "To re-install: '$(aba_cmd delete)' then '$(aba_cmd install)'."
 					exit 0
 				fi
 				if [ -f .shutdown.log ]; then
-					aba_info "Cluster is installed but shut down. Run 'aba -d $(basename "$PWD") startup' to power it on."
+					aba_info "Cluster is installed but shut down. Run '$(aba_cmd startup)' to power it on."
 				else
 					aba_info "Cluster already installed. Nothing to do."
 				fi
-				aba_info "To re-install: 'aba -d $(basename "$PWD") delete' then 'aba -d $(basename "$PWD") install'."
+				aba_info "To re-install: '$(aba_cmd delete)' then '$(aba_cmd install)'."
 				exit 0
 			fi
 			# Not yet installed — re-add target and fall through to generic make block

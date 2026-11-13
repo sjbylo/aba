@@ -101,13 +101,17 @@ e2e_run "Install aba (must reinstall removed packages)" "./install"
 e2e_run "Verify key tools restored" "which git make jq openssl skopeo hostname"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
-# GAP 2: Verify aba auto-update mechanism (modifying scripts/aba.sh triggers re-install)
+# GAP 2: Verify aba auto-update mechanism (modifying scripts/aba.sh triggers re-install).
+# Put the saved line back afterwards. git checkout would drop the deployed
+# tree back to the commit checked out on the pool.
 e2e_run "Auto-update: bump ABA_BUILD timestamp" \
-    "new_v=\$(date +%Y%m%d%H%M%S) && sed -i \"s/^ABA_BUILD=.*/ABA_BUILD=\$new_v/g\" scripts/aba.sh && echo \$new_v > /tmp/e2e-aba-build-stamp"
+    "grep ^ABA_BUILD= scripts/aba.sh > /tmp/e2e-aba-build-orig && new_v=\$(date +%Y%m%d%H%M%S) && sed -i \"s/^ABA_BUILD=.*/ABA_BUILD=\$new_v/g\" scripts/aba.sh && echo \$new_v > /tmp/e2e-aba-build-stamp"
 e2e_run "Auto-update: run aba (triggers update)" \
     "aba -h | head -8"
 e2e_run "Auto-update: verify installed binary has new build stamp" \
     "grep ^ABA_BUILD=\$(cat /tmp/e2e-aba-build-stamp) \$(which aba)"
+e2e_run "Auto-update: restore ABA_BUILD" \
+    "orig=\$(cat /tmp/e2e-aba-build-orig) && sed -i \"s/^ABA_BUILD=.*/\$orig/\" scripts/aba.sh && grep -qxF \"\$orig\" scripts/aba.sh"
 
 suite_configure_aba
 suite_verify_aba_conf

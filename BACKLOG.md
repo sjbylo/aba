@@ -1365,15 +1365,16 @@ in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 ## #B39: omr: transition to GA (mirror-registry v3.0)
 
-**Severity:** LOW — tracking item, no action until upstream ships GA
-**Status:** Waiting on upstream
+**Severity:** LOW
+**Status:** Planned
 **Added:** 2026-07-21
 
 **Context:** The Go-based mirror-registry rewrite (currently `omr` in ABA)
-will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
+shipped as mirror-registry 3.0 on 2026-11-11 (RHBA-2026:99105). ABA already
+supports it as a BETA vendor.
 
 **When GA ships, ABA needs:**
-- Switch `_OMR_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
+- Switch `_OMR_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to `registry.redhat.io/openshift/mirror-registry-rhel9:3.0.0` — #B111
 - Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
 - Re-test `-init-password-stdin` flag (merged upstream, not in current image)
 - Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
@@ -3916,7 +3917,7 @@ The first address is still the rendezvous IP. `--starting-ip` accepts the same s
 ## #B109: Show a 2-3 line agent-config summary on MAC and edit asks
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Partial — the review ask prints the compact summary on the CLI and in the progress dialog. The wizard that first collects MAC addresses does not.
 **Added:** 2026-11-09
 
 **Problem:** Asks about MAC addresses, and asks that invite an edit of `agent-config.yaml`, name the path and then stop. The user cannot tell which cluster file the question is about without opening it. The bare-metal review ask in `scripts/bm-ask-edit.sh` prints the MAC report and `agent-config.yaml: <path>`, then "Are the MAC addresses correct?" (or the placeholder "have all required MACs been added?" question). The same gap is on the ask that collects MAC addresses, and on any prompt that says the user may edit that file.
@@ -3932,4 +3933,85 @@ The first address is still the rendezvous IP. `--starting-ip` accepts the same s
 Skip the summary when the file does not exist yet. Keep MACs in the existing MAC report so the summary does not repeat them. CLI and the progress dialog show the same lines. Do not shell out to an example script that may sit in a cluster directory.
 
 **Workaround:** Open `agent-config.yaml` before answering Yes.
+
+---
+
+## #B110: Power off bare-metal nodes through the BMC
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-11-12
+
+**Problem:** `aba stop` and `aba kill` abort on a bare-metal cluster. After a failed or partial install the nodes stay on, still answering on the node IPs and VIPs, so the next install's preflight reports `IP conflict`. `aba shutdown` cannot help: it needs a working API. The user has to power each server off in the BMC UI. ([#49](https://github.com/sjbylo/aba/issues/49), @mateuszslugocki)
+
+**Root cause:** `stop` and `kill` call `_ensure_vm_platform_ready`, and the `platform=bm` branch aborts. Boot already has a Redfish session and `POST /redfish/v1/Systems/{id}/Actions/ComputerSystem.Reset`, but `bmc_power_reset` only sends `On` and `ForceRestart`.
+
+**Proposed fix:** Keep the existing Reset call. Add one function beside `bmc_power_reset` that POSTs `ResetType` `GracefulShutdown` (`aba stop`) or `ForceOff` (`aba kill` / `aba poweroff`). If the power state is already `Off`, return success. If `GracefulShutdown` comes back HTTP 400, send `ForceOff`. Poll `PowerState` until `Off` (same 120s / 2s loop as the existing power-on wait) so the addresses are free before the command returns.
+
+A short script walks `bmc_host_list`, logs in, reads the first System id, calls that function, and logs out. It does not eject media or change the boot override. On `platform=bm`, `stop` and `kill` call that script instead of `_ensure_vm_platform_ready`. No `bmc.conf` hosts: abort and say to power the servers off in the BMC UI. `aba shutdown` stays the cluster-API shutdown.
+
+**Workaround:** Power the servers off in the BMC UI, then rerun the install once the IPs stop answering.
+
+---
+
+## #B111: Point OMR at the official mirror-registry image, pinned to 3.0.0
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-12
+
+**Problem:** The `omr` vendor pulls `quay.io/sjbylo/quay-mirror:dev`. That tag is an unofficial build. Red Hat published the same product as a GA image on 2026-11-11 (`registry.redhat.io/openshift/mirror-registry-rhel9`, advisory RHBA-2026:99105). `v3.0` on that repository moves when a newer 3.0 build is published. ABA should follow the release tag `3.0.0`.
+
+**Root cause:** `_OMR_IMAGE` in `scripts/include_all.sh` and `OMR_IMAGE` in `templates/Makefile.mirror` both default to the quay.io development image. `podman pull` in the Makefile does not pass a pull-secret file, which that public image did not need.
+
+**Proposed fix:** Set both defaults to `registry.redhat.io/openshift/mirror-registry-rhel9:3.0.0`. Keep the existing path: pull, `podman save` to `omr-image.tgz`, copy `/mirror-registry` out of the image, install with `-image-archive`. Pass the existing `registry.redhat.io` pull secret to `podman pull`. Do not change `mirror_registry_url`; `reg_vendor=quay` still uses the Ansible tarball from `mirror.openshift.com`.
+
+**Workaround:** `podman login registry.redhat.io`, then `OMR_IMAGE=registry.redhat.io/openshift/mirror-registry-rhel9:3.0.0 make -C mirror download-omr-image`, and install with `reg_vendor=omr`.
+
+---
+
+## #B112: Upgrade the installed Quay mirror registry and renew its cert
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-12
+
+**Problem:** ABA installs and uninstalls the Quay mirror registry, and has no upgrade. A registry left in place after the cluster install stays on the old mirror-registry release. Install also omits `--sslCert`, so mirror-registry makes its own cert (about a year) and nothing renews it. ([#47](https://github.com/sjbylo/aba/issues/47), @mateuszslugocki)
+
+**Root cause:** `aba upgrade` always runs `cluster-upgrade.sh`. Quay install in `scripts/reg-install-quay.sh` calls `./mirror-registry install` and never `upgrade`. The upgrade subcommand already accepts the same hostname and root flags as install, plus `--sslCert` and `--sslKey`.
+
+**Proposed fix:**
+
+1. In the mirror directory, `aba -d mirror upgrade` runs a registry upgrade. A cluster directory still runs the cluster upgrade. This command is the only entry point, on the connected host and on the disconnected host. `aba save`, `aba load`, `aba transfer-primed`, and `deploy-primed` do not refresh the installer and do not upgrade the registry.
+2. Only when that registry is already installed. Dispatch by vendor. `existing` stops with a short reason, because ABA did not install it.
+   - `quay`: `./mirror-registry upgrade` and a renewed leaf cert (steps 3–5). This is the only vendor with that subcommand.
+   - `omr`: the upgrade is a second `install` with a newer `-image-archive`. When `auth/admin-password` exists, install already keeps the data. The Go CLI has no `upgrade` subcommand and no `--sslCert`.
+   - `docker`: load the newer `registry` image (tarball or `docker.io/library/registry`), remove the container, and start it again with the same data, cert, and htpasswd volumes. The cert is already 10 years.
+3. Re-extract the vendor file in `mirror/` (`mirror-registry-*.tar.gz`, `docker-reg-image.tgz`, or `omr-image.tgz`). Skip `ensure_quay_registry` and `run_once`: those stop after the first extract, so a newer tarball would be ignored. Then run `./mirror-registry upgrade -v --quayHostname $reg_hostport $reg_root_opts --sslCert <leaf> --sslKey <key>` from that extract. Reuse the localhost SSH setup install already requires.
+   - Connected host: this command refreshes the vendor file, then upgrades. `aba save` leaves an existing file in place, so this is the request that fetches a newer one.
+   - Disconnected host: this command uses the file already in `mirror/`. If it is missing, stop and tell the user to copy it from the connected host, then run the command again.
+4. Issue a new server certificate from the existing Quay CA under `quay-rootCA`, and pass that leaf and key. Do not replace the CA, so clusters that already trust `rootCA.pem` keep working. If that CA itself is near expiry, stop and say so. When the registry is remote, sign the leaf on that host: the CA key is there, not on the bastion.
+5. A remote registry gets the same file by scp, then the upgrade runs over SSH, the same way remote install does. Do not treat "registry answers on /v2/" as success. Install uses that probe to skip, which would leave the old release in place.
+6. After a successful upgrade, store and trust the CA the same way install does, then check that the registry still answers.
+7. Air-gapped move is a copy the user asks for, then the same command on the disconnected host. The vendor file can ride in `aba-transfer.tar` the way updated CLI tarballs already do, and only when the user is making that transfer. `aba load` unpacks it into `mirror/` and stops. The user then runs `aba -d mirror upgrade` on the disconnected side. No Quay tarball on aarch64. `existing` stays a stop. The extracted `image-archive.tar` and friends stay out of the tar; the compressed vendor file is what travels.
+
+**Workaround:** Put the new tarball in `mirror/`, extract it, source `~/.aba/mirror/<name>/state.sh`, and run `./mirror-registry upgrade -v --quayHostname $reg_host:$reg_port $reg_root_opts`. Renew the cert by passing `--sslCert` and `--sslKey` on that command.
+
+---
+
+## #B113: Pin oc-mirror to the pub/cgw 2.0 release
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-12
+
+**Problem:** `oc-mirror` is still taken from the OpenShift client channel pin `stable-4.22` (`oc-mirror.tar.gz` and `oc-mirror.rhel9.tar.gz`). The binary ABA should ship is the oc-mirror 2.0 release at `https://mirror.openshift.com/pub/cgw/oc-mirror/2.0/`. A move to that URL was tried and reverted: the filename, checksum, and binary all change, and that broke other assumptions. Pick this up again soon.
+
+**Root cause:** `cli/Makefile` sets `oc_mirror_pin = stable-4.22` and builds `oc_mirror_base_url` under `mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)`. EC versions probe `ocp-dev-preview` and fall back to that pin. `atomic-download` looks the Make target name up in `sha256sum.txt`, so the target filename has to be the name published in the directory.
+
+**Proposed fix:** Keep a release pin. Set `oc_mirror_pin = 2.0` and `oc_mirror_base_url = https://mirror.openshift.com/pub/cgw/oc-mirror/$(oc_mirror_pin)`. Do not use floating `latest`. A later release is a pin bump to `2.1`. Download both `oc-mirror-rhel8-linux-$(ARCH).tar.gz` and `oc-mirror-rhel9-linux-$(ARCH).tar.gz` for this CPU arch, and install the one that matches the host `rhel_ver`. If `oc-mirror` is already on `PATH`, leave it. Drop the EC dev-preview probe and the "stable-X.Y, consider updating the pin" note. A 2.0 pin has no OpenShift channel to compare. Point `test-oc-mirror-url.sh` and `test-cli-download-urls.sh` at the new names for every arch and for EC, RC, and GA versions.
+
+The 2.0 file is a different build from the stable-4.22 client tarball (`2.0.0-202610201601` vs `4.22.0-202611031655`). Cached `oc-mirror.tar.gz` and `oc-mirror.rhel9.tar.gz` do not satisfy the new targets. `download-all` still fetches both RHEL flavors for this arch only.
+
+**Workaround:** Stay on the `stable-4.22` client tarballs.
 

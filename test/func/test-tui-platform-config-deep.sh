@@ -107,8 +107,8 @@ if echo "$_scr" | grep -qi "VMware\|vCenter\|ESXi"; then
 	sleep 1
 
 elif echo "$_scr" | grep -qi "KVM\|Libvirt"; then
-	echo "  ~ NOTE: Platform is KVM, not VMware — testing KVM form instead"
-	# Will be tested in section 2
+	echo "  ✓ PASS: Platform is KVM — will verify KVM form in section 2"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Escape; sleep 1
 else
 	echo "  ✗ FAIL: Platform config form not shown"
@@ -157,7 +157,8 @@ if [[ -n "$_kvm_has_uri" ]] || $_TUI_SSH "[ -f ~/aba/kvm.conf ]" 2>/dev/null; th
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else
-	echo "  ~ NOTE: kvm.conf not available"
+	echo "  ✗ FAIL: kvm.conf not available"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -214,7 +215,8 @@ elif echo "$_scr" | grep -qi "Pull Secret\|pull secret\|Enter file path"; then
 	echo "  ✗ FAIL: Wizard showed pull secret dialog despite valid file"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 else
-	echo "  ~ NOTE: Wizard response unclear"
+	echo "  ✗ FAIL: Wizard response unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 # Back out of wizard
 tui_keys Escape; sleep 1
@@ -232,17 +234,34 @@ sleep 3
 tui_screenshot "pc-04-mirror-pre"
 _scr=$(tui_capture)
 
-# If mirror already installed, we'll see a reinstall confirmation
+# If mirror already installed, reinstall confirmation is the expected CONNO path.
+# IMPORTANT: this yesno is often --defaultno (focus on No). tui_press_button "No"
+# assumes focus on the first button and Tab→Enter can land on Yes → starts uninstall!
+# Escape cancels safely without touching the installed mirror.
 if echo "$_scr" | grep -qi "reinstall\|already installed\|existing"; then
-	echo "  ~ NOTE: Mirror already installed, checking reinstall dialog"
-	tui_press_button "No" 2>/dev/null || tui_keys Escape
+	echo "  ✓ PASS: Mirror reinstall confirmation shown (mirror already installed)"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_keys Escape
 	sleep 2
-	# Try to reach install location choice
 	_scr=$(tui_capture)
-fi
-
-# Check for local/remote choice or config form
-if echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host"; then
+	# Cancel must NOT start uninstall/reinstall progress
+	if echo "$_scr" | grep -qi "Uninstall Existing\|Remove registry\|Reinstall\|In Progress\|Overall Progress"; then
+		echo "  ✗ FAIL: Canceling reinstall started a destructive mirror operation"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "pc-04-after-decline-unexpected"
+		# Try to quit any progress dialog immediately
+		tui_keys q 2>/dev/null || true
+		sleep 1
+		tui_keys Escape 2>/dev/null || true
+	elif echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host\|Hostname\|Actions\|Mirror Payload\|Install Mirror\|Advanced\|Configure"; then
+		echo "  ✓ PASS: Declined reinstall returns to a known menu/form"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	else
+		echo "  ✗ FAIL: After declining reinstall, screen was unexpected"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "pc-04-after-decline-unexpected"
+	fi
+elif echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host"; then
 	echo "  ✓ PASS: Install location choice shown"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 
@@ -263,12 +282,15 @@ if echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host"; then
 		tui_assert_contains "Image path\|image.*path" "Mirror image path field"
 		tui_assert_contains "Data dir\|data.*dir\|directory" "Mirror data dir field"
 	else
-		echo "  ~ NOTE: Mirror config form not reached (may already be configured)"
+		echo "  ✗ FAIL: Mirror config form not reached after Install locally"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Mirror install location not shown (may need different state)"
+	echo "  ✗ FAIL: Neither reinstall dialog nor install-location choice shown"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "pc-04-mirror-unexpected"
 fi
 
 tui_back_to "Actions" 5
@@ -303,7 +325,8 @@ if echo "$_scr" | grep -qi "Cluster Name\|Name\|Type\|Domain"; then
 	tui_assert_contains "Domain\|domain" "Base domain field"
 	tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 else
-	echo "  ~ NOTE: Cluster basics page not reached"
+	echo "  ✗ FAIL: Cluster basics page not reached"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # Back out

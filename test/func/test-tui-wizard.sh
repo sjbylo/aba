@@ -136,8 +136,19 @@ fi
 # ============================================================================
 echo ""
 echo "--- 5. Operator selection ---"
+# Fresh hosts (or broken registries.d) can interpose Podman Preflight Warning
+# before Select Operators. Continue anyway — smoke already covers that dialog.
+for _pw in 1 2 3; do
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Podman Preflight"; then
+		echo "  Dismissing Podman Preflight Warning (Continue anyway)"
+		tui_keys Enter; sleep 2
+		continue
+	fi
+	break
+done
 # This page may take time (catalog indexes)
-tui_wait_for "Operator\|operator" 30
+tui_wait_for "Operator\|operator\|Select Operators" 60
 tui_assert_title "Select Operators" "Operator selection dialog title"
 tui_screenshot "wiz-05-operators"
 

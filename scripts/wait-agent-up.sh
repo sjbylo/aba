@@ -60,6 +60,12 @@ if [ ! -f .install-complete ]; then
 		[[ $code =~ ^4..$ ]]
 	}
 
+	# This probe is part of Monitor installation, and it runs before
+	# monitor-install.sh. Start the step now so the row is In Progress
+	# during the wait. That script sends START|ci_mon again; a second
+	# START while the step is not Done stays In Progress.
+	aba_progress "START|ci_mon"
+
 	if aba_wait_show "Waiting for Agent at $agent_url" 8 300 _agent_is_alive; then
 		aba_success "Agent alive!"
 		sleep 8

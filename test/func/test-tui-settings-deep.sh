@@ -8,7 +8,8 @@
 #       Verify each value is written to ~/.aba/config
 #   3.  Main menu label reflects current settings (vendor, retry)
 #   4.  Settings survive TUI restart (persistence check)
-#   5.  Mirror install label reflects vendor: "Install auto/Quay/Docker Mirror"
+#   5.  Mirror install title shows the vendor that will be installed
+#       (auto in mirror.conf resolves to quay or docker)
 #
 # Non-destructive: restores original values at the end.
 
@@ -253,17 +254,22 @@ else
 	fi
 fi
 
-# Also verify vendor is loaded from mirror.conf into the install label
+# Title shows the vendor install will run, not the raw mirror.conf value.
+# auto resolves to quay (or docker on aarch64).
 _cur_vendor=$(_read_vendor)
 _install_label=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null && \
 	source <(cd mirror && normalize-mirror-conf) 2>/dev/null && \
-	echo \"Install \${reg_vendor:-auto} Mirror\"" 2>/dev/null || echo "ERR")
+	source tui/v2/tui-lib.sh 2>/dev/null && \
+	_tui_mirror_install_title" 2>/dev/null || echo "ERR")
+_expect_vendor=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null && \
+	source <(cd mirror && normalize-mirror-conf) 2>/dev/null && \
+	resolved_reg_vendor" 2>/dev/null || echo "ERR")
 
-if echo "$_install_label" | grep -qi "$_cur_vendor"; then
-	echo "  ✓ PASS: Install label uses vendor from mirror.conf: $_install_label"
+if [ "$_install_label" = "Install ${_expect_vendor} Mirror" ]; then
+	echo "  ✓ PASS: Install title uses resolved vendor '$_expect_vendor' (config=$_cur_vendor): $_install_label"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ✗ FAIL: Install label doesn't match vendor '$_cur_vendor': $_install_label"
+	echo "  ✗ FAIL: Install title '$_install_label' != 'Install ${_expect_vendor} Mirror' (config=$_cur_vendor)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 

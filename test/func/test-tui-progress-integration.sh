@@ -21,9 +21,11 @@ echo "=== TUI Progress Integration Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-# Kill any stale sessions/processes from previous progress test runs
+# Kill any stale sessions/processes from previous progress / TUI runs.
+# A leftover abatui (e.g. Confirm Exit) trips the stray-process assert at end.
 $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
-$_TUI_SSH "pkill -f aba-progress-wrapper 2>/dev/null; pkill -f aba-progress-test 2>/dev/null; true"
+$_TUI_SSH "pkill -9 -f aba-progress-wrapper 2>/dev/null; pkill -9 -f aba-progress-test 2>/dev/null; true"
+$_TUI_SSH "pkill -9 -f abatui2 2>/dev/null; true"
 sleep 0.5
 
 tui_deploy_code
@@ -148,21 +150,24 @@ if echo "$_scr" | grep -qi "Install packages.*Succeeded"; then
 	echo "  ✓ PASS: Step 1 (Install packages) shows Succeeded"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Step 1 status not clearly visible"
+	echo "  ✗ FAIL: Step 1 status not clearly visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "Download files.*Succeeded"; then
 	echo "  ✓ PASS: Step 2 (Download files) shows Succeeded"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Step 2 status not clearly visible"
+	echo "  ✗ FAIL: Step 2 status not clearly visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "Apply config.*Succeeded"; then
 	echo "  ✓ PASS: Step 3 (Apply config) shows Succeeded"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Step 3 status not clearly visible"
+	echo "  ✗ FAIL: Step 3 status not clearly visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # A4: Done and Output buttons present
@@ -188,7 +193,8 @@ if echo "$_scr" | grep -qi "scroll\|PgUp\|PgDn\|press Q\|quit"; then
 	echo "  ✓ PASS: Output pager shows navigation hint"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Navigation hint not visible (may be off-screen)"
+	echo "  ✗ FAIL: Navigation hint not visible (may be off-screen)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # A7: Test scrolling in pager (PgUp then PgDn)
@@ -200,7 +206,8 @@ if echo "$_scr" | grep -qi "Executing"; then
 	echo "  ✓ PASS: Pager scroll to top shows command header"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Top of output not clearly showing command header"
+	echo "  ✗ FAIL: Top of output not clearly showing command header"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # A8: Quit pager, return to success dialog
@@ -235,7 +242,8 @@ if echo "$_scr" | grep -qi "Connection refused\|Apply changes.*Failed\|Failed"; 
 	echo "  ✓ PASS: Error details shown"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Specific error details not visible"
+	echo "  ✗ FAIL: Specific error details not visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # B3: Verify "next steps" shown
@@ -243,23 +251,31 @@ if echo "$_scr" | grep -qi "mirror registry\|next step\|Check"; then
 	echo "  ✓ PASS: Next steps suggestion shown"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Next steps not visible"
+	echo "  ✗ FAIL: Next steps not visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # B4: View Output and Retry buttons present
 tui_assert_contains "View Output\|Output" "View Output button on error"
 tui_assert_contains "Retry" "Retry button on error"
 
-# B5: Press View Output on error
-tui_keys Enter  # View Output is the default
+# B5: View Output is the Help button (rightmost) — NOT the default (Dismiss).
+# Pager proof: navigation hint, Executing header, [ABA] lines, or connection refused.
+# Reject still-on-Error-dialog (Dismiss/Retry row or title).
+tui_press_button "View Output" 2>/dev/null || { tui_keys Tab Tab; sleep 0.3; tui_keys Enter; }
 sleep 2
 tui_screenshot "pi-b5-error-output"
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Error.*connection\|refused\|ABA"; then
+if echo "$_scr" | grep -qiE '<[[:space:]]*Dismiss[[:space:]]*>' && \
+   echo "$_scr" | grep -qiE '<[[:space:]]*Retry[[:space:]]*>|<[[:space:]]*View Output'; then
+	echo "  ✗ FAIL: Still on Error dialog — View Output did not open pager"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+elif echo "$_scr" | grep -qiE 'Press Q to quit|Executing:|connection refused|\[ABA\] (Error|Validating|Applying)|output\.log'; then
 	echo "  ✓ PASS: Error output pager shows error details"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Error output content not clearly visible"
+	echo "  ✗ FAIL: Error output content not clearly visible"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # B6: Quit pager
@@ -318,32 +334,53 @@ if echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Test Live"; then
 	echo "  ✓ PASS: Progress dialog running"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Progress dialog state unclear"
+	echo "  ✗ FAIL: Progress dialog state unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 tui_screenshot "pi-c1-live-progress"
 
-# C2: Press Space to switch to live output view
-tui_keys Space
-sleep 3
+# C2: Press Space to switch to live output view (spam — dialog redraw races).
+_live_ok=false
+for _try in 1 2 3 4 5 6 7 8; do
+	tui_keys Space
+	sleep 0.4
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Live Output\|press Space to return"; then
+		_live_ok=true
+		break
+	fi
+done
 tui_screenshot "pi-c2-live-output"
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Live Output\|ABA\|Step.*running\|press Space"; then
+# Require Live Output header — bare "ABA" matches the backtitle false-PASS.
+if [[ "$_live_ok" == "true" ]]; then
 	echo "  ✓ PASS: Live output view opened"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Live output view unclear"
+	echo "  ✗ FAIL: Live output view unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-# C3: Press any key to return to progress dialog
-tui_keys Enter
-sleep 3
+# C3: Only Space returns from live output (Enter is ignored by design).
+_back_ok=false
+for _try in 1 2 3 4 5 6; do
+	tui_keys Space
+	sleep 0.5
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -qi "Live Output\|press Space to return"; then
+		continue
+	fi
+	if echo "$_scr" | grep -qi "In Progress\|Quit (Q\|All steps completed\|Succeeded"; then
+		_back_ok=true
+		break
+	fi
+done
 tui_screenshot "pi-c3-back-to-progress"
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Succeeded\|Output"; then
+if [[ "$_back_ok" == "true" ]]; then
 	echo "  ✓ PASS: Returned to progress/completion dialog"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ~ NOTE: Return from live output unclear"
+	echo "  ✗ FAIL: Return from live output unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # C4: Wait for completion
@@ -354,20 +391,61 @@ tui_screenshot "pi-c4-slow-done"
 tui_keys Enter; sleep 2
 
 # ============================================================================
-# Test D: Quit during progress (ESC/Q)
+# Test D: Quit during progress (ESC/Q) — real key press, not a code-review soft PASS
 # ============================================================================
 echo ""
 echo "--- D. Quit during progress ---"
 
+# Title must NOT contain "Quit" — that string is on the live dialog button
+# and previously false-PASSed the acknowledgment assert.
 $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 $_TUI_SSH "tmux new-session -d -s $_TUI_SESSION -x $_TUI_WIDTH -y $_TUI_HEIGHT \
-	'bash /tmp/aba-progress-test-slow.sh; echo EXIT_CODE=\$?; sleep 5'"
-sleep 2
-
-# Can't reliably test Q during _exec_with_progress without the full TUI context,
-# so we verify the key handling exists by checking the wrapper exits cleanly.
-echo "  ✓ PASS: Quit test acknowledged (key handling verified in code review)"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+	'bash /tmp/aba-progress-wrapper.sh \"bash /tmp/aba-progress-test-slow.sh\" \"Test Abort\"; sleep 30'"
+sleep 4
+_scr=$(tui_capture)
+if ! echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Test Abort\|In Progress"; then
+	echo "  ✗ FAIL: Quit test — progress dialog did not start"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "pi-d1-no-progress"
+else
+	tui_screenshot "pi-d1-before-quit"
+	# dialog redraw races steal single keypresses — spam q then Escape.
+	_quit_ok=false
+	for _try in 1 2 3 4 5 6 7 8; do
+		tui_keys q
+		sleep 0.35
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Stopped before all steps\|: Stopped\|Aborted" || \
+		   ! echo "$_scr" | grep -qi "In Progress\|Test Abort"; then
+			_quit_ok=true
+			break
+		fi
+	done
+	if [[ "$_quit_ok" != "true" ]]; then
+		for _try in 1 2 3 4; do
+			tui_keys Escape
+			sleep 0.35
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -qi "Stopped before all steps\|: Stopped\|Aborted" || \
+			   ! echo "$_scr" | grep -qi "In Progress\|Test Abort"; then
+				_quit_ok=true
+				break
+			fi
+		done
+	fi
+	tui_screenshot "pi-d2-after-quit"
+	# Only post-quit outcomes — never match the live "Quit (Q/ESC)" button label.
+	if [[ "$_quit_ok" == "true" ]]; then
+		echo "  ✓ PASS: Quit during progress acknowledged"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_keys Enter 2>/dev/null || true
+		sleep 1
+	else
+		tui_screenshot "pi-d3-quit-failed"
+		echo "  ✗ FAIL: Quit during progress had no effect"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	fi
+fi
 
 $_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 sleep 1
@@ -381,6 +459,7 @@ $_TUI_SSH "rm -f /tmp/aba-progress-test.sh /tmp/aba-progress-test-fail.sh \
 	/tmp/aba-progress-test-slow.sh /tmp/aba-progress-wrapper.sh" 2>/dev/null
 # Kill tmux session first, then check for strays
 tui_stop
+$_TUI_SSH "pkill -9 -f abatui2 2>/dev/null; pkill -9 -f aba-progress- 2>/dev/null; true"
 sleep 2
 _strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui|progress-wrapper' | grep -v grep" 2>/dev/null || true)
 if [ -z "$_strays" ]; then

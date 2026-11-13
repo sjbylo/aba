@@ -44,6 +44,7 @@ dxoperator-v2 DxOperator alpha
 dynatrace-operator Dynatrace Operator alpha
 eda-k8s-operator eda-openshift-operator 6.0
 edb-hcp-operator EDB Postgres AI stable
+edb-plugin-for-cnpg EDB Postgres® AI Plugin for CloudNativePG™ preview
 eginnovations-operator eG Innovations Universal Agent Operator beta
 elasticsearch-eck-operator-certified Elasticsearch (ECK) Operator stable
 eqube-operator eQube® Operator stable
@@ -85,7 +86,7 @@ infoscale-sds-operator InfoScale™ SDS Operator fast
 instana-agent-operator Instana Agent Operator stable
 intel-device-plugins-operator Intel Device Plugins Operator stable
 intel-network-operator Intel Network Operator alpha
-intel-tdx-dcap-operator Intel TDX DCAP Operator alpha
+intel-tdx-dcap-operator Intel TDX DCAP Operator stable
 ipm-controller Intel® Infrastructure Power Manager stable
 jenkins2tekton-operator Jenkins2Tekton Operator stable
 k10-kasten-operator-rhmp Veeam Kasten stable
@@ -179,7 +180,7 @@ template-operator Template Operator release-0.1
 tenant-operator Multi Tenant Operator release-1.11
 tenanttab-operator Denegra TenantTab alpha
 tensormesh-platform Tensormesh Platform stable
-tigera-operator Tigera Operator v1.38 release-v1.42
+tigera-operator Tigera Operator v1.44 release-v1.44
 trident-operator NetApp Trident stable
 truenas-csi TrueNAS CSI Driver stable
 tvo-operator Trilio for OpenStack 6.0.x

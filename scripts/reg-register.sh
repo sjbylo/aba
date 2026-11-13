@@ -31,7 +31,7 @@ if [ -s "$regcreds_dir/state.sh" ]; then
 	source "$regcreds_dir/state.sh"
 	if [ "${reg_vendor:-}" != "existing" ]; then
 		aba_abort "An ABA-managed registry ($reg_vendor) is already installed here." \
-			"Run 'aba -d $(basename "$PWD") uninstall' first, then register."
+			"Run '$(aba_cmd uninstall)' first, then register."
 	else
 		aba_warn "Re-registering: overwriting previous external registry state ($reg_host:$reg_port)."
 	fi
@@ -75,7 +75,7 @@ if [ "$reg_host" ] && [ "$reg_port" ]; then
 			aba_abort "Pull secret has no entry for '$reg_host:$reg_port'." \
 				"Available entries:" \
 				"$_ps_keys" \
-				"Use --reg-host matching one of the above, or regenerate with: aba -d $(basename $PWD) password"
+				"Use --reg-host matching one of the above, or regenerate with: $(aba_cmd password)"
 		fi
 	fi
 elif [ "$_ps_count" -eq 1 ]; then
@@ -93,7 +93,7 @@ elif [ "$_ps_count" -eq 1 ]; then
 else
 	aba_abort "reg_host and reg_port must be set in mirror.conf before registering." \
 		"Pull secret has multiple entries: $_ps_keys" \
-		"Run: aba -d $(basename $PWD) --reg-host <hostname> first."
+		"Run: $(aba_cmd --reg-host '<hostname>') first."
 fi
 
 # Back up existing regcreds if present (hidden so it won't match glob)
@@ -131,4 +131,4 @@ aba_info "Saved registry state to $regcreds_display/state.sh"
 echo
 aba_success "Existing registry registered: $reg_host:$reg_port"
 aba_info "Credentials stored in: $regcreds_display/"
-aba_info "Run 'aba -d $(basename $PWD) verify' to confirm connectivity."
+aba_info "Run '$(aba_cmd verify)' to confirm connectivity."

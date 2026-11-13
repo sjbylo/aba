@@ -23,12 +23,18 @@
 | CONNO: Install standard (TUI) | FAILED | 2026-11-09. Wizard: standard.example.com, 3 masters + 2 workers, starting 10.0.1.81, API 10.0.1.217, ingress 10.0.1.227, DNS/NTP 10.0.1.8, gateway 10.0.0.1, ens160, mirror. VMs powered on. Bootstrap timed out and 6443 never listened. Deleted from the TUI; the five VMs are gone. |
 | CONNO: Install ocp SNO (TUI) | PASSED | 2026-11-09. ocp.example.com, 10.0.1.100, DNS/NTP 10.0.1.8, gateway 10.0.0.1, ens160, mirror. Node Ready. ClusterVersion 4.21.40 Available. OperatorHub: all 8 steps succeeded. |
 | CONNO: Full bundle (TUI) | PASSED | 2026-11-09. Incremental full bundle. File `/tmp/ocp-bundle-4.21.40-amd64-rel-op1.tar` (32G). All eight steps succeeded, including Pack bundle. Disk warning said 49G free; 14G remained after the tar. |
+| DISCO: Load full bundle (TUI) | PASSED | 2026-11-09. The image archive and transfer tar from that bundle replaced disco `mirror/data`. Load of 4.21.40 plus cincinnati-operator succeeded. Day-2 on sno applied the catalog and signatures. |
+| CONNO: Direct install compact2 (TUI) | PASSED | 2026-11-09. Fully Connected. compact2.example.com, 3 masters, starting 10.0.1.91, API 10.0.1.212, ingress 10.0.1.222. The lab gateway did not route to quay.io, so the bastion forwarded the lab subnet and the node gateway was pointed at the bastion. Release images pulled from quay.io. Three masters Ready. ClusterVersion 4.21.40 Available. |
+| CONNO: Upgrade sno2 (TUI) | PASSED | 2026-11-09. Prepare Upgrade synced 4.21.40 to 4.21.42 (383 release images, 5 operator images). Day-2 OperatorHub on sno2, then Upgrade to 4.21.42 with Force left off. ClusterVersion history Completed 4.21.42, Available, Progressing false. Node Ready. |
+| CONNO: Virtualization day-2 (TUI) | PASSED | 2026-11-09. Mirrored the virt operator set (mtv and volsync left out so the sync would fit) plus the 5 guest images. Subscribed kubevirt-hyperconverged on ocp; CSV 4.21.24 Succeeded and HyperConverged was healthy. Day-2 Virtualization Boot Sources then succeeded: CentOS, Fedora, and RHEL 9/10 boot sources point at conno.example.com:8443. |
 | DISCO: TUI startup + bundle detection | PASSED | Light bundle correctly detected, asked for archives |
 | DISCO: Bundle transfer + TUI | SKIPPED | 23GB transfer too slow for session; light bundle detection worked |
 | DISCO: Mirror install + load | PENDING | Requires full bundle or archive transfer |
 | DISCO: Cluster install | PENDING | |
 | DIRECT: Install cluster | PENDING | |
 | Upgrade workflow (TUI) | CODE-REVIEWED | Upgrade version picker, conditional version warnings, manual entry, force toggle — all solid |
+| CONNO: sno2 TUI upgrade 4.21.40→4.21.42 | PASSED | 2026-11-09 22:57. ClusterVersion Available=True Progressing=False at **4.21.42**. All ClusterOperators Available on 4.21.42; node sno2 Ready. Mid-upgrade API briefly unreachable (~22:43–22:47) while waiting on machine-config (expected node reboot). TUI pane afterward showed an unrelated mirror sync at 25% (not the upgrade dialog). Day-2 Virtualization is next. |
+| CONNO: sno2 Day-2 Virtualization (post-upgrade) | PENDING | Starts after 4.21.42 upgrade (per hackathon plan). |
 | VMware config from scratch | CODE-REVIEWED | _configure_vmw_form: test connection, field validation, all fields saved correctly |
 | KVM config from scratch | CODE-REVIEWED | _configure_kvm_form: same pattern, libvirt URI test, all fields saved |
 | Delete installing cluster | NOT RUN | conno `sno` install was already in progress in tmux `tui-test` (another session). Did not delete it. |

@@ -86,7 +86,8 @@ if echo "$_scr" | grep -qi "Prepare Upgrade\|upgrade.*version\|target.*version\|
 	# Cancel out
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Prepare Upgrade screen unclear (may be loading)"
+	echo "  ✗ FAIL: Prepare Upgrade screen unclear (may be loading)"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -120,26 +121,26 @@ if echo "$_scr" | grep -qi "channel\|stable\|fast\|candidate"; then
 		tui_keys Enter; sleep 1
 	fi
 
-	# Select stable (stay on current) and proceed to version page
-	tui_keys Enter; sleep 3
-	tui_screenshot "pd-02c-version"
-
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "version\|Latest\|4\.[0-9]"; then
-		echo "  ✓ PASS: Version selection page appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-
-		# Check for Latest option
-		tui_assert_contains "Latest\|latest" "Latest version option"
-
-		# Cancel out
+	# Select stable (stay on current) and proceed to version page.
+	# Channel Next kicks off a network fetch; asserting before it finishes
+	# races on "Fetching versions for 'fast'…" with no Latest row yet.
+	tui_keys Enter; sleep 1
+	tui_wait_gone "Fetching versions" 90 || true
+	if ! tui_wait_for "Latest\|latest\|4\.[0-9]" 60; then
+		echo "  ✗ FAIL: Version page unclear (fetch never finished)"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "pd-02c-version-timeout"
 		tui_keys Escape; sleep 1
 	else
-		echo "  ~ NOTE: Version page unclear"
+		tui_screenshot "pd-02c-version"
+		echo "  ✓ PASS: Version selection page appeared"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_assert_contains "Latest\|latest" "Latest version option"
 		tui_keys Escape; sleep 1
 	fi
 else
-	echo "  ~ NOTE: Channel selection unclear"
+	echo "  ✗ FAIL: Channel selection unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -184,7 +185,8 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 		echo "  ✓ PASS: Registry type displayed after toggle: ${_toggled_reg}"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 	else
-		echo "  ~ NOTE: Could not detect registry type after toggle"
+		echo "  ✗ FAIL: Could not detect registry type after toggle"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	# Toggle back to restore original: cycle until we see the original type again
@@ -232,7 +234,8 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 
 	tui_keys Escape; sleep 1
 else
-	echo "  ~ NOTE: Settings menu unclear"
+	echo "  ✗ FAIL: Settings menu unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -271,7 +274,8 @@ elif echo "$_scr" | grep -qi "No Internet\|no internet\|not available"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Bundle dialog unclear"
+	echo "  ✗ FAIL: Bundle dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -295,7 +299,8 @@ elif echo "$_scr" | grep -qi "No Internet\|no internet"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Save dialog unclear"
+	echo "  ✗ FAIL: Save dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 
@@ -319,7 +324,8 @@ elif echo "$_scr" | grep -qi "No Internet\|no internet"; then
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_keys Enter; sleep 1
 else
-	echo "  ~ NOTE: Sync dialog unclear"
+	echo "  ✗ FAIL: Sync dialog unclear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_keys Escape; sleep 1
 fi
 

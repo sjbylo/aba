@@ -225,7 +225,35 @@ _bm_type_gates() {
 	tui_wait_for "Review\|Install" 15 || true
 	tui_keys Enter
 	sleep 2
-	if tui_wait_for "Bare-metal MAC check\|placeholder" 180; then
+	# MAC check is asked during Generate configs. It may overlay the progress
+	# dialog, or only be visible via Output if the yesno is slow to appear.
+	_saw_ask=0
+	for _wa in $(seq 1 60); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
+			_saw_ask=1
+			break
+		fi
+		# Peek Output while Generate configs is stuck In Progress
+		if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
+			if (( _wa % 10 == 0 )); then
+				tui_keys Space 2>/dev/null || true
+				sleep 1
+				_scr=$(tui_capture)
+				tui_screenshot "bm-${name}-ask-output-${_wa}"
+				if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
+					_saw_ask=1
+					tui_keys q 2>/dev/null || tui_keys Escape
+					sleep 1
+					break
+				fi
+				tui_keys q 2>/dev/null || tui_keys Escape
+				sleep 1
+			fi
+		fi
+		sleep 3
+	done
+	if [[ "$_saw_ask" -eq 1 ]]; then
 		echo "  ✓ PASS: $name fresh placeholders ask"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		tui_press_button "No" || tui_keys Tab Enter
@@ -234,6 +262,13 @@ _bm_type_gates() {
 		echo "  ✗ FAIL: $name fresh placeholders did not ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "bm-${name}-no-ask"
+		# Quit a stuck Generate-configs progress so fix_in_wizard can proceed
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Quit.*Q\|Overall Progress"; then
+			tui_keys q; sleep 1
+			tui_keys Enter 2>/dev/null || true
+			sleep 1
+		fi
 		return 0
 	fi
 	if tui_wait_for "wizard\|Retry" 60; then
@@ -290,28 +325,54 @@ _bm_fix_in_wizard() {
 	tui_wait_for "Review\|Install" 20 || true
 	tui_press_button "Install" || tui_keys Enter
 	sleep 2
-	if ! tui_wait_for "build the agent ISO" 180; then
+	# MAC ask runs under Generate configs. Compact often overlays the yesno on
+	# the progress frame; standard has been seen with the prompt only in Output
+	# for minutes while the main view stays at Generate configs [In Progress].
+	_saw_build=0
+	for _wa in $(seq 1 90); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+			_saw_build=1
+			break
+		fi
+		if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
+			if (( _wa % 10 == 0 )); then
+				tui_keys Space 2>/dev/null || true
+				sleep 1
+				_scr=$(tui_capture)
+				tui_screenshot "bm-${name}-build-output-${_wa}"
+				if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+					_saw_build=1
+					tui_keys q 2>/dev/null || tui_keys Escape
+					sleep 1
+					break
+				fi
+				tui_keys q 2>/dev/null || tui_keys Escape
+				sleep 1
+			fi
+		fi
+		sleep 3
+	done
+	if [[ "$_saw_build" -ne 1 ]]; then
 		echo "  ✗ FAIL: $name did not reach the build ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "bm-${name}-no-build"
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Quit.*Q\|Overall Progress"; then
+			tui_keys q; sleep 1
+			tui_keys Enter 2>/dev/null || true
+			sleep 1
+		fi
 		tui_press_button "Dismiss" || true
 		tui_back_to "Actions" 8 || true
 		return 0
 	fi
 	_scr=$(tui_capture)
 	tui_screenshot "bm-${name}-build-ask"
-	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-		echo "  ✓ PASS: $name install asks to build after the wizard fix"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_press_button "Yes" || tui_keys Enter
-		sleep 2
-	else
-		echo "  ✗ FAIL: $name did not ask to build"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_press_button "Dismiss" || tui_keys Enter
-		tui_back_to "Actions" 8 || true
-		return 0
-	fi
+	echo "  ✓ PASS: $name install asks to build after the wizard fix"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_press_button "Yes" || tui_keys Enter
+	sleep 2
 
 	_saw=0
 	_i=0
@@ -322,7 +383,19 @@ _bm_fix_in_wizard() {
 			tui_screenshot "bm-${name}-iso-ready"
 			break
 		fi
-		if echo "$_scr" | grep -qi "Error\|FAILED\|Dismiss"; then
+		# Progress success / ISO on disk also prove the build finished.
+		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully"; then
+			_saw=1
+			tui_screenshot "bm-${name}-iso-progress-done"
+			break
+		fi
+		if $_TUI_SSH "test -s ~/aba/$name/iso-agent-based/agent.*.iso" 2>/dev/null; then
+			_saw=1
+			tui_screenshot "bm-${name}-iso-file-ready"
+			break
+		fi
+		if echo "$_scr" | grep -qi "Error\|FAILED" && \
+		   echo "$_scr" | grep -qiE '<[[:space:]]*Dismiss|<[[:space:]]*Retry'; then
 			tui_screenshot "bm-${name}-iso-error"
 			break
 		fi
@@ -333,14 +406,14 @@ _bm_fix_in_wizard() {
 		echo "  ✓ PASS: $name built the agent ISO"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
 		# No servers for this cluster. No stops the run; the ISO is the result.
-		tui_press_button "No" || tui_keys Tab Enter
+		tui_press_button "No" 2>/dev/null || tui_keys Tab Enter 2>/dev/null || true
 		sleep 2
-		tui_press_button "Dismiss" || tui_keys Enter
+		tui_press_button "Dismiss" 2>/dev/null || tui_press_button "Done" 2>/dev/null || tui_keys Enter 2>/dev/null || true
 		sleep 1
 	else
 		echo "  ✗ FAIL: $name did not build the agent ISO"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_press_button "Dismiss" || true
+		tui_press_button "Dismiss" 2>/dev/null || tui_keys Escape 2>/dev/null || true
 	fi
 	_n=$($_TUI_SSH "grep -cve '^[[:space:]]*$' ~/aba/$name/macs.conf 2>/dev/null || echo 0")
 	if [ "$_n" = "$need" ]; then

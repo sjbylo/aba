@@ -186,6 +186,9 @@ $_SSH_DISCO "cd ~ && tar xf $_BUNDLE_ON_DISCO" 2>&1
 if $_SSH_DISCO "test -f ~/aba/.bundle && test -f ~/aba/install"; then
 	echo "  ✓ PASS: Bundle unpacked (.bundle marker present)"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	# Drop the transferred tar immediately — load needs that disk (~46G).
+	$_SSH_DISCO "rm -f $_BUNDLE_ON_DISCO" 2>/dev/null || true
+	echo "  Freed disco disk after unpack (removed $_BUNDLE_ON_DISCO)"
 else
 	echo "  ✗ FAIL: Bundle unpack failed (no .bundle or install)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -665,6 +668,16 @@ echo "================================================================"
 echo "  Phase 7: Cleanup"
 echo "================================================================"
 echo ""
+
+# Delete the DISCO cluster unless kept — same starting_ip (sno=.201) as conno's
+# suite cluster. Leaving it up makes the next conno Cluster Install fail on IP-in-use.
+if [[ "${TUI_SKIP_DELETE:-0}" != "1" ]]; then
+	echo "  Deleting '$_CLUSTER' on disco (frees lab IP for conno suites)..."
+	tui_delete_cluster "$_CLUSTER" || \
+		$_SSH_DISCO "cd ~/aba && aba -d $_CLUSTER delete --yes 2>/dev/null; true"
+else
+	echo "  (TUI_SKIP_DELETE=1) leaving '$_CLUSTER' on disco"
+fi
 
 # Dismiss any lingering dialog before cleanup
 tui_dismiss_result
