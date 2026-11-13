@@ -1663,7 +1663,14 @@ macs_report() {
 		fi
 	fi
 
-	if [ -n "$vs_agent" ]; then
+	# A complete set needs no count. The N/N × ports formula is the shortage.
+	if [ "$ready_word" = "READY" ]; then
+		if [ -n "$vs_agent" ]; then
+			printf 'macs.conf: present, READY — %s\n' "$vs_agent"
+		else
+			printf 'macs.conf: present, READY\n'
+		fi
+	elif [ -n "$vs_agent" ]; then
 		printf 'macs.conf: present, %s (%s/%s) — %s\n' \
 			"$ready_word" "$mac_count" "$mac_expected" "$vs_agent"
 	else

@@ -123,7 +123,8 @@ echo "$_rpt" | grep -q 'missing/empty — NOT READY' \
 
 printf '00:11:22:33:44:55\n' > "$_td/macs-sno.conf"
 _rpt=$(macs_report --file "$_td/macs-sno.conf" --type sno --ports ens1f0 --agent "$_td/no-agent.yaml")
-echo "$_rpt" | grep -q 'READY (1/1)' && echo "$_rpt" | grep -q '00:11:22:33:44:55' \
+echo "$_rpt" | grep -q 'present, READY' && ! echo "$_rpt" | grep -q 'READY (' \
+	&& echo "$_rpt" | grep -q '00:11:22:33:44:55' \
 	&& _pass "macs_report: ready + content" || _fail "macs_report: ready + content (got: $_rpt)"
 
 printf 'aa:bb:cc:dd:ee:01\naa:bb:cc:dd:ee:02\n' > "$_td/macs-partial.conf"
@@ -147,7 +148,7 @@ _canon=$(macs_canonicalize_text $'\n  00:11:22:33:44:55  \n\n')
 	|| _fail "canonicalize trim (got: $_canon)"
 
 _rpt=$(macs_report --text $'\n  00:11:22:33:44:55  \n\n' --type sno --ports ens1f0)
-if echo "$_rpt" | grep -q 'READY (1/1' && ! grep -q 'ERROR:' <<<"$_rpt"; then
+if echo "$_rpt" | grep -q 'present, READY' && ! echo "$_rpt" | grep -q 'READY (' && ! grep -q 'ERROR:' <<<"$_rpt"; then
 	_pass "macs_report: padded MAC is ready"
 else
 	_fail "macs_report: padded MAC (got: $_rpt)"
