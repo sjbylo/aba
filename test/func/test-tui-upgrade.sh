@@ -22,6 +22,17 @@ tui_deploy_code
 tui_pre_cleanup
 echo ""
 
+# Mirror A-record must stay on the lab NIC. Sync/day2 can re-run add-mirror;
+# without this, dual-homed hosts rewrite bastion → mgmt IP and upgrade pulls fail.
+tui_ensure_bastion_mirror_dns || true
+if tui_assert_mirror_dns_reachable; then
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+else
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_summary; exit 1
+fi
+echo ""
+
 # ============================================================================
 # 0. Verify cluster is installed and get current version
 # ============================================================================
@@ -177,6 +188,14 @@ else
 	tui_cleanup; tui_summary; exit 1
 fi
 
+# Sync may refresh mirror/.available → infra-dns add-mirror; re-pin lab A-record.
+tui_ensure_bastion_mirror_dns || true
+if ! tui_assert_mirror_dns_reachable; then
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_cleanup; tui_summary; exit 1
+fi
+_TUI_PASS=$(( _TUI_PASS + 1 ))
+
 # ============================================================================
 # 3. Day-2 configuration (OSUS + IDMS) via TUI
 # ============================================================================
@@ -330,6 +349,14 @@ fi
 # ============================================================================
 echo ""
 echo "--- 4. Upgrade $_current_ver → $_target_ver ---"
+
+# Day-2 may touch mirror markers; pin DNS again before payload pull.
+tui_ensure_bastion_mirror_dns || true
+if ! tui_assert_mirror_dns_reachable; then
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_cleanup; tui_summary; exit 1
+fi
+_TUI_PASS=$(( _TUI_PASS + 1 ))
 
 if ! tui_session_alive; then
 	tui_start_to_menu || { tui_summary; exit 1; }
