@@ -4017,6 +4017,26 @@ The 2.0 file is a different build from the stable-4.22 client tarball (`2.0.0-20
 
 ---
 
+## #B114: Find installed VMs from state.sh, not from cluster.conf and agent-config.yaml
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-13
+
+**Problem:** After a cluster is installed, `aba start`, `aba stop`, `aba ls`, `aba create`, and `aba delete` still need `install-config.yaml` and `agent-config.yaml` in the cluster directory to name the VMs. `cluster.conf` is still required to enter those commands at all. Those files are the inputs that were consumed to build the VMs. Editing them, regenerating them, or removing them makes ABA look up the wrong guests, or report that there is nothing to delete while the VMs are still running. #B85 suggested falling back to `cluster.conf` for delete. That is still the next-install input, not the record of what was installed.
+
+**Root cause:** `vmw-exists.sh`, `kvm-exists.sh`, `vmw-delete.sh`, and `kvm-delete.sh` call `cluster-config.sh` unless `CLUSTER_NAME` is already set. `cluster-config.sh` reads `install-config.yaml` for the cluster name and `agent-config.yaml` for `hosts[].hostname` (`CP_NAMES`, `WORKER_NAMES`). `vm_name` then builds the guest name from those. `_ensure_vm_platform_ready` in `scripts/aba.sh` already takes the installed platform from `state.sh`, then still warns if `agent-config.yaml` is missing. Commands such as `startup` and `delete` also refuse to run when `cluster.conf` is absent, unless a backup copy can be restored.
+
+`externalize_cluster_state` already writes `cluster_name`, `base_domain`, `cluster_type`, `platform`, `cp_names`, and `worker_names` into `~/.aba/clusters/<name>.<domain>/state.sh`. The name fields stay empty. The writer uses lowercase `cp_names` and `worker_names`, and nothing sets those. `monitor-install.sh` has the real lists in `CP_NAMES` and `WORKER_NAMES` at the moment it calls `externalize_cluster_state`. Hostnames cannot be rebuilt from `cluster_name` and replica counts alone, because `master_prefix` and `worker_prefix` in `cluster.conf` are editable. SNO is the exception: the single guest name is the cluster name.
+
+**Proposed fix:** When the cluster is installed, VM lookup reads `state.sh`. At externalize time, store the hostnames that were actually installed (`CP_NAMES` and `WORKER_NAMES`, or the hostnames in the `agent-config.yaml` just consumed). Backfill older state dirs from `backup/agent-config.yaml`, which is already copied there. `vm_exists_any`, start, stop, ls, and delete use `cluster_name`, `cp_names`, `worker_names`, and `cluster_type` from that file. `cluster.conf` stays the input for the next install. A later edit must not change which guests an installed cluster's power and delete commands target. `vmware.conf` and `kvm.conf` stay as they are: they are how ABA reaches the hypervisor, not which guests belong to the cluster. Once `clusterstate` points at `state.sh`, `startup` and `delete` should not need `cluster.conf` in the working directory. #B85's `cluster.conf` fallback is the wrong source for an installed cluster.
+
+Once that record exists, removing `agent-config.yaml` and `install-config.yaml` from the cluster directory is plausible. They have been consumed: the installer already used them, and `externalize_cluster_state` already copies both into `~/.aba/clusters/<name>.<domain>/backup/`. Day-2 power, list, and delete do not need the working copies. The next install regenerates both from `cluster.conf`. Leaving the consumed files in place under their Make input names is what lets a later edit or a timestamp change steer VM lookup and rebuild the ISO from a file that no longer matches the running guests. If an outright delete is too sharp, rename them so they are no longer `agent-config.yaml` and `install-config.yaml` (the backup names already kept under `backup/` are enough). `cluster.conf` stays. It is the editable input, not a consumed output.
+
+**Workaround:** Keep the generated `install-config.yaml` and `agent-config.yaml` that match the running VMs. If they were removed, regenerate them with the same name and prefixes, then retry. Last resort is `govc` or `virsh` with the guest names.
+
+---
+
 ## #B115: Move progress-plan wording into the script that owns the work
 
 **Severity:** LOW
