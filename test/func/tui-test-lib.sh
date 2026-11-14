@@ -352,7 +352,7 @@ tui_dismiss_result() {
 	if echo "$_scr" | grep -qi "Yes.*No\|apply now.*later"; then
 		return 1
 	fi
-	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded\|Success"; then
+	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded\|Success\|Stopped before all steps\|──.*Stopped.*──\|Install.*Stopped\|Sync.*Stopped\|Load.*Stopped"; then
 		tui_keys Enter
 		sleep 2
 		return 0

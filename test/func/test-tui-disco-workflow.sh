@@ -344,6 +344,21 @@ while true; do
 
 	tui_dismiss_result && continue
 
+	# Progress Stopped dialog (Quit mid-run) — dismiss so gate can retry/continue
+	if echo "$_scr" | grep -qi "Stopped before all steps\|Install.*Stopped\|Sync.*Stopped\|Load.*Stopped\|──.*Stopped.*──"; then
+		echo "  Stopped dialog detected — dismissing (mirror may already be up)"
+		tui_screenshot "disco-wf-gate-stopped-${_elapsed}s"
+		tui_keys Enter; sleep 2
+		# If registry is already available, Esc toward DISCO main menu instead of reinstalling
+		if $_SSH_DISCO "test -f ~/aba/mirror/.available" 2>/dev/null; then
+			echo "  Mirror .available present — escaping toward main menu"
+			tui_keys Escape; sleep 1
+			tui_keys Escape; sleep 1
+			tui_keys Escape; sleep 1
+		fi
+		continue
+	fi
+
 	# "Load images to mirror" confirmation dialog
 	if echo "$_scr" | grep -qi "Load images to mirror" && echo "$_scr" | grep -qi "Continue"; then
 		echo "  Load images confirmation — pressing Continue"
