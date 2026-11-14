@@ -80,6 +80,7 @@ unit_tests=(
 	test/func/test-run-once-validation-reread-race.sh
 	test/func/test-run-once-waiting-message.sh
 	test/func/test-run-once-wait-start-race.sh
+	test/func/test-run-once-concurrency-history.sh
 	test/func/test-self-heal-validation.sh
 
 	# Config / normalize
