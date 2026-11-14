@@ -4920,7 +4920,10 @@ run_once() {
 	# but preserves identity files (cmd.sh, cmd, cwd) for TTL re-execution.
 	# Explicit reset also removes identity files -- "forget everything."
 	if [[ "$reset" == true ]]; then
-		_log_history "RESET"
+		# ppid + parent cmdline help RCA who issued -r (double-STARTED after RESET)
+		local _pp_cmd=
+		_pp_cmd=$(tr '\0' ' ' <"/proc/$PPID/cmdline" 2>/dev/null | sed 's/[[:space:]]*$//') || _pp_cmd=
+		_log_history "RESET caller_pid=$$ ppid=$PPID${_pp_cmd:+ pp_cmd=\"$_pp_cmd\"}"
 		aba_debug "run_once: task '$work_id' explicitly reset (killing and clearing state)"
 		_kill_id "$work_id"
 		rm -f "$id_dir"/{cmd.sh,cmd,cwd}
@@ -4951,12 +4954,18 @@ run_once() {
 	_start_task() {
 		local is_fg="$1"
 		local lock_held="${2:-false}"
+		# Caller of run_once (make/TUI/shell). Logged so double-STARTED races
+		# show which processes overlapped on the same work_id.
+		local _caller_pid=$$
 
 		if [[ "$lock_held" != "true" ]]; then
 			# Acquire lock via FD 9; lock remains held while subshell keeps FD open
 			exec 9>>"$lock_file"
 			if ! flock -n 9; then
 				exec 9>&-
+				local _held_job=
+				[[ -f "$pid_file" ]] && _held_job=$(cat "$pid_file" 2>/dev/null || true)
+				_log_history "SKIP_RUNNING caller_pid=$_caller_pid${_held_job:+ held_job_pid=$_held_job}"
 				aba_debug "run_once: task '$work_id' already running (lock held), skipping start"
 				return 0
 			fi
@@ -4978,9 +4987,8 @@ run_once() {
 			command[$_i]="${command[$_i]//$'\t'/ }"     # tabs → spaces
 		done
 
-		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
 		aba_debug "run_once: starting task '$work_id': ${command[*]}"
-		
+
 		# Save command in two formats:
 		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
 		#    Preserves exact array structure including spaces, quotes, special chars
@@ -4988,11 +4996,11 @@ run_once() {
 		declare -p command > "$id_dir/cmd.sh"
 		printf '%s ' "${command[@]}" > "$cmd_file"
 		echo >> "$cmd_file"  # trailing newline
-		
+
 		# Save current working directory for re-execution (self-healing validation)
 		# Commands with relative paths need the same CWD to work correctly
 		pwd > "$id_dir/cwd"
-		
+
 		# Backward compatibility: create symlink for old scripts that reference 'log'
 		ln -sf log.out "$id_dir/log" 2>/dev/null || true
 
@@ -5003,14 +5011,19 @@ run_once() {
 			# exit file even when the command fails (wait returns non-zero).
 			set +e
 			local rc=0
+			local _waiter_pid=$BASHPID
+			local _cmd_line
+			_cmd_line=$(printf '%s ' "${command[@]}")
 
 			if [[ "$is_fg" == "true" ]]; then
 				# Foreground-ish: stream + log
 				# Capture stderr separately, combined to stdout for display
+				# setsid is in a pipeline — job_pid is not a single $!; log waiter.
+				_log_history "STARTED caller_pid=$_caller_pid waiter_pid=$_waiter_pid mode=fg cmd=\"$_cmd_line\""
 				setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
-				_log_history "COMPLETE rc=$rc"
+				_log_history "COMPLETE rc=$rc caller_pid=$_caller_pid waiter_pid=$_waiter_pid mode=fg"
 				exit "$rc"
 			fi
 
@@ -5022,12 +5035,15 @@ run_once() {
 			# the lock. If this subshell is killed, the lock releases immediately
 			# instead of being held by the orphaned child until it finishes.
 			setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
-			echo $! >"$pid_file"
-		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
-			wait $!
+			local _job_pid=$!
+			echo "$_job_pid" >"$pid_file"
+			chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
+			# STARTED after job_pid is known — double-start races show distinct pids
+			_log_history "STARTED caller_pid=$_caller_pid waiter_pid=$_waiter_pid job_pid=$_job_pid cmd=\"$_cmd_line\""
+			wait "$_job_pid"
 			rc=$?
 			echo "$rc" >"$exit_file"
-			_log_history "COMPLETE rc=$rc"
+			_log_history "COMPLETE rc=$rc caller_pid=$_caller_pid waiter_pid=$_waiter_pid job_pid=$_job_pid"
 			exit "$rc"
 		) &
 
@@ -5063,7 +5079,7 @@ run_once() {
 			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
 			# These are interruptions, not legitimate failures, so treat as crash and retry
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
-				_log_history "SIGNAL rc=$exit_code (restarting)"
+				_log_history "SIGNAL rc=$exit_code (restarting) caller_pid=$$"
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
 				# Surgical cleanup: preserve cmd.sh/cmd/cwd so wait can reload the command
 				rm -f "$id_dir"/{pid,lock,exit}
