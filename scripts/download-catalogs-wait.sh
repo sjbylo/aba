@@ -79,7 +79,19 @@ for _ver in "${_versions_to_wait[@]}"; do
 
 		if ! run_once $_skip_val -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then
 			[[ "$_catalogs_progress" == true ]] && aba_progress "FAIL|catalogs_dl"
-			error_output=$(run_once -e -i "$task_id" | head -20)
+			# Full stderr + run_once history (do not head -20 — that hid catalog.json
+			# and the empty-index diagnostic in the shared-.downloading race).
+			_ro_dir="${RUN_ONCE_DIR:-$HOME/.aba/runner}/$task_id"
+			error_output=$(
+				echo "--- run_once history ($task_id) ---"
+				if [[ -f "$_ro_dir/history" ]]; then
+					tail -40 "$_ro_dir/history"
+				else
+					echo "(no history)"
+				fi
+				echo "--- log.err ---"
+				run_once -e -i "$task_id"
+			)
 			aba_abort "Failed to download ${catalog} catalog for OCP ${_ver}" \
 				"Error details from download task:" \
 				"$error_output"

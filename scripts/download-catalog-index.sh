@@ -411,7 +411,10 @@ if [ ! -s "$tmp_file" ]; then
 	{
 		echo "=== DIAGNOSTIC: parser produced empty index ==="
 		echo "catalog=$catalog_name version=$ocp_ver_major"
+		echo "pid=$$ ppid=$PPID tmp_file=$tmp_file"
 		echo "configs_dir=$tmp_dir/configs"
+		_fc=$(find "$tmp_dir/configs" -type f 2>/dev/null | wc -l)
+		echo "configs_file_count=$_fc"
 		echo "--- configs top-level dirs (first 10) ---"
 		find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -10
 		echo "--- sample dir contents ---"
@@ -419,10 +422,29 @@ if [ ! -s "$tmp_file" ]; then
 		if [[ -n "$_sample_dir" ]]; then
 			echo "sample: $_sample_dir"
 			ls -la "$_sample_dir" 2>&1
+			# Do not stop at 20 lines — catalogs-wait used to hide catalog.json this way
+			find "$_sample_dir" -type f 2>/dev/null | head -30
 		else
 			echo "(no non-underscore dirs found)"
 		fi
 		echo "--- catalog-extract-functions.sh loaded: $(type -t _extract_catalog_dir 2>/dev/null || echo 'NOT LOADED') ---"
+		# run_once history for this catalog:ver — catches double-STARTED / SKIP_RUNNING
+		_ro_id="catalog:${ocp_ver_major}:${catalog_name}"
+		_ro_dir="${RUN_ONCE_DIR:-$HOME/.aba/runner}/$_ro_id"
+		echo "--- run_once history ($_ro_id) ---"
+		if [[ -f "$_ro_dir/history" ]]; then
+			tail -30 "$_ro_dir/history"
+		else
+			echo "(no history at $_ro_dir/history)"
+		fi
+		echo "--- run_once pid/lock/exit ---"
+		for _f in pid lock exit; do
+			if [[ -e "$_ro_dir/$_f" ]]; then
+				echo "$_f=$(cat "$_ro_dir/$_f" 2>/dev/null | tr '\n' ' ')"
+			else
+				echo "$_f=(missing)"
+			fi
+		done
 		echo "=== END DIAGNOSTIC ==="
 	} >&2
 	aba_abort "Catalog extraction produced empty index for $catalog_name v$ocp_ver_major"
