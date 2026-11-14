@@ -1,104 +1,82 @@
 #!/bin/bash
-# Test parallel validation race condition in run_once
-# This tests the fix for the issue where multiple processes calling ensure_*
-# simultaneously would cause validation race conditions
+# Test parallel validation / concurrent -w on a completed run_once task
 
-set -e
-
+set -u
 cd "$(dirname "$0")/../.." || exit 1
 source scripts/include_all.sh
-
-# Disable ERR trap for test
 trap - ERR
 
-# Use test runner directory to avoid conflicts
-export RUN_ONCE_DIR="$HOME/.aba/runner-test-parallel-validation"
+pass=0
+fail=0
+_pass() { pass=$(( pass + 1 )); printf "  \033[32mPASS\033[0m  %s\n" "$*"; }
+_fail() { fail=$(( fail + 1 )); printf "  \033[31mFAIL\033[0m  %s\n" "$*"; }
+
+export RUN_ONCE_DIR="$HOME/.aba/runner-test-parallel-validation-$$"
 TEST_OUTPUT_DIR="/tmp/aba-test-parallel-validation-$$"
-
-# Cleanup
-cleanup() {
-	rm -rf "$RUN_ONCE_DIR" "$TEST_OUTPUT_DIR"
-}
+cleanup() { rm -rf "$RUN_ONCE_DIR" "$TEST_OUTPUT_DIR"; }
 trap cleanup EXIT
-cleanup  # Clean any previous test runs
+cleanup
+mkdir -p "$RUN_ONCE_DIR" "$TEST_OUTPUT_DIR"
 
-mkdir -p "$TEST_OUTPUT_DIR"
+echo "=== run_once parallel validation ==="
 
-echo "======================================================================"
-echo "Test 1: Sequential validation (baseline)"
-echo "======================================================================"
-
+echo "--- 1. Sequential validation baseline ---"
 output1="$TEST_OUTPUT_DIR/output1.txt"
-
-# Simple idempotent task
-task1=(bash -c "
-	if [[ -f '$output1' ]]; then
-		exit 0
-	fi
-	echo 'creating' > '$output1'
-	exit 0
-")
-
-echo "→ Running task..."
-run_once -i "test:parallel:seq" -- "${task1[@]}"
-run_once -w -i "test:parallel:seq"
-
-if [[ ! -f "$output1" ]]; then
-	echo "❌ FAIL: Output not created"
-	exit 1
+run_once -i "test:parallel:seq" -- bash -c "
+	if [[ -f '$output1' ]]; then exit 0; fi
+	echo creating > '$output1'
+"
+run_once -w -i "test:parallel:seq" || { _fail "first wait failed"; }
+if [[ -f "$output1" ]]; then
+	_pass "task created output"
+else
+	_fail "output not created"
 fi
-echo "✓ Task completed"
+_starts1=$(grep -c ' STARTED ' "$RUN_ONCE_DIR/test:parallel:seq/history" || echo 0)
+run_once -w -i "test:parallel:seq" || { _fail "validation wait failed"; }
+_starts2=$(grep -c ' STARTED ' "$RUN_ONCE_DIR/test:parallel:seq/history" || echo 0)
+# Default -w may validate (re-run); with completed exit, STARTED should stay 1
+# unless validation restarts — use -S for cache check
+run_once -w -S -i "test:parallel:seq" || { _fail "-S wait failed"; }
+_starts3=$(grep -c ' STARTED ' "$RUN_ONCE_DIR/test:parallel:seq/history" || echo 0)
+if [[ "$_starts1" -eq 1 && "$_starts3" -eq 1 ]]; then
+	_pass "cached -S wait does not add STARTED (was $_starts1, now $_starts3)"
+else
+	_fail "STARTED drifted: $_starts1 → $_starts2 → $_starts3"
+fi
 
-# Wait again - should trigger validation
-echo "→ Waiting again (triggers validation)..."
-run_once -w -i "test:parallel:seq"
-
-echo "✓ Validation succeeded"
-
-echo ""
-echo "======================================================================"
-echo "Test 2: Parallel waits don't interfere with each other"
-echo "======================================================================"
-
+echo "--- 2. Parallel waits on completed task ---"
 output2="$TEST_OUTPUT_DIR/output2.txt"
-echo "initial" > "$output2"
+echo initial > "$output2"
+run_once -i "test:parallel:waits" -- bash -c "
+	if [[ -f '$output2' ]]; then exit 0; fi
+	echo created > '$output2'
+"
+run_once -w -i "test:parallel:waits" || { _fail "setup wait failed"; }
 
-task2=(bash -c "
-	if [[ -f '$output2' ]]; then
-		exit 0
-	fi
-	echo 'created' > '$output2'
-	exit 0
-")
-
-# Run task once
-echo "→ Running task..."
-run_once -i "test:parallel:waits" -- "${task2[@]}"
-run_once -w -i "test:parallel:waits"
-
-echo "✓ Task completed"
-
-# Run 3 parallel waits - all should succeed
-echo "→ Running 3 parallel waits..."
-run_once -w -i "test:parallel:waits" &
-run_once -w -i "test:parallel:waits" &
-run_once -w -i "test:parallel:waits" &
+_rcs=0
+for i in 1 2 3; do
+	(
+		rc=0
+		run_once -q -w -i "test:parallel:waits" || rc=$?
+		echo "$rc" > "$TEST_OUTPUT_DIR/pw.$i.rc"
+	) &
+done
 wait
-
-echo "✓ All parallel waits succeeded"
-
-if [[ ! -f "$output2" ]]; then
-	echo "❌ FAIL: Output lost"
-	exit 1
+_bad=0
+for i in 1 2 3; do
+	rc=$(cat "$TEST_OUTPUT_DIR/pw.$i.rc" 2>/dev/null || echo 99)
+	[[ "$rc" == "0" ]] || _bad=$(( _bad + 1 ))
+done
+if [[ "$_bad" -eq 0 && -f "$output2" ]]; then
+	_pass "3 parallel -w all rc=0 and output intact"
+else
+	_fail "parallel waits: bad=$_bad output=$(cat "$output2" 2>/dev/null)"
 fi
-echo "✓ Output still exists"
 
-echo ""
-echo "======================================================================"
-echo "✓ ALL TESTS PASSED"
-echo "======================================================================"
-echo ""
-echo "Summary:"
-echo "  - Sequential validation works correctly"
-echo "  - Parallel waits don't interfere with each other"
-echo "  - Validation holds lock properly (no race conditions)"
+echo
+echo "========================================"
+echo "  PASS: $pass"
+echo "  FAIL: $fail"
+echo "========================================"
+exit "$fail"
