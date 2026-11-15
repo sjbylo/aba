@@ -29,6 +29,14 @@ _SSH_DISCO="ssh -F $_TUI_SSH_CFG $_DISCO"
 _BUNDLE_PATH="${TUI_BUNDLE_PATH:-}"
 _BUNDLE_DEST="/tmp/disco-test-bundle.tar"
 
+# Air-gap immediately, and again on the way out. Bundle work runs on conno.
+# Disco must not keep an internet NIC that an earlier test left up.
+_disco_internet_off() {
+	tui_disco_internet_down "$_DISCO"
+}
+trap _disco_internet_off EXIT
+_disco_internet_off
+
 # Resolve starting_ip / API / APPS from throwaway-cluster skill and verify DNS.
 tui_lab_resolve_cluster "$_CLUSTER" || exit 1
 
@@ -226,9 +234,8 @@ echo ""
 # Deploy latest TUI code
 tui_deploy_code
 
-# Ensure disco host has no internet access (must be fully air-gapped)
-echo "  Ensuring internet is down on disco host..."
-$_SSH_DISCO "internet.sh down 2>&1" || true
+# Again, immediately before the TUI. Phases above run on conno.
+tui_disco_internet_down "$_DISCO"
 
 # Launch TUI
 tui_start

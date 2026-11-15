@@ -15,6 +15,16 @@ _TUI_FAIL=0
 _TUI_WIDTH=160
 _TUI_HEIGHT=45
 
+# Drop the internet NIC on the disconnected bastion. SSH stays on the
+# management NIC (internet.sh uses SSH_CONNECTION). Call at the start of a
+# disco test and from its EXIT trap. Do not leave the link up afterwards.
+tui_disco_internet_down() {
+	local _host="${1:-disco.example.com}"
+	echo "  Internet down on $_host"
+	ssh -F "$_TUI_SSH_CFG" "$_host" '~/bin/internet.sh down' 2>&1 || \
+		ssh -F "$_TUI_SSH_CFG" "$_host" 'internet.sh down' 2>&1 || true
+}
+
 # ---------------------------------------------------------------------------
 # Throwaway-cluster lab defaults
 # Source of truth: .cursor/skills/throwaway-cluster/SKILL.md
@@ -744,15 +754,17 @@ tui_require_internet() {
 # Deploy ALL ABA core + TUI code to the test host.
 # Uses git ls-files to build a tarball of tracked (+ untracked-not-ignored)
 # files, matching the same approach as the e2e deploy framework.
-# Copies: scripts/, templates/, tools/, others/, tui/, Makefile, aba, abatui,
-#         install, mirror/Makefile — everything needed for a working ABA.
+# Copies: scripts/, templates/, tools/, others/, tui/, rpms/, Makefile, aba,
+#         abatui, install, mirror/Makefile, cli/Makefile.
+# rpms/ must travel with the deploy. aba bundle's find starts at rpms/, and
+# an overlay deploy must not leave that directory missing on conno.
 # Usage: tui_deploy_code
 tui_deploy_code() {
 	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
 	# cli/Makefile is required for mirror install (out-download-all). Without it
 	# make -C cli fails with "No such file or directory" and the suite cascades.
 	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
-		cli/Makefile
+		cli/Makefile rpms/
 		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
 	local _tar _hash _old_hash
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
