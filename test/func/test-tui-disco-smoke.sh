@@ -18,12 +18,14 @@ echo "=== TUI DISCO Mode Smoke Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
+# Disco stays air-gapped. A previous run may have left ens192 up.
+tui_disco_internet_down "$_TUI_HOST"
+
 tui_deploy_code
 
 # Force DISCO only when a real payload exists (imageset + mirror_*.tar).
-# After a host wipe, .bundle alone → "Bundle incomplete" or "Image Archives
-# Needed" → Exit kills the TUI. Smoke then runs in native CONNO mode (lab
-# disco has internet). DISCO Workflow covers the full air-gap path.
+# No archives is a failure. Smoke does not bring the internet NIC up and
+# does not fall back to the connected menu.
 _had_bundle=$($_TUI_SSH "test -f ~/aba/.bundle && echo yes || echo no" 2>/dev/null)
 _had_available=$($_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null)
 _has_archives=$($_TUI_SSH "ls ~/aba/mirror/data/mirror_*.tar >/dev/null 2>&1 && echo yes || echo no" 2>/dev/null)
@@ -36,13 +38,10 @@ if [[ "$_has_archives" == "yes" && "$_has_isc" == "yes" ]]; then
 		echo "  Created .bundle marker to force DISCO mode (archives present)"
 	fi
 else
-	echo "  No mirror archives on disco — smoke runs in native mode (no forced .bundle)"
-	# Drop a stale .bundle left from a prior wipe so TUI does not abort
-	if [[ "$_had_bundle" == "yes" && "$_has_archives" != "yes" ]]; then
-		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null
-		echo "  Removed stale .bundle (no archives)"
-		_had_bundle=no
-	fi
+	echo "  ✗ FAIL: No mirror archives on disco — DISCO smoke needs the air-gap payload"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_summary
+	exit 1
 fi
 # If mirror is installed but .available is missing, create it to prevent
 # the wizard gate from trying to auto-install (and failing on stale state).
@@ -56,6 +55,7 @@ echo ""
 
 # Cleanup helper: restore markers we created
 _disco_cleanup() {
+	tui_disco_internet_down "$_TUI_HOST"
 	if [[ "$_force_disco" == "yes" && "$_had_bundle" != "yes" ]]; then
 		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null
 		echo "  Removed .bundle marker"
@@ -128,38 +128,31 @@ for _gate_i in 1 2 3 4 5; do
 		continue
 	fi
 
-	# Light bundle / wipe: no mirror_*.tar — Exit and continue in native mode
-	if echo "$_scr" | grep -qi "Image Archives Needed\|mirror_\*\.tar\|light\* install bundle"; then
-		echo "  Image Archives Needed — Exit to native mode (Workflow transfers archives)"
-		tui_press_button "Exit" 2>/dev/null || tui_keys Tab Enter
-		sleep 2
-		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null || true
-		tui_stop 2>/dev/null || true
-		tui_start
-		tui_keys Enter; sleep 3
-		continue
-	fi
-
-	# Bundle incomplete after wipe
-	if echo "$_scr" | grep -qi "Cannot Proceed\|Bundle incomplete\|no imageset-config"; then
-		echo "  Bundle incomplete — clearing .bundle and relaunching native"
-		tui_keys Enter; sleep 1
-		$_TUI_SSH "rm -f ~/aba/.bundle" 2>/dev/null || true
-		tui_stop 2>/dev/null || true
-		tui_start
-		tui_keys Enter; sleep 3
-		continue
-	fi
-
-	# Air-gap host with no bundle and no internet — TUI exits. Soft-skip smoke;
-	# DISCO Workflow covers the real air-gap path after a bundle transfer.
-	if echo "$_scr" | grep -qi "Internet Access Required\|Internet access required\|Exiting\.\.\."; then
-		echo "  ✓ PASS: Internet Access Required (no archives, offline) — soft-skip DISCO smoke"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_keys Enter; sleep 1
+	# The success dialog says "mirror_*.tar detected". Match the missing-archive
+	# title only, or this gate fails on a healthy Fully Disconnected payload.
+	if echo "$_scr" | grep -qi "Image Archives Needed\|This is a \*light\* install bundle"; then
+		echo "  ✗ FAIL: Image Archives Needed — not falling back to connected mode"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_stop 2>/dev/null || true
 		tui_summary
-		exit 0
+		exit 1
+	fi
+
+	if echo "$_scr" | grep -qi "Cannot Proceed\|Bundle incomplete\|no imageset-config"; then
+		echo "  ✗ FAIL: Bundle incomplete — not relaunching in connected mode"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_stop 2>/dev/null || true
+		tui_summary
+		exit 1
+	fi
+
+	# Offline with no payload. The TUI exits. That is not a DISCO smoke pass.
+	if echo "$_scr" | grep -qi "Internet Access Required\|Internet access required\|Exiting\.\.\."; then
+		echo "  ✗ FAIL: Internet Access Required — DISCO smoke has no air-gap payload"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_stop 2>/dev/null || true
+		tui_summary
+		exit 1
 	fi
 
 	# Bundle payload summary (title "ABA Install Bundle", not "install bundle was detected")
@@ -189,9 +182,12 @@ for _menu_i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 		sleep 5
 		continue
 	fi
-	# Install location choice — select locally
-	if echo "$_scr" | grep -qi "Install locally\|Install on remote"; then
-		tui_keys Enter; sleep 3
+	# Install-target chooser. Enter would start a registry install.
+	# Smoke only needs the actions menu, so leave this dialog.
+	if echo "$_scr" | grep -qi "Choose installation target\|Install locally\|Install on remote"; then
+		echo "  Install-target chooser — Back to the DISCO menu"
+		tui_press_button "Back" 2>/dev/null || tui_keys Escape
+		sleep 2
 		continue
 	fi
 	# Load (or long install) progress — Quit so smoke can exercise the menu.
@@ -248,7 +244,7 @@ if ! tui_capture | grep -q "── Registry ──\|── Cluster ──\|─�
 		tui_press_button "Dismiss" 2>/dev/null || tui_keys Enter
 		sleep 2
 	fi
-	tui_back_to "Registry\|Cluster\|Advanced\|Actions" 10
+	tui_back_to "── Registry ──\|– Actions" 10
 fi
 
 # ============================================================================
@@ -262,13 +258,21 @@ _scr=$(tui_capture)
 
 # Detect which mode we ended up in
 _detected_disco=false
-if echo "$_scr" | grep -qi "Fully Disconnected"; then
+# The status bar always says Fully Disconnected. The actions menu is the
+# title "– Actions" or the Registry section rule.
+if echo "$_scr" | grep -q "– Actions\|── Registry ──"; then
 	echo "  ✓ PASS: Fully Disconnected mode detected"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	_detected_disco=true
-elif echo "$_scr" | grep -qi "Partially Disconnected\|CONNO"; then
-	echo "  ✓ PASS: Host is in Partially Disconnected mode — adapting to CONNO menu structure"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+fi
+
+if [[ "$_detected_disco" != "true" ]]; then
+	echo "  ✗ FAIL: DISCO smoke is not in Fully Disconnected mode"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "disco-03-not-disco"
+	tui_stop 2>/dev/null || true
+	tui_summary
+	exit 1
 fi
 
 # Check menu items — DISCO and CONNO have different items

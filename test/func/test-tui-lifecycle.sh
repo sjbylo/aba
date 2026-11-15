@@ -223,8 +223,16 @@ else
 			echo "  ✓ PASS: Delete completed"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			echo "  ✗ FAIL: Delete failed"
-			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			# The dialog often closes as soon as the marker is gone. The
+			# marker is the result; a short menu return is not a failed delete.
+			_gone_now=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
+			if [[ "$_gone_now" == "yes" ]]; then
+				echo "  ✓ PASS: Delete completed (install marker gone)"
+				_TUI_PASS=$(( _TUI_PASS + 1 ))
+			else
+				echo "  ✗ FAIL: Delete failed"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			fi
 		fi
 		tui_screenshot "lc-06b-delete-result"
 		tui_dismiss_result

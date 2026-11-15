@@ -598,16 +598,38 @@ echo "--- 5. Fix the MAC, Retry, then boot ---"
 # The stop dialog is still up. Retry re-runs this install; the wizard is behind it.
 _bm_prepare_boot_conf
 tui_press_button "Retry" || true
-if tui_wait_for "build the agent ISO" 180; then
+# The build ask can overlay the progress frame, or only show up in Output
+# while Generate configs stays In Progress at 0%.
+_saw_build=0
+for _wa in $(seq 1 60); do
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+		_saw_build=1
+		break
+	fi
+	if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
+		if (( _wa % 10 == 0 )); then
+			tui_keys Space 2>/dev/null || true
+			sleep 1
+			_scr=$(tui_capture)
+			tui_screenshot "bm-05-build-output-${_wa}"
+			if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+				_saw_build=1
+				tui_keys q 2>/dev/null || tui_keys Escape
+				sleep 1
+				break
+			fi
+			tui_keys q 2>/dev/null || tui_keys Escape
+			sleep 1
+		fi
+	fi
+	sleep 3
+done
+if [[ "$_saw_build" -eq 1 ]]; then
 	_scr=$(tui_capture)
 	tui_screenshot "bm-05-retry-ask"
-	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-		echo "  ✓ PASS: Retry after the MAC was fixed asks to build"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Retry after the fix did not ask to build"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	fi
+	echo "  ✓ PASS: Retry after the MAC was fixed asks to build"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_press_button "Yes" || tui_keys Enter
 	sleep 2
 	_build_yes=1
