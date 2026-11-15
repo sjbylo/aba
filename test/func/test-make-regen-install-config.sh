@@ -105,8 +105,17 @@ fi
 # Mirror install-config runs verify-release-image.sh, which extracts
 # openshift-install from the registry. Stub that binary so the test does
 # not require the current aba.conf ocp_version to be loaded in the mirror.
-_reg_host=$(grep '^reg_host=' ../mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
-_reg_port=$(grep '^reg_port=' ../mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+# Installed registry state overrides mirror.conf. The stub name has to be
+# the host and port verify-release-image.sh will actually use.
+_reg_host=
+_reg_port=
+if [ -f mirror.conf ]; then
+	eval "$(normalize-mirror-conf)"
+	_reg_host=${reg_host:-}
+	_reg_port=${reg_port:-}
+fi
+[ -n "$_reg_host" ] || _reg_host=$(grep '^reg_host=' ../mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+[ -n "$_reg_port" ] || _reg_port=$(grep '^reg_port=' ../mirror/mirror.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
 _ocp_ver=$(grep '^ocp_version=' ../aba.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
 if [ -n "$_reg_host" ] && [ -n "$_reg_port" ] && [ -n "$_ocp_ver" ]; then
 	_stub="./openshift-install-mirror-${_ocp_ver}-${_reg_host}-${_reg_port}"
