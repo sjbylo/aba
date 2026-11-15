@@ -172,6 +172,9 @@ unit_tests=(
 # INTEGRATION TESTS — may download files, use podman, take minutes; still safe
 # ─────────────────────────────────────────────────────────────────────────────
 integration_tests=(
+	# Flag effects. Sandbox repo, so bastion aba.conf is not written.
+	test/func/test-cli-flag-effects.sh
+
 	# CLI download pipeline
 	test/func/test-cli-download-urls.sh
 	test/func/test-arch-binaries.sh

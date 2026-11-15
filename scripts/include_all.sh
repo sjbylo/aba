@@ -5606,6 +5606,15 @@ _oc_mirror_decode_exit() {
 	fi
 }
 
+# oc-mirror v2 binds its cache registry to TCP 55000. lsof is not installed
+# on the bastion, so a leftover listener was invisible and every retry failed
+# in the same second. ss is always present and shows the owning pid.
+_oc_mirror_port_pids() {
+	ss -H -ltnp 'sport = :55000' 2>/dev/null \
+		| sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' \
+		| sort -u
+}
+
 _run_oc_mirror_with_retry() {
 	local action="$1"
 	local try_tot="$2"
@@ -5661,11 +5670,12 @@ _run_oc_mirror_with_retry() {
 	aba_debug "Starting retry loop: try_tot=$try_tot"
 
 	# Pre-check: warn if port 55000 is already occupied (stale oc-mirror local registry)
-	local _precheck_pid
-	_precheck_pid=$(lsof -ti :55000 2>/dev/null) || true
+	local _precheck_pid _precheck_first
+	_precheck_pid=$(_oc_mirror_port_pids | paste -sd' ' -) || true
 	if [ -n "$_precheck_pid" ]; then
 		local _age_sec="" _age_str="unknown"
-		_age_sec=$(ps -o etimes= -p "$_precheck_pid" 2>/dev/null | tr -d ' ') || true
+		_precheck_first=${_precheck_pid%% *}
+		_age_sec=$(ps -o etimes= -p "$_precheck_first" 2>/dev/null | tr -d ' ') || true
 		if [ -n "$_age_sec" ]; then
 			local _m=$(( _age_sec / 60 )) _s=$(( _age_sec % 60 ))
 			_age_str="${_m}m${_s}s"
@@ -5724,7 +5734,7 @@ _run_oc_mirror_with_retry() {
 			# Kill orphaned oc-mirror processes and free port 55000 (local registry).
 			# oc-mirror panics can leave the child registry process alive.
 			local _stale_pids
-			_stale_pids=$(lsof -ti :55000 2>/dev/null) || true
+			_stale_pids=$(_oc_mirror_port_pids) || true
 			if [ -n "$_stale_pids" ]; then
 				aba_debug "Killing stale process(es) on port 55000: $_stale_pids"
 				kill $_stale_pids 2>/dev/null || true

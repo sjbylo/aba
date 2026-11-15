@@ -850,7 +850,7 @@ for i in imgs:
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_port -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
-	elif [ "$1" = "--reg-user" ]; then
+	elif [ "$1" = "--reg-user" -o "$1" = "-u" ]; then
 		_require_mirror_dir "$1"
 		# The username used to access the mirror registry 
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"

@@ -12,6 +12,7 @@
 #     - Latest (+ Previous when offer has ≥2) are valid and ordered
 #     - Older optional (only when offer has ≥3)
 #     - Tips may equal stable/fast after GA catch-up (intentional, not exclusive-only)
+#     - Per minor, a GA candidate tip may also be 1 or 2 patches ahead of stable
 
 cd "$(dirname "$0")/../.." || exit 1
 source scripts/include_all.sh 2>/dev/null
@@ -175,11 +176,49 @@ elif [[ -n "$old" ]]; then
 	_fail "candidate Older ($old) set but offer size is $_offer_n"
 fi
 
-# Official-card style: for each released minor, candidate tip must match stable tip
-# when both are GA (candidate-5.0 == stable-5.0, etc.). Prerelease next minors are
-# allowed in the offer list ahead of those cards — that is intentional.
+# For each released minor, candidate may match stable, be one or two GA
+# patches ahead (candidate is promoted first), or be a prerelease.
+# Candidate three or more patches ahead, or behind stable, is a mismatch.
+_candidate_ga_patches_ahead() {
+	local st=$1 ca=$2
+	local st_maj st_min st_z ca_maj ca_min ca_z delta
+	_is_prerelease "$st" && return 1
+	_is_prerelease "$ca" && return 1
+	[[ "$st" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+	st_maj=${BASH_REMATCH[1]}
+	st_min=${BASH_REMATCH[2]}
+	st_z=${BASH_REMATCH[3]}
+	[[ "$ca" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+	ca_maj=${BASH_REMATCH[1]}
+	ca_min=${BASH_REMATCH[2]}
+	ca_z=${BASH_REMATCH[3]}
+	[[ "$st_maj" == "$ca_maj" && "$st_min" == "$ca_min" ]] || return 1
+	delta=$(( ca_z - st_z ))
+	[[ $delta -ge 1 && $delta -le 2 ]]
+}
+
 echo ""
 echo "--- card-style per-minor tips (stable vs candidate) ---"
+if _candidate_ga_patches_ahead 4.22.22 4.22.23; then
+	_pass "helper: one GA patch ahead is allowed"
+else
+	_fail "helper: one GA patch ahead should be allowed"
+fi
+if _candidate_ga_patches_ahead 5.0.1 5.0.3; then
+	_pass "helper: two GA patches ahead is allowed"
+else
+	_fail "helper: two GA patches ahead should be allowed"
+fi
+if _candidate_ga_patches_ahead 4.22.22 4.22.25; then
+	_fail "helper: three GA patches ahead should be rejected"
+else
+	_pass "helper: three GA patches ahead is rejected"
+fi
+if _candidate_ga_patches_ahead 4.21.43 4.21.42; then
+	_fail "helper: candidate behind stable should be rejected"
+else
+	_pass "helper: candidate behind stable is rejected"
+fi
 _card_minors=()
 _cdn_m=$(fetch_latest_minor_version stable) || true
 if [[ -n "$_cdn_m" ]]; then
@@ -206,6 +245,8 @@ for _m in "${_card_minors[@]}"; do
 		elif _is_prerelease "$_ca" && ! _is_prerelease "$_st"; then
 			# Rare: candidate ahead of stable on same minor (rc/ec before GA lands on stable)
 			_pass "card $_m: candidate $_ca is prerelease ahead of stable $_st"
+		elif _candidate_ga_patches_ahead "$_st" "$_ca"; then
+			_pass "card $_m: candidate $_ca is one or two patches ahead of stable $_st"
 		else
 			_fail "card $_m: candidate ($_ca) vs stable ($_st) unexpected"
 		fi
