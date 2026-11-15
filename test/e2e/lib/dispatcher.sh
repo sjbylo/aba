@@ -590,6 +590,11 @@ _record_result() {
 
 	if [ "$rc" -eq 0 ]; then
 		_print_box "1;42;97" "✔  PASS  ${suite}  pool ${pool_num}"
+		# Attribute this PASS to the current code-update stamp (may notify when
+		# every suite has passed since the last deploy / auto-deploy).
+		if declare -F _e2e_cov_record_pass >/dev/null 2>&1; then
+			_e2e_cov_record_pass "$suite" || true
+		fi
 	elif [ "$rc" -eq 3 ]; then
 		_print_box "1;43;30" "⊘  SKIP  ${suite}  pool ${pool_num}"
 	else
