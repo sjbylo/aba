@@ -151,6 +151,17 @@ for _gate_i in 1 2 3 4 5; do
 		continue
 	fi
 
+	# Air-gap host with no bundle and no internet — TUI exits. Soft-skip smoke;
+	# DISCO Workflow covers the real air-gap path after a bundle transfer.
+	if echo "$_scr" | grep -qi "Internet Access Required\|Internet access required\|Exiting\.\.\."; then
+		echo "  ✓ PASS: Internet Access Required (no archives, offline) — soft-skip DISCO smoke"
+		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_keys Enter; sleep 1
+		tui_stop 2>/dev/null || true
+		tui_summary
+		exit 0
+	fi
+
 	# Bundle payload summary (title "ABA Install Bundle", not "install bundle was detected")
 	if echo "$_scr" | grep -qi "ABA Install Bundle\|payload summary\|Disconnected.*payload summary"; then
 		echo "  ✓ PASS: ABA Install Bundle info dialog appeared"

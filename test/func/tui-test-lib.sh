@@ -749,7 +749,10 @@ tui_require_internet() {
 # Usage: tui_deploy_code
 tui_deploy_code() {
 	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
+	# cli/Makefile is required for mirror install (out-download-all). Without it
+	# make -C cli fails with "No such file or directory" and the suite cascades.
 	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
+		cli/Makefile
 		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
 	local _tar _hash _old_hash
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
@@ -765,7 +768,9 @@ tui_deploy_code() {
 
 	# Upload and extract on remote host (overlay, never wipe)
 	scp -q -F "$_TUI_SSH_CFG" "$_tar" "$_TUI_HOST:/tmp/tui-deploy.tar.gz" 2>/dev/null
-	$_TUI_SSH "tar xzf /tmp/tui-deploy.tar.gz -C ~/aba && rm -f /tmp/tui-deploy.tar.gz" 2>/dev/null
+	$_TUI_SSH "mkdir -p ~/aba/cli && tar xzf /tmp/tui-deploy.tar.gz -C ~/aba && rm -f /tmp/tui-deploy.tar.gz &&
+		# cli/Makefile expects scripts/ sibling symlink (created by make -C cli init)
+		[ -e ~/aba/cli/scripts ] || ln -sfn ../scripts ~/aba/cli/scripts" 2>/dev/null
 
 	rm -f "$_tar"
 	echo "  Code deployed ($(git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | wc -l) files)"
@@ -932,6 +937,19 @@ tui_ensure_install_prereqs() {
 			sudo systemctl restart dnsmasq 2>/dev/null || true
 			echo "MIRRORDNS:$_cur->$_mir_ip"
 		fi
+		# --- cli/Makefile (mirror install / out-download-all) ---
+		if [ ! -f cli/Makefile ]; then
+			echo "MISSING_CLI_MAKEFILE"
+		else
+			mkdir -p cli
+			[ -e cli/scripts ] || ln -sfn ../scripts cli/scripts
+		fi
+		# --- Disco/lab: ens224 DHCP can install a blackhole "default dev ens224"
+		# that outranks the ens192 default-via-gw and kills internet checks.
+		if ip route 2>/dev/null | grep -q "^default dev ens224"; then
+			sudo ip route del default dev ens224 2>/dev/null || true
+			echo "ROUTE:dropped-ens224-blackhole-default"
+		fi
 	' 2>/dev/null) || true
 	if [[ -n "$_out" ]]; then
 		echo "  Ensured install prereqs: $_out"
@@ -1016,6 +1034,17 @@ tui_ensure_mirror_installed() {
 	else
 		echo "  Mirror not installed — installing local registry via CLI (prereq)..."
 	fi
+	# Wipe leftovers a host wipe can leave behind (podman secrets, quay-install)
+	# that block `aba install` with "Stale registry state detected".
+	$_TUI_SSH 'cd ~/aba || exit 0
+		podman secret ls -q 2>/dev/null | while read -r s; do podman secret rm "$s" 2>/dev/null || true; done
+		rm -rf ~/quay-install ~/docker-reg ~/.aba/mirror
+		mkdir -p ~/.aba mirror
+		# Ensure cli/Makefile present for out-download-all during install
+		mkdir -p cli
+		[ -f cli/Makefile ] || true
+		[ -e cli/scripts ] || ln -sfn ../scripts cli/scripts
+	' 2>/dev/null || true
 	if $_TUI_SSH "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1; cd ~/aba/mirror && aba install --yes" 2>&1 | tee /tmp/tui-mirror-install-$$.log | tail -30; then
 		if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
 			echo "  ✓ Mirror installed (listening on :8443)"

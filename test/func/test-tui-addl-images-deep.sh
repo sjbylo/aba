@@ -56,8 +56,10 @@ _goto_addl() {
 # Helper: read image count from images.conf on remote
 _read_img_count() {
 	local _c
-	_c=$($_TUI_SSH "grep -c '^[^#].*[^[:space:]]' ~/aba/images.conf 2>/dev/null || echo 0") || true
-	echo "${_c%%[^0-9]*}"
+	# grep -c exits 1 when count is 0 — never append another 0 (breaks [[ -ge ]])
+	_c=$($_TUI_SSH "grep -cE '^[^#[:space:]]' ~/aba/images.conf 2>/dev/null || true") || true
+	_c=${_c//[^0-9]/}
+	echo "${_c:-0}"
 }
 
 # ============================================================================
@@ -144,26 +146,25 @@ echo ""
 echo "--- 4. Add image: registry.redhat.io/ubi9/ubi:latest ---"
 _goto_addl
 tui_keys A; sleep 0.3; tui_keys Enter
-sleep 2
-_scr=$(tui_capture)
-tui_screenshot "ai-04-add-input"
-
-if echo "$_scr" | grep -qi "image reference\|container image\|Add.*image\|Enter"; then
-	echo "  ✓ PASS: Add image input dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
+# Wait for inputbox title (not the parent menu's "Add image" row)
+if ! tui_wait_for "Add Image\|image reference\|container image" 8; then
 	echo "  ✗ FAIL: Add image input not shown"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-fi
+	tui_screenshot "ai-04-add-input-missing"
+else
+	echo "  ✓ PASS: Add image input dialog appeared"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_screenshot "ai-04-add-input"
 
-# Type the image reference
-tui_keys "registry.redhat.io/ubi9/ubi:latest"
-sleep 0.5
-tui_keys Enter
-sleep 3
-# Dismiss the "Added:" confirmation msgbox
-if tui_capture | grep -qi "Added\|ubi"; then
-	tui_keys Enter; sleep 1
+	# Type the image reference
+	tui_keys "registry.redhat.io/ubi9/ubi:latest"
+	sleep 0.5
+	tui_keys Enter
+	sleep 3
+	# Dismiss the "Added:" confirmation or error msgbox
+	if tui_capture | grep -qi "Added\|ubi\|Failed\|Error"; then
+		tui_keys Enter; sleep 1
+	fi
 fi
 tui_screenshot "ai-04-after-add"
 
@@ -177,7 +178,9 @@ else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
-_has_ubi=$($_TUI_SSH "grep -c 'ubi9/ubi' ~/aba/images.conf 2>/dev/null" || echo "0")
+_has_ubi=$($_TUI_SSH "grep -c 'ubi9/ubi' ~/aba/images.conf 2>/dev/null || true") || true
+_has_ubi=${_has_ubi//[^0-9]/}
+_has_ubi=${_has_ubi:-0}
 if [[ "$_has_ubi" -ge 1 ]]; then
 	echo "  ✓ PASS: ubi9/ubi found in images.conf"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
@@ -193,13 +196,16 @@ echo ""
 echo "--- 5. Add image: registry.redhat.io/rhel9/support-tools:latest ---"
 _goto_addl
 tui_keys A; sleep 0.3; tui_keys Enter
-sleep 2
-tui_keys "registry.redhat.io/rhel9/support-tools:latest"
-sleep 0.5
-tui_keys Enter
-sleep 3
-if tui_capture | grep -qi "Added\|support-tools"; then
-	tui_keys Enter; sleep 1
+if tui_wait_for "Add Image\|image reference\|container image" 8; then
+	tui_keys "registry.redhat.io/rhel9/support-tools:latest"
+	sleep 0.5
+	tui_keys Enter
+	sleep 3
+	if tui_capture | grep -qi "Added\|support-tools\|Failed\|Error"; then
+		tui_keys Enter; sleep 1
+	fi
+else
+	echo "  WARNING: Add image input not shown for second image"
 fi
 
 _count=$(_read_img_count)
