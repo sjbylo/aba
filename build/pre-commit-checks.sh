@@ -355,10 +355,13 @@ fi
 # for every planned step.  Missing events cause the TUI to show "Stopped before
 # all steps finished" even when the operation succeeded.
 #
-# Mapping: progress-plan.sh "install" declares reg_config..reg_verify.
-# reg-install.sh (dispatcher) emits START|reg_config, then exec's into
-# the vendor-specific script which must emit DONE|reg_config and all
-# subsequent START/DONE pairs.
+# Mapping: progress-plan.sh "install" declares reg_prep, rpms_ext, then
+# reg_config..reg_verify.
+# START|reg_prep is emitted with the PLANs. DONE|reg_prep is the dispatcher
+# (reg-install.sh), once Make has extracted or downloaded the registry files.
+# rpms_ext is the Makefile package prereq. Vendor scripts start at
+# DONE|reg_config (the dispatcher emits START|reg_config) and own every
+# later START/DONE pair.
 echo -e "${YELLOW}[9/9] Checking progress events in registry install scripts...${NC}"
 _progress_failed=0
 
@@ -373,6 +376,12 @@ done < <(awk '/^\tinstall\)$/{found=1; next} found && /^\t\t;;$/{exit} found' sc
 if [ ${#_plan_ids[@]} -eq 0 ]; then
     echo -e "${YELLOW}      ⚠ No PLAN IDs found in progress-plan.sh install case — skipping${NC}\n"
 else
+    # Dispatcher-owned steps are not repeated in each vendor script.
+    if ! grep -q 'aba_progress "DONE|reg_prep"' scripts/reg-install.sh; then
+        echo -e "${RED}      ✗ scripts/reg-install.sh: missing DONE|reg_prep${NC}"
+        _progress_failed=1
+    fi
+
     # Check every reg-install-*.sh script (excluding the dispatcher reg-install.sh)
     for script in scripts/reg-install-*.sh; do
         [ -f "$script" ] || continue
@@ -381,8 +390,8 @@ else
         _script_events=$(grep -o 'aba_progress "[A-Z]*|[a-z_0-9]*"' "$script" 2>/dev/null || true)
         _missing=()
         for id in "${_plan_ids[@]}"; do
-            # rpms_ext is handled by Makefile prereqs, not the install script
-            [[ "$id" == "rpms_ext" ]] && continue
+            # rpms_ext: Makefile prereq. reg_prep: closed by the dispatcher.
+            [[ "$id" == "rpms_ext" || "$id" == "reg_prep" ]] && continue
             # reg_config START is emitted by the dispatcher (reg-install.sh)
             # Vendor scripts only need DONE|reg_config
             _has_done=$(echo "$_script_events" | grep -c "DONE|${id}" || true)
