@@ -9,6 +9,7 @@
 #   lib/cli.sh       -- Argument parsing (_parse_args, _parse_pools, ...)
 #   lib/deploy.sh    -- Harness sync (sync_harness, sync_source, deploy_pool)
 #   lib/commands.sh  -- One-shot commands (stop, start, status, verify, ...)
+#   lib/code-coverage.sh -- "all suites passed since last code update" notify
 #   lib/tmux-ui.sh   -- Dashboard / live / attach
 #   lib/constants.sh -- Shared constants
 #   lib/dispatcher.sh -- Work-queue dispatcher
@@ -32,6 +33,7 @@ source "$_RUN_DIR/lib/cleanup.sh"
 source "$_RUN_DIR/lib/cli.sh"
 source "$_RUN_DIR/lib/deploy.sh"
 source "$_RUN_DIR/lib/commands.sh"
+source "$_RUN_DIR/lib/code-coverage.sh"
 source "$_RUN_DIR/lib/tmux-ui.sh"
 source "$_RUN_DIR/lib/dispatcher.sh"
 source "$_RUN_DIR/lib/infra.sh"

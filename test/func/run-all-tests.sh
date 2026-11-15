@@ -82,6 +82,7 @@ unit_tests=(
 	test/func/test-run-once-wait-start-race.sh
 	test/func/test-run-once-concurrency-history.sh
 	test/func/test-install-runner-wipe-orphan-race.sh
+	test/func/test-e2e-code-coverage.sh
 	test/func/test-self-heal-validation.sh
 
 	# Config / normalize
