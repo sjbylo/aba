@@ -376,6 +376,55 @@ _set_cluster_conf() {
 	fi
 }
 
+# Unsigned count or size written to cluster.conf. $1 is the flag as typed,
+# $2 the raw value, $3 the cluster.conf key.
+_aba_set_uint_cluster() {
+	local _flag="$1" _raw="$2" _key="$3" _n
+	[[ "$_raw" =~ ^- || -z "$_raw" ]] && aba_abort "missing argument after option $_flag"
+	_n=$(normalize_uint "$_raw") || aba_abort "argument invalid [$_raw] after option $_flag"
+	[[ -n "$_n" ]] || aba_abort "argument invalid [$_raw] after option $_flag"
+	_set_cluster_conf "$_key" "$_n" "$_flag"
+}
+
+# Required file path stored as a Make variable. $1 is the flag as typed,
+# $2 the path, $3 the variable name.
+_aba_set_build_file() {
+	local _flag="$1" _path="$2" _key="$3"
+	[[ "$_path" =~ ^- || -z "$_path" ]] && aba_abort "missing argument after option $_flag"
+	[ ! -f "$_path" ] && aba_abort "file not found: $_path"
+	BUILD_COMMAND="$BUILD_COMMAND ${_key}='${_path}'"
+}
+
+# Required mirror.conf value. $1 flag, $2 raw value, $3 key, $4 validator, $5 abort text.
+_aba_set_mirror_conf() {
+	local _flag="$1" _val="$2" _key="$3" _check="$4" _err="$5"
+	_require_mirror_dir "$_flag"
+	[[ "$_val" =~ ^- || -z "$_val" ]] && aba_abort "missing argument after option $_flag"
+	"$_check" "$_val" || aba_abort "$_err"
+	# force skips the editor prompt when mirror.conf is created.
+	make -sC $WORK_DIR mirror.conf force=yes
+	replace-value-conf -n "$_key" -v "$_val" -f $WORK_DIR/mirror.conf
+}
+
+# Optional IPv4 written to cluster.conf. A missing or flag-like next arg clears the key.
+# $1 flag, $2 raw value, $3 cluster.conf key. Caller still shifts.
+_aba_set_optional_ipv4() {
+	local _flag="$1" _raw="$2" _key="$3" _ip=
+	if [[ -n "$_raw" && "$_raw" != -* ]]; then
+		_ip=$(normalize_ipv4 "$_raw") || aba_abort "invalid IPv4 address [$_raw] after option: $_flag"
+	fi
+	_set_cluster_conf "$_key" "$_ip" "$_flag"
+}
+
+# Copy a non-empty file into the working directory. $1 flag, $2 source, $3 dest name.
+_aba_copy_conf_file() {
+	local _flag="$1" _src="$2" _dest="$3"
+	[[ "$_src" =~ ^- || -z "$_src" ]] && aba_abort "missing argument after option $_flag"
+	[ -s "$_src" ] || aba_abort "file not found or empty: $_src"
+	cp "$_src" "$_dest"
+}
+
+aba_parse_args() {
 while [ "$*" ] 
 do
 	aba_debug "Args: [$(_redact_args "$@")]"
@@ -383,6 +432,135 @@ do
 
 	# Treat bare "help" the same as "--help" (prevents destructive fallthrough to Make)
 	[ "$1" = "help" ] && set -- "--help" "${@:2}"
+
+	# Switches that only record a choice and consume themselves.
+	# The words that take a value, or that choose the verb, stay below.
+	case "$1" in
+		--interactive)
+			interactive_mode=1
+			replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
+			export ask=1
+			shift
+			continue
+			;;
+		--quiet|-q)
+			export INFO_ABA=
+			shift
+			continue
+			;;
+		--info)
+			export INFO_ABA=1
+			shift
+			continue
+			;;
+		--debug|-D)
+			export DEBUG_ABA=1
+			export INFO_ABA=1
+			shift
+			continue
+			;;
+		--light|--lite)
+			export opt_light="--light"
+			shift
+			continue
+			;;
+		--delete-data)
+			export REG_DELETE_DATA=1
+			shift
+			continue
+			;;
+		-y|--yes)
+			export ASK_OVERRIDE=1
+			export ask=1
+			shift
+			continue
+			;;
+		-Y|--yes-permanent)
+			export ASK_OVERRIDE=1
+			replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
+			export ask=
+			shift
+			continue
+			;;
+		--ask|-a)
+			replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
+			export ask=1
+			shift
+			continue
+			;;
+		--noask)
+			replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
+			export ask=
+			shift
+			continue
+			;;
+		--shell)
+			shift
+			BUILD_COMMAND="$BUILD_COMMAND output=shell"
+			upgrade_shell="--shell"
+			opt_shell="--shell"
+			continue
+			;;
+		--force|-f)
+			shift
+			opt_force="--force"
+			BUILD_COMMAND="$BUILD_COMMAND force=force"
+			continue
+			;;
+		--wait|-w)
+			shift
+			BUILD_COMMAND="$BUILD_COMMAND wait=1"
+			upgrade_wait=1
+			continue
+			;;
+		--workers)
+			BUILD_COMMAND="$BUILD_COMMAND workers=1"
+			opt_workers="--workers"
+			shift
+			continue
+			;;
+		--masters)
+			BUILD_COMMAND="$BUILD_COMMAND masters=1"
+			opt_masters="--masters"
+			shift
+			continue
+			;;
+		--start)
+			BUILD_COMMAND="$BUILD_COMMAND start=--start"
+			shift
+			continue
+			;;
+		--dry-run)
+			upgrade_dry_run="--dry-run"
+			shift
+			continue
+			;;
+		--validate)
+			_cli_validate_only=true
+			shift
+			continue
+			;;
+		--skip-day2)
+			upgrade_skip_day2="--skip-day2"
+			shift
+			continue
+			;;
+		--allow-not-recommended)
+			upgrade_allow_not_recommended="--allow-not-recommended"
+			shift
+			continue
+			;;
+		--primed)
+			opt_primed="--primed"
+			shift
+			continue
+			;;
+		--all)
+			opt_all="--all"
+			shift
+			continue
+			;;
+	esac
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		# Peek at next arg if no target yet (allows "aba --help cluster")
@@ -409,26 +587,6 @@ do
 		fi
 
 		exit 0
-	elif [ "$1" = "--interactive" ]; then
-		interactive_mode=1
-		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
-		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
-		export ask=1
-		shift
-	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
-		export INFO_ABA=
-		shift 
-	elif [ "$1" = "--info" ]; then
-		export INFO_ABA=1
-		shift 
-	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
-		export DEBUG_ABA=1
-	export INFO_ABA=1
-	shift 
-elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
-	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
-	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
-	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
 		echo_yellow "Available OpenShift versions:"
@@ -826,38 +984,20 @@ for i in imgs:
 		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
-		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_abs_path "$2" || aba_abort "invalid data-dir '$2' — must be an absolute path (starting with '/' or '~')"
-		# force will skip over asking to edit the conf file
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n data_dir -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" data_dir _valid_abs_path \
+			"invalid data-dir '$2' — must be an absolute path (starting with '/' or '~')"
 		shift 2
-	elif [ "$1" = "--delete-data" ]; then
-		export REG_DELETE_DATA=1
-		shift
 	elif [ "$1" = "--vendor" ]; then
-		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_cli_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_OMR_VENDOR. Use 'aba register' to connect an externally managed registry."
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" reg_vendor _valid_cli_vendor \
+			"invalid vendor '$2' -- must be auto, quay, docker, or $_OMR_VENDOR. Use 'aba register' to connect an externally managed registry."
 		shift 2
 	elif [ "$1" = "--reg-port" ]; then
-		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		valid_port "$2" || aba_abort "invalid port '$2' -- must be 1-65535"
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_port -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" reg_port valid_port \
+			"invalid port '$2' -- must be 1-65535"
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
-		_require_mirror_dir "$1"
-		# The username used to access the mirror registry 
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_username "$2" || aba_abort "invalid registry username '$2' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
-		# force will skip over asking to edit the conf file
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_user -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" reg_user _valid_username \
+			"invalid registry username '$2' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
 		_require_mirror_dir "$1"
@@ -884,14 +1024,10 @@ for i in imgs:
 		replace-value-conf -n reg_path -v "$_rp" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--pull-secret-mirror" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ ! -f "$2" ] && aba_abort "file not found: $2"
-		BUILD_COMMAND="$BUILD_COMMAND pull_secret_mirror='$2'"
+		_aba_set_build_file "$1" "$2" pull_secret_mirror
 		shift 2
 	elif [ "$1" = "--ca-cert" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ ! -f "$2" ] && aba_abort "file not found: $2"
-		BUILD_COMMAND="$BUILD_COMMAND ca_cert='$2'"
+		_aba_set_build_file "$1" "$2" ca_cert
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -941,24 +1077,12 @@ for i in imgs:
 		fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
-		_flag="$1"
-		api_vip=
-		if [[ -n $2 && $2 != -* ]]; then
-			# Strip leading zeros immediately (10.0.0.08 → 10.0.0.8)
-			api_vip=$(normalize_ipv4 "$2") || aba_abort "invalid IPv4 address [$2] after option: $_flag"
-			shift
-		fi
-		_set_cluster_conf api_vip "$api_vip" "$_flag"
-		shift
+		# Strip leading zeros immediately (10.0.0.08 -> 10.0.0.8)
+		_aba_set_optional_ipv4 "$1" "$2" api_vip
+		if [[ -n $2 && $2 != -* ]]; then shift 2; else shift; fi
 	elif [ "$1" = "--ingress-vip" -o "$1" = "-G" ]; then
-		_flag="$1"
-		ingress_vip=
-		if [[ -n $2 && $2 != -* ]]; then
-			ingress_vip=$(normalize_ipv4 "$2") || aba_abort "invalid IPv4 address [$2] after option: $_flag"
-			shift
-		fi
-		_set_cluster_conf ingress_vip "$ingress_vip" "$_flag"
-		shift
+		_aba_set_optional_ipv4 "$1" "$2" ingress_vip
+		if [[ -n $2 && $2 != -* ]]; then shift 2; else shift; fi
 	elif [ "$1" = "--ports" ]; then
 		_flag="$1"
 		ports_vals=""
@@ -1050,55 +1174,22 @@ for i in imgs:
 		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ -s "$2" ] || aba_abort "file not found or empty: $2"
-		cp "$2" vmware.conf
+		_aba_copy_conf_file "$1" "$2" vmware.conf
 		shift 2
 	elif [ "$1" = "--kvm" -o "$1" = "-K" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ -s "$2" ] || aba_abort "file not found or empty: $2"
-		cp "$2" kvm.conf
+		_aba_copy_conf_file "$1" "$2" kvm.conf
 		shift 2
-	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # Answer yes to all prompts
-		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
-		export ask=1
-		shift 
-	elif [ "$1" = "-Y" -o "$1" = "--yes-permanent" ]; then
-		export ASK_OVERRIDE=1  
-		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf  # And make permanent change
-		export ask=
-		shift 
-	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
-		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
-		export ask=1
-		shift 
-	elif [ "$1" = "--noask" ]; then
-		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
-		export ask=
-		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf master_cpu_count "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" master_cpu_count
 		shift 2
 	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf master_mem "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" master_mem
 		shift 2
 	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf worker_cpu_count "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" worker_cpu_count
 		shift 2
 	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf worker_mem "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" worker_mem
 		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
@@ -1202,27 +1293,6 @@ for i in imgs:
 			aba_debug "Adding retry=3 (default) to BUILD_COMMAND"
 			shift
 		fi
-	elif [ "$1" = "--shell" ]; then
-		shift
-		BUILD_COMMAND="$BUILD_COMMAND output=shell"
-		upgrade_shell="--shell"
-		opt_shell="--shell"
-	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
-		shift
-		opt_force="--force"
-		BUILD_COMMAND="$BUILD_COMMAND force=force"  # FIXME: Should only allow force=1 after the appropriate target
-	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		shift
-		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
-		upgrade_wait=1  # Also enables upgrade monitoring (aba upgrade --wait)
-	elif [ "$1" = "--workers" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND workers=1"
-		opt_workers="--workers"
-		shift
-	elif [ "$1" = "--masters" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND masters=1"
-		opt_masters="--masters"
-		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
 		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
 		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
@@ -1285,33 +1355,12 @@ for i in imgs:
 		_valid_image_source "$2" || aba_abort "invalid mirror name '$2' — must be alphanumeric (hyphens, dots, underscores allowed)"
 		_set_cluster_conf image_source "$2" "$1"
 		shift 2
-	elif [ "$1" = "--start" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND start=--start"
-		shift
 	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
 	elif [ "$1" = "--to" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		_is_version_string "$2" || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
 		upgrade_to="$2"
 		shift 2
-	elif [ "$1" = "--dry-run" ]; then
-		upgrade_dry_run="--dry-run"
-		shift
-	elif [ "$1" = "--validate" ]; then
-		_cli_validate_only=true
-		shift
-	elif [ "$1" = "--skip-day2" ]; then
-		upgrade_skip_day2="--skip-day2"
-		shift
-	elif [ "$1" = "--allow-not-recommended" ]; then
-		upgrade_allow_not_recommended="--allow-not-recommended"
-		shift
-	elif [ "$1" = "--primed" ]; then
-		opt_primed="--primed"
-		shift
-	elif [ "$1" = "--all" ]; then
-		opt_all="--all"
-		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
 		cmd=
@@ -1376,6 +1425,10 @@ for i in imgs:
 		shift 
 	fi
 done
+}
+
+aba_parse_args "$@"
+
 
 # Guard for VM lifecycle targets: validate platform + hypervisor config
 _ensure_vm_platform_ready() {
