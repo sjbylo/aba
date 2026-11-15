@@ -147,7 +147,9 @@ rm -f "$CLUSTER/bmc.conf"
 # Manual BM (no BMC): wait-agent-up must exit immediately (no 5m spinner).
 # Pre-set CLUSTER_NAME/ASSETS_DIR so we exercise the skip gate without a full
 # agentconf (cluster-config-check would otherwise abort the stub cluster).
-echo "10.0.1.201" > "$CLUSTER/iso-agent-based/rendezvousIP"
+# TEST-NET (RFC 5737). A lab address can answer :8090 and the wait
+# returns immediately, so the assertion never sees the waiting line.
+echo "192.0.2.201" > "$CLUSTER/iso-agent-based/rendezvousIP"
 _t0=$(date +%s)
 _wa_rc=0
 _wa_out=$(cd "$CLUSTER" && CLUSTER_NAME=testbm ASSETS_DIR=iso-agent-based \

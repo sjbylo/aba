@@ -995,7 +995,7 @@ for i in imgs:
 		_aba_set_mirror_conf "$1" "$2" reg_port valid_port \
 			"invalid port '$2' -- must be 1-65535"
 		shift 2
-	elif [ "$1" = "--reg-user" ]; then
+	elif [ "$1" = "--reg-user" -o "$1" = "-u" ]; then
 		_aba_set_mirror_conf "$1" "$2" reg_user _valid_username \
 			"invalid registry username '$2' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
 		shift 2

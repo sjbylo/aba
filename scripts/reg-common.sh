@@ -8,6 +8,7 @@
 # contain vendor-specific logic.
 #
 # Functions:
+#   reg_install_begin      Shared local-install prelude (config, checks, password)
 #   reg_load_config        Load and validate mirror.conf, set common variables
 #   reg_check_fqdn         Verify registry hostname resolves to an IP
 #   reg_detect_existing     Check for existing credentials or running registry
@@ -28,6 +29,20 @@ _REG_COMMON_LOADED=1
 
 # Enable INFO messages when called from make (unless parent set --quiet)
 if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
+
+# Local install prelude shared by every vendor. The vendor script keeps going
+# with its own checks, then emits DONE|reg_env. $1 is the data_dir vendor name.
+# Remote installers do not use this: their SSH setup is not the same sequence.
+reg_install_begin() {
+	reg_load_config
+	aba_progress "DONE|reg_config"
+	aba_progress "START|reg_env"
+	reg_detect_existing
+	reg_check_fqdn
+	reg_setup_data_dir "$1"
+	reg_generate_password
+	reg_verify_localhost
+}
 
 source scripts/include_all.sh
 
