@@ -47,7 +47,7 @@ else ifeq ($(_REG_VENDOR),omr)
 else ifeq ($(arch),aarch64)
   _REGISTRY_PREREQ := docker-reg-image.tgz
 else
-  _REGISTRY_PREREQ := mirror-registry
+  _REGISTRY_PREREQ := mirror-registry execution-environment.tar
 endif
 
 ##########################
@@ -226,7 +226,10 @@ testload: save install load     # Test the save, install, load process on a conn
 rpmsclean:
 	@rm -f .rpms*
 
-mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
+# Both outputs come from the same tarball. Listing both targets so a host that
+# has the binary but lost execution-environment.tar (lean wipe / partial copy)
+# re-extracts instead of skipping and failing Quay install.
+mirror-registry execution-environment.tar: $(MR_TARBALL) ## Extract the mirror-registry binary + EE
 	@$(SCRIPTS)/run-once.sh -w -m "Downloading Quay mirror-registry" -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory $(MR_TARBALL)
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
