@@ -153,6 +153,34 @@ else
 fi
 
 # Flag path: a copy of the tree, so the real aba.conf is not edited.
+echo "=== image set template ==="
+_isc="$(mktemp -d /tmp/aba-isc.XXXXXX)"
+git show HEAD:templates/imageset-config.yaml.j2 > "$_isc/old.j2"
+env ARCH=amd64 ocp_channel=stable ocp_version=4.22.22 ocp_ver_major=4.22 \
+	ocp_upgrade_to= release_ref= has_operators=false \
+	scripts/j2 templates/imageset-config.yaml.j2 > "$_isc/new.out"
+env ARCH=amd64 ocp_channel=stable ocp_version=4.22.22 ocp_ver_major=4.22 \
+	ocp_upgrade_to= has_operators=false \
+	scripts/j2 "$_isc/old.j2" > "$_isc/old.out"
+if diff -q "$_isc/old.out" "$_isc/new.out" >/dev/null; then
+	_pass "OpenShift image set render is unchanged"
+else
+	_fail "OpenShift image set render is unchanged"
+fi
+env ARCH=amd64 ocp_channel=stable ocp_version=5.0.0-okd-scos.6 ocp_ver_major=5.0 \
+	ocp_upgrade_to= has_operators=false \
+	release_ref='quay.io/okd/scos-release@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+	scripts/j2 templates/imageset-config.yaml.j2 > "$_isc/okd.out"
+if grep -q '^    release: quay.io/okd/scos-release@sha256:' "$_isc/okd.out" \
+	&& grep -q '^    graph: false$' "$_isc/okd.out" \
+	&& grep -q 'registry.access.redhat.com/redhat/community-operator-index' "$_isc/okd.out" \
+	&& ! grep -q 'type: ocp' "$_isc/okd.out"; then
+	_pass "OKD image set pins the release digest"
+else
+	_fail "OKD image set pins the release digest"
+fi
+rm -rf "$_isc"
+
 echo "=== --distribution flag ==="
 _before="$(sha256sum "$ROOT/aba.conf" | awk '{print $1}')"
 WORK="$(mktemp -d /tmp/aba-dist-flag.XXXXXX)"

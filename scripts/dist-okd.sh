@@ -354,3 +354,48 @@ dist_verify_release() {
 	minor="$(printf '%s\n' "$ver" | cut -d. -f1-2)"
 	_okd_verify_release "$ver" "$channel" "$minor"
 }
+
+# $2 is a digest reference of payload repo $1.
+_okd_is_payload_ref() {
+	[[ "$2" == "$1"@sha256:* ]] && [[ "${2#*@sha256:}" =~ ^[0-9a-f]{64}$ ]]
+}
+
+# Digest published for build $1 on channel $2. The graph node first, then
+# the Pull From line of that GitHub release. A tag is not accepted.
+_okd_release_payload_spec() {
+	local ver="$1" channel="$2" minor repo ref rel
+	minor="$(printf '%s\n' "$ver" | cut -d. -f1-2)"
+	repo="$(dist_release_payload_repo)"
+
+	while read -r ref; do
+		_okd_is_payload_ref "$repo" "$ref" && { echo "$ref"; return 0; }
+	done < <(_fetch_graph_cached "$channel" "$minor" 2>/dev/null \
+		| jq -r --arg v "$ver" '.nodes[] | select(.version == $v) | .payload' 2>/dev/null)
+
+	rel="${ABA_CACHE_DIR}/okd_release_${ver}.json"
+	_fetch_cached "${ABA_OKD_RELEASES_API}/tags/${ver}" "$rel" "$(parse_duration "$ABA_CACHE_TTL")" _okd_validate_release || return 1
+	jq -e --arg t "$ver" '.tag_name == $t' "$rel" >/dev/null 2>&1 || { rm -f "$rel"; return 1; }
+	while read -r ref; do
+		_okd_is_payload_ref "$repo" "$ref" && { echo "$ref"; return 0; }
+	done < <(jq -r --arg t "$ver" 'select(.tag_name == $t) | .body // empty' "$rel" 2>/dev/null \
+		| tr -d '\r' | sed -n 's/^Pull From: *//p')
+	return 1
+}
+
+# Pull spec of the release image for this architecture. The signature belongs
+# to that image, not to the multi-arch list. Returns 1 when no digest is
+# published, 2 when the manifest cannot be read.
+dist_release_payload_ref() {
+	local ver="${1:-}" channel="${2:-stable}" spec raw child
+	dist_version_is_valid "$ver" "$channel" || return 1
+	spec="$(_okd_release_payload_spec "$ver" "$channel")" || return 1
+
+	raw="$(timeout 60 skopeo inspect --raw "docker://${spec}" 2>/dev/null)" || return 2
+	if [[ "$(jq -r 'if has("manifests") then "list" else "image" end' <<< "$raw" 2>/dev/null)" == "image" ]]; then
+		printf '%s\n' "$spec"
+		return 0
+	fi
+	child="$(jq -r --arg a "$ARCH" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest] | unique | if length == 1 then .[0] else empty end' <<< "$raw" 2>/dev/null)"
+	_okd_is_payload_ref "${spec%@*}" "${spec%@*}@${child}" || return 2
+	printf '%s\n' "${spec%@*}@${child}"
+}

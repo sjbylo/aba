@@ -266,6 +266,30 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
+	# No channels block: the release is a digest. Resolve it before rendering
+	# so a failed lookup leaves an existing image set file untouched.
+	export release_ref=""
+	if ! dist_supports_channels; then
+		if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+			dist_stop_unsupported "mirroring an upgrade target"
+		fi
+		_ref_rc=0
+		release_ref="$(dist_release_payload_ref "$ocp_version" "$ocp_channel")" || _ref_rc=$?
+		if [ "$_ref_rc" -ne 0 ] && [ "${excl_platform:-}" ]; then
+			release_ref="(not resolved, platform excluded)"
+		elif [ "$_ref_rc" -eq 1 ]; then
+			aba_abort \
+				"Cannot find the release image digest of $ocp_version (channel $ocp_channel)." \
+				"It is read from the update graph or the release notes." \
+				"Check that ocp_version is a published build and that the graph can be reached."
+		elif [ "$_ref_rc" -ne 0 ]; then
+			aba_abort \
+				"Cannot read the release image manifest of $ocp_version from $(dist_release_payload_repo)." \
+				"The image of architecture $ARCH is needed, because the release signature belongs to it." \
+				"Check that the registry can be reached and that skopeo is installed."
+		fi
+	fi
+
 	# Upgrade mode: export target version variables for the Jinja template
 	export ocp_upgrade_to="${ocp_upgrade_to:-}"
 	export tgt_major=""
@@ -385,7 +409,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	_tmp_isc=$(mktemp data/imageset-config.yaml.XXXXXX) || aba_abort "Cannot create temp file in data/"
 	scripts/j2 ./templates/imageset-config.yaml.j2 > "$_tmp_isc"
 
-	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
+	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: (true|false)/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
 
 	# Add friendly comments when sections are excluded (aba.conf toggles)
 	if [ "$excl_platform" ]; then
