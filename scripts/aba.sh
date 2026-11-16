@@ -61,11 +61,13 @@ fi
 WORK_DIR=$PWD # Remember so can change config file here 
 
 
-# Pre-process ALL arguments to extract --dir/-d (first only) and --debug/-D (anywhere)
+# Pre-process ALL arguments to extract --dir/-d (first only), --debug/-D, and
+# --distribution (anywhere). The distribution has to be known before --version.
 # This scans through all arguments and filters out these special options
 new_args=()           # Array to collect arguments we want to keep
 dir_already_set=false # Only process first --dir/-d
 _CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
+_CLI_DISTRIBUTION="" # Extracted from --distribution, applied after aba.conf is loaded
 i=1
 
 while [ $i -le $# ]; do
@@ -154,6 +156,17 @@ while [ $i -le $# ]; do
 			i=$((i + 1))
 			chan="${!i}"
 			new_args+=("$arg" "$chan")
+			;;
+
+		--distribution)
+			# Taken out of the main parse so --version sees the right file
+			# whichever flag is written first.
+			i=$((i + 1))
+			_CLI_DISTRIBUTION="${!i}"
+			if [[ -z "${_CLI_DISTRIBUTION:-}" || "$_CLI_DISTRIBUTION" =~ ^- ]]; then
+				echo "Error: missing argument after option --distribution" >&2
+				exit 1
+			fi
 			;;
 
 		*)
@@ -328,6 +341,39 @@ fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(cd "$ABA_ROOT" && normalize-aba-conf)
+# include_all.sh loads the distribution file before this source, so reload
+# once the key from aba.conf is in the environment.
+dist_load
+if [ -n "${_CLI_DISTRIBUTION:-}" ]; then
+	case "$_CLI_DISTRIBUTION" in
+		ocp)
+			# An OpenShift config does not keep the key.
+			sed -i --follow-symlinks '/^distribution=/d' "$ABA_ROOT/aba.conf"
+			unset distribution
+			;;
+		okd)
+			replace-value-conf -n distribution -v okd -f "$ABA_ROOT/aba.conf"
+			distribution=okd
+			;;
+		*)
+			aba_abort "wrong value [$_CLI_DISTRIBUTION] after option --distribution"
+			;;
+	esac
+	dist_load
+	_dist_chan="${ocp_channel:-}"
+	if [ -n "${chan:-}" ]; then
+		_dist_chan="$chan"
+		case "$_dist_chan" in
+			stable|s) _dist_chan=stable ;;
+			fast|f) _dist_chan=fast ;;
+			eus|e) _dist_chan=eus ;;
+			candidate|c) _dist_chan=candidate ;;
+		esac
+	fi
+	if [ -n "$_dist_chan" ] && ! dist_channel_is_valid "$_dist_chan"; then
+		aba_abort "ocp_channel [$_dist_chan] is not a channel for distribution $(dist_of)"
+	fi
+fi
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
@@ -824,6 +870,7 @@ for i in imgs:
 				aba_abort "wrong value [$chan] after option $opt" 
 				;;
 		esac
+		dist_channel_is_valid "$chan" || aba_abort "wrong value [$chan] after option $opt"
 		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
 		ocp_channel=$chan
 		shift 2
@@ -838,7 +885,7 @@ for i in imgs:
 		ver=$arg
 		# Reject obvious format errors immediately (before any network lookups)
 		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p", "older", "o"
-		if ! _is_version_string "$arg" && ! _is_minor_version "$arg" && \
+		if ! dist_version_is_valid "$arg" "${chan:-$ocp_channel}" && ! _is_minor_version "$arg" && \
 		   ! [[ "$arg" =~ ^(latest|l|previous|p|older|o)$ ]]; then
 			aba_abort "incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
 		fi
@@ -901,6 +948,7 @@ for i in imgs:
 		shift 2
 		ocp_version=$ver
 	elif [ "$1" = "--upgrade-to" ]; then
+		dist_stop_unsupported "--upgrade-to"
 		opt=$1
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
@@ -1523,6 +1571,12 @@ if [ "$cur_target" ]; then
 				aba_warn "Cluster has not completed installation."
 				ask "Cluster has not completed installation, continue anyway" || exit 1
 			fi
+			;;
+	esac
+
+	case $cur_target in
+		day2-osus|day2-virt|upgrade|upgrade-mon)
+			dist_stop_unsupported "$cur_target"
 			;;
 	esac
 

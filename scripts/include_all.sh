@@ -725,11 +725,16 @@ verify-aba-conf() {
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
 
-	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$ocp_channel" | grep -q -E "^(fast|stable|candidate|eus)$" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	dist_version_is_valid "$ocp_version" "$ocp_channel" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	dist_channel_is_valid "$ocp_channel" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo "$platform"    | grep -q -E "^(bm|vmw|kvm)$" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	case "${distribution:-ocp}" in
+		ocp|okd) ;;
+		*) echo_red "Error: distribution incorrectly set in aba.conf: [$distribution]" >&2; ret=1 ;;
+	esac
+	local _tp
+	_tp="$(dist_target_problem "$platform")" || { echo_red "Error: $_tp" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -6775,50 +6780,30 @@ cli_download_extra_clis() {
 check_internet_connectivity() {
 	local prefix="$1"
 	local quiet="${2:-false}"
-	
-	# Check if we need to run the checks (not cached)
-	local need_check=false
-	if ! run_once -p -i "${prefix}:check:api.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "${prefix}:check:mirror.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "${prefix}:check:registry.redhat.io" >/dev/null 2>&1; then
-		need_check=true
-	fi
-	
-	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
-	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://api.openshift.com/
-	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://mirror.openshift.com/
-	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 8 --max-time 15 https://registry.redhat.io/
-	
-	# Wait: block for the 3 checks started above
+	local site err_msg
+
+	# quiet is accepted so existing callers keep their argument.
+	# The sites come from the loaded distribution file.
+	: "$quiet"
+
+	# Start: one probe per site, in parallel (5-min TTL). Wait: loop below.
+	for site in $(dist_probe_sites); do
+		run_once -t 300 -i "${prefix}:check:${site}" -- curl -sL --head --connect-timeout 8 --max-time 15 "https://${site}/"
+	done
+
 	FAILED_SITES=""
 	ERROR_DETAILS=""
-	
-	if ! run_once -w -q -S -i "${prefix}:check:api.openshift.com"; then
-		FAILED_SITES="api.openshift.com"
-		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		ERROR_DETAILS="  api.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -S -i "${prefix}:check:mirror.openshift.com"; then
-		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
-		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
-		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
-		ERROR_DETAILS="${ERROR_DETAILS}  mirror.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -S -i "${prefix}:check:registry.redhat.io"; then
-		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
-		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
-		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
-		ERROR_DETAILS="${ERROR_DETAILS}  registry.redhat.io: $err_msg"
-	fi
-	
-	# Return status
+	for site in $(dist_probe_sites); do
+		if ! run_once -w -q -S -i "${prefix}:check:${site}"; then
+			[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+			FAILED_SITES="${FAILED_SITES}${site}"
+			err_msg=$(run_once -e -i "${prefix}:check:${site}" | head -1)
+			[[ -z "$err_msg" ]] && err_msg="Connection failed"
+			[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
+			ERROR_DETAILS="${ERROR_DETAILS}  ${site}: $err_msg"
+		fi
+	done
+
 	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
 }
 
@@ -6832,24 +6817,27 @@ require_internet_and_pull_secret() {
 	local errors=()
 	local has_internet=true
 
-	# Check internet (quick probe, 5s timeout)
-	local _inet_err
-	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ 2>&1 >/dev/null); then
+	# Check internet (quick probe, 5s timeout). The host is the distribution's.
+	local _inet_err _probe
+	_probe="$(dist_quick_probe_host)"
+	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 "https://${_probe}/v2/" 2>&1 >/dev/null); then
 		has_internet=false
-		errors+=("No internet access (cannot reach registry.redhat.io)")
+		errors+=("No internet access (cannot reach ${_probe})")
 		aba_debug "Internet check failed: $_inet_err"
 	fi
 
-	# Check pull secret (global, then fallback)
+	# Check pull secret (global, then fallback). OKD without operators needs none.
+	local _ps_reg
+	_ps_reg="$(dist_pull_secret_registry)"
 	if [ -s "$pull_secret_file" ]; then
-		if ! grep -q registry.redhat.io "$pull_secret_file"; then
-			errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
+		if dist_pull_secret_required && ! grep -q "$_ps_reg" "$pull_secret_file"; then
+			errors+=("Pull secret at $pull_secret_file does not contain ${_ps_reg} credentials")
 		elif ! jq empty "$pull_secret_file" 2>/dev/null; then
 			errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
 		fi
 	elif [ -n "$fallback_ps" ] && [ -s "$fallback_ps" ]; then
 		aba_debug "Global pull secret not found; using fallback: $fallback_ps"
-	else
+	elif dist_pull_secret_required; then
 		errors+=("Pull secret not found at $pull_secret_file")
 	fi
 
@@ -6877,7 +6865,7 @@ require_internet_and_pull_secret() {
 	fi
 }
 
-# OpenShift constants. Loaded last so ocp_major_of, _is_version_string and
+# Distribution file. Loaded last so ocp_major_of, _is_version_string and
 # ABA_GRAPH_API already exist. readlink follows a symlink of this file, so
 # the companion is found beside the real script rather than beside the link.
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dist-ocp.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dist.sh"
