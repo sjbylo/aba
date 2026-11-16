@@ -3127,7 +3127,7 @@ _ver_minor() {
 # If mirror reports prerelease (e.g. 4.21.0-rc.1), returns previous minor (e.g. 4.20)
 # Note: CDN is the floating download anchor only; channel tips come from Cincinnati.
 ############################################
-fetch_latest_minor_version() {
+_ocp_fetch_latest_minor_version() {
 	local channel="${1:-stable}"
 	local major
 	major="$(ocp_major_of "${ocp_version:-}")"
@@ -3165,7 +3165,9 @@ _fetch_graph_cached() {
 	[[ -n "$minor" ]] || return 0
 
 	chann_minor="${channel}-${minor}"
-	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
+	# The channel name is shared (stable-4.21). The distribution keeps the
+	# OpenShift graph from being reused as an OKD graph.
+	cache_file="${ABA_CACHE_DIR}/graph_$(dist_of)_${chann_minor}_${ARCH}.json"
 	url="$(dist_graph_api)?channel=${chann_minor}&arch=${ARCH}"
 
 	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
@@ -3178,7 +3180,7 @@ _fetch_graph_cached() {
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
 ############################################
-fetch_all_versions() {
+_ocp_fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
 
@@ -3200,7 +3202,7 @@ _version_has_cross_minor_edge() {
 	minor="$(_ver_minor "$version")"
 	[[ -n "$minor" ]] || return 1
 
-	cache_file="${ABA_CACHE_DIR}/graph_candidate-${minor}_${ARCH}.json"
+	cache_file="${ABA_CACHE_DIR}/graph_$(dist_of)_candidate-${minor}_${ARCH}.json"
 	[[ -s "$cache_file" ]] || return 1
 
 	while IFS= read -r src; do
@@ -3313,7 +3315,7 @@ _candidate_offer() {
 # stable-5.0 has 5.0.0), prefer that GA tip. Previous then becomes
 # the CDN tip via fetch_previous_version.
 ############################################
-fetch_latest_version() {
+_ocp_fetch_latest_version() {
 	local channel="${1:-stable}"
 	local minor v prev offer newer
 
@@ -3351,7 +3353,7 @@ fetch_latest_version() {
 #	$2 = minor (e.g. 4.20) [optional]
 # If requested minor has no GA, fall back to previous minor.
 ############################################
-fetch_latest_z_version() {
+_ocp_fetch_latest_z_version() {
 	local channel="${1:-stable}"
 	local minor="$2"
 	local v prev
@@ -3378,7 +3380,7 @@ fetch_latest_z_version() {
 # At X.0 (CDN already on next major), Previous is previous-major CDN tip.
 # On candidate: line 2 of _candidate_offer (the one before latest). Empty if none.
 ############################################
-fetch_previous_version() {
+_ocp_fetch_previous_version() {
 	local channel="${1:-stable}"
 	local minor prev v offer newer cdn_tip
 
@@ -3412,7 +3414,7 @@ fetch_previous_version() {
 # Crosses majors at X.0 via _channel_prev_minor.
 # On candidate: line 3 of _candidate_offer. Empty if the walk found fewer than 3.
 ############################################
-fetch_older_version() {
+_ocp_fetch_older_version() {
 	local channel="${1:-stable}"
 	local minor prev older v offer newer cdn_tip
 
@@ -3837,7 +3839,7 @@ resolve_cluster_channel() {
 #	$2 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
 # Returns: 0 if version found, 1 if not
 ############################################
-verify_release_version_exists() {
+_ocp_verify_release() {
 	local ver="${1:-}"
 	local channel="${2:-${ocp_channel:-stable}}"
 
@@ -6869,3 +6871,13 @@ require_internet_and_pull_secret() {
 # ABA_GRAPH_API already exist. readlink follows a symlink of this file, so
 # the companion is found beside the real script rather than beside the link.
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dist.sh"
+
+# Public names. The loaded distribution file supplies the body. The
+# OpenShift bodies are the _ocp_* functions above. OKD does not use the CDN.
+fetch_latest_minor_version() { dist_fetch_latest_minor_version "$@"; }
+fetch_all_versions() { dist_fetch_all_versions "$@"; }
+fetch_latest_version() { dist_fetch_latest_version "$@"; }
+fetch_latest_z_version() { dist_fetch_latest_z_version "$@"; }
+fetch_previous_version() { dist_fetch_previous_version "$@"; }
+fetch_older_version() { dist_fetch_older_version "$@"; }
+verify_release_version_exists() { dist_verify_release "$@"; }

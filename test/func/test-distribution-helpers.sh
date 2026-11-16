@@ -56,6 +56,11 @@ if dist_stop_unsupported upgrade; then
 else
 	_fail "OpenShift allows upgrade"
 fi
+if dist_is_prerelease "4.22.0-rc.1" && ! dist_is_prerelease "4.22.22"; then
+	_pass "OpenShift pre-release is a hyphenated build"
+else
+	_fail "OpenShift pre-release is a hyphenated build"
+fi
 
 distribution=okd
 dist_load
@@ -112,6 +117,11 @@ if dist_target_problem vmw; then
 	_pass "OKD allows VMware"
 else
 	_fail "OKD allows VMware"
+fi
+if dist_is_prerelease "4.21.0-okd-scos.ec.1" && ! dist_is_prerelease "4.21.0-okd-scos.5"; then
+	_pass "OKD pre-release is the ec build"
+else
+	_fail "OKD pre-release is the ec build"
 fi
 
 _ref="$(dist_catalog_ref community-operator 4.21)"

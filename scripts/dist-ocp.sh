@@ -121,3 +121,17 @@ dist_pull_secret_registry() {
 dist_stop_unsupported() {
 	return 0
 }
+
+# A hyphen marks an OpenShift pre-release (rc, ec). A GA version has none.
+dist_is_prerelease() {
+	[[ "${1:-}" == *-* ]]
+}
+
+# The bodies stay in include_all.sh. This file only selects them.
+dist_fetch_latest_minor_version() { _ocp_fetch_latest_minor_version "$@"; }
+dist_fetch_all_versions() { _ocp_fetch_all_versions "$@"; }
+dist_fetch_latest_version() { _ocp_fetch_latest_version "$@"; }
+dist_fetch_latest_z_version() { _ocp_fetch_latest_z_version "$@"; }
+dist_fetch_previous_version() { _ocp_fetch_previous_version "$@"; }
+dist_fetch_older_version() { _ocp_fetch_older_version "$@"; }
+dist_verify_release() { _ocp_verify_release "$@"; }
