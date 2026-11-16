@@ -140,3 +140,9 @@ dist_verify_release() { _ocp_verify_release "$@"; }
 dist_release_payload_ref() {
 	return 1
 }
+
+# OpenShift does not invent a pull secret. The caller prints its own error.
+# $1 is the file path.
+dist_pull_secret_ensure() {
+	return 1
+}

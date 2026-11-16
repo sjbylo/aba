@@ -143,9 +143,33 @@ else
 	_fail "OKD upgrade aborts (rc ${_rc:-0})"
 fi
 
+_ps="$(mktemp /tmp/aba-okd-ps.XXXXXX)"
+rm -f "$_ps"
+if dist_pull_secret_ensure "$_ps" && jq -e '.auths.fake.auth' "$_ps" >/dev/null; then
+	_pass "OKD writes a placeholder pull secret when none is required"
+else
+	_fail "OKD writes a placeholder pull secret when none is required"
+fi
+rm -f "$_ps"
+ops=virt
+_ps="$(mktemp -u /tmp/aba-okd-ps.XXXXXX)"
+if dist_pull_secret_ensure "$_ps"; then
+	_fail "OKD refuses a missing pull secret when operators are selected"
+else
+	_pass "OKD refuses a missing pull secret when operators are selected"
+fi
+[ ! -e "$_ps" ] || _fail "OKD did not leave a secret file behind"
+unset ops
+
 # Back to OpenShift, without writing aba.conf.
 unset distribution
 dist_load
+_ps="$(mktemp -u /tmp/aba-ocp-ps.XXXXXX)"
+if dist_pull_secret_ensure "$_ps"; then
+	_fail "OpenShift does not invent a pull secret"
+else
+	_pass "OpenShift does not invent a pull secret"
+fi
 if [ "$(dist_of)" = "ocp" ] && ! dist_version_is_valid "4.21.0-okd-scos.5" stable; then
 	_pass "clearing the variable loads OpenShift again"
 else

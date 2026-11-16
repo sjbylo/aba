@@ -112,6 +112,9 @@ if [ "$image_source" = "direct" ]; then
 	use_mirror=
 elif [ "$image_source" = "proxy" ]; then
 	if [ "$http_proxy" ] || [ "$https_proxy" ]; then
+		if [ ! -s "$pull_secret_file" ]; then
+			dist_pull_secret_ensure "$pull_secret_file" || true
+		fi
 		if [ -s $pull_secret_file ]; then
 			export pull_secret=$(jq . "$pull_secret_file")
 			aba_info "Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry."
@@ -217,6 +220,9 @@ fi
 
 # If not already set, set the default value
 if [ ! "$pull_secret" ]; then
+	if [ ! -s "$pull_secret_file" ]; then
+		dist_pull_secret_ensure "$pull_secret_file" || true
+	fi
 	if [ -s "$pull_secret_file" ]; then
 		export pull_secret=$(cat "$pull_secret_file" | jq .) 
 
