@@ -135,3 +135,8 @@ dist_fetch_latest_z_version() { _ocp_fetch_latest_z_version "$@"; }
 dist_fetch_previous_version() { _ocp_fetch_previous_version "$@"; }
 dist_fetch_older_version() { _ocp_fetch_older_version "$@"; }
 dist_verify_release() { _ocp_verify_release "$@"; }
+
+# OpenShift selects the release with a channel, not a digest pin.
+dist_release_payload_ref() {
+	return 1
+}
