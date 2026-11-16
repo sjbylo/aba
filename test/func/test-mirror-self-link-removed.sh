@@ -6,7 +6,8 @@
 #   2. CMD_*_REG and check-image run the mirror Makefile from the repo root,
 #      a mirror dir, a named mirror dir and a cluster dir (mirror -> ../<name>)
 #   3. Any make in an old mirror dir removes the stale self-link and forgets
-#      only the old-style run_once tasks saved from that dir
+#      only the old-style run_once tasks saved from that dir, unless run_once
+#      is replaying one of them (task lock held)
 
 cd "$(dirname "$0")/../.." || exit 1
 source scripts/include_all.sh 2>/dev/null
@@ -122,6 +123,26 @@ if [ -f "$RUN_ONCE_DIR/mirror:reg:download:omr/exit" ]; then
 	_fail "no link: old task saved from the mirror dir not forgotten"
 else
 	_pass "no link: old task saved from the mirror dir forgotten"
+fi
+
+# run_once validation replays an old task through the link while it holds the task lock
+ln -s . "$_root/mirror/mirror"
+fake_task install "$_root/mirror" "$OLD_CMD"
+(
+	exec 8>>"$RUN_ONCE_DIR/mirror:reg:install/lock"
+	flock -n 8 || exit 1
+	make -C "$_root/mirror" help >/dev/null 2>&1
+)
+if [ -f "$RUN_ONCE_DIR/mirror:reg:install/cmd.sh" ] && [ -L "$_root/mirror/mirror" ]; then
+	_pass "locked: old task and self-link kept while run_once replays it"
+else
+	_fail "locked: old task or self-link removed while run_once replays it"
+fi
+make -C "$_root/mirror" help >/dev/null 2>&1
+if [ ! -f "$RUN_ONCE_DIR/mirror:reg:install/cmd.sh" ] && [ ! -L "$_root/mirror/mirror" ]; then
+	_pass "unlocked: old task forgotten and self-link removed on the next make"
+else
+	_fail "unlocked: old task or self-link left after the next make"
 fi
 
 # --- Summary ---
