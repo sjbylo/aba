@@ -103,13 +103,13 @@ _resolve_operators_json() {
 	# Special "all" operator set — mirrors entire redhat catalog
 	if echo "$op_sets" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 		aba_success "Adding all redhat-operator operators (catalog v$catalog_ver) to your image-set config file!" >&2
-		echo '[{"catalog":"registry.redhat.io/redhat/redhat-operator-index:v'"$catalog_ver"'","all":true,"packages":[]}]'
+		echo '[{"catalog":"'"$(dist_catalog_ref redhat-operator "$catalog_ver")"'","all":true,"packages":[]}]'
 		return 0
 	fi
 
 	# Verify catalog index files exist
 	local _cat_errors=""
-	for _cat in redhat-operator certified-operator community-operator; do
+	for _cat in $(dist_catalogs); do
 		if [ ! -s ".index/${_cat}-index-v${catalog_ver}" ]; then
 			_cat_errors=1
 			aba_warn "Missing operator catalog file: $PWD/.index/${_cat}-index-v${catalog_ver}" >&2
@@ -138,7 +138,7 @@ _resolve_operators_json() {
 
 		# Find which catalog contains this operator (priority: redhat, certified, community)
 		local _found_cat=""
-		for _cat in redhat-operator certified-operator community-operator; do
+		for _cat in $(dist_catalogs); do
 			if _index_line=$(grep "^$_op " ".index/${_cat}-index-v${catalog_ver}" 2>/dev/null); then
 				_found_cat="$_cat"
 				break
@@ -231,13 +231,13 @@ _resolve_operators_json() {
 	local _catalogs=()
 	local _rj _cj _cmj
 
-	_rj=$(_build_catalog_json "redhat" "registry.redhat.io/redhat/redhat-operator-index:v${catalog_ver}" "${_redhat_pkgs[@]+"${_redhat_pkgs[@]}"}")
+	_rj=$(_build_catalog_json "redhat" "$(dist_catalog_ref redhat-operator "$catalog_ver")" "${_redhat_pkgs[@]+"${_redhat_pkgs[@]}"}")
 	[ -n "$_rj" ] && _catalogs+=("$_rj")
 
-	_cj=$(_build_catalog_json "certified" "registry.redhat.io/redhat/certified-operator-index:v${catalog_ver}" "${_certified_pkgs[@]+"${_certified_pkgs[@]}"}")
+	_cj=$(_build_catalog_json "certified" "$(dist_catalog_ref certified-operator "$catalog_ver")" "${_certified_pkgs[@]+"${_certified_pkgs[@]}"}")
 	[ -n "$_cj" ] && _catalogs+=("$_cj")
 
-	_cmj=$(_build_catalog_json "community" "registry.redhat.io/redhat/community-operator-index:v${catalog_ver}" "${_community_pkgs[@]+"${_community_pkgs[@]}"}")
+	_cmj=$(_build_catalog_json "community" "$(dist_catalog_ref community-operator "$catalog_ver")" "${_community_pkgs[@]+"${_community_pkgs[@]}"}")
 	[ -n "$_cmj" ] && _catalogs+=("$_cmj")
 
 	# Output final JSON array

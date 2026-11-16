@@ -23,7 +23,7 @@ while [ "$#" -gt 0 ]; do
 		--certified) _catalogs+=(certified-operator); shift ;;
 		--community) _catalogs+=(community-operator); shift ;;
 		--redhat)    _catalogs+=(redhat-operator); shift ;;
-		--all)       _catalogs=(redhat-operator certified-operator community-operator); shift ;;
+		--all)       read -ra _catalogs <<< "$(dist_catalogs)"; shift ;;
 		--refresh)   _refresh=1; shift ;;
 		*) aba_abort "Unknown option '$1'. Usage: aba show-ops [--certified] [--community] [--redhat] [--all] [--refresh]" ;;
 	esac
