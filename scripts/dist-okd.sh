@@ -142,3 +142,215 @@ dist_stop_unsupported() {
 	aba_abort "$op is unsupported for OKD in ABA." \
 		"aba.conf has distribution=okd. ABA installs OKD but does not upgrade it or set up Red Hat services on it."
 }
+
+# A GA build is X.Y.Z-okd-scos.N. The pre-release form has .ec. in it.
+dist_is_prerelease() {
+	[[ "${1:-}" == *.ec.* ]]
+}
+
+# The answer for the release list must be a JSON list of the fields we read.
+_okd_validate_releases() {
+	local f="$1"
+	jq -ce 'if type == "array" then [.[] | {tag_name, prerelease, draft}] else error("not a list") end' "$f" > "$f.r" 2>/dev/null \
+		&& mv -f "$f.r" "$f"
+	local rc=$?
+	rm -f "$f.r"
+	return $rc
+}
+
+# One release object. Keep the tag and the Pull From lines. That is all we read.
+_okd_validate_release() {
+	local f="$1"
+	jq -ce 'if type == "object" and (.tag_name | type) == "string" then {tag_name, body: ([(.body // "") | split("\n")[] | select(startswith("Pull From:"))] | join("\n"))} else error("not a release") end' "$f" > "$f.r" 2>/dev/null \
+		&& mv -f "$f.r" "$f"
+	local rc=$?
+	rm -f "$f.r"
+	return $rc
+}
+
+# GA release tags, oldest first. Follow GitHub pages until a short page.
+_okd_ga_tags() {
+	local ttl page=1 cache_file n
+	ttl="$(parse_duration "$ABA_CACHE_TTL")"
+	while [[ $page -le 10 ]]; do
+		cache_file="${ABA_CACHE_DIR}/okd_releases_p${page}.json"
+		_fetch_cached "${ABA_OKD_RELEASES_API}?per_page=100&page=${page}" "$cache_file" "$ttl" _okd_validate_releases || break
+		jq -r '.[] | select((.prerelease // false) == false and (.draft // false) == false) | .tag_name' "$cache_file" 2>/dev/null
+		n="$(jq 'length' "$cache_file" 2>/dev/null)" || break
+		[[ "$n" -ge 100 ]] || break
+		page=$(( page + 1 ))
+	done | grep -E "$_ABA_OKD_VERSION_RE" | _semver_sort || true
+}
+
+_okd_ga_minors() {
+	_okd_ga_tags | awk -F. '{print $1 "." $2}'
+}
+
+# The pattern a channel holds. Candidate also accepts the ec form.
+_okd_version_re() {
+	if [ "${1:-}" = "candidate" ]; then
+		printf '%s\n' "$_ABA_OKD_CANDIDATE_VERSION_RE"
+	else
+		printf '%s\n' "$_ABA_OKD_VERSION_RE"
+	fi
+}
+
+# Release builds sort by build number. A pre-release (.ec.N) sorts first.
+_okd_sort() {
+	awk -F'[.-]' '{ printf "%08d %08d %08d %d %08d %s\n", $1, $2, $3, ($0 ~ /\.ec\./) ? 0 : 1, $NF, $0 }' | sort | cut -d' ' -f6
+}
+
+_okd_all_versions() {
+	local channel="${1:-stable}"
+	local minor="${2:-}"
+
+	[[ -n "$minor" ]] || minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 0
+
+	_fetch_graph_cached "$channel" "$minor" | jq -r '.nodes[].version' 2>/dev/null \
+		| grep -E "$(_okd_version_re "$channel")" \
+		| grep "^${minor}\." | _okd_sort || true
+}
+
+_okd_list_versions() {
+	local channel="${1:-stable}"
+	local minor="${2:-}"
+
+	[[ -n "$minor" ]] || minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 0
+
+	if [[ "$channel" = "stable" ]]; then
+		{ _okd_all_versions "$channel" "$minor"; _okd_ga_tags | grep "^${minor}\." || true; } | sort -u | _okd_sort || true
+	else
+		_okd_all_versions "$channel" "$minor"
+	fi
+}
+
+_okd_verify_release() {
+	local ver="$1" channel="$2" minor="$3"
+
+	dist_version_is_valid "$ver" "$channel" || return 1
+	_okd_all_versions "$channel" "$minor" | grep -qxF "$ver" && return 0
+
+	[[ "$channel" = "stable" ]] || return 1
+	_okd_ga_tags | grep -qxF "$ver"
+}
+
+_okd_tip() {
+	local channel="$1" minor="$2" v
+
+	v="$(_okd_all_versions "$channel" "$minor" | tail -n1)"
+	[[ -n "$v" || "$channel" != "stable" ]] || v="$(_okd_ga_tags | grep "^${minor}\." | tail -n1 || true)"
+	printf '%s\n' "$v"
+}
+
+_okd_prev_minor() {
+	local minor="$1" prev maj
+
+	prev="$(_prev_minor "$minor")"
+	if [[ -n "$prev" ]]; then
+		echo "$prev"
+		return 0
+	fi
+
+	maj="${minor%%.*}"
+	[[ "$maj" =~ ^[0-9]+$ && "$maj" -gt 1 ]] || { echo ""; return 0; }
+	_okd_ga_minors | grep "^$(( maj - 1 ))\." | tail -n1 || true
+}
+
+_okd_head_minor() {
+	local channel="${1:-stable}"
+	local best n jump steps=0 crossed=0
+
+	best="$(_okd_ga_minors | tail -n1)"
+	[[ -n "$best" ]] || return 0
+
+	if [[ "$channel" = "candidate" ]]; then
+		while [[ $steps -lt 6 ]]; do
+			steps=$(( steps + 1 ))
+			n="$(_next_minor "$best")"
+			if [[ -n "$(_okd_all_versions candidate "$n" | tail -n1)" ]]; then
+				best="$n"
+				continue
+			fi
+			[[ $crossed -eq 0 ]] || break
+			crossed=1
+			jump="$(_next_major "$best")"
+			[[ -n "$(_okd_all_versions candidate "$jump" | tail -n1)" ]] || break
+			best="$jump"
+		done
+	fi
+
+	printf '%s\n' "$best"
+}
+
+_okd_fetch_latest_version() {
+	local channel="${1:-stable}"
+	local minor v
+
+	minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+	v="$(_okd_tip "$channel" "$minor")"
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+_okd_fetch_previous_version() {
+	local channel="${1:-stable}"
+	local minor prev v
+
+	minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+	prev="$(_okd_prev_minor "$minor")"
+	[[ -n "$prev" ]] || return 1
+	v="$(_okd_tip "$channel" "$prev")"
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+_okd_fetch_older_version() {
+	local channel="${1:-stable}"
+	local minor prev older v
+
+	minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+	prev="$(_okd_prev_minor "$minor")"
+	[[ -n "$prev" ]] || return 1
+	older="$(_okd_prev_minor "$prev")"
+	[[ -n "$older" ]] || return 1
+	v="$(_okd_tip "$channel" "$older")"
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+_okd_fetch_latest_z_version() {
+	local channel="${1:-stable}"
+	local minor="${2:-}"
+	local v prev
+
+	[[ -n "$minor" ]] || minor="$(_okd_head_minor "$channel")"
+	[[ -n "$minor" ]] || return 1
+	v="$(_okd_tip "$channel" "$minor")"
+	if [[ -z "$v" ]]; then
+		prev="$(_okd_prev_minor "$minor")"
+		[[ -n "$prev" ]] || return 1
+		v="$(_okd_tip "$channel" "$prev")"
+	fi
+	dist_version_is_valid "$v" "$channel" && echo "$v" && return 0
+	return 1
+}
+
+dist_fetch_latest_minor_version() { _okd_head_minor "$@"; }
+dist_fetch_all_versions() { _okd_list_versions "$@"; }
+dist_fetch_latest_version() { _okd_fetch_latest_version "$@"; }
+dist_fetch_latest_z_version() { _okd_fetch_latest_z_version "$@"; }
+dist_fetch_previous_version() { _okd_fetch_previous_version "$@"; }
+dist_fetch_older_version() { _okd_fetch_older_version "$@"; }
+
+# $1 version, $2 channel. The minor is the first two numbers.
+dist_verify_release() {
+	local ver="${1:-}" channel="${2:-stable}" minor
+	[[ -n "$ver" ]] || return 1
+	minor="$(printf '%s\n' "$ver" | cut -d. -f1-2)"
+	_okd_verify_release "$ver" "$channel" "$minor"
+}

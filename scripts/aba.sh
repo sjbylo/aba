@@ -909,8 +909,8 @@ for i in imgs:
 		# Expand ver to latest, if it's just a point version (x.y)
 		_is_minor_version "$ver" && { ver=$(fetch_latest_z_version "$ocp_channel" "$ver") || true; }
 
-		# Validate version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
-		_is_version_string "$ver" || ver=""
+		# Validate version for the distribution that is loaded.
+		dist_version_is_valid "$ver" "$chan" || ver=""
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		if [ ! "$ver" ]; then
@@ -922,7 +922,7 @@ for i in imgs:
 		# ver should now be x.y.z or x.y.z-prerelease format (guaranteed by early validation)
 
 		# Warn if pre-release version
-		_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use."
+		dist_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use."
 
 		# Same graph check save/sync use. Do not store a version the channel does not list.
 		if ! verify_release_version_exists "$ver" "$chan"; then
