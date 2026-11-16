@@ -90,6 +90,7 @@ unit_tests=(
 	test/func/test-normalize-ipv4.sh
 	test/func/test-pick-install-iface.sh
 	test/func/test-input-validation-all.sh
+	test/func/test-distribution-helpers.sh
 	test/func/test-ocp-major-render.sh
 	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh

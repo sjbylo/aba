@@ -1,14 +1,12 @@
 #!/bin/bash
 # OpenShift values for the dist_* functions.
 #
-# One distribution is one file of these functions. This branch installs
-# OpenShift only, so include_all.sh always loads this file. OKD is the
-# same names in scripts/dist-okd.sh; the driver then loads one file.
-# Callers use the functions and do not carry their own copy of a URL
-# or a catalog list.
+# One distribution is one file of these functions. scripts/dist.sh loads
+# this file when distribution is missing, empty, or ocp. The OKD file
+# is scripts/dist-okd.sh. Callers use the functions and do not carry
+# their own copy of a URL or a catalog list.
 #
-# No distribution key is read here. OpenShift is the only answer until
-# that key exists.
+# No distribution key is read here. Loading this file means OpenShift.
 
 # Prints ocp. The OKD file prints okd.
 dist_of() {
@@ -99,5 +97,27 @@ dist_catalog_index_files() {
 # OpenShift does not reject operators for living in a Red Hat catalog.
 # Usage: dist_catalog_reject_blocked_ops <version_short>...
 dist_catalog_reject_blocked_ops() {
+	return 0
+}
+
+# Hosts a connected OpenShift run must be able to reach.
+# Order is the order the connectivity check reports them.
+dist_probe_sites() {
+	printf '%s\n' api.openshift.com mirror.openshift.com registry.redhat.io
+}
+
+# Host used by the short save/sync reachability check.
+dist_quick_probe_host() {
+	printf '%s\n' registry.redhat.io
+}
+
+# Registry name that must appear in a required pull secret.
+dist_pull_secret_registry() {
+	printf '%s\n' registry.redhat.io
+}
+
+# Upgrade, day2-osus, day2-virt, and import are supported for OpenShift.
+# $1 is the command name. Prints nothing and returns 0.
+dist_stop_unsupported() {
 	return 0
 }
