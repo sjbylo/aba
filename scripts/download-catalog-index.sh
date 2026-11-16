@@ -126,12 +126,14 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-# Check connectivity to registry
-aba_debug "Checking connectivity to registry.redhat.io"
+# The distribution names the registry. OpenShift is registry.redhat.io.
+catalog_url="$(dist_catalog_ref "$catalog_name" "$ocp_ver_major")"
+_cat_host="${catalog_url%%/*}"
+aba_debug "Checking connectivity to $_cat_host"
 _reg_err=""
-if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 2>&1 >/dev/null); then
-	aba_debug "registry.redhat.io check failed: $_reg_err"
-	aba_abort "Cannot access registry.redhat.io - check internet connection"
+if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL "http://${_cat_host}/v2" 2>&1 >/dev/null); then
+	aba_debug "$_cat_host check failed: $_reg_err"
+	aba_abort "Cannot access $_cat_host - check internet connection"
 fi
 
 # Verify prerequisites
@@ -142,7 +144,6 @@ if ! command -v jq >/dev/null 2>&1; then
 	aba_abort "jq is required but not installed"
 fi
 
-catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 remote_ref="docker://${catalog_url}"
 content_layer_file=".index/.${catalog_name}-index-v${ocp_ver_major}.content-layer-digest"
 

@@ -3161,7 +3161,7 @@ _fetch_graph_cached() {
 
 	chann_minor="${channel}-${minor}"
 	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
-	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
+	url="$(dist_graph_api)?channel=${chann_minor}&arch=${ARCH}"
 
 	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
 	cat "$cache_file"
@@ -5353,7 +5353,8 @@ download_all_catalogs() {
 	fi
 	[[ -z "$ttl" ]] && ttl="$(parse_duration "${CATALOG_CACHE_TTL:-12h}")"
 
-	local catalogs=(redhat-operator certified-operator community-operator)
+	local catalogs
+	read -ra catalogs <<< "$(dist_catalogs)"
 	local running=0
 
 	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
@@ -5532,7 +5533,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 	for ocp_ver_major in "$@"; do
 		[ -z "$ocp_ver_major" ] && continue
-		for catalog_name in redhat-operator certified-operator community-operator; do
+		for catalog_name in $(dist_catalogs); do
 			local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
 			[ -s "$digest_file" ] || continue
 			local digest
@@ -6875,3 +6876,8 @@ require_internet_and_pull_secret() {
 			"and save it to $pull_secret_file"
 	fi
 }
+
+# OpenShift constants. Loaded last so ocp_major_of, _is_version_string and
+# ABA_GRAPH_API already exist. readlink follows a symlink of this file, so
+# the companion is found beside the real script rather than beside the link.
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dist-ocp.sh"
