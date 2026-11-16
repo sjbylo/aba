@@ -21,13 +21,19 @@ SCRIPTS   := ../scripts
 # Forget those tasks so they re-run with the new command. Delete the files instead of
 # run-once.sh -r: -r kills the saved PID, which may belong to another process by now.
 # Then remove the link. Runs on any target because .init is already stamped in old dirs.
-_STALE_SELF_LINK := $(shell d="$${RUN_ONCE_DIR:-$$HOME/.aba/runner}"; \
+# A held task lock means run_once is replaying that old command through the link right now,
+# so keep the task and the link until a later make.
+_STALE_SELF_LINK := $(shell d="$${RUN_ONCE_DIR:-$$HOME/.aba/runner}"; busy=; \
 	for t in install download:quay download:docker download:omr; do \
 		s="$$d/mirror:reg:$$t"; \
-		[ "$$(cat "$$s/cwd" 2>/dev/null)" -ef . ] && grep -qsF '[1]="-sC" [2]="mirror"' "$$s/cmd.sh" && \
+		[ "$$(cat "$$s/cwd" 2>/dev/null)" -ef . ] && grep -qsF '[1]="-sC" [2]="mirror"' "$$s/cmd.sh" || continue; \
+		if flock -n "$$s/lock" true 2>/dev/null; then \
 			rm -f "$$s/cmd.sh" "$$s/cmd" "$$s/cwd" "$$s/exit"; \
+		else \
+			busy=1; \
+		fi; \
 	done; \
-	[ "$$(readlink mirror 2>/dev/null)" = . ] && rm -f mirror)
+	[ -z "$$busy" ] && [ "$$(readlink mirror 2>/dev/null)" = . ] && rm -f mirror)
 ##debug   ?=
 force     ?= no
 bg        ?=
