@@ -237,6 +237,15 @@ rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch
 openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
 openshift_install_url	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/$(ocp_client_dir)/$(ocp_version)
 
+# OKD publishes the same tarball names under the release tag. The base URL
+# is dist_cli_base_url in scripts/dist-okd.sh. Make reads that file so the
+# URL is not copied here.
+ifeq ($(distribution),okd)
+  openshift_install_url	:= $(shell bash -c 'source ../scripts/dist-okd.sh; dist_cli_base_url "$(ocp_version)"')
+  rhel9_oc_url		:= $(openshift_install_url)/$(rhel9_oc_tar_file)
+  rhel8_oc_url		:= $(openshift_install_url)/$(rhel8_oc_tar_file)
+endif
+
 
 ########################################################################
 ##@ Download Targets
