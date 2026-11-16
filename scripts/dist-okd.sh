@@ -382,6 +382,25 @@ _okd_release_payload_spec() {
 	return 1
 }
 
+# Write the placeholder when no secret is required. Operators still need a real one.
+# $1 is the file path. Prints a problem and returns 1 when it cannot proceed.
+dist_pull_secret_ensure() {
+	local f="${1:?Usage: dist_pull_secret_ensure <file>}"
+	if [ -s "$f" ]; then
+		return 0
+	fi
+	if dist_pull_secret_required; then
+		echo "No pull secret found at $f (needed because operators are selected)"
+		return 1
+	fi
+	( umask 077; printf '%s\n' "$_ABA_OKD_FAKE_PULL_SECRET" > "$f" ) || {
+		echo "Cannot write $f"
+		return 1
+	}
+	aba_info "No pull secret at $f: using the OKD placeholder." >&2
+	return 0
+}
+
 # Pull spec of the release image for this architecture. The signature belongs
 # to that image, not to the multi-arch list. Returns 1 when no digest is
 # published, 2 when the manifest cannot be read.
