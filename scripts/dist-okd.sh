@@ -63,7 +63,9 @@ dist_release_image_ref() {
 			"$wd/cluster-resources/signature-configmap.json" 2>/dev/null)
 	fi
 	if [ ${#found[@]} -gt 0 ]; then
+		if [ ${#found[@]} -gt 0 ]; then
 		mapfile -t found < <(printf '%s\n' "${found[@]}" | sed '/^$/d' | sort -u)
+	fi
 	fi
 	if [ ${#found[@]} -eq 0 ]; then
 		echo "oc-mirror has not recorded a release image for $ver under $wd" >&2
@@ -423,11 +425,11 @@ dist_pull_secret_ensure() {
 		return 0
 	fi
 	if dist_pull_secret_required; then
-		echo "No pull secret found at $f (needed because operators are selected)"
+		echo "No pull secret found at $f (needed because operators are selected)" >&2
 		return 1
 	fi
 	( umask 077; printf '%s\n' "$_ABA_OKD_FAKE_PULL_SECRET" > "$f" ) || {
-		echo "Cannot write $f"
+		echo "Cannot write $f" >&2
 		return 1
 	}
 	aba_info "No pull secret at $f: using the OKD placeholder." >&2

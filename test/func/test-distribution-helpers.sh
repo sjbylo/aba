@@ -61,6 +61,11 @@ if dist_stop_unsupported upgrade; then
 else
 	_fail "OpenShift allows upgrade"
 fi
+if [ -z "$(dist_oc_mirror_flags)" ]; then
+	_pass "OpenShift adds no oc-mirror flag"
+else
+	_fail "OpenShift adds no oc-mirror flag"
+fi
 if dist_is_prerelease "4.22.0-rc.1" && ! dist_is_prerelease "4.22.22"; then
 	_pass "OpenShift pre-release is a hyphenated build"
 else
@@ -123,6 +128,18 @@ if dist_target_problem vmw; then
 else
 	_fail "OKD allows VMware"
 fi
+if [ "$(dist_oc_mirror_flags)" = "--remove-signatures" ]; then
+	_pass "OKD save/load drops signatures"
+else
+	_fail "OKD save/load drops signatures (got $(dist_oc_mirror_flags))"
+fi
+OC_MIRROR_FLAGS=--remove-signatures
+if [ -z "$(dist_oc_mirror_flags)" ]; then
+	_pass "OKD does not repeat a flag the user already set"
+else
+	_fail "OKD does not repeat a flag the user already set"
+fi
+unset OC_MIRROR_FLAGS
 if dist_is_prerelease "4.21.0-okd-scos.ec.1" && ! dist_is_prerelease "4.21.0-okd-scos.5"; then
 	_pass "OKD pre-release is the ec build"
 else
@@ -165,19 +182,6 @@ else
 fi
 [ ! -e "$_ps" ] || _fail "OKD did not leave a secret file behind"
 unset ops
-
-if [ "$(dist_oc_mirror_flags)" = "--remove-signatures" ]; then
-	_pass "OKD oc-mirror drops signatures"
-else
-	_fail "OKD oc-mirror drops signatures (got $(dist_oc_mirror_flags))"
-fi
-OC_MIRROR_FLAGS=--remove-signatures
-if [ -z "$(dist_oc_mirror_flags)" ]; then
-	_pass "OKD does not repeat a flag the user already set"
-else
-	_fail "OKD does not repeat a flag the user already set"
-fi
-unset OC_MIRROR_FLAGS
 
 _sig=$(mktemp -d /tmp/aba-okd-sig.XXXXXX)
 mkdir -p "$_sig/data/working-dir/signatures"
