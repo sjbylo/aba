@@ -5697,7 +5697,10 @@ _run_oc_mirror_with_retry() {
 		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
-		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+		# The distribution may add a flag (OKD save/load needs --remove-signatures).
+		local _dist_flags
+		_dist_flags="$(dist_oc_mirror_flags)"
+		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-} ${_dist_flags}"
 
 		echo
 		if [ $try -gt 1 ]; then
@@ -6180,7 +6183,8 @@ ensure_openshift_install() {
 # Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
 	local _vendor="${1:-}"
-	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
+	local _tag
+	_tag="$(dist_mirror_manifest_ref)" || return 1
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
 	local _repo="${reg_path#/}/openshift/release-images"   # strip leading slash from registry path
@@ -6832,7 +6836,8 @@ require_internet_and_pull_secret() {
 	local _ps_reg
 	_ps_reg="$(dist_pull_secret_registry)"
 	if [ -s "$pull_secret_file" ]; then
-		if dist_pull_secret_required && ! grep -q "$_ps_reg" "$pull_secret_file"; then
+		# An empty registry name would make grep match every file.
+		if dist_pull_secret_required && [ -n "$_ps_reg" ] && ! grep -q "$_ps_reg" "$pull_secret_file"; then
 			errors+=("Pull secret at $pull_secret_file does not contain ${_ps_reg} credentials")
 		elif ! jq empty "$pull_secret_file" 2>/dev/null; then
 			errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")

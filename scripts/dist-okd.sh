@@ -36,11 +36,44 @@ dist_release_payload_repo() {
 	printf '%s\n' "$_ABA_OKD_PAYLOAD_REPO"
 }
 
-# OKD releases are pinned by digest, not by a version tag.
-# The digest lookup is a later step. This names the repo and the build.
+# Digest (sha256:<64 hex>) of the release oc-mirror stored for version $1.
+# The mirror does not tag it as <version>-<arch>. The name of the signature
+# file is <version>-sha256-<digest>. Errors go to stderr.
 dist_release_image_ref() {
-	local ver="${1:?Usage: dist_release_image_ref <version>}"
-	printf '%s\n' "${_ABA_OKD_PAYLOAD_REPO}:${ver}"
+	local ver="${1:-${ocp_version:-}}" wd f d
+	local -a found=()
+	if [ -z "$ver" ]; then
+		echo "No release version given" >&2
+		return 1
+	fi
+	if [ -d data/working-dir ]; then
+		wd=data/working-dir
+	elif [ -d mirror/data/working-dir ]; then
+		wd=mirror/data/working-dir
+	else
+		echo "No oc-mirror output found: run 'aba -d mirror sync' (or 'load') first" >&2
+		return 1
+	fi
+	for f in "$wd/signatures/${ver}-sha256-"*; do
+		d="${f##*-sha256-}"
+		[[ "$d" =~ ^[0-9a-f]{64}$ ]] && found+=("sha256:$d")
+	done
+	if [ ${#found[@]} -eq 0 ] && ! compgen -G "$wd/signatures/*" >/dev/null && [ -s "$wd/cluster-resources/signature-configmap.json" ]; then
+		mapfile -t found < <(jq -r '(.binaryData // {}) | keys[] | capture("^sha256-(?<d>[0-9a-f]{64})-[0-9]+$").d | "sha256:" + .' \
+			"$wd/cluster-resources/signature-configmap.json" 2>/dev/null)
+	fi
+	if [ ${#found[@]} -gt 0 ]; then
+		mapfile -t found < <(printf '%s\n' "${found[@]}" | sed '/^$/d' | sort -u)
+	fi
+	if [ ${#found[@]} -eq 0 ]; then
+		echo "oc-mirror has not recorded a release image for $ver under $wd" >&2
+		return 1
+	fi
+	if [ ${#found[@]} -gt 1 ]; then
+		echo "oc-mirror recorded more than one release image under $wd (${found[*]})" >&2
+		return 1
+	fi
+	printf '%s\n' "${found[0]}"
 }
 
 # Directory holding the CLI tarballs for version $1.
@@ -417,4 +450,102 @@ dist_release_payload_ref() {
 	child="$(jq -r --arg a "$ARCH" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest] | unique | if length == 1 then .[0] else empty end' <<< "$raw" 2>/dev/null)"
 	_okd_is_payload_ref "${spec%@*}" "${spec%@*}@${child}" || return 2
 	printf '%s\n' "${spec%@*}@${child}"
+}
+
+# Manifest name in the mirror. A digest, because there is no version-arch tag.
+dist_mirror_manifest_ref() {
+	dist_release_image_ref "${1:-${ocp_version:-}}"
+}
+
+# quay.io/okd/scos-content publishes no signature tags. save and load fail
+# unless oc-mirror is told to drop them. A flag the user already set is kept.
+dist_oc_mirror_flags() {
+	case " ${OC_MIRROR_FLAGS-} " in
+		*" --remove-signatures "*|*"--remove-signatures="*) return 0 ;;
+	esac
+	printf '%s\n' --remove-signatures
+}
+
+# Record which distribution the registry holds. OpenShift state files stay as they are.
+# $1 state file, $2 release digest (may be empty).
+dist_record_mirror_state() {
+	local state="${1:?Usage: dist_record_mirror_state <state-file> <digest>}"
+	local digest="${2:-}"
+	replace-value-conf -q -n distribution -v okd -f "$state"
+	if [ -n "$digest" ]; then
+		replace-value-conf -q -n mirror_release_digest -v "$digest" -f "$state"
+	elif [ "${excl_platform:-}" != "true" ]; then
+		aba_warn "The release digest of the mirrored OKD release is unknown; mirror_release_digest was not recorded."
+	fi
+}
+
+# Image sources come from the IDMS oc-mirror wrote. The payload repo is added
+# when that file has no rule for it. No IDMS means there is nothing to guess.
+dist_render_image_content_sources() {
+	local _idms=mirror/data/working-dir/cluster-resources/idms-oc-mirror.yaml
+	local _dest="$reg_host:$reg_port$reg_path/"
+	local _re='\A[A-Za-z0-9][A-Za-z0-9._:/@-]*\z'
+	local _json _src _payload
+	if [ ! -s "$_idms" ]; then
+		aba_abort "No oc-mirror IDMS found: $_idms" \
+			"Run 'aba -d mirror sync' (or 'aba -d mirror load') first; the install-config is built from it."
+	fi
+	if ! _json=$(yaml2json < "$_idms" 2>/dev/null); then
+		aba_abort "Could not read $_idms (not valid YAML)"
+	fi
+	if ! jq -e '(.spec.imageDigestMirrors // []) | length > 0 and all(.[]; (.source | type == "string") and ((.mirrors // []) | length > 0))' <<<"$_json" >/dev/null 2>&1; then
+		aba_abort "$_idms has no usable imageDigestMirrors"
+	fi
+	if ! jq -e --arg re "$_re" 'all(.spec.imageDigestMirrors[]; (.source | test($re)) and all(.mirrors[]; test($re)))' <<<"$_json" >/dev/null 2>&1; then
+		aba_abort "$_idms has a source or mirror that is not a valid registry reference"
+	fi
+	if ! jq -e --arg dest "$_dest" 'all(.spec.imageDigestMirrors[].mirrors[]; startswith($dest))' <<<"$_json" >/dev/null 2>&1; then
+		aba_abort "$_idms points outside the registry in mirror.conf (expected mirrors under $_dest)" \
+			"The IDMS may come from another registry; run 'aba -d mirror sync' (or 'load') again."
+	fi
+	_payload=$(dist_release_payload_repo)
+	if ! _src=$(jq -r --arg payload "$_payload" '
+		.spec.imageDigestMirrors as $m
+		| (if any($m[]; .source == $payload) then $m
+		   else ($m | map(select(.mirrors[0] | endswith("/openshift/release-images"))) | .[0]) as $rel
+		   | if $rel == null then error("no release-images rule") else $m + [{mirrors: $rel.mirrors, source: $payload}] end
+		   end)
+		| .[] | "- mirrors:", (.mirrors[] | "  - " + .), "  source: " + .source' <<<"$_json" 2>/dev/null); then
+		aba_abort "$_idms has no rule for the release images (.../openshift/release-images)" \
+			"Run 'aba -d mirror sync' (or 'load') again."
+	fi
+	export image_content_sources="$_src"
+}
+
+# A mirror install must not let the Samples Operator or OperatorHub call the internet.
+# Direct and proxy installs keep the OKD defaults, and a previous mirror manifest is removed.
+dist_install_manifests() {
+	local _dir=openshift
+	local _samples=$_dir/99-aba-samples-removed.yaml
+	local _hub=$_dir/99-aba-operatorhub-default-sources-off.yaml
+	if [ -n "${image_content_sources:-}" ]; then
+		mkdir -p "$_dir"
+		cat > "$_samples" <<'END'
+# File generated by ABA (github.com/sjbylo/aba)
+apiVersion: samples.operator.openshift.io/v1
+kind: Config
+metadata:
+  name: cluster
+spec:
+  managementState: Removed
+END
+		cat > "$_hub" <<'END'
+# File generated by ABA (github.com/sjbylo/aba)
+apiVersion: config.openshift.io/v1
+kind: OperatorHub
+metadata:
+  name: cluster
+spec:
+  disableAllDefaultSources: true
+END
+		aba_info "OKD from a mirror: added install-time manifests to $PWD/$_dir (Samples Operator removed, OperatorHub default sources off)"
+	else
+		rm -f "$_samples" "$_hub"
+		rmdir "$_dir" 2>/dev/null || true
+	fi
 }
