@@ -153,7 +153,13 @@ dist_mirror_manifest_ref() {
 }
 
 # OpenShift release images have signatures. No extra oc-mirror flag.
+# $1 is the action (sync, save, load). Unused.
 dist_oc_mirror_flags() {
+	return 0
+}
+
+# OpenShift signatures are on mirror.openshift.com. Nothing to export.
+dist_prepare_oc_mirror() {
 	return 0
 }
 

@@ -5697,9 +5697,10 @@ _run_oc_mirror_with_retry() {
 		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
-		# The distribution may add a flag (OKD save/load needs --remove-signatures).
+		# OKD sync needs the CI signature store. save/load add --remove-signatures.
+		dist_prepare_oc_mirror
 		local _dist_flags
-		_dist_flags="$(dist_oc_mirror_flags)"
+		_dist_flags="$(dist_oc_mirror_flags "$action")"
 		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-} ${_dist_flags}"
 
 		echo
