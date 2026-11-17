@@ -22,13 +22,21 @@ if [ ! -x ~/bin/openshift-install ]; then
 fi
 
 out=$(openshift-install version)
-release_sha=$(echo "$out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 release_ver=$(echo "$out" | grep "^openshift-install" | cut -d" " -f2)
 
 if [ "$ocp_version" != "$release_ver" ]; then
 	aba_abort \
 		"The OpenShift version set in 'aba.conf' does not match the version of the 'openshift-install' CLI." \
 		"Please run 'aba -d cli clean install' to refresh the CLIs and try again." 
+fi
+
+if dist_supports_channels; then
+	release_sha=$(echo "$out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
+else
+	# The installer's digest is the index. The mirror holds the arch image oc-mirror recorded.
+	release_digest="$(dist_release_image_ref "$ocp_version")" || aba_abort \
+		"Cannot tell which release image oc-mirror put into the mirror for $ocp_version"
+	release_sha="@$release_digest"
 fi
 
 # When verify_conf=conf/off, skip the skopeo registry connectivity check
@@ -38,9 +46,11 @@ fi
 if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
 	aba_warn "verify_conf=$verify_conf: skipping release image connectivity check"
 else
+	_image_ref=":${ocp_version}-$(uname -m)"
+	dist_supports_channels || _image_ref="$release_sha"
 	check_release_image || aba_abort \
 		"Cannot access the release image for OpenShift v$ocp_version (HTTP ${_release_http_code:-?})" \
-		"Image: $reg_host:$reg_port${reg_path}/openshift/release-images:${ocp_version}-$(uname -m)" \
+		"Image: $reg_host:$reg_port${reg_path}/openshift/release-images${_image_ref}" \
 		"${_release_check_err:+Error: $_release_check_err}" \
 		"${_release_check_extra[@]}" \
 		"Run 'aba -d mirror verify' for detailed diagnostics."
@@ -78,6 +88,15 @@ if [ ! -x "$openshift_install_mirror" ]; then
 	rm -f .idms.yaml
 else
 	aba_info "openshift-install already extracted from mirror registry"
+fi
+
+if ! dist_supports_channels; then
+	_inst_digest=$("$openshift_install_mirror" version 2>/dev/null | sed -n 's/^release image .*@\(sha256:[0-9a-f]\{64\}\)$/\1/p')
+	if [ "$_inst_digest" != "$release_digest" ]; then
+		rm -f "$openshift_install_mirror"
+		aba_abort "The openshift-install from the mirror reports release image ${_inst_digest:-(none)}, expected $release_digest" \
+			"The extracted binary was removed; run the command again."
+	fi
 fi
 
 aba_success "Release image for version $release_ver is available at $reg_host:$reg_port$reg_path/openshift/release-images$release_sha"

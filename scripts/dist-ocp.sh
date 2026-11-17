@@ -146,3 +146,29 @@ dist_release_payload_ref() {
 dist_pull_secret_ensure() {
 	return 1
 }
+
+# Tag oc-mirror gives the release inside the mirror registry.
+dist_mirror_manifest_ref() {
+	printf '%s\n' "${ocp_version:?}-$(uname -m)"
+}
+
+# OpenShift release images have signatures. No extra oc-mirror flag.
+dist_oc_mirror_flags() {
+	return 0
+}
+
+# An OpenShift mirror state file gains no distribution key.
+# $1 state file, $2 digest (unused).
+dist_record_mirror_state() {
+	return 0
+}
+
+# The channel template in create-install-config.sh renders the sources.
+dist_render_image_content_sources() {
+	_ocp_render_image_content_sources
+}
+
+# OpenShift does not add install-time manifests here.
+dist_install_manifests() {
+	return 0
+}

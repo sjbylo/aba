@@ -18,10 +18,15 @@ echo "=== distribution helpers ==="
 # shellcheck disable=SC1091
 source scripts/include_all.sh
 
+# The repo aba.conf may already select OKD. These checks pin the variable
+# so they do not depend on that file.
+distribution=ocp
+dist_load
+
 if [ "$(dist_of)" = "ocp" ]; then
-	_pass "missing key loads OpenShift"
+	_pass "distribution=ocp loads OpenShift"
 else
-	_fail "missing key loads OpenShift (got $(dist_of))"
+	_fail "distribution=ocp loads OpenShift (got $(dist_of))"
 fi
 
 _sites="$(dist_probe_sites)"
@@ -161,9 +166,45 @@ fi
 [ ! -e "$_ps" ] || _fail "OKD did not leave a secret file behind"
 unset ops
 
-# Back to OpenShift, without writing aba.conf.
+if [ "$(dist_oc_mirror_flags)" = "--remove-signatures" ]; then
+	_pass "OKD oc-mirror drops signatures"
+else
+	_fail "OKD oc-mirror drops signatures (got $(dist_oc_mirror_flags))"
+fi
+OC_MIRROR_FLAGS=--remove-signatures
+if [ -z "$(dist_oc_mirror_flags)" ]; then
+	_pass "OKD does not repeat a flag the user already set"
+else
+	_fail "OKD does not repeat a flag the user already set"
+fi
+unset OC_MIRROR_FLAGS
+
+_sig=$(mktemp -d /tmp/aba-okd-sig.XXXXXX)
+mkdir -p "$_sig/data/working-dir/signatures"
+touch "$_sig/data/working-dir/signatures/5.0.0-okd-scos.6-sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+_ref="$(cd "$_sig" && dist_release_image_ref 5.0.0-okd-scos.6)"
+if [ "$_ref" = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]; then
+	_pass "OKD release ref is the digest oc-mirror recorded"
+else
+	_fail "OKD release ref is the digest oc-mirror recorded (got $_ref)"
+fi
+rm -rf "$_sig"
+
+# An unset variable follows aba.conf. This tree's file may say okd.
 unset distribution
 dist_load
+if [ "$(dist_of)" = "$(grep -E '^[[:space:]]*distribution=' aba.conf | tail -1 | cut -d= -f2 | tr -d "\"'[:space:]" || true)" ] || { [ "$(dist_of)" = "ocp" ] && ! grep -q '^distribution=' aba.conf; }; then
+	_pass "an unset variable follows aba.conf"
+else
+	_fail "an unset variable follows aba.conf (got $(dist_of))"
+fi
+distribution=ocp
+dist_load
+if [ -z "$(dist_oc_mirror_flags)" ]; then
+	_pass "OpenShift oc-mirror flags stay empty"
+else
+	_fail "OpenShift oc-mirror flags stay empty"
+fi
 _ps="$(mktemp -u /tmp/aba-ocp-ps.XXXXXX)"
 if dist_pull_secret_ensure "$_ps"; then
 	_fail "OpenShift does not invent a pull secret"
@@ -171,9 +212,9 @@ else
 	_pass "OpenShift does not invent a pull secret"
 fi
 if [ "$(dist_of)" = "ocp" ] && ! dist_version_is_valid "4.21.0-okd-scos.5" stable; then
-	_pass "clearing the variable loads OpenShift again"
+	_pass "distribution=ocp loads OpenShift again"
 else
-	_fail "clearing the variable loads OpenShift again"
+	_fail "distribution=ocp loads OpenShift again"
 fi
 
 # Flag path: a copy of the tree, so the real aba.conf is not edited.
@@ -243,6 +284,14 @@ if grep -q '^distribution=' "$REPO/aba.conf"; then
 	_fail "--distribution ocp removes the key"
 else
 	_pass "--distribution ocp removes the key"
+fi
+
+_rc=0
+_err="$(cd "$REPO" && _run --distribution 2>&1)" || _rc=$?
+if [ "$_rc" -ne 0 ] && printf '%s\n' "$_err" | grep -q '\[ABA\] Error: missing argument after option --distribution'; then
+	_pass "missing --distribution value uses aba_abort"
+else
+	_fail "missing --distribution value uses aba_abort (rc $_rc)"
 fi
 
 _after="$(sha256sum "$ROOT/aba.conf" | awk '{print $1}')"

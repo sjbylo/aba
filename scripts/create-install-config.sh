@@ -55,7 +55,7 @@ source <(normalize-mirror-conf)
 # ADR-005: ocp_major is not a normalize output. The content-sources template
 # applies | int to it. A failed j2 used to be swallowed by the assignment, so
 # install-config.yaml was written with no ImageDigestSources and still reported success.
-_render_image_content_sources() {
+_ocp_render_image_content_sources() {
 	export ocp_major="$(ocp_major_of "${ocp_version:-}")"
 	if [ -z "$ocp_major" ]; then
 		aba_abort "ocp_version '${ocp_version:-}' has no major number"
@@ -65,6 +65,11 @@ _render_image_content_sources() {
 		aba_abort "Could not render image content sources"
 	fi
 	export image_content_sources="$_src"
+}
+
+# The loaded distribution file renders the sources. OpenShift uses the channel template.
+_render_image_content_sources() {
+	dist_render_image_content_sources
 }
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -285,6 +290,7 @@ aba_info
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy, arch ...
 aba_debug Creating install-config.yaml ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
+dist_install_manifests
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
 aba_success "$PWD/install-config.yaml generated successfully!"

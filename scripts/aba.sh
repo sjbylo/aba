@@ -68,6 +68,7 @@ new_args=()           # Array to collect arguments we want to keep
 dir_already_set=false # Only process first --dir/-d
 _CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
 _CLI_DISTRIBUTION="" # Extracted from --distribution, applied after aba.conf is loaded
+_CLI_DISTRIBUTION_SET="" # 1 when the flag was present, even if its value was missing
 i=1
 
 while [ $i -le $# ]; do
@@ -160,13 +161,11 @@ while [ $i -le $# ]; do
 
 		--distribution)
 			# Taken out of the main parse so --version sees the right file
-			# whichever flag is written first.
+			# whichever flag is written first. A missing value is rejected
+			# after include_all.sh is loaded, where aba_abort exists.
 			i=$((i + 1))
 			_CLI_DISTRIBUTION="${!i}"
-			if [[ -z "${_CLI_DISTRIBUTION:-}" || "$_CLI_DISTRIBUTION" =~ ^- ]]; then
-				echo "Error: missing argument after option --distribution" >&2
-				exit 1
-			fi
+			_CLI_DISTRIBUTION_SET=1
 			;;
 
 		*)
@@ -344,7 +343,10 @@ source <(cd "$ABA_ROOT" && normalize-aba-conf)
 # include_all.sh loads the distribution file before this source, so reload
 # once the key from aba.conf is in the environment.
 dist_load
-if [ -n "${_CLI_DISTRIBUTION:-}" ]; then
+if [ -n "${_CLI_DISTRIBUTION_SET:-}" ]; then
+	if [[ -z "${_CLI_DISTRIBUTION:-}" || "$_CLI_DISTRIBUTION" =~ ^- ]]; then
+		aba_abort "missing argument after option --distribution"
+	fi
 	case "$_CLI_DISTRIBUTION" in
 		ocp)
 			# An OpenShift config does not keep the key.
@@ -979,10 +981,10 @@ for i in imgs:
 			;;
 		esac
 		_is_minor_version "$tgt_ver" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
-		_is_version_string "$tgt_ver" || tgt_ver=""
+		dist_version_is_valid "$tgt_ver" "$chan" || tgt_ver=""
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
-		_is_version_string "$tgt_ver" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
-		_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
+		dist_version_is_valid "$tgt_ver" "$chan" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		dist_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
 		replace-value-conf -n ocp_upgrade_to -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
@@ -1406,7 +1408,7 @@ for i in imgs:
 	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
 	elif [ "$1" = "--to" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_is_version_string "$2" || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
+		dist_version_is_valid "$2" "${chan:-$ocp_channel}" || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
 		upgrade_to="$2"
 		shift 2
 	elif [ "$1" = "--cmd" ]; then
