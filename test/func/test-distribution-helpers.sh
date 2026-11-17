@@ -128,18 +128,26 @@ if dist_target_problem vmw; then
 else
 	_fail "OKD allows VMware"
 fi
-if [ "$(dist_oc_mirror_flags)" = "--remove-signatures" ]; then
-	_pass "OKD save/load drops signatures"
+if [ -z "$(dist_oc_mirror_flags sync)" ] && [ "$(dist_oc_mirror_flags save)" = "--remove-signatures" ] && [ "$(dist_oc_mirror_flags load)" = "--remove-signatures" ]; then
+	_pass "OKD sync keeps signatures and save/load drop them"
 else
-	_fail "OKD save/load drops signatures (got $(dist_oc_mirror_flags))"
+	_fail "OKD sync keeps signatures and save/load drop them"
 fi
 OC_MIRROR_FLAGS=--remove-signatures
-if [ -z "$(dist_oc_mirror_flags)" ]; then
+if [ -z "$(dist_oc_mirror_flags save)" ]; then
 	_pass "OKD does not repeat a flag the user already set"
 else
 	_fail "OKD does not repeat a flag the user already set"
 fi
 unset OC_MIRROR_FLAGS
+unset OCP_SIGNATURE_URL OCP_SIGNATURE_VERIFICATION_PK
+dist_prepare_oc_mirror
+if [[ "$OCP_SIGNATURE_URL" == */ ]] && [ -s "$OCP_SIGNATURE_VERIFICATION_PK" ]; then
+	_pass "OKD points oc-mirror at the CI signature store"
+else
+	_fail "OKD points oc-mirror at the CI signature store"
+fi
+unset OCP_SIGNATURE_URL OCP_SIGNATURE_VERIFICATION_PK
 if dist_is_prerelease "4.21.0-okd-scos.ec.1" && ! dist_is_prerelease "4.21.0-okd-scos.5"; then
 	_pass "OKD pre-release is the ec build"
 else

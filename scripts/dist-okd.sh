@@ -457,13 +457,42 @@ dist_mirror_manifest_ref() {
 	dist_release_image_ref "${1:-${ocp_version:-}}"
 }
 
-# quay.io/okd/scos-content publishes no signature tags. save and load fail
-# unless oc-mirror is told to drop them. A flag the user already set is kept.
+# quay.io/okd/scos-content publishes no cosign tags, so save and load fail
+# unless oc-mirror is told to drop them. sync verifies the release signature
+# from the CI store instead, so it must not drop signatures. A flag the user
+# already set is kept. $1 is the action.
 dist_oc_mirror_flags() {
+	case "${1:-sync}" in
+	save|load) ;;
+	*) return 0 ;;
+	esac
 	case " ${OC_MIRROR_FLAGS-} " in
-		*" --remove-signatures "*|*"--remove-signatures="*) return 0 ;;
+		*" --remove-signatures "*|*" --remove-signatures="*) return 0 ;;
 	esac
 	printf '%s\n' --remove-signatures
+}
+
+# oc-mirror appends the digest to this URL as written, so it must end in /.
+# A value the user already exported wins. The key path is absolute because
+# oc-mirror runs in data/.
+dist_prepare_oc_mirror() {
+	local key=""
+
+	if [ -z "${OCP_SIGNATURE_VERIFICATION_PK:-}" ]; then
+		key=$(readlink -f templates/okd-release-signing-key.asc)
+		[ -s "$key" ] || aba_abort \
+			"Release signing key not found: templates/okd-release-signing-key.asc" \
+			"oc-mirror needs it to verify the OKD release signature." \
+			"Restore the file from the ABA installation, or set OCP_SIGNATURE_VERIFICATION_PK to a key file."
+	fi
+	if [ -z "${OCP_SIGNATURE_URL:-}" ]; then
+		export OCP_SIGNATURE_URL="https://storage.googleapis.com/openshift-ci-release/releases/signatures/openshift/release/"
+	elif [[ "$OCP_SIGNATURE_URL" != */ ]]; then
+		aba_warn "OCP_SIGNATURE_URL ($OCP_SIGNATURE_URL) does not end with '/'." \
+			"oc-mirror appends the release digest to it as is and will not find the signature."
+	fi
+	[ -n "$key" ] && export OCP_SIGNATURE_VERIFICATION_PK="$key"
+	return 0
 }
 
 # Record which distribution the registry holds. OpenShift state files stay as they are.
