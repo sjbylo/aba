@@ -63,9 +63,7 @@ dist_release_image_ref() {
 			"$wd/cluster-resources/signature-configmap.json" 2>/dev/null)
 	fi
 	if [ ${#found[@]} -gt 0 ]; then
-		if [ ${#found[@]} -gt 0 ]; then
 		mapfile -t found < <(printf '%s\n' "${found[@]}" | sed '/^$/d' | sort -u)
-	fi
 	fi
 	if [ ${#found[@]} -eq 0 ]; then
 		echo "oc-mirror has not recorded a release image for $ver under $wd" >&2
