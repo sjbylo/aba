@@ -234,6 +234,7 @@ fi
 _iv_reject M "10.0.0.0" "Invalid CIDR" "Machine Network" "CIDR without a prefix"
 _iv_accept M "10.0.0.0/20" "Cluster – Networking" "valid CIDR returns to Networking"
 _iv_reject S "10.0.1" "Invalid IP address" "Starting IP" "starting IP with three octets"
+_iv_reject S "10,11,12" "Invalid IP address" "Starting IP" "starting IP list without a full first address"
 _iv_reject A "10.0.1" "Invalid IP address" "API VIP" "API VIP with three octets"
 _iv_reject I "10.0.1" "Invalid IP address" "Ingress VIP" "ingress VIP with three octets"
 _iv_reject D "dns.lab" "Invalid DNS entry" "DNS Servers" "DNS hostname instead of an IP"
