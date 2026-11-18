@@ -204,6 +204,9 @@ fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n reg_running -v "true" -f "$regcreds_dir/state.sh"
+# OKD records the distribution and the digest oc-mirror stored. OpenShift does not.
+_digest="$(dist_release_image_ref "$ocp_version" 2>/dev/null)" || _digest=""
+dist_record_mirror_state "$regcreds_dir/state.sh" "$_digest"
 
 # Archive the entire cluster-resources/ directory per OCP minor version.
 # oc-mirror overwrites these files on every sync, so after an upgrade sync
@@ -225,7 +228,7 @@ echo
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	aba_success "Images synced to $reg_host:$reg_port (upgrade: $ocp_version → $_synced_ver)"
 else
-	aba_success "Images synced to $reg_host:$reg_port (OCP $_synced_ver)"
+	aba_success "Images synced to $reg_host:$reg_port ($(dist_display) $_synced_ver)"
 fi
 if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
 	# Context-aware next steps: upgrade sync vs initial sync

@@ -80,7 +80,13 @@ reg_open_firewall
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 
-reg_post_install "$reg_root/ssl.cert" "$_OMR_VENDOR"
+# OMR v3 writes the CA to rootCA.pem and the server leaf to ssl.cert.
+# Trust the CA. An older image only wrote ssl.cert, and that file was the CA.
+_omr_ca="$reg_root/ssl.cert"
+if [ -s "$reg_root/rootCA.pem" ] && openssl x509 -in "$reg_root/rootCA.pem" -noout -text 2>/dev/null | grep -q 'CA:TRUE'; then
+	_omr_ca="$reg_root/rootCA.pem"
+fi
+reg_post_install "$_omr_ca" "$_OMR_VENDOR"
 
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"

@@ -49,6 +49,8 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 
 > **Prerequisites:** RHEL 8/9/10, sudo access (passwordless recommended) or root, Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
 
+> **Installing OKD?** A release-only install needs no Red Hat pull secret. Run `aba --distribution okd`. The TUI does not run for OKD. See [OKD](#okd).
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"
 cd aba
@@ -110,6 +112,35 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Troubleshooting](#troubleshooting)
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 - [License](#license)
+
+[Back to top](#quick-start)
+
+# OKD
+
+ABA can install OKD. A fresh cluster is supported. `aba day2`, `aba day2-ntp`, `aba shutdown`, and `aba startup` still work.
+
+```bash
+aba --distribution okd --channel stable --version latest
+```
+
+That stores `distribution=okd` in `aba.conf`. `aba --distribution ocp` switches back. Channels are `stable` and `candidate`. `--version` takes `latest`, `previous`, `older`, `X.Y`, or a full `X.Y.Z-okd-scos.N`. On `candidate`, a pre-release is `X.Y.Z-okd-scos.ec.N`.
+
+`oc` and `openshift-install` come from the [OKD GitHub release](https://github.com/okd-project/okd/releases). OKD does not publish `oc-mirror`, so ABA uses the OpenShift build from `mirror.openshift.com`. Release images come from `quay.io/okd`. The update graph is `updates.okd.io`.
+
+A release-only install needs no Red Hat pull secret. The community catalog index on `registry.access.redhat.com` is anonymous. Choosing an operator needs a real pull secret: ABA rejects the placeholder once `ops` is set. Connected install (direct or through a proxy) and mirror save and load work on x86_64. Bare metal, VMware, and KVM are included. VMware VMs are created with secure boot off.
+
+`aba -d mirror sync` checks the release signature against the OpenShift CI signature store. `save` and `load` pass `--remove-signatures`, because `quay.io/okd/scos-content` has no cosign tags. The key ABA ships is `templates/okd-release-signing-key.asc`, and it expires on 2027-03-31. If `OCP_SIGNATURE_URL` does not end with `/`, ABA warns. `oc-mirror` appends the release digest to that URL as written.
+
+```bash
+aba --distribution okd --ops cert-manager community-kubevirt-hyperconverged
+aba -d mirror sync
+aba -d mycluster install
+aba -d mycluster day2
+```
+
+Pass either operator name, or both. `aba -d mirror sync` runs oc-mirror and pushes those images into the mirror. Install the cluster from that mirror, then run `aba day2`. For an air-gapped host, use `aba -d mirror save` and then `aba -d mirror load` instead of sync. `aba day2` publishes the community catalog. It does not install the operator. In the console, open Operators, then OperatorHub, and install it there.
+
+These stop: `upgrade`, `upgrade-mon`, `--upgrade-to`, `day2-virt`, and `day2-osus`. `fast` and `eus` are not OKD channels. Other CPU architectures are not supported. The TUI exits when `distribution=okd`. Use `aba`.
 
 [Back to top](#quick-start)
 

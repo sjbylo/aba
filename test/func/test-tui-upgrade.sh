@@ -136,10 +136,21 @@ _nav_prepare_upgrade() {
 
 	# Multiple dialogs may appear — handle each one
 	local _s _i
-	for _i in 1 2 3 4 5; do
+	for _i in 1 2 3 4 5 6 7 8 9 10 11 12; do
 		sleep 2
 		_s=$(tui_capture)
 		tui_screenshot "upg-02-nav-step${_i}"
+
+		# Fast-channel version list. Item 2 is "Current target". The list
+		# has no Manual/Change-base text, so the Next branch below never saw it
+		# and the sync waiter sat on this menu.
+		if echo "$_s" | grep -qi "Select target upgrade version\|Current target"; then
+			tui_keys 2
+			sleep 0.3
+			tui_keys Enter
+			sleep 2
+			continue
+		fi
 
 		# Version picker: select target version then press Next
 		if echo "$_s" | grep -qi "$_target_ver.*Manual\|Manual.*entry\|Change base\|Change channel"; then

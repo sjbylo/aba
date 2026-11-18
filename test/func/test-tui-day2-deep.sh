@@ -71,9 +71,23 @@ tui_pick_cluster "$_CLUSTER" || true
 # Status check takes time (API calls)
 sleep 8
 
+# "Cluster Ready!" contains "Ready" and "completed". Enter is "Yes, apply now"
+# and starts OperatorHub, so the OSUS/Virt/Upgrade steps never see the menu.
+if tui_decline_cluster_ready; then
+	tui_back_to "Day-2\|Cluster Management" 8 || true
+	tui_select_item "status" || true
+	sleep 2
+	tui_pick_cluster "$_CLUSTER" || true
+	sleep 8
+fi
+
 tui_screenshot "d2d-02b-status"
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|co\|node\|Ready\|Unreachable\|API"; then
+if echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+	tui_decline_cluster_ready || true
+	echo "  ✗ FAIL: Status display was the post-install prompt"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+elif echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|co\|node\|Ready\|Unreachable\|API"; then
 	echo "  ✓ PASS: Cluster status displayed"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 

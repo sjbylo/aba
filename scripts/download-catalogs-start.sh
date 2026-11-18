@@ -35,7 +35,7 @@ done
 # Only announce if downloads are actually running (not already cached)
 _any_running=
 for _ver in "${_versions[@]}"; do
-	for catalog in redhat-operator certified-operator community-operator; do
+	for catalog in $(dist_catalogs); do
 		if ! run_once -p -i "catalog:${_ver}:${catalog}"; then
 			_any_running=1
 			break 2
@@ -44,6 +44,6 @@ for _ver in "${_versions[@]}"; do
 done
 
 if [ -n "$_any_running" ]; then
-	aba_info "Downloading operator catalogs for OCP ${_versions[*]} in background..."
+	aba_info "Downloading operator catalogs for $(dist_display) ${_versions[*]} in background..."
 fi
 

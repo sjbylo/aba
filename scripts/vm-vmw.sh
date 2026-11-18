@@ -128,7 +128,8 @@ vmp_upload_iso() {
 	fi
 }
 
-# Create a VM with UEFI firmware, vmxnet3 NIC, secure boot, hot-add, and disks.
+# Create a VM with UEFI firmware, vmxnet3 NIC, hot-add, and disks.
+# Secure boot follows dist_vm_secure_boot.
 #   vmp_create_vm <vm_name> <cpu> <mem_gb> <mac> <datastore> <network> <folder> <nested_hv> [data_disk_gb]
 vmp_create_vm() {
 	local vm_name=$1 cpu=$2 mem_gb=$3 mac=$4 datastore=$5 network=$6 folder=$7 nested_hv=$8
@@ -150,7 +151,10 @@ vmp_create_vm() {
 		-on=false \
 		"$vm_name"
 
-	govc device.boot -secure -vm "$vm_name"
+	# OpenShift enables this. OKD leaves it off.
+	if dist_vm_secure_boot; then
+		govc device.boot -secure -vm "$vm_name"
+	fi
 
 	govc vm.change -vm "$vm_name" \
 		-e disk.enableUUID=TRUE \

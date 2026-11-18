@@ -219,15 +219,15 @@ else
 
 		tui_dismiss_exec_mode
 
+		# A fast delete returns to the Day-2 menu before the waiter sees
+		# "All steps completed". The cluster being gone is the result.
 		if tui_wait_for_progress "lc-delete" 120; then
 			echo "  ✓ PASS: Delete completed"
 			_TUI_PASS=$(( _TUI_PASS + 1 ))
 		else
-			# The dialog often closes as soon as the marker is gone. The
-			# marker is the result; a short menu return is not a failed delete.
-			_gone_now=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
-			if [[ "$_gone_now" == "yes" ]]; then
-				echo "  ✓ PASS: Delete completed (install marker gone)"
+			_deleted_now=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
+			if [[ "$_deleted_now" == "yes" ]]; then
+				echo "  ✓ PASS: Delete completed (install marker already gone)"
 				_TUI_PASS=$(( _TUI_PASS + 1 ))
 			else
 				echo "  ✗ FAIL: Delete failed"

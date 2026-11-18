@@ -291,7 +291,7 @@ else
 		_loaded_ver=$(grep '^\s*maxVersion:' "$_isc_file" | head -1 | sed 's/.*maxVersion: *//')
 		_loaded_chan=$(grep -E '^\s*- name: (stable|fast|candidate|eus)-[0-9]' "$_isc_file" | head -1 | sed 's/.*- name: *//; s/-[0-9].*//')
 		if [ "$_loaded_ver" ] && ! echo "$_loaded_ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-			aba_abort "Cannot parse a valid OCP version from $_isc_file (got: '$_loaded_ver')." \
+			aba_abort "Cannot parse a valid $(dist_display) version from $_isc_file (got: '$_loaded_ver')." \
 				"Check the imageset-config.yaml and try again."
 		fi
 		aba_debug "Version from ISC parsing: ver=$_loaded_ver chan=$_loaded_chan"
@@ -349,7 +349,7 @@ _loaded_display="${_loaded_ver:-$ocp_version}"
 if [ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ]; then
 	aba_success "Images loaded into $reg_host:$reg_port (upgrade: $ocp_version → $_loaded_ver)"
 else
-	aba_success "Images loaded into $reg_host:$reg_port (OCP $_loaded_display)"
+	aba_success "Images loaded into $reg_host:$reg_port ($(dist_display) $_loaded_display)"
 fi
 
 # Bundle phase complete: unlock ISC so future config changes trigger regeneration.
