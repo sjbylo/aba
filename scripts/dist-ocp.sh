@@ -13,6 +13,12 @@ dist_of() {
 	printf '%s\n' ocp
 }
 
+# Prints OCP. The OKD file prints OKD.
+# Sentences and menus use this. dist_of stays the config token.
+dist_display() {
+	printf '%s\n' OCP
+}
+
 # $1 version, $2 channel. The channel does not change the OpenShift rule.
 dist_version_is_valid() {
 	_is_version_string "${1:-}"
@@ -27,6 +33,16 @@ dist_release_payload_repo() {
 dist_release_image_ref() {
 	local ver="${1:?Usage: dist_release_image_ref <version>}"
 	printf '%s\n' "${ver}-$(uname -m)"
+}
+
+# Installer tarball for $1 os, $2 arch, $3 version.
+# The architecture is in the URL path, not in this filename.
+dist_cli_install_file() {
+	local os="${1:?Usage: dist_cli_install_file <os> <arch> <version>}"
+	local ver="${3:?Usage: dist_cli_install_file <os> <arch> <version>}"
+	# $2 is the arch. OpenShift does not put it in the filename.
+	[ -n "${2:?Usage: dist_cli_install_file <os> <arch> <version>}" ]
+	printf '%s\n' "openshift-install-${os}-${ver}.tar.gz"
 }
 
 # Directory holding the CLI tarballs for version $1.
@@ -68,6 +84,16 @@ dist_supports_channels() {
 # $1 is the platform. Prints a reason and returns 1 when the combination
 # cannot be used. Always succeeds for OpenShift.
 dist_target_problem() {
+	return 0
+}
+
+# VMware Secure Boot stays on. The OpenShift shim is signed for it.
+dist_vm_secure_boot() {
+	return 0
+}
+
+# The TUI is the OpenShift wizard.
+dist_tui_allowed() {
 	return 0
 }
 

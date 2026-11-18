@@ -17,7 +17,8 @@ echo "=== ocp_major is set by the render callers ==="
 _load_renderer() {
 	# shellcheck disable=SC1091
 	source scripts/include_all.sh
-	eval "$(awk '/^_render_image_content_sources\(\)/{p=1} p{print} p && /^}/{exit}' scripts/create-install-config.sh)"
+	# The wrapper calls _ocp_render_image_content_sources. Load both.
+	eval "$(awk '/^_ocp_render_image_content_sources\(\)/{p=1} p{print} p && /^_render_image_content_sources\(\)/{w=1} w && /^}/{exit}' scripts/create-install-config.sh)"
 }
 
 _out=$(
@@ -80,7 +81,7 @@ _err=$(
 		cd "$_td" || exit 1
 		# shellcheck disable=SC1091
 		source "$OLDPWD/scripts/include_all.sh"
-		eval "$(awk '/^_render_image_content_sources\(\)/{p=1} p{print} p && /^}/{exit}' "$OLDPWD/scripts/create-install-config.sh")"
+		eval "$(awk '/^_ocp_render_image_content_sources\(\)/{p=1} p{print} p && /^_render_image_content_sources\(\)/{w=1} w && /^}/{exit}' "$OLDPWD/scripts/create-install-config.sh")"
 		ocp_version=4.19.5
 		_render_image_content_sources
 	} 2>&1

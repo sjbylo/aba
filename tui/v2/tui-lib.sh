@@ -1015,7 +1015,7 @@ Run Day-2 now to apply changes\n\
 Installed clusters using this mirror:$_list\n\n\
 Run 'aba day2' on those clusters, if you have:\n\
   - Added or changed operators\n\
-  - Updated the OCP release image\n\n\
+  - Updated the $(dist_display) release image\n\n\
 CLI:  aba --dir <cluster> day2\n\
 TUI:  Cluster > Day-2 > Configure OperatorHub" 0 0
 }

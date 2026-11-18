@@ -42,7 +42,7 @@ if [[ "$_have_all" == true ]]; then
 		done
 	else
 		# No internet — existing catalogs are all we have
-		aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]} (cached)"
+		aba_success "All operator catalogs ready for $(dist_display) ${_versions_to_wait[*]} (cached)"
 		exit 0
 	fi
 fi
@@ -92,7 +92,7 @@ for _ver in "${_versions_to_wait[@]}"; do
 				echo "--- log.err ---"
 				run_once -e -i "$task_id"
 			)
-			aba_abort "Failed to download ${catalog} catalog for OCP ${_ver}" \
+			aba_abort "Failed to download ${catalog} catalog for $(dist_display) ${_ver}" \
 				"Error details from download task:" \
 				"$error_output"
 		fi
@@ -101,4 +101,4 @@ done
 
 [[ "$_catalogs_progress" == true ]] && aba_progress "DONE|catalogs_dl"
 
-aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]}"
+aba_success "All operator catalogs ready for $(dist_display) ${_versions_to_wait[*]}"

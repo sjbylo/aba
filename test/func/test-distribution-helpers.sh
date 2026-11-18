@@ -6,6 +6,29 @@
 cd "$(dirname "$0")/../.." || exit 1
 ROOT=$PWD
 
+# dist_load reads aba.conf. Save the checkout file and write the key the
+# case under test needs. The flag section below runs in a sandbox copy.
+_conf_save=$(mktemp)
+cp -a "$ROOT/aba.conf" "$_conf_save"
+_restore_aba_conf() {
+	if [ -n "${_conf_save:-}" ] && [ -f "$_conf_save" ]; then
+		cp -a "$_conf_save" "$ROOT/aba.conf"
+		rm -f "$_conf_save"
+		_conf_save=
+	fi
+}
+trap _restore_aba_conf EXIT
+
+_set_dist() {
+	local v="$1"
+	if grep -q '^distribution=' "$ROOT/aba.conf"; then
+		sed -i "s/^distribution=.*/distribution=$v/" "$ROOT/aba.conf"
+	else
+		printf 'distribution=%s\n' "$v" >>"$ROOT/aba.conf"
+	fi
+	dist_load
+}
+
 pass=0
 fail=0
 _pass() { pass=$(( pass + 1 )); printf '  \033[32mPASS\033[0m  %s\n' "$*"; }
@@ -18,15 +41,33 @@ echo "=== distribution helpers ==="
 # shellcheck disable=SC1091
 source scripts/include_all.sh
 
-# The repo aba.conf may already select OKD. These checks pin the variable
-# so they do not depend on that file.
-distribution=ocp
-dist_load
+_set_dist ocp
 
 if [ "$(dist_of)" = "ocp" ]; then
 	_pass "distribution=ocp loads OpenShift"
 else
 	_fail "distribution=ocp loads OpenShift (got $(dist_of))"
+fi
+if [ "$(dist_display)" = "OCP" ]; then
+	_pass "OpenShift display name is OCP"
+else
+	_fail "OpenShift display name is OCP (got $(dist_display))"
+fi
+if [ "$(dist_cli_install_file linux amd64 4.22.22)" = "openshift-install-linux-4.22.22.tar.gz" ] \
+	&& [ "$(dist_cli_install_file linux arm64 4.22.22)" = "openshift-install-linux-4.22.22.tar.gz" ]; then
+	_pass "OpenShift installer name has no arch token"
+else
+	_fail "OpenShift installer name has no arch token"
+fi
+if dist_vm_secure_boot; then
+	_pass "OpenShift keeps VMware secure boot"
+else
+	_fail "OpenShift keeps VMware secure boot"
+fi
+if dist_tui_allowed; then
+	_pass "OpenShift keeps the TUI"
+else
+	_fail "OpenShift keeps the TUI"
 fi
 
 _sites="$(dist_probe_sites)"
@@ -72,13 +113,33 @@ else
 	_fail "OpenShift pre-release is a hyphenated build"
 fi
 
-distribution=okd
-dist_load
+_set_dist okd
 
 if [ "$(dist_of)" = "okd" ]; then
 	_pass "distribution=okd loads the OKD file"
 else
 	_fail "distribution=okd loads the OKD file (got $(dist_of))"
+fi
+if [ "$(dist_display)" = "OKD" ]; then
+	_pass "OKD display name is OKD"
+else
+	_fail "OKD display name is OKD (got $(dist_display))"
+fi
+if [ "$(dist_cli_install_file linux amd64 4.21.0-okd-scos.11)" = "openshift-install-linux-4.21.0-okd-scos.11.tar.gz" ] \
+	&& [ "$(dist_cli_install_file linux arm64 4.21.0-okd-scos.11)" = "openshift-install-linux-arm64-4.21.0-okd-scos.11.tar.gz" ]; then
+	_pass "OKD amd64 installer has no arch token"
+else
+	_fail "OKD amd64 installer has no arch token"
+fi
+if dist_vm_secure_boot; then
+	_fail "OKD leaves VMware secure boot off"
+else
+	_pass "OKD leaves VMware secure boot off"
+fi
+if dist_tui_allowed; then
+	_fail "OKD stops the TUI"
+else
+	_pass "OKD stops the TUI"
 fi
 
 _sites="$(dist_probe_sites)"
@@ -202,16 +263,61 @@ else
 fi
 rm -rf "$_sig"
 
-# An unset variable follows aba.conf. This tree's file may say okd.
-unset distribution
-dist_load
-if [ "$(dist_of)" = "$(grep -E '^[[:space:]]*distribution=' aba.conf | tail -1 | cut -d= -f2 | tr -d "\"'[:space:]" || true)" ] || { [ "$(dist_of)" = "ocp" ] && ! grep -q '^distribution=' aba.conf; }; then
-	_pass "an unset variable follows aba.conf"
+_txt=$(mktemp /tmp/aba-okd-rel.XXXXXX)
+_dig=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+cat > "$_txt" <<EOF
+Name:           4.22.0-okd-scos.10
+Digest:         sha256:${_dig}
+OS/Arch:        linux/${ARCH}
+EOF
+_ref="$(_okd_payload_ref_from_release_txt "$_txt" 4.22.0-okd-scos.10)"
+if [ "$_ref" = "quay.io/okd/scos-release@sha256:${_dig}" ]; then
+	_pass "OKD release.txt Digest is the payload ref"
 else
-	_fail "an unset variable follows aba.conf (got $(dist_of))"
+	_fail "OKD release.txt Digest is the payload ref (got $_ref)"
 fi
-distribution=ocp
+printf '\nPull From: quay.io/okd/scos-release@sha256:%s\n' "$_dig" >> "$_txt"
+_ref="$(_okd_payload_ref_from_release_txt "$_txt" 4.22.0-okd-scos.10)"
+if [ "$_ref" = "quay.io/okd/scos-release@sha256:${_dig}" ]; then
+	_pass "OKD release.txt accepts a Pull From line that matches Digest"
+else
+	_fail "OKD release.txt accepts a matching Pull From line (got $_ref)"
+fi
+_bad=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+cat > "$_txt" <<EOF
+Name:           4.22.0-okd-scos.10
+Digest:         sha256:${_dig}
+OS/Arch:        linux/${ARCH}
+Pull From: quay.io/okd/scos-release@sha256:${_bad}
+EOF
+_rc=0
+_err="$(_okd_payload_ref_from_release_txt "$_txt" 4.22.0-okd-scos.10 2>&1)" || _rc=$?
+if [ "$_rc" -eq 1 ] && printf '%s\n' "$_err" | grep -q "does not match its Digest"; then
+	_pass "OKD release.txt stops when Pull From disagrees with Digest"
+else
+	_fail "OKD release.txt stops when Pull From disagrees with Digest (rc $_rc)"
+fi
+sed -i '/^Pull From:/d' "$_txt"
+sed -i "s|^OS/Arch:.*|OS/Arch:        linux/notarch|" "$_txt"
+_rc=0
+_err="$(_okd_payload_ref_from_release_txt "$_txt" 4.22.0-okd-scos.10 2>&1)" || _rc=$?
+if [ "$_rc" -eq 1 ] && printf '%s\n' "$_err" | grep -q "this host needs linux/${ARCH}"; then
+	_pass "OKD release.txt stops when OS/Arch is another architecture"
+else
+	_fail "OKD release.txt stops when OS/Arch is another architecture (rc $_rc)"
+fi
+rm -f "$_txt"
+
+# The file is okd here. An export must not switch the functions.
+export distribution=ocp
 dist_load
+if [ "$(dist_of)" = "okd" ]; then
+	_pass "an exported distribution does not override aba.conf"
+else
+	_fail "an exported distribution does not override aba.conf (got $(dist_of))"
+fi
+unset distribution
+_set_dist ocp
 if [ -z "$(dist_oc_mirror_flags)" ]; then
 	_pass "OpenShift oc-mirror flags stay empty"
 else
@@ -259,9 +365,10 @@ fi
 rm -rf "$_isc"
 
 echo "=== --distribution flag ==="
+_restore_aba_conf
 _before="$(sha256sum "$ROOT/aba.conf" | awk '{print $1}')"
 WORK="$(mktemp -d /tmp/aba-dist-flag.XXXXXX)"
-cleanup() { rm -rf "$WORK"; }
+cleanup() { _restore_aba_conf; rm -rf "$WORK"; }
 trap cleanup EXIT
 
 REPO="$WORK/repo"
@@ -290,20 +397,20 @@ else
 fi
 
 # nope is not a channel, so aba stops in the flag check, after the key
-# is removed and before any download starts.
+# is written and before any download starts.
 _err="$(cd "$REPO" && _run --distribution ocp --channel nope 2>&1)" || _rc=$?
-if grep -q '^distribution=' "$REPO/aba.conf"; then
-	_fail "--distribution ocp removes the key"
+if grep -q '^distribution=ocp$' "$REPO/aba.conf"; then
+	_pass "--distribution ocp writes distribution=ocp"
 else
-	_pass "--distribution ocp removes the key"
+	_fail "--distribution ocp writes distribution=ocp"
 fi
 
 _rc=0
 _err="$(cd "$REPO" && _run --distribution 2>&1)" || _rc=$?
-if [ "$_rc" -ne 0 ] && printf '%s\n' "$_err" | grep -q '\[ABA\] Error: missing argument after option --distribution'; then
-	_pass "missing --distribution value uses aba_abort"
+if [ "$_rc" -ne 0 ] && printf '%s\n' "$_err" | grep -q 'missing argument after option --distribution'; then
+	_pass "missing --distribution value is rejected"
 else
-	_fail "missing --distribution value uses aba_abort (rc $_rc)"
+	_fail "missing --distribution value is rejected (rc $_rc)"
 fi
 
 _after="$(sha256sum "$ROOT/aba.conf" | awk '{print $1}')"

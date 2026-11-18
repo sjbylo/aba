@@ -125,7 +125,7 @@ else
 	if [[ -n "$_upgrade_to" ]]; then
 		local_ver="$_ocp_version → $_upgrade_to"
 	fi
-	aba_info "OCP: $local_ver ($_ocp_channel)"
+	aba_info "$(dist_display): $local_ver ($_ocp_channel)"
 
 	if [[ $_operator_count -gt 0 ]]; then
 		aba_info "Operators ($_operator_count): $(echo "$_operators" | sed 's/,/, /g')"

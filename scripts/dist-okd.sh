@@ -10,6 +10,12 @@ dist_of() {
 	printf '%s\n' okd
 }
 
+# Prints OKD. The OpenShift file prints OCP.
+# Sentences and menus use this. dist_of stays the config token.
+dist_display() {
+	printf '%s\n' OKD
+}
+
 # Release builds are X.Y.Z-okd-scos.N. Candidate also lists X.Y.Z-okd-scos.ec.N.
 # The OpenShift version check is not widened to accept these.
 _ABA_OKD_VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+-okd-scos\.[0-9]+$'
@@ -76,6 +82,21 @@ dist_release_image_ref() {
 	printf '%s\n' "${found[0]}"
 }
 
+# Installer tarball for $1 os, $2 arch, $3 version.
+# The published amd64 asset has no arch token. arm64 has one.
+# ppc64le and s390x are not published; the name still carries the arch
+# so a caller can see the 404 instead of fetching the amd64 binary.
+dist_cli_install_file() {
+	local os="${1:?Usage: dist_cli_install_file <os> <arch> <version>}"
+	local arch="${2:?Usage: dist_cli_install_file <os> <arch> <version>}"
+	local ver="${3:?Usage: dist_cli_install_file <os> <arch> <version>}"
+	if [ "$arch" = amd64 ]; then
+		printf '%s\n' "openshift-install-${os}-${ver}.tar.gz"
+	else
+		printf '%s\n' "openshift-install-${os}-${arch}-${ver}.tar.gz"
+	fi
+}
+
 # Directory holding the CLI tarballs for version $1.
 dist_cli_base_url() {
 	local ver="${1:?Usage: dist_cli_base_url <version>}"
@@ -116,6 +137,18 @@ dist_target_problem() {
 		return 1
 	fi
 	return 0
+}
+
+# VMware Secure Boot stays off. OKD 5.0 signs the new kernel with
+# CentOS Secure Boot CA 8. The shim on a new VM only trusts CA 2,
+# so GRUB rejects that kernel.
+dist_vm_secure_boot() {
+	return 1
+}
+
+# The TUI is the OpenShift wizard. OKD uses the CLI.
+dist_tui_allowed() {
+	return 1
 }
 
 # The community catalog is the one served without a Red Hat account.
@@ -185,16 +218,6 @@ dist_is_prerelease() {
 _okd_validate_releases() {
 	local f="$1"
 	jq -ce 'if type == "array" then [.[] | {tag_name, prerelease, draft}] else error("not a list") end' "$f" > "$f.r" 2>/dev/null \
-		&& mv -f "$f.r" "$f"
-	local rc=$?
-	rm -f "$f.r"
-	return $rc
-}
-
-# One release object. Keep the tag and the Pull From lines. That is all we read.
-_okd_validate_release() {
-	local f="$1"
-	jq -ce 'if type == "object" and (.tag_name | type) == "string" then {tag_name, body: ([(.body // "") | split("\n")[] | select(startswith("Pull From:"))] | join("\n"))} else error("not a release") end' "$f" > "$f.r" 2>/dev/null \
 		&& mv -f "$f.r" "$f"
 	local rc=$?
 	rm -f "$f.r"
@@ -393,26 +416,72 @@ _okd_is_payload_ref() {
 	[[ "$2" == "$1"@sha256:* ]] && [[ "${2#*@sha256:}" =~ ^[0-9a-f]{64}$ ]]
 }
 
-# Digest published for build $1 on channel $2. The graph node first, then
-# the Pull From line of that GitHub release. A tag is not accepted.
-_okd_release_payload_spec() {
-	local ver="$1" channel="$2" minor repo ref rel
-	minor="$(printf '%s\n' "$ver" | cut -d. -f1-2)"
+# One labeled line of a release.txt. $2 is the label, such as Name or OS/Arch.
+_okd_release_txt_field() {
+	local f="$1" label="$2"
+	sed -n "s|^${label}:[[:space:]]*||p" "$f" | head -n1 | tr -d '\r'
+}
+
+# A release.txt download is usable when it has the three fields the lookup reads.
+_okd_validate_release_txt() {
+	local f="$1" name digest os
+	name="$(_okd_release_txt_field "$f" Name)"
+	digest="$(_okd_release_txt_field "$f" Digest)"
+	os="$(_okd_release_txt_field "$f" "OS/Arch")"
+	[[ -n "$name" && "$digest" =~ ^sha256:[0-9a-f]{64}$ && -n "$os" ]]
+}
+
+# Payload ref for version $2 from release.txt $1.
+# Digest is the image. OS/Arch says whether that digest is this architecture
+# or a manifest list. The signature belongs to the architecture image, so a
+# list is resolved to one child. Returns 1 when the file does not name this
+# version and architecture, 2 when a list cannot be read.
+_okd_payload_ref_from_release_txt() {
+	local f="$1" ver="$2" name digest os pull repo spec raw child
+	name="$(_okd_release_txt_field "$f" Name)"
+	digest="$(_okd_release_txt_field "$f" Digest)"
+	os="$(_okd_release_txt_field "$f" "OS/Arch")"
+	pull="$(_okd_release_txt_field "$f" "Pull From")"
 	repo="$(dist_release_payload_repo)"
-
-	while read -r ref; do
-		_okd_is_payload_ref "$repo" "$ref" && { echo "$ref"; return 0; }
-	done < <(_fetch_graph_cached "$channel" "$minor" 2>/dev/null \
-		| jq -r --arg v "$ver" '.nodes[] | select(.version == $v) | .payload' 2>/dev/null)
-
-	rel="${ABA_CACHE_DIR}/okd_release_${ver}.json"
-	_fetch_cached "${ABA_OKD_RELEASES_API}/tags/${ver}" "$rel" "$(parse_duration "$ABA_CACHE_TTL")" _okd_validate_release || return 1
-	jq -e --arg t "$ver" '.tag_name == $t' "$rel" >/dev/null 2>&1 || { rm -f "$rel"; return 1; }
-	while read -r ref; do
-		_okd_is_payload_ref "$repo" "$ref" && { echo "$ref"; return 0; }
-	done < <(jq -r --arg t "$ver" 'select(.tag_name == $t) | .body // empty' "$rel" 2>/dev/null \
-		| tr -d '\r' | sed -n 's/^Pull From: *//p')
-	return 1
+	if [ "$name" != "$ver" ]; then
+		echo "release.txt names [${name:-none}], expected $ver" >&2
+		return 1
+	fi
+	if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+		echo "release.txt for $ver has no sha256 digest" >&2
+		return 1
+	fi
+	spec="${repo}@${digest}"
+	# The line is not the source. A file that disagrees with its Digest stops.
+	if [ -n "$pull" ] && [ "$pull" != "$spec" ]; then
+		echo "release.txt Pull From for $ver does not match its Digest" >&2
+		return 1
+	fi
+	case "$os" in
+	multi|multi\ *)
+		raw="$(timeout 60 skopeo inspect --raw "docker://${spec}" 2>/dev/null)" || {
+			echo "Cannot read the manifest list of $spec" >&2
+			return 2
+		}
+		if [[ "$(jq -r 'if has("manifests") then "list" else "image" end' <<< "$raw" 2>/dev/null)" == "image" ]]; then
+			printf '%s\n' "$spec"
+			return 0
+		fi
+		child="$(jq -r --arg a "$ARCH" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest] | unique | if length == 1 then .[0] else empty end' <<< "$raw" 2>/dev/null)"
+		_okd_is_payload_ref "$repo" "${repo}@${child}" || {
+			echo "release.txt digest $spec has no single linux/$ARCH image" >&2
+			return 2
+		}
+		printf '%s\n' "${repo}@${child}"
+		;;
+	"linux/$ARCH")
+		printf '%s\n' "$spec"
+		;;
+	*)
+		echo "release.txt for $ver is ${os:-unspecified}; this host needs linux/$ARCH" >&2
+		return 1
+		;;
+	esac
 }
 
 # Write the placeholder when no secret is required. Operators still need a real one.
@@ -434,22 +503,43 @@ dist_pull_secret_ensure() {
 	return 0
 }
 
-# Pull spec of the release image for this architecture. The signature belongs
-# to that image, not to the multi-arch list. Returns 1 when no digest is
-# published, 2 when the manifest cannot be read.
-dist_release_payload_ref() {
-	local ver="${1:-}" channel="${2:-stable}" spec raw child
-	dist_version_is_valid "$ver" "$channel" || return 1
-	spec="$(_okd_release_payload_spec "$ver" "$channel")" || return 1
-
-	raw="$(timeout 60 skopeo inspect --raw "docker://${spec}" 2>/dev/null)" || return 2
-	if [[ "$(jq -r 'if has("manifests") then "list" else "image" end' <<< "$raw" 2>/dev/null)" == "image" ]]; then
-		printf '%s\n' "$spec"
+# Download release.txt for $1 into the cache. Prints the cache path.
+# GitHub answers the asset URL with a redirect, so this fetch follows it.
+# Returns 1 when the file is missing or has none of the fields we read.
+_okd_fetch_release_txt() {
+	local ver="$1" url f ttl tmp
+	url="$(dist_cli_base_url "$ver")/release.txt"
+	f="${ABA_CACHE_DIR}/okd_release_txt_${ver}"
+	ttl="$(parse_duration "$ABA_CACHE_TTL")"
+	if _cache_fresh "$f" "$ttl" && _okd_validate_release_txt "$f"; then
+		printf '%s\n' "$f"
 		return 0
 	fi
-	child="$(jq -r --arg a "$ARCH" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest] | unique | if length == 1 then .[0] else empty end' <<< "$raw" 2>/dev/null)"
-	_okd_is_payload_ref "${spec%@*}" "${spec%@*}@${child}" || return 2
-	printf '%s\n' "${spec%@*}@${child}"
+	mkdir -p "$(dirname "$f")" 2>/dev/null || true
+	tmp="$(mktemp "${f}.XXXXXX")" || return 1
+	if ! curl -f --retry 3 --retry-delay 2 -sL --connect-timeout 5 --max-time 30 "$url" -o "$tmp"; then
+		rm -f "$tmp"
+		echo "No release.txt for $ver at $url" >&2
+		return 1
+	fi
+	if ! _okd_validate_release_txt "$tmp"; then
+		rm -f "$tmp"
+		echo "release.txt for $ver at $url has no Name, Digest, and OS/Arch" >&2
+		return 1
+	fi
+	mv -f "$tmp" "$f"
+	printf '%s\n' "$f"
+}
+
+# Pull spec of the release image for this architecture. release.txt is the
+# digest the installer was built to install. $2 is the channel, used only to
+# accept a pre-release version. Returns 1 when that file does not name this
+# version, 2 when a manifest list in it cannot be read.
+dist_release_payload_ref() {
+	local ver="${1:-}" channel="${2:-stable}" f
+	dist_version_is_valid "$ver" "$channel" || return 1
+	f="$(_okd_fetch_release_txt "$ver")" || return 1
+	_okd_payload_ref_from_release_txt "$f" "$ver"
 }
 
 # Manifest name in the mirror. A digest, because there is no version-arch tag.
@@ -519,7 +609,22 @@ dist_render_image_content_sources() {
 		aba_abort "No oc-mirror IDMS found: $_idms" \
 			"Run 'aba -d mirror sync' (or 'aba -d mirror load') first; the install-config is built from it."
 	fi
-	if ! _json=$(yaml2json < "$_idms" 2>/dev/null); then
+	# oc-mirror writes one ImageDigestMirrorSet per group in this file
+	# (release, then operators). yaml.safe_load accepts one document.
+	if ! _json=$(python3 -c '
+import json, sys, yaml
+mirrors = []
+for doc in yaml.safe_load_all(sys.stdin):
+	if not doc:
+		continue
+	if not isinstance(doc, dict):
+		sys.exit(1)
+	rules = (doc.get("spec") or {}).get("imageDigestMirrors") or []
+	if not isinstance(rules, list):
+		sys.exit(1)
+	mirrors.extend(rules)
+json.dump({"spec": {"imageDigestMirrors": mirrors}}, sys.stdout)
+' < "$_idms" 2>/dev/null); then
 		aba_abort "Could not read $_idms (not valid YAML)"
 	fi
 	if ! jq -e '(.spec.imageDigestMirrors // []) | length > 0 and all(.[]; (.source | type == "string") and ((.mirrors // []) | length > 0))' <<<"$_json" >/dev/null 2>&1; then

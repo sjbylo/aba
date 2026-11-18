@@ -15,6 +15,16 @@ _TUI_FAIL=0
 _TUI_WIDTH=160
 _TUI_HEIGHT=45
 
+# Drop the internet NIC on the disconnected bastion. SSH stays on the
+# management NIC (internet.sh uses SSH_CONNECTION). Call at the start of a
+# disco test and from its EXIT trap. Do not leave the link up afterwards.
+tui_disco_internet_down() {
+	local _host="${1:-disco.example.com}"
+	echo "  Internet down on $_host"
+	ssh -F "$_TUI_SSH_CFG" "$_host" '~/bin/internet.sh down' 2>&1 || \
+		ssh -F "$_TUI_SSH_CFG" "$_host" 'internet.sh down' 2>&1 || true
+}
+
 # ---------------------------------------------------------------------------
 # Throwaway-cluster lab defaults
 # Source of truth: .cursor/skills/throwaway-cluster/SKILL.md
@@ -536,6 +546,20 @@ tui_assert_title() {
 
 # Navigate back to a known screen (by title/pattern), pressing Escape as needed.
 # Usage: tui_back_to "Actions" [max_attempts]
+# Cluster Ready defaults to "Yes, apply now". Enter starts day2 and the
+# next assertion then sees a progress gauge instead of the menu it wanted.
+tui_decline_cluster_ready() {
+	local _scr
+	_scr=$(tui_capture) || return 1
+	if ! echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+		return 1
+	fi
+	echo "  Declining post-install OperatorHub prompt" >&2
+	tui_press_button "No, later" 2>/dev/null || tui_press_button "No" 2>/dev/null || tui_keys Escape
+	sleep 1
+	return 0
+}
+
 tui_back_to() {
 	local pattern="$1"
 	local max="${2:-5}"
@@ -545,6 +569,7 @@ tui_back_to() {
 			echo "  WARNING: tmux session gone while navigating back to '$pattern'" >&2
 			return 1
 		fi
+		tui_decline_cluster_ready || true
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "$pattern"; then
 			return 0
@@ -744,15 +769,17 @@ tui_require_internet() {
 # Deploy ALL ABA core + TUI code to the test host.
 # Uses git ls-files to build a tarball of tracked (+ untracked-not-ignored)
 # files, matching the same approach as the e2e deploy framework.
-# Copies: scripts/, templates/, tools/, others/, tui/, Makefile, aba, abatui,
-#         install, mirror/Makefile — everything needed for a working ABA.
+# Copies: scripts/, templates/, tools/, others/, tui/, rpms/, Makefile, aba,
+#         abatui, install, mirror/Makefile, cli/Makefile.
+# rpms/ must travel with the deploy. aba bundle's find starts at rpms/, and
+# an overlay deploy must not leave that directory missing on conno.
 # Usage: tui_deploy_code
 tui_deploy_code() {
 	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
 	# cli/Makefile is required for mirror install (out-download-all). Without it
 	# make -C cli fails with "No such file or directory" and the suite cascades.
 	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
-		cli/Makefile
+		cli/Makefile rpms/
 		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
 	local _tar _hash _old_hash
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
@@ -1200,6 +1227,10 @@ tui_pick_cluster() {
 	local _scr _i
 	for _i in $(seq 1 60); do
 		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+			tui_decline_cluster_ready || true
+			continue
+		fi
 		# Splash while TUI probes leftover cluster dirs (e.g. after BM tests)
 		if echo "$_scr" | grep -qi "Detecting installation status"; then
 			sleep 2
@@ -1490,7 +1521,8 @@ tui_delete_cluster() {
 tui_sweep_throwaway_clusters() {
 	local _keep=" $* " _name _has
 	echo "  Sweeping throwaway clusters (keep:${_keep:- none})..."
-	for _name in sno sno2 sno3 sno4 compact compact2 standard ocp; do
+	# sno4 is 10.0.1.204, which okd-vmw holds. Do not sweep that name.
+	for _name in sno sno2 sno3 compact compact2 standard ocp; do
 		case "$_keep" in
 			*" $_name "*) continue ;;
 		esac
@@ -1616,13 +1648,27 @@ _tui_capture_output() {
 	local label="${1:-output}"
 	local _scr
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "View Output\|Output"; then
-		tui_press_button "View Output" 2>/dev/null || tui_press_button "Output" 2>/dev/null || return 0
+	# Live Output closes with Space. q here is delivered to the progress
+	# gauge and aborts an install that is still In Progress.
+	if echo "$_scr" | grep -q "ABA Live Output"; then
+		tui_keys Space
+		sleep 1
+		return 0
+	fi
+	if echo "$_scr" | grep -qi "In Progress"; then
+		return 0
+	fi
+	if echo "$_scr" | grep -qi "View Output"; then
+		tui_press_button "View Output" 2>/dev/null || return 0
 		sleep 2
 		tui_screenshot "${label}-output"
-		# Return from output view (Q to quit less/viewer, or Escape)
-		tui_keys q 2>/dev/null; sleep 1
-		tui_keys Escape 2>/dev/null; sleep 1
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "ABA Live Output"; then
+			tui_keys Space
+		else
+			tui_keys Escape
+		fi
+		sleep 1
 	fi
 }
 
@@ -1653,6 +1699,10 @@ tui_wait_for_progress() {
 		fi
 
 		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+			tui_decline_cluster_ready || true
+			continue
+		fi
 
 		# Bail immediately if we accidentally exited the TUI
 		if echo "$_scr" | grep -qi "Exit ABA TUI\|Confirm Exit"; then
@@ -1774,6 +1824,15 @@ tui_wait_for_progress() {
 		if echo "$_scr" | grep -qi "Quit.*Q\|Q.*ESC"; then
 			if echo "$_scr" | grep -qi "Failed\|No-op\|Done\|Skipped\|Succeeded"; then
 				if echo "$_scr" | grep -qi "In Progress"; then
+					sleep 5
+					continue
+				fi
+				# Early steps already say Succeeded while Monitor is still
+				# running. A capture that misses "In Progress" must not q-quit
+				# a gauge that is under 100%.
+				local _pct
+				_pct=$(echo "$_scr" | grep -oE '[0-9]+%' | tail -1 | tr -d '%')
+				if [[ -n "$_pct" && "$_pct" -lt 100 ]]; then
 					sleep 5
 					continue
 				fi

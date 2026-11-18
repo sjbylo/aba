@@ -8,12 +8,13 @@
 # DESTRUCTIVE on the TUI host: writes platform=bm while it runs, then restores it.
 # Creates ~/aba/$TUI_BM_CLUSTER and deletes it at the end.
 #
-# Default name is sno4 (throwaway-cluster skill). Override with TUI_BM_CLUSTER.
+# Default name is sno2 (10.0.1.202). sno4 is 10.0.1.204, which okd-vmw holds.
+# Override with TUI_BM_CLUSTER.
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
-_CLUSTER="${TUI_BM_CLUSTER:-sno4}"
+_CLUSTER="${TUI_BM_CLUSTER:-sno2}"
 _MAC1="00:50:56:0a:b4:01"
 _MAC2="00:50:56:0a:b4:02"
 
@@ -240,6 +241,13 @@ _bm_type_gates() {
 	_saw_ask=0
 	for _wa in $(seq 1 60); do
 		_scr=$(tui_capture)
+		# Live Output is closed with Space. q leaves this view up, and the
+		# log text contains "placeholder", which is not the yes/no dialog.
+		if echo "$_scr" | grep -q "ABA Live Output"; then
+			tui_keys Space
+			sleep 1
+			continue
+		fi
 		if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
 			_saw_ask=1
 			break
@@ -251,22 +259,61 @@ _bm_type_gates() {
 				sleep 1
 				_scr=$(tui_capture)
 				tui_screenshot "bm-${name}-ask-output-${_wa}"
-				if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
-					_saw_ask=1
-					tui_keys q 2>/dev/null || tui_keys Escape
+				if echo "$_scr" | grep -q "ABA Live Output" \
+					&& echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
+					# The ask is in the log. Close the log and wait until the
+					# yes/no is the front dialog. Tab-Enter here hits Quit.
+					tui_keys Space
 					sleep 1
-					break
+					continue
 				fi
-				tui_keys q 2>/dev/null || tui_keys Escape
-				sleep 1
+				if echo "$_scr" | grep -q "ABA Live Output"; then
+					tui_keys Space
+					sleep 1
+				fi
 			fi
 		fi
 		sleep 3
 	done
+	# The yes/no is often only in Live Output on the last peek. Closing that
+	# view ends the loop, so the dialog on the next frame is never seen.
+	if [[ "$_saw_ask" -eq 0 ]]; then
+		for _extra in $(seq 1 20); do
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -q "ABA Live Output"; then
+				tui_keys Space
+				sleep 1
+				continue
+			fi
+			if echo "$_scr" | grep -qi "Bare-metal MAC check"; then
+				_saw_ask=1
+				break
+			fi
+			sleep 2
+		done
+	fi
 	if [[ "$_saw_ask" -eq 1 ]]; then
 		echo "  ✓ PASS: $name fresh placeholders ask"
 		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_press_button "No" || tui_keys Tab Enter
+		_no_pressed=0
+		for _nb in $(seq 1 20); do
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -q "ABA Live Output"; then
+				tui_keys Space
+				sleep 1
+				continue
+			fi
+			if tui_press_button "No"; then
+				_no_pressed=1
+				break
+			fi
+			sleep 2
+		done
+		if [[ "$_no_pressed" -eq 0 ]]; then
+			echo "  ✗ FAIL: $name could not press No on the MAC dialog"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			tui_screenshot "bm-${name}-no-button"
+		fi
 		sleep 2
 	else
 		echo "  ✗ FAIL: $name fresh placeholders did not ask"
@@ -341,6 +388,11 @@ _bm_fix_in_wizard() {
 	_saw_build=0
 	for _wa in $(seq 1 90); do
 		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "ABA Live Output"; then
+			tui_keys Space
+			sleep 1
+			continue
+		fi
 		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
 			_saw_build=1
 			break
@@ -351,14 +403,18 @@ _bm_fix_in_wizard() {
 				sleep 1
 				_scr=$(tui_capture)
 				tui_screenshot "bm-${name}-build-output-${_wa}"
-				if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+				if echo "$_scr" | grep -q "ABA Live Output" \
+					&& echo "$_scr" | grep -q "build the agent ISO" \
+					&& ! echo "$_scr" | grep -q "Yes: re-check"; then
 					_saw_build=1
-					tui_keys q 2>/dev/null || tui_keys Escape
+					tui_keys Space
 					sleep 1
 					break
 				fi
-				tui_keys q 2>/dev/null || tui_keys Escape
-				sleep 1
+				if echo "$_scr" | grep -q "ABA Live Output"; then
+					tui_keys Space
+					sleep 1
+				fi
 			fi
 		fi
 		sleep 3
@@ -598,16 +654,47 @@ echo "--- 5. Fix the MAC, Retry, then boot ---"
 # The stop dialog is still up. Retry re-runs this install; the wizard is behind it.
 _bm_prepare_boot_conf
 tui_press_button "Retry" || true
-if tui_wait_for "build the agent ISO" 180; then
+# The build ask can overlay the progress frame, or only show up in Output
+# while Generate configs stays In Progress at 0%.
+_saw_build=0
+for _wa in $(seq 1 60); do
+	_scr=$(tui_capture)
+	if echo "$_scr" | grep -q "ABA Live Output"; then
+		tui_keys Space
+		sleep 1
+		continue
+	fi
+	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+		_saw_build=1
+		break
+	fi
+	if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
+		if (( _wa % 10 == 0 )); then
+			tui_keys Space 2>/dev/null || true
+			sleep 1
+			_scr=$(tui_capture)
+			tui_screenshot "bm-05-build-output-${_wa}"
+			if echo "$_scr" | grep -q "ABA Live Output" \
+				&& echo "$_scr" | grep -q "build the agent ISO" \
+				&& ! echo "$_scr" | grep -q "Yes: re-check"; then
+				_saw_build=1
+				tui_keys Space
+				sleep 1
+				break
+			fi
+			if echo "$_scr" | grep -q "ABA Live Output"; then
+				tui_keys Space
+				sleep 1
+			fi
+		fi
+	fi
+	sleep 3
+done
+if [[ "$_saw_build" -eq 1 ]]; then
 	_scr=$(tui_capture)
 	tui_screenshot "bm-05-retry-ask"
-	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-		echo "  ✓ PASS: Retry after the MAC was fixed asks to build"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Retry after the fix did not ask to build"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	fi
+	echo "  ✓ PASS: Retry after the MAC was fixed asks to build"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
 	tui_press_button "Yes" || tui_keys Enter
 	sleep 2
 	_build_yes=1

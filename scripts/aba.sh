@@ -160,12 +160,22 @@ while [ $i -le $# ]; do
 			;;
 
 		--distribution)
-			# Taken out of the main parse so --version sees the right file
-			# whichever flag is written first. A missing value is rejected
-			# after include_all.sh is loaded, where aba_abort exists.
+			# Taken out of the main parse so the file is written before
+			# include_all.sh loads the distribution, whichever flag is first.
 			i=$((i + 1))
 			_CLI_DISTRIBUTION="${!i}"
 			_CLI_DISTRIBUTION_SET=1
+			if [[ -z "${_CLI_DISTRIBUTION:-}" || "$_CLI_DISTRIBUTION" =~ ^- ]]; then
+				echo "Error: missing argument after option --distribution" >&2
+				exit 1
+			fi
+			case "$_CLI_DISTRIBUTION" in
+				ocp|okd) ;;
+				*)
+					echo "Error: wrong value [$_CLI_DISTRIBUTION] after option --distribution" >&2
+					exit 1
+					;;
+			esac
 			;;
 
 		*)
@@ -241,8 +251,33 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	fi
 fi
 
-# If invoked as "abatui", launch the TUI instead of the CLI
-if [ "$(basename "$0")" = "abatui" ]; then
+# Write distribution= before any load. A missing key is OpenShift, same as
+# --platform writing platform=. The TUI reads the file itself, so it starts
+# only after this write. A first run has no file yet: hold the load, create
+# the file below, then write and load once.
+_aba_write_distribution() {
+	local f="$ABA_ROOT/aba.conf" v="${1:-}"
+	[ -s "$f" ] || return 0
+	if [ -n "$v" ]; then
+		if grep -q '^distribution=' "$f"; then
+			sed -i --follow-symlinks "s/^distribution=.*/distribution=$v/" "$f"
+		else
+			printf 'distribution=%s\n' "$v" >>"$f"
+		fi
+	elif ! grep -q '^distribution=' "$f"; then
+		printf 'distribution=ocp\n' >>"$f"
+	fi
+}
+
+_ABA_DIST_HOLD=
+if [ -s "$ABA_ROOT/aba.conf" ]; then
+	_aba_write_distribution "${_CLI_DISTRIBUTION:-}"
+else
+	_ABA_DIST_HOLD=1
+fi
+
+# No file and a flag: fall through so the template is created first.
+if [ "$(basename "$0")" = "abatui" ] && { [ -s "$ABA_ROOT/aba.conf" ] || [ -z "${_CLI_DISTRIBUTION_SET:-}" ]; }; then
 	cd "$ABA_ROOT" || exit 1
 	exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
 fi
@@ -338,30 +373,23 @@ else
 	fi
 fi
 
+# The file was missing at startup. The template is written above; apply the
+# flag and load once. abatui with a flag waits until that write.
+if [ -n "${_ABA_DIST_HOLD:-}" ]; then
+	_aba_write_distribution "${_CLI_DISTRIBUTION:-}"
+	_ABA_DIST_HOLD=
+	dist_load
+	if [ "$(basename "$0")" = "abatui" ]; then
+		cd "$ABA_ROOT" || exit 1
+		exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
+	fi
+fi
+
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(cd "$ABA_ROOT" && normalize-aba-conf)
-# include_all.sh loads the distribution file before this source, so reload
-# once the key from aba.conf is in the environment.
-dist_load
+# The key was written before the load. Reject a channel this distribution
+# does not publish. The key stays.
 if [ -n "${_CLI_DISTRIBUTION_SET:-}" ]; then
-	if [[ -z "${_CLI_DISTRIBUTION:-}" || "$_CLI_DISTRIBUTION" =~ ^- ]]; then
-		aba_abort "missing argument after option --distribution"
-	fi
-	case "$_CLI_DISTRIBUTION" in
-		ocp)
-			# An OpenShift config does not keep the key.
-			sed -i --follow-symlinks '/^distribution=/d' "$ABA_ROOT/aba.conf"
-			unset distribution
-			;;
-		okd)
-			replace-value-conf -n distribution -v okd -f "$ABA_ROOT/aba.conf"
-			distribution=okd
-			;;
-		*)
-			aba_abort "wrong value [$_CLI_DISTRIBUTION] after option --distribution"
-			;;
-	esac
-	dist_load
 	_dist_chan="${ocp_channel:-}"
 	if [ -n "${chan:-}" ]; then
 		_dist_chan="$chan"
@@ -373,7 +401,7 @@ if [ -n "${_CLI_DISTRIBUTION_SET:-}" ]; then
 		esac
 	fi
 	if [ -n "$_dist_chan" ] && ! dist_channel_is_valid "$_dist_chan"; then
-		aba_abort "ocp_channel [$_dist_chan] is not a channel for distribution $(dist_of)"
+		aba_abort "ocp_channel [$_dist_chan] is not a channel for distribution $(dist_display)"
 	fi
 fi
 
@@ -872,7 +900,9 @@ for i in imgs:
 				aba_abort "wrong value [$chan] after option $opt" 
 				;;
 		esac
-		dist_channel_is_valid "$chan" || aba_abort "wrong value [$chan] after option $opt"
+		# fast and eus are real tokens. A distribution that does not publish
+		# them gets the same reason as the --distribution check above.
+		dist_channel_is_valid "$chan" || aba_abort "ocp_channel [$chan] is not a channel for distribution $(dist_display)"
 		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
 		ocp_channel=$chan
 		shift 2
@@ -2170,7 +2200,7 @@ fi
 	if ! aba_version_fetch_wait "$ocp_channel"; then
 		error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version")
 		[ -z "$error_msg" ] && error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version_previous")
-		aba_abort "Failed to fetch OCP versions from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
+		aba_abort "Failed to fetch $(dist_display) versions from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi
 #	if [ "$ocp_channel" = "stable" ]; then
 #		run_once -w -i ocp:stable:latest_version
