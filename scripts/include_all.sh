@@ -1242,6 +1242,59 @@ _validate_network_consistency() {
 	return $_ret
 }
 
+# The _validate_network_consistency checks for a starting_ip list.  A list may
+# leave gaps, so each check tests the listed node IPs, not a first-to-last range.
+# Args: the node IPs (expand_starting_ips output), all inside machine_network.
+# Returns 0 if consistent, 1 on error (all errors printed to stderr).
+_validate_node_ip_list() {
+	local _ret=0 _i=0 _ip _host _gw _vip_name _vip_val
+	local _host_mask=$(( (1 << (32 - prefix_length)) - 1 ))
+
+	# 1. No node IP may be the network or broadcast address
+	for _ip in "$@"; do
+		_host=$(( $(ip_to_int "$_ip") & _host_mask ))
+		if (( _host == 0 )); then
+			echo_red "Error: node IP $_ip in starting_ip is the network address of $machine_network/$prefix_length" >&2
+			_ret=1
+		elif (( _host == _host_mask )); then
+			echo_red "Error: node IP $_ip in starting_ip is the broadcast address of $machine_network/$prefix_length" >&2
+			_ret=1
+		fi
+	done
+
+	# 2. Gateway must be within the machine_network CIDR
+	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null; then
+		if ! ip_in_cidr "$next_hop_address" "$machine_network" "$prefix_length"; then
+			echo_red "Error: next_hop_address ($next_hop_address) is outside the machine_network ($machine_network/$prefix_length)" >&2
+			_ret=1
+		fi
+	fi
+
+	# 3. The gateway must not be a node IP.  Node IPs are canonical, so compare
+	# the canonical gateway: 10.0.0.001 is node IP 10.0.0.1.
+	_gw=$(normalize_ipv4 "${next_hop_address:-}") || _gw=""
+	for _ip in "$@"; do
+		_i=$(( _i + 1 ))
+		if [ "$_ip" = "$_gw" ]; then
+			echo_red "Error: node IP $_ip (node $_i of $#) collides with next_hop_address (gateway)" >&2
+			_ret=1
+		fi
+	done
+
+	# 4. VIPs must not be node IPs.  A VIP between two listed node IPs is fine.
+	if (( num_masters > 1 )); then
+		for _vip_name in api_vip ingress_vip; do
+			_vip_val=$(normalize_ipv4 "${!_vip_name:-}") || continue
+			if [[ " $* " == *" $_vip_val "* ]]; then
+				echo_red "Error: $_vip_name (${!_vip_name}) is a node IP in starting_ip" >&2
+				_ret=1
+			fi
+		done
+	fi
+
+	return $_ret
+}
+
 # Canonicalize a non-negative integer: strip leading zeros (08 → 8, 00 → 0).
 # Empty input prints empty and returns 0 (caller decides if empty is allowed).
 # Returns 1 if non-empty and not digits-only.
@@ -1279,6 +1332,72 @@ normalize_ipv4() {
 # strip them before storing. Returns 0 if valid, 1 if invalid.
 _valid_ipv4() {
 	normalize_ipv4 "$1" >/dev/null
+}
+
+# starting_ip may also be a comma list with one IP address per node, masters
+# first, so nodes can skip used addresses or sit on another prefix.  A bare
+# octet keeps the prefix of the last full address: 10.0.0.10,11,12,10.0.1.60,61
+
+# Canonicalize a starting_ip list: drop spaces around items and leading zeros.
+# Syntax only, because the CLI and TUI do not know the node count yet.  Spaces
+# and leading zeros are dropped to store one canonical form.
+# Prints the list.  Returns 1 if invalid.
+normalize_starting_ip() {
+	local spec item n out=""
+	local -a items
+	# sed works per line, so a second line would be dropped silently
+	[[ "$1" == *$'\n'* ]] && return 1
+	spec=$(sed -E 's/[[:space:]]*,[[:space:]]*/,/g; s/^[[:space:]]+//; s/[[:space:]]+$//' <<< "$1")
+	# read -ra drops a trailing empty item, so reject empty items before the split
+	[[ "$spec" =~ (^|,)(,|$) ]] && return 1
+	IFS=',' read -ra items <<< "$spec"
+	# A bare octet needs a prefix, so the first item must be a full address
+	normalize_ipv4 "${items[0]}" >/dev/null || return 1
+	for item in "${items[@]}"; do
+		if [[ "$item" =~ ^[0-9]{1,3}$ ]] && (( 10#$item <= 255 )); then
+			n=$(( 10#$item ))
+		else
+			n=$(normalize_ipv4 "$item") || return 1
+		fi
+		out+="${out:+,}$n"
+	done
+	printf '%s\n' "$out"
+}
+
+# Expand a starting_ip list into one IP address per node, masters first.
+# Args: LIST  COUNT (num_masters + num_workers)
+# Prints the addresses space separated.  Errors go to stderr, returns 1.
+expand_starting_ips() {
+	local spec="" item prefix=""
+	local -a items ips=()
+	local -A seen=()
+
+	if ! spec=$(normalize_starting_ip "$1"); then
+		echo_red "Error: starting_ip is invalid: [$1]. Expected one IPv4 per node, the first in full, bare octets 0-255 (e.g. 10.0.0.10,11,12)." >&2
+		return 1
+	fi
+	IFS=',' read -ra items <<< "$spec"
+	for item in "${items[@]}"; do
+		if [[ "$item" == *.* ]]; then
+			prefix=${item%.*}
+			ips+=("$item")
+		else
+			ips+=("$prefix.$item")
+		fi
+	done
+
+	if (( ${#ips[@]} != $2 )); then
+		echo_red "Error: starting_ip lists ${#ips[@]} address(es) but the cluster has $2 node(s) (num_masters + num_workers): [$1]" >&2
+		return 1
+	fi
+	for item in "${ips[@]}"; do
+		if [ -n "${seen[$item]:-}" ]; then
+			echo_red "Error: starting_ip lists $item more than once: [$1]" >&2
+			return 1
+		fi
+		seen[$item]=1
+	done
+	echo "${ips[*]}"
 }
 
 # Validate a Unix username (SSH user, registry user, etc.)
@@ -2112,10 +2231,25 @@ verify-cluster-conf() {
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
 	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: prefix_length is invalid in cluster.conf [$prefix_length]" >&2; ret=1; }
 
+	# Node IPs from a starting_ip list (comma); empty for one starting IP
+	local node_ips=""
 	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
 	else
-		validate_ip "$starting_ip" || { echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Try using --starting-ip option." >&2; ret=1; }
+		if [[ "$starting_ip" == *,* ]]; then
+			# The list length needs valid node counts.  Invalid counts are
+			# reported below, so skip the list checks without a message.
+			if ! normalize_starting_ip "$starting_ip" >/dev/null; then
+				echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Expected one IPv4 per node, the first in full, bare octets 0-255 (e.g. 10.0.0.10,11,12). Try using --starting-ip option." >&2
+				ret=1
+			elif [[ "$num_masters" =~ ^[1-9][0-9]*$ && "$num_workers" =~ ^(0|[1-9][0-9]*)$ ]]; then
+				node_ips=$(expand_starting_ips "$starting_ip" $(( num_masters + num_workers ))) || ret=1
+			else
+				ret=1
+			fi
+		else
+			validate_ip "$starting_ip" || { echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Try using --starting-ip option." >&2; ret=1; }
+		fi
 
 		# Validate starting_ip falls within machine_network CIDR
 		if [[ $ret -eq 0 ]] && echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
@@ -2123,21 +2257,32 @@ verify-cluster-conf() {
 			local cidr_last=$(cidr_last_ip "$machine_network" "$prefix_length")
 			local cidr_range="Valid range: $cidr_first_ip - $cidr_last"
 
-			if ! ip_in_cidr "$starting_ip" "$machine_network" "$prefix_length"; then
-				echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
-				ret=1
-			fi
-
-			# Validate all nodes fit within the CIDR
-			local total_nodes=$(( num_masters + num_workers ))
-			if (( total_nodes > 0 )); then
-				local start_int=$(ip_to_int "$starting_ip")
-				local last_node_int=$(( start_int + total_nodes - 1 ))
-				local last_node_ip=$(int_to_ip $last_node_int)
-				if ! ip_in_cidr "$last_node_ip" "$machine_network" "$prefix_length"; then
-					echo_red "Error: not all $total_nodes nodes fit in machine_network ($machine_network/$prefix_length)." \
-						"Last node IP would be $last_node_ip. $cidr_range" >&2
+			if [ -n "$node_ips" ]; then
+				# A list can name any address: check each node IP
+				local _ip
+				for _ip in $node_ips; do
+					if ! ip_in_cidr "$_ip" "$machine_network" "$prefix_length"; then
+						echo_red "Error: node IP $_ip in starting_ip is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
+						ret=1
+					fi
+				done
+			else
+				if ! ip_in_cidr "$starting_ip" "$machine_network" "$prefix_length"; then
+					echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
 					ret=1
+				fi
+
+				# Validate all nodes fit within the CIDR
+				local total_nodes=$(( num_masters + num_workers ))
+				if (( total_nodes > 0 )); then
+					local start_int=$(ip_to_int "$starting_ip")
+					local last_node_int=$(( start_int + total_nodes - 1 ))
+					local last_node_ip=$(int_to_ip $last_node_int)
+					if ! ip_in_cidr "$last_node_ip" "$machine_network" "$prefix_length"; then
+						echo_red "Error: not all $total_nodes nodes fit in machine_network ($machine_network/$prefix_length)." \
+							"Last node IP would be $last_node_ip. $cidr_range" >&2
+						ret=1
+					fi
 				fi
 			fi
 
@@ -2215,6 +2360,10 @@ verify-cluster-conf() {
 	if [[ $ret -eq 0 ]] && validate_ip "$starting_ip" 2>/dev/null && \
 	   echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' 2>/dev/null; then
 		_validate_network_consistency || ret=1
+	fi
+	if [[ $ret -eq 0 ]] && [ -n "$node_ips" ]; then
+		# Unquoted on purpose: one argument per node IP
+		_validate_node_ip_list $node_ips || ret=1
 	fi
 
 	return $ret

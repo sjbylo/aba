@@ -79,6 +79,37 @@ else
 	test_pass "No trailing whitespace on any line"
 fi
 
+# 13. IP conflict check probes VIPs and each node IP from starting_ip.
+# Runs the real function with ping/hostname stubbed and arping hidden,
+# so nothing goes on the network.
+_probed_ips() {
+	(
+		source scripts/include_all.sh noerr >/dev/null 2>&1
+		eval "$(sed -n '/^preflight_check_ip_conflicts()/,/^}/p' "$SCRIPT")"
+		_log=$(mktemp)
+		hostname() { :; }
+		command() { if [ "$1" = "-v" ] && [ "$2" = "arping" ]; then return 1; fi; builtin command "$@"; }
+		ping() { echo "${*: -1}" >> "$_log"; return 1; }
+		# shellcheck disable=SC2034 # read by the eval'd function
+		starting_ip="$1" num_masters=3 num_workers="$2" api_vip=10.0.0.20 ingress_vip=10.0.0.21
+		_preflight_errors=0
+		preflight_check_ip_conflicts >/dev/null 2>&1
+		tr '\n' ' ' < "$_log"
+		echo "errors=$_preflight_errors"
+		rm -f "$_log"
+	)
+}
+
+_got=$(_probed_ips "10.0.0.10" 0)
+_want="10.0.0.20 10.0.0.21 10.0.0.10 10.0.0.11 10.0.0.12 errors=0"
+[ "$_got" = "$_want" ] && test_pass "Probes contiguous node IPs from one starting_ip" \
+	|| test_fail "Contiguous probe: want [$_want] got [$_got]"
+
+_got=$(_probed_ips "10.0.0.10,11,12,10.0.1.60,61,62" 3)
+_want="10.0.0.20 10.0.0.21 10.0.0.10 10.0.0.11 10.0.0.12 10.0.1.60 10.0.1.61 10.0.1.62 errors=0"
+[ "$_got" = "$_want" ] && test_pass "Probes each node IP from a starting_ip list" \
+	|| test_fail "List probe: want [$_want] got [$_got]"
+
 echo
 echo -e "${GREEN}=== All Tests Passed ===${NC}"
 echo
