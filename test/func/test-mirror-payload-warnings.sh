@@ -30,7 +30,6 @@ ln -sfn "$_repo/cli" "$_tmp/cli"
 ln -sfn "$_repo/scripts" "$_tmp/mirror/scripts"
 ln -sfn "$_repo/cli" "$_tmp/mirror/cli"
 ln -sf ../aba.conf "$_tmp/mirror/aba.conf"
-ln -sfn . "$_tmp/mirror/mirror"
 
 # Copy templates (not symlink) so test files don't pollute the repo
 cp -a "$_repo/templates" "$_tmp/templates"
