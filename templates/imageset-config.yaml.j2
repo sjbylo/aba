@@ -3,6 +3,13 @@ kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
+{%- if release_ref %}
+    release: {{ release_ref }}
+    architectures:
+    - {{ ARCH }}
+    graph: false
+{#- graph stays the last key of platform so excl_platform can comment the block #}
+{%- else %}
 {%- if ARCH != 'amd64' and ARCH != 'x86_64' %}
     architectures:
     - {{ ARCH }}
@@ -22,6 +29,7 @@ mirror:
 #      shortestPath: true
 {%- endif %}
     graph: true
+{%- endif %}
 {%- if additional_images is defined and additional_images %}
   additionalImages:
 {%- for img in additional_images %}
@@ -53,6 +61,10 @@ mirror:
 {%- endfor %}
 {%- else %}
 #  operators:
+{%- if release_ref %}
+#  - catalog: registry.access.redhat.com/redhat/community-operator-index:v{{ tgt_major if (ocp_upgrade_to is defined and ocp_upgrade_to and ocp_upgrade_to != ocp_version) else ocp_ver_major }}
+{%- else %}
 #  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ tgt_major if (ocp_upgrade_to is defined and ocp_upgrade_to and ocp_upgrade_to != ocp_version) else ocp_ver_major }}
+{%- endif %}
 #    packages:
 {%- endif %}

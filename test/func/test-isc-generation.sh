@@ -134,6 +134,14 @@ generate_isc() {
 		esac
 	done
 
+	# Cases assert OpenShift image-set output. A checkout aba.conf may
+	# set distribution=okd, which has no redhat catalog image.
+	if grep -q '^distribution=' "$aba_conf" 2>/dev/null; then
+		sed -i 's/^distribution=.*/distribution=ocp/' "$aba_conf"
+	else
+		echo 'distribution=ocp' >> "$aba_conf"
+	fi
+
 	# Generate ISC using real script but with temp configs
 	local data_dir="$tmpdir/data"
 	mkdir -p "$data_dir"

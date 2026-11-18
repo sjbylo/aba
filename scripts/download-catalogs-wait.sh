@@ -29,7 +29,7 @@ _populate_shipped_indexes
 # kick off background refreshes but don't block.
 _have_all=true
 for _ver in "${_versions_to_wait[@]}"; do
-	for catalog in redhat-operator certified-operator community-operator; do
+	for catalog in $(dist_catalogs); do
 		[[ -s ".index/${catalog}-index-v${_ver}" ]] || { _have_all=false; break 2; }
 	done
 done
@@ -42,7 +42,7 @@ if [[ "$_have_all" == true ]]; then
 		done
 	else
 		# No internet — existing catalogs are all we have
-		aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]} (cached)"
+		aba_success "All operator catalogs ready for $(dist_display) ${_versions_to_wait[*]} (cached)"
 		exit 0
 	fi
 fi
@@ -63,7 +63,7 @@ if [[ "$_have_all" != true ]]; then
 	_catalogs_progress=true
 else
 	for _ver in "${_versions_to_wait[@]}"; do
-		for catalog in redhat-operator certified-operator community-operator; do
+		for catalog in $(dist_catalogs); do
 			if ! run_once -p -i "catalog:${_ver}:${catalog}"; then
 				_catalogs_progress=true
 				break 2
@@ -74,7 +74,7 @@ fi
 [[ "$_catalogs_progress" == true ]] && aba_progress "START|catalogs_dl"
 
 for _ver in "${_versions_to_wait[@]}"; do
-	for catalog in redhat-operator certified-operator community-operator; do
+	for catalog in $(dist_catalogs); do
 		task_id="catalog:${_ver}:${catalog}"
 
 		if ! run_once $_skip_val -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then
@@ -92,7 +92,7 @@ for _ver in "${_versions_to_wait[@]}"; do
 				echo "--- log.err ---"
 				run_once -e -i "$task_id"
 			)
-			aba_abort "Failed to download ${catalog} catalog for OCP ${_ver}" \
+			aba_abort "Failed to download ${catalog} catalog for $(dist_display) ${_ver}" \
 				"Error details from download task:" \
 				"$error_output"
 		fi
@@ -101,4 +101,4 @@ done
 
 [[ "$_catalogs_progress" == true ]] && aba_progress "DONE|catalogs_dl"
 
-aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]}"
+aba_success "All operator catalogs ready for $(dist_display) ${_versions_to_wait[*]}"

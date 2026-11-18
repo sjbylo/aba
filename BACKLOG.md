@@ -4063,3 +4063,50 @@ Prove the dialog sees the same events: capture `progress-plan.sh` output for eac
 
 **Workaround:** None. The dialog already shows these steps.
 
+---
+
+## #B116: OKD: same day2-virt command, separate virt image set
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-17
+**Updated:** 2026-11-17
+
+**Problem:** `aba day2-virt` is rejected when `distribution=okd`. An OKD cluster that installs `community-kubevirt-hyperconverged` can publish that operator with `aba day2`, but nothing retargets its guest-disk imports at the mirror. On a disconnected cluster those imports still point at `quay.io` and fail. The current virt image set also lists `registry.redhat.io` RHEL guest images, and mirroring those needs an entitled Red Hat pull secret. A release-only OKD install does not have one.
+
+**Root cause:** `scripts/day2-config-virt.sh` requires the `HyperConverged` object `kubevirt-hyperconverged` in `openshift-cnv` and rewrites that object's boot sources. The rows are three `quay.io/containerdisks` images (`centos-stream:10`, `centos-stream:9`, `fedora:latest`) plus `registry.redhat.io` RHEL 9, 10, and 11 image streams. `templates/image-set-virt` is only the guest disks (RHEL 9, RHEL 10, and the three container disks). The Red Hat operators are a different file, `templates/operator-set-virt`. `dist_stop_unsupported` rejects `day2-virt` for OKD before the script runs. `upgrade`, `upgrade-mon`, and `day2-osus` stay rejected.
+
+**Proposed fix:** Keep the command `aba day2-virt` for OpenShift and OKD. Stop passing `day2-virt` to `dist_stop_unsupported`. Keep one script. Do not test the distribution inside it. The distribution file supplies the operator name to tell the user to install, the `HyperConverged` namespace and name, and the boot-source rows. The script already treats an `imagestream` row differently from a `url` row.
+
+OpenShift answers stay what the script has today: operator `kubevirt-hyperconverged`, object `kubevirt-hyperconverged` in `openshift-cnv`, the three container disks, and the RHEL image streams. OKD answers: operator `community-kubevirt-hyperconverged`, and only the three container-disk rows. No `registry.redhat.io` rows, so the RHEL image-stream half does not run. A RHEL guest disk can boot on the community operator, but OKD does not mirror those disks because of the pull secret.
+
+Keep two image-set files, because the disk lists differ:
+
+- `templates/image-set-virt-ocp` keeps the current `templates/image-set-virt` contents, including the two RHEL disks.
+- `templates/image-set-virt-okd` lists only the three `quay.io/containerdisks` images.
+
+The command stays `aba image set add virt`. Do not add `virt-ocp` or `virt-okd` as names the user types. `distribution` in `aba.conf` already says which file `virt` is. Missing or `ocp` uses the OpenShift file. `okd` uses the OKD file. `scripts/image-sets.sh` names a set from the filename suffix and globs `templates/image-set-*`, so those two files must not appear as their own sets. The distribution file selects the file for `virt`.
+
+`aba day2` still only publishes the catalog. `aba day2-virt` still does not install the operator. `templates/operator-set-virt` stays the Red Hat operator list. OKD selects `community-kubevirt-hyperconverged` with `--ops`. On a connected cluster the script already exits and leaves the public imports alone. That stays true for both.
+
+Before writing the OKD answers, confirm the community operator's `HyperConverged` name and namespace. If they are not `openshift-cnv` / `kubevirt-hyperconverged`, the current script would patch the wrong object.
+
+**Workaround:** On a connected OKD cluster, install `community-kubevirt-hyperconverged` and let it import the container disks from `quay.io`. A fully disconnected cluster has no workaround until `aba day2-virt` accepts OKD.
+
+---
+
+## #B117: OKD: install the community virt operator after day2
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-18
+**Updated:** 2026-11-18
+
+**Problem:** The OKD air-gap path stops once `community-kubevirt-hyperconverged` is listed in the catalog. `aba day2` applies the mirrored CatalogSource. The OKD end-to-end suite then checks `oc get packagemanifests` for that name. A package manifest means OperatorHub can offer the operator. It does not mean the operator is installed. Nothing creates the namespace, OperatorGroup, or Subscription, and nothing waits for the CSV to reach Succeeded.
+
+**Root cause:** `scripts/day2.sh` installs CatalogSources and the related mirror resources. It does not create a Subscription. The ACM suite is the existing pattern for the missing step: day2 first, then `oc apply` of a subscription, then a poll until the CSV is Succeeded. The OKD suite has only the catalog half of that. #B116 still assumes the operator is already installed before `aba day2-virt` retargets guest-disk imports. This item is that install. It does not create the HyperConverged operand.
+
+**Proposed fix:** After day2 on the OKD air-gap cluster, install `community-kubevirt-hyperconverged` from the CatalogSource day2 applied. Read the channel and the suggested install namespace from the package manifest before writing the objects. Apply the namespace, OperatorGroup, and Subscription, then wait until the CSV is Succeeded. Extend the OKD suite to assert that CSV, after the existing package-manifest check. Leave `aba day2` as catalog publication. Leave the HyperConverged object and the boot-source rows to #B116.
+
+**Workaround:** After `aba day2`, install `community-kubevirt-hyperconverged` from OperatorHub, or apply a Subscription to the community CatalogSource by hand.
+

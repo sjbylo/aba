@@ -35,6 +35,12 @@ f=data/imageset-config.yaml
 dir=$(dirname "$f")
 [ "$dir/.created" -nt "$f" ] && exit 0
 
+# A digest pin has no channel range. Nothing here can be out of date with ocp_channel.
+_pinned=$(yaml2json < "$f" | jq -r '.mirror.platform.release // empty')
+if [ -n "$_pinned" ] && [ "$_pinned" != "null" ]; then
+	exit 0
+fi
+
 om_ocp_min_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].minVersion)
 om_ocp_max_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].maxVersion)
 om_ocp_channel=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].name)

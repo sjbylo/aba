@@ -456,8 +456,11 @@ else
 fi
 tui_screenshot "od-08-final-empty"
 
-# ISC round-trip: after clearing all operators, ISC should have no operator packages
+# ISC round-trip: after clearing all operators, ISC should have no operator packages.
+# Clear persists aba.conf and regenerates the file in the background. Reading
+# immediately still sees the previous packages.
 echo "  Verifying ISC has no operators after clear..."
+tui_wait_isc_file 60
 _isc_cleared=$(tui_read_isc)
 _pkg_lines=$(echo "$_isc_cleared" | grep -c '^\s*- name:.*operator' 2>/dev/null) || _pkg_lines=0
 if [[ "$_pkg_lines" -eq 0 ]]; then

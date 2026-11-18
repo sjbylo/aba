@@ -229,6 +229,18 @@ _day2_run_action() {
 				fi
 			fi
 		else
+			# OperatorHub has stopped in ~11s with the gauge already gone.
+			# Dismiss that dialog and run the action once more before failing.
+			if [[ "$action_name" == "operatorhub" && -z "${_op_retried:-}" ]]; then
+				_op_retried=1
+				echo "  OperatorHub stopped early — dismissing and retrying once"
+				tui_screenshot "d2-operatorhub-retry"
+				tui_keys Enter
+				sleep 2
+				tui_back_to "Actions" 4 || true
+				_day2_run_action "$item_label" "$action_name" "$timeout" "$expected_cmd"
+				return $?
+			fi
 			echo "  ✗ FAIL: $action_name failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			tui_screenshot "d2-${action_name}-failed"

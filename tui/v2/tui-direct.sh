@@ -56,7 +56,7 @@ _direct_config_complete() {
 # =============================================================================
 
 tui_change_version() {
-	tui_log "Action: Change OCP Version/Channel"
+	tui_log "Action: Change $(dist_display) version/channel"
 
 	local step="channel"
 	while :; do

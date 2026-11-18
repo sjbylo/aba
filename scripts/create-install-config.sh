@@ -55,7 +55,7 @@ source <(normalize-mirror-conf)
 # ADR-005: ocp_major is not a normalize output. The content-sources template
 # applies | int to it. A failed j2 used to be swallowed by the assignment, so
 # install-config.yaml was written with no ImageDigestSources and still reported success.
-_render_image_content_sources() {
+_ocp_render_image_content_sources() {
 	export ocp_major="$(ocp_major_of "${ocp_version:-}")"
 	if [ -z "$ocp_major" ]; then
 		aba_abort "ocp_version '${ocp_version:-}' has no major number"
@@ -65,6 +65,11 @@ _render_image_content_sources() {
 		aba_abort "Could not render image content sources"
 	fi
 	export image_content_sources="$_src"
+}
+
+# The loaded distribution file renders the sources. OpenShift uses the channel template.
+_render_image_content_sources() {
+	dist_render_image_content_sources
 }
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -112,6 +117,9 @@ if [ "$image_source" = "direct" ]; then
 	use_mirror=
 elif [ "$image_source" = "proxy" ]; then
 	if [ "$http_proxy" ] || [ "$https_proxy" ]; then
+		if [ ! -s "$pull_secret_file" ]; then
+			dist_pull_secret_ensure "$pull_secret_file" || true
+		fi
 		if [ -s $pull_secret_file ]; then
 			export pull_secret=$(jq . "$pull_secret_file")
 			aba_info "Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry."
@@ -217,6 +225,9 @@ fi
 
 # If not already set, set the default value
 if [ ! "$pull_secret" ]; then
+	if [ ! -s "$pull_secret_file" ]; then
+		dist_pull_secret_ensure "$pull_secret_file" || true
+	fi
 	if [ -s "$pull_secret_file" ]; then
 		export pull_secret=$(cat "$pull_secret_file" | jq .) 
 
@@ -263,9 +274,9 @@ if [ "$platform" = "vmw" ] && [ "${VC:-}" = "1" ]; then
 	_ocp_mm=$(_ver_minor "${ocp_version:-}")
 	if is_version_greater "${_ocp_mm}.0" "4.21.0" && { [ -z "${_vc_ver:-}" ] || ! is_version_greater "$_vc_ver" "8.0.0"; }; then
 		VSPHERE_PLATFORM_FALLBACK=1
-		aba_warn "OCP ${ocp_version} requires vSphere 8.0 U1+ for platform: vsphere (CSI)." \
+		aba_warn "$(dist_display) ${ocp_version} requires vSphere 8.0 U1+ for platform: vsphere (CSI)." \
 			"vCenter reports ${_vc_ver:-unknown}; generating platform: baremetal (apiVIPs)." \
-			"VMs still run on this hypervisor; OpenShift will not integrate with vCenter."
+			"VMs still run on this hypervisor; $(dist_display) will not integrate with vCenter."
 	else
 		USE_VSPHERE_PLATFORM=1
 	fi
@@ -279,6 +290,7 @@ aba_info
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy, arch ...
 aba_debug Creating install-config.yaml ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
+dist_install_manifests
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
 aba_success "$PWD/install-config.yaml generated successfully!"

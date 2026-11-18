@@ -61,11 +61,14 @@ fi
 WORK_DIR=$PWD # Remember so can change config file here 
 
 
-# Pre-process ALL arguments to extract --dir/-d (first only) and --debug/-D (anywhere)
+# Pre-process ALL arguments to extract --dir/-d (first only), --debug/-D, and
+# --distribution (anywhere). The distribution has to be known before --version.
 # This scans through all arguments and filters out these special options
 new_args=()           # Array to collect arguments we want to keep
 dir_already_set=false # Only process first --dir/-d
 _CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
+_CLI_DISTRIBUTION="" # Extracted from --distribution, applied after aba.conf is loaded
+_CLI_DISTRIBUTION_SET="" # 1 when the flag was present, even if its value was missing
 i=1
 
 while [ $i -le $# ]; do
@@ -156,6 +159,25 @@ while [ $i -le $# ]; do
 			new_args+=("$arg" "$chan")
 			;;
 
+		--distribution)
+			# Taken out of the main parse so the file is written before
+			# include_all.sh loads the distribution, whichever flag is first.
+			i=$((i + 1))
+			_CLI_DISTRIBUTION="${!i}"
+			_CLI_DISTRIBUTION_SET=1
+			if [[ -z "${_CLI_DISTRIBUTION:-}" || "$_CLI_DISTRIBUTION" =~ ^- ]]; then
+				echo "Error: missing argument after option --distribution" >&2
+				exit 1
+			fi
+			case "$_CLI_DISTRIBUTION" in
+				ocp|okd) ;;
+				*)
+					echo "Error: wrong value [$_CLI_DISTRIBUTION] after option --distribution" >&2
+					exit 1
+					;;
+			esac
+			;;
+
 		*)
 			# Keep all other arguments
 			new_args+=("$arg")
@@ -229,8 +251,33 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	fi
 fi
 
-# If invoked as "abatui", launch the TUI instead of the CLI
-if [ "$(basename "$0")" = "abatui" ]; then
+# Write distribution= before any load. A missing key is OpenShift, same as
+# --platform writing platform=. The TUI reads the file itself, so it starts
+# only after this write. A first run has no file yet: hold the load, create
+# the file below, then write and load once.
+_aba_write_distribution() {
+	local f="$ABA_ROOT/aba.conf" v="${1:-}"
+	[ -s "$f" ] || return 0
+	if [ -n "$v" ]; then
+		if grep -q '^distribution=' "$f"; then
+			sed -i --follow-symlinks "s/^distribution=.*/distribution=$v/" "$f"
+		else
+			printf 'distribution=%s\n' "$v" >>"$f"
+		fi
+	elif ! grep -q '^distribution=' "$f"; then
+		printf 'distribution=ocp\n' >>"$f"
+	fi
+}
+
+_ABA_DIST_HOLD=
+if [ -s "$ABA_ROOT/aba.conf" ]; then
+	_aba_write_distribution "${_CLI_DISTRIBUTION:-}"
+else
+	_ABA_DIST_HOLD=1
+fi
+
+# No file and a flag: fall through so the template is created first.
+if [ "$(basename "$0")" = "abatui" ] && { [ -s "$ABA_ROOT/aba.conf" ] || [ -z "${_CLI_DISTRIBUTION_SET:-}" ]; }; then
 	cd "$ABA_ROOT" || exit 1
 	exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
 fi
@@ -326,8 +373,37 @@ else
 	fi
 fi
 
+# The file was missing at startup. The template is written above; apply the
+# flag and load once. abatui with a flag waits until that write.
+if [ -n "${_ABA_DIST_HOLD:-}" ]; then
+	_aba_write_distribution "${_CLI_DISTRIBUTION:-}"
+	_ABA_DIST_HOLD=
+	dist_load
+	if [ "$(basename "$0")" = "abatui" ]; then
+		cd "$ABA_ROOT" || exit 1
+		exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
+	fi
+fi
+
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(cd "$ABA_ROOT" && normalize-aba-conf)
+# The key was written before the load. Reject a channel this distribution
+# does not publish. The key stays.
+if [ -n "${_CLI_DISTRIBUTION_SET:-}" ]; then
+	_dist_chan="${ocp_channel:-}"
+	if [ -n "${chan:-}" ]; then
+		_dist_chan="$chan"
+		case "$_dist_chan" in
+			stable|s) _dist_chan=stable ;;
+			fast|f) _dist_chan=fast ;;
+			eus|e) _dist_chan=eus ;;
+			candidate|c) _dist_chan=candidate ;;
+		esac
+	fi
+	if [ -n "$_dist_chan" ] && ! dist_channel_is_valid "$_dist_chan"; then
+		aba_abort "ocp_channel [$_dist_chan] is not a channel for distribution $(dist_display)"
+	fi
+fi
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
@@ -376,6 +452,55 @@ _set_cluster_conf() {
 	fi
 }
 
+# Unsigned count or size written to cluster.conf. $1 is the flag as typed,
+# $2 the raw value, $3 the cluster.conf key.
+_aba_set_uint_cluster() {
+	local _flag="$1" _raw="$2" _key="$3" _n
+	[[ "$_raw" =~ ^- || -z "$_raw" ]] && aba_abort "missing argument after option $_flag"
+	_n=$(normalize_uint "$_raw") || aba_abort "argument invalid [$_raw] after option $_flag"
+	[[ -n "$_n" ]] || aba_abort "argument invalid [$_raw] after option $_flag"
+	_set_cluster_conf "$_key" "$_n" "$_flag"
+}
+
+# Required file path stored as a Make variable. $1 is the flag as typed,
+# $2 the path, $3 the variable name.
+_aba_set_build_file() {
+	local _flag="$1" _path="$2" _key="$3"
+	[[ "$_path" =~ ^- || -z "$_path" ]] && aba_abort "missing argument after option $_flag"
+	[ ! -f "$_path" ] && aba_abort "file not found: $_path"
+	BUILD_COMMAND="$BUILD_COMMAND ${_key}='${_path}'"
+}
+
+# Required mirror.conf value. $1 flag, $2 raw value, $3 key, $4 validator, $5 abort text.
+_aba_set_mirror_conf() {
+	local _flag="$1" _val="$2" _key="$3" _check="$4" _err="$5"
+	_require_mirror_dir "$_flag"
+	[[ "$_val" =~ ^- || -z "$_val" ]] && aba_abort "missing argument after option $_flag"
+	"$_check" "$_val" || aba_abort "$_err"
+	# force skips the editor prompt when mirror.conf is created.
+	make -sC $WORK_DIR mirror.conf force=yes
+	replace-value-conf -n "$_key" -v "$_val" -f $WORK_DIR/mirror.conf
+}
+
+# Optional IPv4 written to cluster.conf. A missing or flag-like next arg clears the key.
+# $1 flag, $2 raw value, $3 cluster.conf key. Caller still shifts.
+_aba_set_optional_ipv4() {
+	local _flag="$1" _raw="$2" _key="$3" _ip=
+	if [[ -n "$_raw" && "$_raw" != -* ]]; then
+		_ip=$(normalize_ipv4 "$_raw") || aba_abort "invalid IPv4 address [$_raw] after option: $_flag"
+	fi
+	_set_cluster_conf "$_key" "$_ip" "$_flag"
+}
+
+# Copy a non-empty file into the working directory. $1 flag, $2 source, $3 dest name.
+_aba_copy_conf_file() {
+	local _flag="$1" _src="$2" _dest="$3"
+	[[ "$_src" =~ ^- || -z "$_src" ]] && aba_abort "missing argument after option $_flag"
+	[ -s "$_src" ] || aba_abort "file not found or empty: $_src"
+	cp "$_src" "$_dest"
+}
+
+aba_parse_args() {
 while [ "$*" ] 
 do
 	aba_debug "Args: [$(_redact_args "$@")]"
@@ -383,6 +508,135 @@ do
 
 	# Treat bare "help" the same as "--help" (prevents destructive fallthrough to Make)
 	[ "$1" = "help" ] && set -- "--help" "${@:2}"
+
+	# Switches that only record a choice and consume themselves.
+	# The words that take a value, or that choose the verb, stay below.
+	case "$1" in
+		--interactive)
+			interactive_mode=1
+			replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
+			export ask=1
+			shift
+			continue
+			;;
+		--quiet|-q)
+			export INFO_ABA=
+			shift
+			continue
+			;;
+		--info)
+			export INFO_ABA=1
+			shift
+			continue
+			;;
+		--debug|-D)
+			export DEBUG_ABA=1
+			export INFO_ABA=1
+			shift
+			continue
+			;;
+		--light|--lite)
+			export opt_light="--light"
+			shift
+			continue
+			;;
+		--delete-data)
+			export REG_DELETE_DATA=1
+			shift
+			continue
+			;;
+		-y|--yes)
+			export ASK_OVERRIDE=1
+			export ask=1
+			shift
+			continue
+			;;
+		-Y|--yes-permanent)
+			export ASK_OVERRIDE=1
+			replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
+			export ask=
+			shift
+			continue
+			;;
+		--ask|-a)
+			replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
+			export ask=1
+			shift
+			continue
+			;;
+		--noask)
+			replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
+			export ask=
+			shift
+			continue
+			;;
+		--shell)
+			shift
+			BUILD_COMMAND="$BUILD_COMMAND output=shell"
+			upgrade_shell="--shell"
+			opt_shell="--shell"
+			continue
+			;;
+		--force|-f)
+			shift
+			opt_force="--force"
+			BUILD_COMMAND="$BUILD_COMMAND force=force"
+			continue
+			;;
+		--wait|-w)
+			shift
+			BUILD_COMMAND="$BUILD_COMMAND wait=1"
+			upgrade_wait=1
+			continue
+			;;
+		--workers)
+			BUILD_COMMAND="$BUILD_COMMAND workers=1"
+			opt_workers="--workers"
+			shift
+			continue
+			;;
+		--masters)
+			BUILD_COMMAND="$BUILD_COMMAND masters=1"
+			opt_masters="--masters"
+			shift
+			continue
+			;;
+		--start)
+			BUILD_COMMAND="$BUILD_COMMAND start=--start"
+			shift
+			continue
+			;;
+		--dry-run)
+			upgrade_dry_run="--dry-run"
+			shift
+			continue
+			;;
+		--validate)
+			_cli_validate_only=true
+			shift
+			continue
+			;;
+		--skip-day2)
+			upgrade_skip_day2="--skip-day2"
+			shift
+			continue
+			;;
+		--allow-not-recommended)
+			upgrade_allow_not_recommended="--allow-not-recommended"
+			shift
+			continue
+			;;
+		--primed)
+			opt_primed="--primed"
+			shift
+			continue
+			;;
+		--all)
+			opt_all="--all"
+			shift
+			continue
+			;;
+	esac
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		# Peek at next arg if no target yet (allows "aba --help cluster")
@@ -409,26 +663,6 @@ do
 		fi
 
 		exit 0
-	elif [ "$1" = "--interactive" ]; then
-		interactive_mode=1
-		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
-		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
-		export ask=1
-		shift
-	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
-		export INFO_ABA=
-		shift 
-	elif [ "$1" = "--info" ]; then
-		export INFO_ABA=1
-		shift 
-	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
-		export DEBUG_ABA=1
-	export INFO_ABA=1
-	shift 
-elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
-	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
-	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
-	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
 		echo_yellow "Available OpenShift versions:"
@@ -666,6 +900,9 @@ for i in imgs:
 				aba_abort "wrong value [$chan] after option $opt" 
 				;;
 		esac
+		# fast and eus are real tokens. A distribution that does not publish
+		# them gets the same reason as the --distribution check above.
+		dist_channel_is_valid "$chan" || aba_abort "ocp_channel [$chan] is not a channel for distribution $(dist_display)"
 		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
 		ocp_channel=$chan
 		shift 2
@@ -680,7 +917,7 @@ for i in imgs:
 		ver=$arg
 		# Reject obvious format errors immediately (before any network lookups)
 		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p", "older", "o"
-		if ! _is_version_string "$arg" && ! _is_minor_version "$arg" && \
+		if ! dist_version_is_valid "$arg" "${chan:-$ocp_channel}" && ! _is_minor_version "$arg" && \
 		   ! [[ "$arg" =~ ^(latest|l|previous|p|older|o)$ ]]; then
 			aba_abort "incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
 		fi
@@ -704,8 +941,8 @@ for i in imgs:
 		# Expand ver to latest, if it's just a point version (x.y)
 		_is_minor_version "$ver" && { ver=$(fetch_latest_z_version "$ocp_channel" "$ver") || true; }
 
-		# Validate version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
-		_is_version_string "$ver" || ver=""
+		# Validate version for the distribution that is loaded.
+		dist_version_is_valid "$ver" "$chan" || ver=""
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		if [ ! "$ver" ]; then
@@ -717,7 +954,7 @@ for i in imgs:
 		# ver should now be x.y.z or x.y.z-prerelease format (guaranteed by early validation)
 
 		# Warn if pre-release version
-		_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use."
+		dist_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use."
 
 		# Same graph check save/sync use. Do not store a version the channel does not list.
 		if ! verify_release_version_exists "$ver" "$chan"; then
@@ -743,6 +980,7 @@ for i in imgs:
 		shift 2
 		ocp_version=$ver
 	elif [ "$1" = "--upgrade-to" ]; then
+		dist_stop_unsupported "--upgrade-to"
 		opt=$1
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
@@ -773,10 +1011,10 @@ for i in imgs:
 			;;
 		esac
 		_is_minor_version "$tgt_ver" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
-		_is_version_string "$tgt_ver" || tgt_ver=""
+		dist_version_is_valid "$tgt_ver" "$chan" || tgt_ver=""
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
-		_is_version_string "$tgt_ver" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
-		_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
+		dist_version_is_valid "$tgt_ver" "$chan" || aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		dist_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
 		replace-value-conf -n ocp_upgrade_to -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
@@ -826,38 +1064,20 @@ for i in imgs:
 		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
-		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_abs_path "$2" || aba_abort "invalid data-dir '$2' — must be an absolute path (starting with '/' or '~')"
-		# force will skip over asking to edit the conf file
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n data_dir -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" data_dir _valid_abs_path \
+			"invalid data-dir '$2' — must be an absolute path (starting with '/' or '~')"
 		shift 2
-	elif [ "$1" = "--delete-data" ]; then
-		export REG_DELETE_DATA=1
-		shift
 	elif [ "$1" = "--vendor" ]; then
-		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_cli_vendor "$2" || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_OMR_VENDOR. Use 'aba register' to connect an externally managed registry."
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" reg_vendor _valid_cli_vendor \
+			"invalid vendor '$2' -- must be auto, quay, docker, or $_OMR_VENDOR. Use 'aba register' to connect an externally managed registry."
 		shift 2
 	elif [ "$1" = "--reg-port" ]; then
-		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		valid_port "$2" || aba_abort "invalid port '$2' -- must be 1-65535"
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_port -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" reg_port valid_port \
+			"invalid port '$2' -- must be 1-65535"
 		shift 2
 	elif [ "$1" = "--reg-user" -o "$1" = "-u" ]; then
-		_require_mirror_dir "$1"
-		# The username used to access the mirror registry 
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_valid_username "$2" || aba_abort "invalid registry username '$2' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
-		# force will skip over asking to edit the conf file
-		make -sC $WORK_DIR mirror.conf force=yes
-		replace-value-conf -n reg_user -v "$2" -f $WORK_DIR/mirror.conf
+		_aba_set_mirror_conf "$1" "$2" reg_user _valid_username \
+			"invalid registry username '$2' — must start with a letter or underscore, followed by alphanumeric, dots, hyphens, or underscores"
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
 		_require_mirror_dir "$1"
@@ -884,14 +1104,10 @@ for i in imgs:
 		replace-value-conf -n reg_path -v "$_rp" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--pull-secret-mirror" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ ! -f "$2" ] && aba_abort "file not found: $2"
-		BUILD_COMMAND="$BUILD_COMMAND pull_secret_mirror='$2'"
+		_aba_set_build_file "$1" "$2" pull_secret_mirror
 		shift 2
 	elif [ "$1" = "--ca-cert" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ ! -f "$2" ] && aba_abort "file not found: $2"
-		BUILD_COMMAND="$BUILD_COMMAND ca_cert='$2'"
+		_aba_set_build_file "$1" "$2" ca_cert
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -941,24 +1157,12 @@ for i in imgs:
 		fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
-		_flag="$1"
-		api_vip=
-		if [[ -n $2 && $2 != -* ]]; then
-			# Strip leading zeros immediately (10.0.0.08 → 10.0.0.8)
-			api_vip=$(normalize_ipv4 "$2") || aba_abort "invalid IPv4 address [$2] after option: $_flag"
-			shift
-		fi
-		_set_cluster_conf api_vip "$api_vip" "$_flag"
-		shift
+		# Strip leading zeros immediately (10.0.0.08 -> 10.0.0.8)
+		_aba_set_optional_ipv4 "$1" "$2" api_vip
+		if [[ -n $2 && $2 != -* ]]; then shift 2; else shift; fi
 	elif [ "$1" = "--ingress-vip" -o "$1" = "-G" ]; then
-		_flag="$1"
-		ingress_vip=
-		if [[ -n $2 && $2 != -* ]]; then
-			ingress_vip=$(normalize_ipv4 "$2") || aba_abort "invalid IPv4 address [$2] after option: $_flag"
-			shift
-		fi
-		_set_cluster_conf ingress_vip "$ingress_vip" "$_flag"
-		shift
+		_aba_set_optional_ipv4 "$1" "$2" ingress_vip
+		if [[ -n $2 && $2 != -* ]]; then shift 2; else shift; fi
 	elif [ "$1" = "--ports" ]; then
 		_flag="$1"
 		ports_vals=""
@@ -1050,55 +1254,22 @@ for i in imgs:
 		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ -s "$2" ] || aba_abort "file not found or empty: $2"
-		cp "$2" vmware.conf
+		_aba_copy_conf_file "$1" "$2" vmware.conf
 		shift 2
 	elif [ "$1" = "--kvm" -o "$1" = "-K" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ -s "$2" ] || aba_abort "file not found or empty: $2"
-		cp "$2" kvm.conf
+		_aba_copy_conf_file "$1" "$2" kvm.conf
 		shift 2
-	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # Answer yes to all prompts
-		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
-		export ask=1
-		shift 
-	elif [ "$1" = "-Y" -o "$1" = "--yes-permanent" ]; then
-		export ASK_OVERRIDE=1  
-		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf  # And make permanent change
-		export ask=
-		shift 
-	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
-		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
-		export ask=1
-		shift 
-	elif [ "$1" = "--noask" ]; then
-		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
-		export ask=
-		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf master_cpu_count "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" master_cpu_count
 		shift 2
 	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf master_mem "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" master_mem
 		shift 2
 	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf worker_cpu_count "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" worker_cpu_count
 		shift 2
 	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
-		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
-		_set_cluster_conf worker_mem "$_n" "$1"
+		_aba_set_uint_cluster "$1" "$2" worker_mem
 		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
@@ -1207,27 +1378,6 @@ for i in imgs:
 			aba_debug "Adding retry=3 (default) to BUILD_COMMAND"
 			shift
 		fi
-	elif [ "$1" = "--shell" ]; then
-		shift
-		BUILD_COMMAND="$BUILD_COMMAND output=shell"
-		upgrade_shell="--shell"
-		opt_shell="--shell"
-	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
-		shift
-		opt_force="--force"
-		BUILD_COMMAND="$BUILD_COMMAND force=force"  # FIXME: Should only allow force=1 after the appropriate target
-	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		shift
-		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
-		upgrade_wait=1  # Also enables upgrade monitoring (aba upgrade --wait)
-	elif [ "$1" = "--workers" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND workers=1"
-		opt_workers="--workers"
-		shift
-	elif [ "$1" = "--masters" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND masters=1"
-		opt_masters="--masters"
-		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
 		_n=$(normalize_uint "$2") || aba_abort "argument invalid [$2] after option $1"
 		[[ -n "$_n" ]] || aba_abort "argument invalid [$2] after option $1"
@@ -1290,33 +1440,12 @@ for i in imgs:
 		_valid_image_source "$2" || aba_abort "invalid mirror name '$2' — must be alphanumeric (hyphens, dots, underscores allowed)"
 		_set_cluster_conf image_source "$2" "$1"
 		shift 2
-	elif [ "$1" = "--start" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND start=--start"
-		shift
 	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
 	elif [ "$1" = "--to" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_is_version_string "$2" || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
+		dist_version_is_valid "$2" "${chan:-$ocp_channel}" || aba_abort "invalid version format '$2' for --to — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-rc.1)"
 		upgrade_to="$2"
 		shift 2
-	elif [ "$1" = "--dry-run" ]; then
-		upgrade_dry_run="--dry-run"
-		shift
-	elif [ "$1" = "--validate" ]; then
-		_cli_validate_only=true
-		shift
-	elif [ "$1" = "--skip-day2" ]; then
-		upgrade_skip_day2="--skip-day2"
-		shift
-	elif [ "$1" = "--allow-not-recommended" ]; then
-		upgrade_allow_not_recommended="--allow-not-recommended"
-		shift
-	elif [ "$1" = "--primed" ]; then
-		opt_primed="--primed"
-		shift
-	elif [ "$1" = "--all" ]; then
-		opt_all="--all"
-		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
 		cmd=
@@ -1381,6 +1510,10 @@ for i in imgs:
 		shift 
 	fi
 done
+}
+
+aba_parse_args "$@"
+
 
 # Guard for VM lifecycle targets: validate platform + hypervisor config
 _ensure_vm_platform_ready() {
@@ -1475,6 +1608,12 @@ if [ "$cur_target" ]; then
 				aba_warn "Cluster has not completed installation."
 				ask "Cluster has not completed installation, continue anyway" || exit 1
 			fi
+			;;
+	esac
+
+	case $cur_target in
+		day2-osus|day2-virt|upgrade|upgrade-mon)
+			dist_stop_unsupported "$cur_target"
 			;;
 	esac
 
@@ -2066,7 +2205,7 @@ fi
 	if ! aba_version_fetch_wait "$ocp_channel"; then
 		error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version")
 		[ -z "$error_msg" ] && error_msg=$(run_once -e -i "ocp:${ocp_channel}:latest_version_previous")
-		aba_abort "Failed to fetch OCP versions from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
+		aba_abort "Failed to fetch $(dist_display) versions from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi
 #	if [ "$ocp_channel" = "stable" ]; then
 #		run_once -w -i ocp:stable:latest_version

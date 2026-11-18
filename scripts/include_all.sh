@@ -594,6 +594,8 @@ normalize-aba-conf() {
 
 	# Default verify_conf to "all" if not set or empty in config
 	grep -q '^verify_conf=\S' aba.conf 2>/dev/null || echo "export verify_conf=all"
+	# A file with no distribution= line is OpenShift.
+	grep -q '^distribution=\S' aba.conf 2>/dev/null || echo "export distribution=ocp"
 }
 
 warn_if_cluster_unstable() {
@@ -725,11 +727,16 @@ verify-aba-conf() {
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
 
-	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$ocp_channel" | grep -q -E "^(fast|stable|candidate|eus)$" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	dist_version_is_valid "$ocp_version" "$ocp_channel" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	dist_channel_is_valid "$ocp_channel" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo "$platform"    | grep -q -E "^(bm|vmw|kvm)$" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	case "${distribution:-ocp}" in
+		ocp|okd) ;;
+		*) echo_red "Error: distribution incorrectly set in aba.conf: [$distribution]" >&2; ret=1 ;;
+	esac
+	local _tp
+	_tp="$(dist_target_problem "$platform")" || { echo_red "Error: $_tp" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -3271,7 +3278,7 @@ _ver_minor() {
 # If mirror reports prerelease (e.g. 4.21.0-rc.1), returns previous minor (e.g. 4.20)
 # Note: CDN is the floating download anchor only; channel tips come from Cincinnati.
 ############################################
-fetch_latest_minor_version() {
+_ocp_fetch_latest_minor_version() {
 	local channel="${1:-stable}"
 	local major
 	major="$(ocp_major_of "${ocp_version:-}")"
@@ -3309,8 +3316,10 @@ _fetch_graph_cached() {
 	[[ -n "$minor" ]] || return 0
 
 	chann_minor="${channel}-${minor}"
-	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
-	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
+	# The channel name is shared (stable-4.21). The distribution keeps the
+	# OpenShift graph from being reused as an OKD graph.
+	cache_file="${ABA_CACHE_DIR}/graph_$(dist_of)_${chann_minor}_${ARCH}.json"
+	url="$(dist_graph_api)?channel=${chann_minor}&arch=${ARCH}"
 
 	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
 	cat "$cache_file"
@@ -3322,7 +3331,7 @@ _fetch_graph_cached() {
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
 ############################################
-fetch_all_versions() {
+_ocp_fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
 
@@ -3344,7 +3353,7 @@ _version_has_cross_minor_edge() {
 	minor="$(_ver_minor "$version")"
 	[[ -n "$minor" ]] || return 1
 
-	cache_file="${ABA_CACHE_DIR}/graph_candidate-${minor}_${ARCH}.json"
+	cache_file="${ABA_CACHE_DIR}/graph_$(dist_of)_candidate-${minor}_${ARCH}.json"
 	[[ -s "$cache_file" ]] || return 1
 
 	while IFS= read -r src; do
@@ -3457,7 +3466,7 @@ _candidate_offer() {
 # stable-5.0 has 5.0.0), prefer that GA tip. Previous then becomes
 # the CDN tip via fetch_previous_version.
 ############################################
-fetch_latest_version() {
+_ocp_fetch_latest_version() {
 	local channel="${1:-stable}"
 	local minor v prev offer newer
 
@@ -3495,7 +3504,7 @@ fetch_latest_version() {
 #	$2 = minor (e.g. 4.20) [optional]
 # If requested minor has no GA, fall back to previous minor.
 ############################################
-fetch_latest_z_version() {
+_ocp_fetch_latest_z_version() {
 	local channel="${1:-stable}"
 	local minor="$2"
 	local v prev
@@ -3522,7 +3531,7 @@ fetch_latest_z_version() {
 # At X.0 (CDN already on next major), Previous is previous-major CDN tip.
 # On candidate: line 2 of _candidate_offer (the one before latest). Empty if none.
 ############################################
-fetch_previous_version() {
+_ocp_fetch_previous_version() {
 	local channel="${1:-stable}"
 	local minor prev v offer newer cdn_tip
 
@@ -3556,7 +3565,7 @@ fetch_previous_version() {
 # Crosses majors at X.0 via _channel_prev_minor.
 # On candidate: line 3 of _candidate_offer. Empty if the walk found fewer than 3.
 ############################################
-fetch_older_version() {
+_ocp_fetch_older_version() {
 	local channel="${1:-stable}"
 	local minor prev older v offer newer cdn_tip
 
@@ -3981,7 +3990,7 @@ resolve_cluster_channel() {
 #	$2 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
 # Returns: 0 if version found, 1 if not
 ############################################
-verify_release_version_exists() {
+_ocp_verify_release() {
 	local ver="${1:-}"
 	local channel="${2:-${ocp_channel:-stable}}"
 
@@ -5502,7 +5511,8 @@ download_all_catalogs() {
 	fi
 	[[ -z "$ttl" ]] && ttl="$(parse_duration "${CATALOG_CACHE_TTL:-12h}")"
 
-	local catalogs=(redhat-operator certified-operator community-operator)
+	local catalogs
+	read -ra catalogs <<< "$(dist_catalogs)"
 	local running=0
 
 	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
@@ -5551,18 +5561,20 @@ wait_for_all_catalogs() {
 	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
 	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
 	CATALOG_ERROR=""
-	local _failed_cat=""
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
-		_failed_cat="redhat-operator"
-	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
-		_failed_cat="certified-operator"
-	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
-		_failed_cat="community-operator"
-	fi
+	local _failed_cat="" catalog catalogs
+	# Wait only for the catalogs this distribution started. OKD ships
+	# community-operator alone; waiting on redhat-operator never returns.
+	read -ra catalogs <<< "$(dist_catalogs)"
+	for catalog in "${catalogs[@]}"; do
+		if ! run_once -S -w -W "$timeout_secs" -m "Waiting for $catalog catalog download to complete" -i "catalog:${version_short}:${catalog}"; then
+			_failed_cat="$catalog"
+			break
+		fi
+	done
 
 	if [[ -n "$_failed_cat" ]]; then
 		CATALOG_ERROR=$(get_task_error "catalog:${version_short}:${_failed_cat}" 2>/dev/null | tail -8 | tail -c 600)
-		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for OCP $version_short" >&2
+		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for $(dist_display) $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
@@ -5570,7 +5582,7 @@ wait_for_all_catalogs() {
 	aba_debug "community-operator catalog ready"
 	
 	# Must use stderr since stdout may be redirected to YAML file
-	aba_success "All catalog downloads completed for OCP $version_short" >&2
+	aba_success "All catalog downloads completed for $(dist_display) $version_short" >&2
 }
 
 # Copy shipped catalog indexes into .index/ if live versions don't exist yet.
@@ -5681,7 +5693,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 	for ocp_ver_major in "$@"; do
 		[ -z "$ocp_ver_major" ] && continue
-		for catalog_name in redhat-operator certified-operator community-operator; do
+		for catalog_name in $(dist_catalogs); do
 			local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
 			[ -s "$digest_file" ] || continue
 			local digest
@@ -5838,7 +5850,11 @@ _run_oc_mirror_with_retry() {
 		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
-		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+		# OKD sync needs the CI signature store. save/load add --remove-signatures.
+		dist_prepare_oc_mirror
+		local _dist_flags
+		_dist_flags="$(dist_oc_mirror_flags "$action")"
+		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-} ${_dist_flags}"
 
 		echo
 		if [ $try -gt 1 ]; then
@@ -6324,7 +6340,8 @@ ensure_openshift_install() {
 # Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
 	local _vendor="${1:-}"
-	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
+	local _tag
+	_tag="$(dist_mirror_manifest_ref)" || return 1
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
 	local _repo="${reg_path#/}/openshift/release-images"   # strip leading slash from registry path
@@ -6926,50 +6943,30 @@ cli_download_extra_clis() {
 check_internet_connectivity() {
 	local prefix="$1"
 	local quiet="${2:-false}"
-	
-	# Check if we need to run the checks (not cached)
-	local need_check=false
-	if ! run_once -p -i "${prefix}:check:api.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "${prefix}:check:mirror.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "${prefix}:check:registry.redhat.io" >/dev/null 2>&1; then
-		need_check=true
-	fi
-	
-	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
-	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://api.openshift.com/
-	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://mirror.openshift.com/
-	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 8 --max-time 15 https://registry.redhat.io/
-	
-	# Wait: block for the 3 checks started above
+	local site err_msg
+
+	# quiet is accepted so existing callers keep their argument.
+	# The sites come from the loaded distribution file.
+	: "$quiet"
+
+	# Start: one probe per site, in parallel (5-min TTL). Wait: loop below.
+	for site in $(dist_probe_sites); do
+		run_once -t 300 -i "${prefix}:check:${site}" -- curl -sL --head --connect-timeout 8 --max-time 15 "https://${site}/"
+	done
+
 	FAILED_SITES=""
 	ERROR_DETAILS=""
-	
-	if ! run_once -w -q -S -i "${prefix}:check:api.openshift.com"; then
-		FAILED_SITES="api.openshift.com"
-		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		ERROR_DETAILS="  api.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -S -i "${prefix}:check:mirror.openshift.com"; then
-		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
-		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
-		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
-		ERROR_DETAILS="${ERROR_DETAILS}  mirror.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -S -i "${prefix}:check:registry.redhat.io"; then
-		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
-		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
-		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
-		ERROR_DETAILS="${ERROR_DETAILS}  registry.redhat.io: $err_msg"
-	fi
-	
-	# Return status
+	for site in $(dist_probe_sites); do
+		if ! run_once -w -q -S -i "${prefix}:check:${site}"; then
+			[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+			FAILED_SITES="${FAILED_SITES}${site}"
+			err_msg=$(run_once -e -i "${prefix}:check:${site}" | head -1)
+			[[ -z "$err_msg" ]] && err_msg="Connection failed"
+			[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
+			ERROR_DETAILS="${ERROR_DETAILS}  ${site}: $err_msg"
+		fi
+	done
+
 	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
 }
 
@@ -6983,24 +6980,28 @@ require_internet_and_pull_secret() {
 	local errors=()
 	local has_internet=true
 
-	# Check internet (quick probe, 5s timeout)
-	local _inet_err
-	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ 2>&1 >/dev/null); then
+	# Check internet (quick probe, 5s timeout). The host is the distribution's.
+	local _inet_err _probe
+	_probe="$(dist_quick_probe_host)"
+	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 "https://${_probe}/v2/" 2>&1 >/dev/null); then
 		has_internet=false
-		errors+=("No internet access (cannot reach registry.redhat.io)")
+		errors+=("No internet access (cannot reach ${_probe})")
 		aba_debug "Internet check failed: $_inet_err"
 	fi
 
-	# Check pull secret (global, then fallback)
+	# Check pull secret (global, then fallback). OKD without operators needs none.
+	local _ps_reg
+	_ps_reg="$(dist_pull_secret_registry)"
 	if [ -s "$pull_secret_file" ]; then
-		if ! grep -q registry.redhat.io "$pull_secret_file"; then
-			errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
+		# An empty registry name would make grep match every file.
+		if dist_pull_secret_required && [ -n "$_ps_reg" ] && ! grep -q "$_ps_reg" "$pull_secret_file"; then
+			errors+=("Pull secret at $pull_secret_file does not contain ${_ps_reg} credentials")
 		elif ! jq empty "$pull_secret_file" 2>/dev/null; then
 			errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
 		fi
 	elif [ -n "$fallback_ps" ] && [ -s "$fallback_ps" ]; then
 		aba_debug "Global pull secret not found; using fallback: $fallback_ps"
-	else
+	elif dist_pull_secret_required; then
 		errors+=("Pull secret not found at $pull_secret_file")
 	fi
 
@@ -7027,3 +7028,24 @@ require_internet_and_pull_secret() {
 			"and save it to $pull_secret_file"
 	fi
 }
+
+# Distribution file. Loaded last so ocp_major_of, _is_version_string and
+# ABA_GRAPH_API already exist. readlink follows a symlink of this file, so
+# the companion is found beside the real script rather than beside the link.
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dist.sh"
+
+# Public names. The loaded distribution file supplies the body. The
+# OpenShift bodies are the _ocp_* functions above. OKD does not use the CDN.
+fetch_latest_minor_version() { dist_fetch_latest_minor_version "$@"; }
+fetch_all_versions() { dist_fetch_all_versions "$@"; }
+fetch_latest_version() { dist_fetch_latest_version "$@"; }
+fetch_latest_z_version() { dist_fetch_latest_z_version "$@"; }
+fetch_previous_version() { dist_fetch_previous_version "$@"; }
+fetch_older_version() { dist_fetch_older_version "$@"; }
+verify_release_version_exists() { dist_verify_release "$@"; }
+
+# aba.sh sets _ABA_DIST_HOLD when aba.conf does not exist yet. It writes
+# the key, then calls dist_load itself. Every other source loads now.
+if [ -z "${_ABA_DIST_HOLD:-}" ]; then
+	dist_load
+fi

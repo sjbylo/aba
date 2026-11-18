@@ -103,13 +103,13 @@ _resolve_operators_json() {
 	# Special "all" operator set — mirrors entire redhat catalog
 	if echo "$op_sets" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 		aba_success "Adding all redhat-operator operators (catalog v$catalog_ver) to your image-set config file!" >&2
-		echo '[{"catalog":"registry.redhat.io/redhat/redhat-operator-index:v'"$catalog_ver"'","all":true,"packages":[]}]'
+		echo '[{"catalog":"'"$(dist_catalog_ref redhat-operator "$catalog_ver")"'","all":true,"packages":[]}]'
 		return 0
 	fi
 
 	# Verify catalog index files exist
 	local _cat_errors=""
-	for _cat in redhat-operator certified-operator community-operator; do
+	for _cat in $(dist_catalogs); do
 		if [ ! -s ".index/${_cat}-index-v${catalog_ver}" ]; then
 			_cat_errors=1
 			aba_warn "Missing operator catalog file: $PWD/.index/${_cat}-index-v${catalog_ver}" >&2
@@ -138,7 +138,7 @@ _resolve_operators_json() {
 
 		# Find which catalog contains this operator (priority: redhat, certified, community)
 		local _found_cat=""
-		for _cat in redhat-operator certified-operator community-operator; do
+		for _cat in $(dist_catalogs); do
 			if _index_line=$(grep "^$_op " ".index/${_cat}-index-v${catalog_ver}" 2>/dev/null); then
 				_found_cat="$_cat"
 				break
@@ -146,7 +146,7 @@ _resolve_operators_json() {
 		done
 
 		if [ -z "$_found_cat" ]; then
-			aba_warn "Operator '$_op' (from set '$_group_label') not found in any catalog for OCP $catalog_ver -- skipping" >&2
+			aba_warn "Operator '$_op' (from set '$_group_label') not found in any catalog for $(dist_display) $catalog_ver -- skipping" >&2
 			return 0
 		fi
 
@@ -231,13 +231,13 @@ _resolve_operators_json() {
 	local _catalogs=()
 	local _rj _cj _cmj
 
-	_rj=$(_build_catalog_json "redhat" "registry.redhat.io/redhat/redhat-operator-index:v${catalog_ver}" "${_redhat_pkgs[@]+"${_redhat_pkgs[@]}"}")
+	_rj=$(_build_catalog_json "redhat" "$(dist_catalog_ref redhat-operator "$catalog_ver")" "${_redhat_pkgs[@]+"${_redhat_pkgs[@]}"}")
 	[ -n "$_rj" ] && _catalogs+=("$_rj")
 
-	_cj=$(_build_catalog_json "certified" "registry.redhat.io/redhat/certified-operator-index:v${catalog_ver}" "${_certified_pkgs[@]+"${_certified_pkgs[@]}"}")
+	_cj=$(_build_catalog_json "certified" "$(dist_catalog_ref certified-operator "$catalog_ver")" "${_certified_pkgs[@]+"${_certified_pkgs[@]}"}")
 	[ -n "$_cj" ] && _catalogs+=("$_cj")
 
-	_cmj=$(_build_catalog_json "community" "registry.redhat.io/redhat/community-operator-index:v${catalog_ver}" "${_community_pkgs[@]+"${_community_pkgs[@]}"}")
+	_cmj=$(_build_catalog_json "community" "$(dist_catalog_ref community-operator "$catalog_ver")" "${_community_pkgs[@]+"${_community_pkgs[@]}"}")
 	[ -n "$_cmj" ] && _catalogs+=("$_cmj")
 
 	# Output final JSON array
@@ -265,6 +265,31 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	{ [ ! "$ocp_channel" ] || [ ! "$ocp_version" ]; } && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
+
+	# No channels block: the release is a digest. Resolve it before rendering
+	# so a failed lookup leaves an existing image set file untouched.
+	export release_ref=""
+	if ! dist_supports_channels; then
+		if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+			dist_stop_unsupported "mirroring an upgrade target"
+		fi
+		_ref_rc=0
+		release_ref="$(dist_release_payload_ref "$ocp_version" "$ocp_channel")" || _ref_rc=$?
+		if [ "$_ref_rc" -ne 0 ] && [ "${excl_platform:-}" ]; then
+			release_ref="(not resolved, platform excluded)"
+		elif [ "$_ref_rc" -eq 1 ]; then
+			aba_abort \
+				"Cannot find the release image digest of $ocp_version (channel $ocp_channel)." \
+				"It is read from $(dist_cli_base_url "$ocp_version")/release.txt." \
+				"Check that ocp_version is a published build and that GitHub can be reached."
+		elif [ "$_ref_rc" -ne 0 ]; then
+			aba_abort \
+				"Cannot read the release image manifest of $ocp_version from $(dist_release_payload_repo)." \
+				"release.txt names a manifest list, and the image of architecture $ARCH is needed." \
+				"The release signature belongs to that image." \
+				"Check that the registry can be reached and that skopeo is installed."
+		fi
+	fi
 
 	# Upgrade mode: export target version variables for the Jinja template
 	export ocp_upgrade_to="${ocp_upgrade_to:-}"
@@ -385,7 +410,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	_tmp_isc=$(mktemp data/imageset-config.yaml.XXXXXX) || aba_abort "Cannot create temp file in data/"
 	scripts/j2 ./templates/imageset-config.yaml.j2 > "$_tmp_isc"
 
-	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
+	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: (true|false)/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
 
 	# Add friendly comments when sections are excluded (aba.conf toggles)
 	if [ "$excl_platform" ]; then
