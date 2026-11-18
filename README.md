@@ -525,11 +525,13 @@ To create a cluster configuration and install OpenShift:
 aba cluster \
     --name mycluster \
     --type compact \
-    [--starting-ip <ip>] \
+    [--starting-ip <ip|ip-list>] \
     [--api-vip <ip>] \
     [--ingress-vip <ip>]
 aba -d mycluster install
 ```
+
+`--starting-ip` takes the first node IP (the other nodes get the next addresses), or a comma list with one IP per node, masters first. In a list, a bare last octet keeps the prefix of the previous full address: `10.0.0.10,11,12,10.0.1.60,61,62`.
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
 For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
@@ -740,7 +742,7 @@ In a connected environment, cluster nodes pull images directly from the Internet
 
 ```
 cd aba
-aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
+aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip|ip-list>]
 ```
 
 2. Edit `mycluster/cluster.conf` and set the connection type:

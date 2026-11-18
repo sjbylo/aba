@@ -1213,7 +1213,14 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local sip_val
 					sip_val=$(<"$_TUI_TMP")
-					if ! sip_val=$(_normalize_ip "$sip_val"); then
+					if [[ "$sip_val" == *,* ]]; then
+						# Syntax only: the list length is checked when cluster.conf is verified
+						if ! sip_val=$(normalize_starting_ip "$sip_val"); then
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Invalid IP address.\n\nExpected one IP per node, the first one in full\n(e.g. 10.0.0.10,11,12,10.0.1.60)" 0 0 || true
+							continue
+						fi
+					elif ! sip_val=$(_normalize_ip "$sip_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.100)" 0 0 || true
 						continue

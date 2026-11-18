@@ -88,6 +88,7 @@ unit_tests=(
 	# Config / normalize
 	test/func/test-normalize-conf-pipeline.sh
 	test/func/test-normalize-ipv4.sh
+	test/func/test-starting-ip-list.sh
 	test/func/test-pick-install-iface.sh
 	test/func/test-input-validation-all.sh
 	test/func/test-ocp-major-render.sh
