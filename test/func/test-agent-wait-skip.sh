@@ -19,7 +19,25 @@ _assert() {
 }
 
 _tmp=$(mktemp -d)
-trap 'rm -rf "$_tmp"' EXIT
+_fake_oc_install=
+_agent_wait_cleanup() {
+	rm -rf "$_tmp"
+	# Only remove the placeholder this test created.
+	if [ -n "${_fake_oc_install:-}" ]; then
+		rm -f "$HOME/bin/openshift-install"
+	fi
+}
+trap _agent_wait_cleanup EXIT
+
+# make -n still runs a $(MAKE) recipe. The install chain depends on
+# ~/bin/openshift-install, whose recipe recurses into ../cli. This stub
+# tree has no ../cli, so a missing binary aborts the dry-run before the
+# later install steps are printed.
+if [ ! -e "$HOME/bin/openshift-install" ]; then
+	mkdir -p "$HOME/bin"
+	: > "$HOME/bin/openshift-install"
+	_fake_oc_install=1
+fi
 
 # Minimal aba root with cluster Makefile
 mkdir -p "$_tmp/cluster" "$_tmp/scripts" "$_tmp/templates" "$_tmp/others"

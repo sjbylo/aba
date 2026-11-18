@@ -12,7 +12,7 @@
 #   TUI_SKIP_DELETE   - Set to 1 to skip cluster deletion / throwaway sweeps
 #
 # Cluster lifetime (full mode): Cluster Install creates $TUI_CLUSTER_NAME;
-# day2/upgrade/lifecycle reuse it; Lifecycle deletes it. BM uses sno4 /
+# day2/upgrade/lifecycle reuse it; Lifecycle deletes it. BM uses sno2 /
 # compact / standard and must free them before day2 (suite sweeps after BM).
 # Suite EXIT also sweeps all throwaways unless TUI_SKIP_DELETE=1.
 #
@@ -168,14 +168,14 @@ else
 	# --- Destructive tests (full mode only, pipeline order) ---
 	# Cluster ownership: Cluster Install creates $TUI_CLUSTER_NAME (sno);
 	# day2 / upgrade / lifecycle reuse it; Lifecycle deletes it. BM uses
-	# sno4/compact/standard and must free them before day2 (below).
+	# sno2/compact/standard and must free them before day2 (below).
 	_run_test "Mirror Workflow" "test/func/test-tui-mirror.sh" || true
 	_run_test "Cluster Install" "test/func/test-tui-cluster.sh" || true
 	_run_test "BM Cluster Install" "test/func/test-tui-bm-cluster.sh" || true
 	# Free BM leftovers immediately — keep only the shared sno for day2+.
 	if [[ "${TUI_SKIP_DELETE:-0}" != "1" ]]; then
 		echo ""
-		echo "  Post-BM: freeing sno4/compact/standard (keeping ${TUI_CLUSTER_NAME})"
+		echo "  Post-BM: freeing sno2/compact/standard (keeping ${TUI_CLUSTER_NAME})"
 		tui_sweep_throwaway_clusters "${TUI_CLUSTER_NAME}" || true
 	fi
 	_run_test "Cluster-Select Race" "test/func/test-tui-cluster-select-race.sh" || true

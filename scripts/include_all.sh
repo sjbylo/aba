@@ -594,6 +594,8 @@ normalize-aba-conf() {
 
 	# Default verify_conf to "all" if not set or empty in config
 	grep -q '^verify_conf=\S' aba.conf 2>/dev/null || echo "export verify_conf=all"
+	# A file with no distribution= line is OpenShift.
+	grep -q '^distribution=\S' aba.conf 2>/dev/null || echo "export distribution=ocp"
 }
 
 warn_if_cluster_unstable() {
@@ -5410,18 +5412,20 @@ wait_for_all_catalogs() {
 	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
 	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
 	CATALOG_ERROR=""
-	local _failed_cat=""
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
-		_failed_cat="redhat-operator"
-	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
-		_failed_cat="certified-operator"
-	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
-		_failed_cat="community-operator"
-	fi
+	local _failed_cat="" catalog catalogs
+	# Wait only for the catalogs this distribution started. OKD ships
+	# community-operator alone; waiting on redhat-operator never returns.
+	read -ra catalogs <<< "$(dist_catalogs)"
+	for catalog in "${catalogs[@]}"; do
+		if ! run_once -S -w -W "$timeout_secs" -m "Waiting for $catalog catalog download to complete" -i "catalog:${version_short}:${catalog}"; then
+			_failed_cat="$catalog"
+			break
+		fi
+	done
 
 	if [[ -n "$_failed_cat" ]]; then
 		CATALOG_ERROR=$(get_task_error "catalog:${version_short}:${_failed_cat}" 2>/dev/null | tail -8 | tail -c 600)
-		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for OCP $version_short" >&2
+		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for $(dist_display) $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
@@ -5429,7 +5433,7 @@ wait_for_all_catalogs() {
 	aba_debug "community-operator catalog ready"
 	
 	# Must use stderr since stdout may be redirected to YAML file
-	aba_success "All catalog downloads completed for OCP $version_short" >&2
+	aba_success "All catalog downloads completed for $(dist_display) $version_short" >&2
 }
 
 # Copy shipped catalog indexes into .index/ if live versions don't exist yet.
@@ -6887,3 +6891,9 @@ fetch_latest_z_version() { dist_fetch_latest_z_version "$@"; }
 fetch_previous_version() { dist_fetch_previous_version "$@"; }
 fetch_older_version() { dist_fetch_older_version "$@"; }
 verify_release_version_exists() { dist_verify_release "$@"; }
+
+# aba.sh sets _ABA_DIST_HOLD when aba.conf does not exist yet. It writes
+# the key, then calls dist_load itself. Every other source loads now.
+if [ -z "${_ABA_DIST_HOLD:-}" ]; then
+	dist_load
+fi

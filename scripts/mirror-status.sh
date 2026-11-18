@@ -626,7 +626,7 @@ op)
 
 			_parts=""
 			[ "${transfer_operator_count:-0}" -gt 0 ] 2>/dev/null && _parts="${transfer_operator_count} operator(s)"
-			aba_info "Loading to registry: OCP $_ver_display${_parts:+ — $_parts}"
+			aba_info "Loading to registry: $(dist_display) $_ver_display${_parts:+ — $_parts}"
 		else
 			aba_info "Loading to registry: ${_reg_host}:${_reg_port}${_reg_path}"
 		fi
@@ -657,14 +657,14 @@ op)
 		[ -z "$_parts" ] && _parts="(nothing — all sections excluded)"
 
 		if [ "$_op" = "save" ]; then
-			aba_info "Saving to disk: OCP $_ver_display — $_parts"
+			aba_info "Saving to disk: $(dist_display) $_ver_display — $_parts"
 			if [ "$_disk_save_short" = true ]; then
 				aba_warn "$_disk_save_summary"
 			elif [ -n "$_disk_save_summary" ]; then
 				aba_info "$_disk_save_summary"
 			fi
 		else
-			aba_info "Syncing to registry: OCP $_ver_display — $_parts"
+			aba_info "Syncing to registry: $(dist_display) $_ver_display — $_parts"
 			if [ "$_disk_sync_short" = true ]; then
 				aba_warn "$_disk_sync_summary"
 			elif [ -n "$_disk_sync_summary" ]; then
@@ -734,7 +734,7 @@ op)
 
 	echo
 	aba_info "Mirror status:"
-	aba_info "  OCP:          ${local_ver_display}"
+	aba_info "  $(dist_display):          ${local_ver_display}"
 	aba_info "  Registry:     ${_reg_display}"
 	if [ "$_mirror_installed" = "true" ] && [ "$_reg_running" = "false" ]; then
 		aba_warn -p "  Release" "     unknown (registry is stopped)"

@@ -12,6 +12,69 @@
 
 cd "$(dirname "$0")/../.."
 
+# These tests are OpenShift. A checkout aba.conf may say okd, or omit the
+# key, and ocp_version may be an OKD string. Write distribution=ocp for the
+# run. An OKD version fails OpenShift verification and is not on the
+# OpenShift CDN, so replace it with the published stable version for that
+# major.minor. Put the original file back on exit.
+_ABA_CONF="$PWD/aba.conf"
+_ABA_CONF_BAK=
+_aba_ocp_version_ok() {
+	[[ "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]
+}
+_restore_aba_conf() {
+	if [ -n "${_ABA_CONF_BAK:-}" ] && [ -f "$_ABA_CONF_BAK" ]; then
+		cp -a "$_ABA_CONF_BAK" "$_ABA_CONF"
+		rm -f "$_ABA_CONF_BAK"
+	fi
+}
+trap _restore_aba_conf EXIT
+if [ -f "$_ABA_CONF" ]; then
+	_dist=$(grep '^distribution=' "$_ABA_CONF" | tail -1 | cut -d= -f2 | awk '{print $1}')
+	_ver=$(grep '^ocp_version=' "$_ABA_CONF" | tail -1 | cut -d= -f2 | awk '{print $1}')
+	_fix_dist=0
+	_fix_ver=0
+	[ "$_dist" = "ocp" ] || _fix_dist=1
+	_aba_ocp_version_ok "$_ver" || _fix_ver=1
+	if [ "$_fix_dist" = 1 ] || [ "$_fix_ver" = 1 ]; then
+		_ABA_CONF_BAK=$(mktemp)
+		cp -a "$_ABA_CONF" "$_ABA_CONF_BAK"
+		if [ "$_fix_dist" = 1 ]; then
+			if grep -q '^distribution=' "$_ABA_CONF"; then
+				sed -i 's/^distribution=.*/distribution=ocp/' "$_ABA_CONF"
+			else
+				printf 'distribution=ocp\n' >> "$_ABA_CONF"
+			fi
+		fi
+		if [ "$_fix_ver" = 1 ]; then
+			_mm=$(printf '%s\n' "$_ver" | cut -d. -f1,2)
+			case "$_mm" in
+				[0-9]*.[0-9]*) ;;
+				*) _mm=4.21 ;;
+			esac
+			_rel=$(mktemp)
+			if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$_rel" \
+				"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-${_mm}/release.txt"; then
+				rm -f "$_rel"
+				echo "Error: could not read the OpenShift stable-${_mm} release" >&2
+				exit 1
+			fi
+			_stable=$(awk '/^Name:/ { print $2; exit }' "$_rel")
+			rm -f "$_rel"
+			if ! _aba_ocp_version_ok "$_stable"; then
+				echo "Error: could not resolve an OpenShift version from stable-${_mm}" >&2
+				exit 1
+			fi
+			if grep -q '^ocp_version=' "$_ABA_CONF"; then
+				sed -i -E "s/^(ocp_version=)[^[:space:]]*/\\1${_stable}/" "$_ABA_CONF"
+			else
+				printf 'ocp_version=%s\n' "$_stable" >> "$_ABA_CONF"
+			fi
+			echo "Func suite: ocp_version ${_ver:-<unset>} is not an OpenShift version; using ${_stable} for this run"
+		fi
+	fi
+fi
+
 mode="${1:---all}"
 
 # Acquire lock to prevent multiple test runs

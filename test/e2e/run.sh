@@ -639,6 +639,17 @@ declare -A _result_pool=()
 declare -A _bad_pools_map=()
 declare -A _unreachable_pools=()
 
+# A dispatcher restart still receives --fresh from the daemon. Touch
+# /tmp/e2e-no-force-clean before replacing the dispatcher so this start
+# does not kill suites that are already running.
+if [ -f /tmp/e2e-no-force-clean ]; then
+	rm -f /tmp/e2e-no-force-clean
+	if [ -n "${CLI_FORCE:-}" ]; then
+		echo "  Dispatcher restart: keeping running suites (--fresh clean skipped)"
+		CLI_FORCE=
+	fi
+fi
+
 # Apply --fresh / --force scoping
 if [ -n "${CLI_FORCE:-}" ]; then
 	_pool_count=0
@@ -667,6 +678,7 @@ for s in "${!_completed[@]}"; do
 done
 
 # Consume pre-existing inject queue
+_pre_injected=()
 if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
 	_pre_injected=()
 	while IFS= read -r _pi; do
@@ -700,7 +712,50 @@ if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
 	fi
 fi
 
+# History sort runs inside _build_work_queue. Clear a priority suite's
+# completed mark first, then put those names at the front afterwards.
+if [ ${#_pre_injected[@]} -gt 0 ]; then
+	for _pi in "${_pre_injected[@]}"; do
+		_running=""
+		for _bp in "${!_busy_pools[@]}"; do
+			[ "${_busy_pools[$_bp]}" = "$_pi" ] && _running=1 && break
+		done
+		if [ -z "$_running" ]; then
+			unset '_completed[$_pi]'
+			unset '_results[$_pi]'
+		fi
+	done
+fi
+
 _build_work_queue
+
+if [ ${#_pre_injected[@]} -gt 0 ] && [ ${#_work_queue[@]} -gt 0 ]; then
+	_pri_ordered=()
+	_pri_rest=()
+	for _pi in "${_pre_injected[@]}"; do
+		for _es in "${_work_queue[@]}"; do
+			if [ "$_es" = "$_pi" ]; then
+				_pri_ordered+=("$_pi")
+				break
+			fi
+		done
+	done
+	for _es in "${_work_queue[@]}"; do
+		_pri=""
+		for _pi in "${_pre_injected[@]}"; do
+			[ "$_es" = "$_pi" ] && _pri=1 && break
+		done
+		[ -z "$_pri" ] && _pri_rest+=("$_es")
+	done
+	if [ ${#_pri_ordered[@]} -gt 0 ]; then
+		if [ ${#_pri_rest[@]} -gt 0 ]; then
+			_work_queue=("${_pri_ordered[@]}" "${_pri_rest[@]}")
+		else
+			_work_queue=("${_pri_ordered[@]}")
+		fi
+		echo "  Priority queue: ${_pri_ordered[*]}"
+	fi
+fi
 
 _num_completed=${#_completed[@]}
 _num_running=${#_busy_pools[@]}

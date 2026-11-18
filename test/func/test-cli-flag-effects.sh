@@ -80,6 +80,19 @@ if [ -f "$ROOT/aba.conf" ]; then
 else
 	printf '%s\n' 'ocp_channel=fast' 'ocp_version=4.22.22' 'ask=false' 'editor=vi' >"$REPO/aba.conf"
 fi
+# Flag writes under test are OpenShift (--upgrade-to, --to X.Y.Z).
+# A checkout aba.conf may set distribution=okd, which rejects both, and
+# its version string is not a valid OpenShift version.
+if grep -q '^distribution=' "$REPO/aba.conf"; then
+	sed -i 's/^distribution=.*/distribution=ocp/' "$REPO/aba.conf"
+else
+	printf 'distribution=ocp\n' >>"$REPO/aba.conf"
+fi
+if grep -q '^ocp_version=' "$REPO/aba.conf"; then
+	sed -i 's/^ocp_version=.*/ocp_version=4.22.22/' "$REPO/aba.conf"
+else
+	echo 'ocp_version=4.22.22' >>"$REPO/aba.conf"
+fi
 
 cat >"$REPO/mirror/mirror.conf" << 'EOF'
 reg_host=registry.example.com

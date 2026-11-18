@@ -274,9 +274,9 @@ if [ "$platform" = "vmw" ] && [ "${VC:-}" = "1" ]; then
 	_ocp_mm=$(_ver_minor "${ocp_version:-}")
 	if is_version_greater "${_ocp_mm}.0" "4.21.0" && { [ -z "${_vc_ver:-}" ] || ! is_version_greater "$_vc_ver" "8.0.0"; }; then
 		VSPHERE_PLATFORM_FALLBACK=1
-		aba_warn "OCP ${ocp_version} requires vSphere 8.0 U1+ for platform: vsphere (CSI)." \
+		aba_warn "$(dist_display) ${ocp_version} requires vSphere 8.0 U1+ for platform: vsphere (CSI)." \
 			"vCenter reports ${_vc_ver:-unknown}; generating platform: baremetal (apiVIPs)." \
-			"VMs still run on this hypervisor; OpenShift will not integrate with vCenter."
+			"VMs still run on this hypervisor; $(dist_display) will not integrate with vCenter."
 	else
 		USE_VSPHERE_PLATFORM=1
 	fi

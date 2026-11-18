@@ -146,7 +146,7 @@ _resolve_operators_json() {
 		done
 
 		if [ -z "$_found_cat" ]; then
-			aba_warn "Operator '$_op' (from set '$_group_label') not found in any catalog for OCP $catalog_ver -- skipping" >&2
+			aba_warn "Operator '$_op' (from set '$_group_label') not found in any catalog for $(dist_display) $catalog_ver -- skipping" >&2
 			return 0
 		fi
 
@@ -280,12 +280,13 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 		elif [ "$_ref_rc" -eq 1 ]; then
 			aba_abort \
 				"Cannot find the release image digest of $ocp_version (channel $ocp_channel)." \
-				"It is read from the update graph or the release notes." \
-				"Check that ocp_version is a published build and that the graph can be reached."
+				"It is read from $(dist_cli_base_url "$ocp_version")/release.txt." \
+				"Check that ocp_version is a published build and that GitHub can be reached."
 		elif [ "$_ref_rc" -ne 0 ]; then
 			aba_abort \
 				"Cannot read the release image manifest of $ocp_version from $(dist_release_payload_repo)." \
-				"The image of architecture $ARCH is needed, because the release signature belongs to it." \
+				"release.txt names a manifest list, and the image of architecture $ARCH is needed." \
+				"The release signature belongs to that image." \
 				"Check that the registry can be reached and that skopeo is installed."
 		fi
 	fi

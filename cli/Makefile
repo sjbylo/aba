@@ -237,13 +237,19 @@ rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch
 openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
 openshift_install_url	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/$(ocp_client_dir)/$(ocp_version)
 
-# OKD publishes the same tarball names under the release tag. The base URL
-# is dist_cli_base_url in scripts/dist-okd.sh. Make reads that file so the
-# URL is not copied here.
+# Keep this ifeq. The OpenShift CDN URLs above stay in Make; only OKD replaces them.
+# OKD publishes CLI tarballs on GitHub. The base URL and the installer
+# filename come from the distribution that aba.conf names. Make's cwd is
+# cli/, so ../scripts is the repo scripts directory. Parse time runs even
+# for version-independent targets. An empty ocp_version must not call the
+# helpers; ${1:?} would abort the shell.
 ifeq ($(distribution),okd)
-  openshift_install_url	:= $(shell bash -c 'source ../scripts/dist-okd.sh; dist_cli_base_url "$(ocp_version)"')
-  rhel9_oc_url		:= $(openshift_install_url)/$(rhel9_oc_tar_file)
-  rhel8_oc_url		:= $(openshift_install_url)/$(rhel8_oc_tar_file)
+  ifneq ($(strip $(ocp_version)),)
+    openshift_install_url	:= $(shell bash -c 'source ../scripts/dist.sh; dist_load; dist_cli_base_url "$(ocp_version)"')
+    openshift_install_file	:= $(shell bash -c 'source ../scripts/dist.sh; dist_load; dist_cli_install_file "$(os)" "$(ARCH)" "$(ocp_version)"')
+    rhel9_oc_url		:= $(openshift_install_url)/$(rhel9_oc_tar_file)
+    rhel8_oc_url		:= $(openshift_install_url)/$(rhel8_oc_tar_file)
+  endif
 endif
 
 

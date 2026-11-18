@@ -44,6 +44,6 @@ for _ver in "${_versions[@]}"; do
 done
 
 if [ -n "$_any_running" ]; then
-	aba_info "Downloading operator catalogs for OCP ${_versions[*]} in background..."
+	aba_info "Downloading operator catalogs for $(dist_display) ${_versions[*]} in background..."
 fi
 

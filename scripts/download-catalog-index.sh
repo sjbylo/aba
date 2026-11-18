@@ -127,7 +127,12 @@ _cleanup() {
 trap _cleanup EXIT
 
 # The distribution names the registry. OpenShift is registry.redhat.io.
-catalog_url="$(dist_catalog_ref "$catalog_name" "$ocp_ver_major")"
+# A catalog this distribution does not ship leaves the URL empty. Curling
+# that used to report "Cannot access " / "Could not resolve host: v2".
+catalog_url="$(dist_catalog_ref "$catalog_name" "$ocp_ver_major" || true)"
+if [ -z "$catalog_url" ]; then
+	aba_abort "No $(dist_display) catalog image for $catalog_name $ocp_ver_major"
+fi
 _cat_host="${catalog_url%%/*}"
 aba_debug "Checking connectivity to $_cat_host"
 _reg_err=""
