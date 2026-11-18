@@ -1102,7 +1102,12 @@ for i in imgs:
 		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		_sip=$(normalize_ipv4 "$2") || aba_abort "invalid starting IP [$2] — expected valid IPv4 (octets 0-255)"
+		if [[ "$2" == *,* ]]; then
+			# Syntax only: the list length is checked when cluster.conf is verified
+			_sip=$(normalize_starting_ip "$2") || aba_abort "invalid starting IP list [$2] - expected one IPv4 address per node, the first one in full (e.g. 10.0.0.10,11,12,10.0.1.60)"
+		else
+			_sip=$(normalize_ipv4 "$2") || aba_abort "invalid starting IP [$2] — expected valid IPv4 (octets 0-255)"
+		fi
 		_set_cluster_conf starting_ip "$_sip" "$1"
 		shift 2
 
