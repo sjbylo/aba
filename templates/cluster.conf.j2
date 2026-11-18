@@ -16,6 +16,9 @@ machine_network={{ machine_network }}/{{ prefix_length }}		# CIDR for all cluste
 
 starting_ip={{ starting_ip }}			# First static node IP (node0 / rendezvous)
 					# - Sequential IPs assigned from this address
+					# - Or list one IP per node, masters first; a bare octet
+					#   keeps the last prefix: 10.0.0.10,11,12,10.0.1.60,61,62
+					#   No spaces: this file is read as shell
 					# - Must be inside the machine_network range
 					# - Ensure IPs are unused
 
