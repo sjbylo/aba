@@ -118,8 +118,8 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   aba [-d <cluster>] shutdown [--wait]    # Gracefully shut down cluster and VMs
   aba [-d <cluster>] startup              # Start VMs and wait for cluster to be ready
   aba [-d <cluster>] start                # Start the VMs only
-  aba [-d <cluster>] stop [--wait]        # Shut down the VMs only
-  aba [-d <cluster>] kill                 # Power off the VMs immediately
+  aba [-d <cluster>] stop [--wait]        # Shut down the VMs only (bare metal: GracefulShutdown via bmc.conf)
+  aba [-d <cluster>] kill                 # Power off the VMs immediately (bare metal: ForceOff via bmc.conf)
   aba [-d <cluster>] create [--start]     # Create VMs if they don't exist
   aba [-d <cluster>] refresh              # Re-create the VMs and start
   aba [-d <cluster>] delete               # Delete the VMs
