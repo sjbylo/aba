@@ -39,7 +39,7 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 - **Day-2** — ongoing content updates, cluster upgrades (OSUS), OperatorHub, NTP, shutdown/startup
 
 <div align="center">
-<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="300">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="300">
+<img src="https://github.com/sjbylo/aba/releases/download/readme-media/aba-mirror-sync.gif" alt="ABA TUI mirror sync" title="ABA TUI mirror sync" width="100%">
 <br><sub>The ABA TUI — a guided wizard for the complete OpenShift installation workflow (<code>abatui</code>)</sub>
 </div>
 
