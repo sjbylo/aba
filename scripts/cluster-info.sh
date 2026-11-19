@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
@@ -29,7 +29,14 @@ aba_info "To access the cluster as the system:admin user when using 'oc', run"
 aba_info "    export KUBECONFIG=$kc"
 aba_info "Access the OpenShift web-console here: https://console-openshift-console.apps.$cluster_name.$base_domain"
 if [ -n "$pw" ]; then
-	aba_info "Login to the console with user: \"kubeadmin\", and password: \"$pw\""
+	# The screen shows the password so the user can log in.
+	# The trace file is what gets shared, so that copy stores ***.
+	if [ "${INFO_ABA:-}" ]; then
+		echo_white "[ABA] Login to the console with user: \"kubeadmin\", and password: \"$pw\""
+		if [ -n "${ABA_TRACE_FILE:-}" ]; then
+			echo "[ABA] Login to the console with user: \"kubeadmin\", and password: \"***\"" >> "$ABA_TRACE_FILE"
+		fi
+	fi
 else
 	aba_info "Login to the console with user: \"kubeadmin\" (password not available)"
 fi
