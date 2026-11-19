@@ -26,6 +26,10 @@
 #   _STUB_202_TASK=true               # InsertMedia returns 202 async task
 #   _STUB_MANAGER_ID=<string>         # override Manager ID (default: iRMC)
 #   _STUB_USBCD_TARGET=true           # AllowableValues has UsbCd instead of Cd
+#   _STUB_POWER_FILE=<file>           # per-host PowerState ("<host>=<state>" lines);
+#                                     # Reset ForceOff/GracefulShutdown -> Off, other -> On
+#   _STUB_GRACEFUL_400=true           # 400 on Reset GracefulShutdown
+#   _STUB_STUCK_HOST=<host>           # Reset leaves this host's PowerState unchanged
 #
 # Phase 10 EthernetInterfaces control flags (TEST-06 MAC discovery scenarios):
 #   _STUB_NIC_SCENARIO=<name>         # one of: happy | ambiguous | no-linkup |
@@ -234,7 +238,7 @@ EOF
 
 _stub_emit_computer_system() {
 	_REDFISH_LAST_BODY=$(mktemp)
-	local power_state="${_STUB_POWER_STATE:-On}"
+	local power_state="${1:-${_STUB_POWER_STATE:-On}}"
 	# BootSourceOverrideTarget AllowableValues; honor _STUB_FORBID_TARGET (omit Cd) for L4 negative test
 	local allowable_targets='["None", "Cd", "Pxe", "Hdd"]'
 	if [ "${_STUB_FORBID_TARGET:-}" = "Cd" ]; then
@@ -510,6 +514,33 @@ _stub_nic_resource_for_id() {
 }
 
 # ---------------------------------------------------------------------------
+# Per-host PowerState (opt-in via _STUB_POWER_FILE). A file, not a variable,
+# because curl runs in $(...) subshells. The last "<host>=" line wins.
+# ---------------------------------------------------------------------------
+
+_stub_url_host() {
+	local h="${1#*://}"
+	printf '%s' "${h%%/*}"
+}
+
+_stub_power_of() {
+	[ -n "${_STUB_POWER_FILE:-}" ] || return 0
+	grep "^$(_stub_url_host "$1")=" "$_STUB_POWER_FILE" | tail -1 | cut -d= -f2
+}
+
+_stub_power_reset() {
+	local host state
+	[ -n "${_STUB_POWER_FILE:-}" ] || return 0
+	host=$(_stub_url_host "$1")
+	[ "$host" = "${_STUB_STUCK_HOST:-}" ] && return 0
+	case "$2" in
+		ForceOff|GracefulShutdown) state=Off ;;
+		*) state=On ;;
+	esac
+	printf '%s=%s\n' "$host" "$state" >> "$_STUB_POWER_FILE"
+}
+
+# ---------------------------------------------------------------------------
 # _bmc_stub_reset_globals - call between Paths to clear all _STUB_* config
 # ---------------------------------------------------------------------------
 
@@ -519,6 +550,7 @@ _bmc_stub_reset_globals() {
 	unset _STUB_VENDOR_MODEL _STUB_FIRMWARE_VERSION _STUB_POWER_STATE
 	unset _STUB_MEDIA_INSERTED _STUB_MEDIA_CONNECTED _STUB_202_TASK _STUB_MANAGER_ID _STUB_USBCD_TARGET
 	unset _STUB_LENOVO_LICENSE_TIER _STUB_POST_RESET_401
+	unset _STUB_POWER_FILE _STUB_GRACEFUL_400 _STUB_STUCK_HOST
 	# Phase 10 EthernetInterfaces fixture flags (TEST-06).
 	unset _STUB_NIC_SCENARIO _STUB_NIC_MACS _STUB_NIC_IDS _STUB_SYSTEM_ID
 	# Clear _STUB_STATE_FILE content (reset stateful insert/eject tracking) but keep the path
@@ -545,7 +577,7 @@ _bmc_stub_reset_globals() {
 
 _bmc_stub_curl() {
 	local verb="GET" url="" head_only="false"
-	local write_code="false" out_file="" hdr_file="" has_data="false"
+	local write_code="false" out_file="" hdr_file="" has_data="false" data_file=""
 	# Parse $@ scanning for the curl flags actually passed by preflight-check-bm.sh,
 	# bmc-redfish.sh, and bmc-boot.sh:
 	#   -X VERB                 explicit method
@@ -566,7 +598,7 @@ _bmc_stub_curl() {
 				;;
 			-o) out_file="$2"; shift 2 ;;
 			-D) hdr_file="$2"; shift 2 ;;
-			--data-binary|-d) has_data="true"; shift 2 ;;
+			--data-binary|-d) has_data="true"; data_file="${2#@}"; shift 2 ;;
 			http*|https*) url="$1"; shift ;;
 			*) shift ;;
 		esac
@@ -734,14 +766,21 @@ _bmc_stub_curl() {
 			_stub_nic_resource_for_id "$_nic_id"
 			;;
 		*/Systems/*/Actions/ComputerSystem.Reset)
+			local _reset_type=""
+			[ -f "$data_file" ] && _reset_type=$(jq -r '.ResetType // empty' "$data_file")
 			if [ "${_STUB_RESET_401:-false}" = "true" ]; then
 				_REDFISH_LAST_CODE=401
 				_REDFISH_LAST_REASON="Unauthorized"
+				_stub_emit_empty_body
+			elif [ "${_STUB_GRACEFUL_400:-false}" = "true" ] && [ "$_reset_type" = "GracefulShutdown" ]; then
+				_REDFISH_LAST_CODE=400
+				_REDFISH_LAST_REASON="stub: GracefulShutdown not supported"
 				_stub_emit_empty_body
 			else
 				_REDFISH_LAST_CODE=204
 				_REDFISH_LAST_REASON=""
 				_stub_emit_empty_body
+				_stub_power_reset "$url" "$_reset_type"
 				# ERR-05 support: if _STUB_POST_RESET_401=true, arm one-shot 401 on next
 				# Systems/* GET (simulates firmware session drop after power cycle).
 				# Write to _STUB_STATE_FILE so the flag survives subshell boundaries.
@@ -771,7 +810,7 @@ _bmc_stub_curl() {
 			else
 				_REDFISH_LAST_CODE=200
 				_REDFISH_LAST_REASON=""
-				_stub_emit_computer_system
+				_stub_emit_computer_system "$(_stub_power_of "$url")"
 			fi
 			;;
 		*)
