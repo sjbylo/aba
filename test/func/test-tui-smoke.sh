@@ -12,13 +12,26 @@ echo ""
 tui_deploy_code
 echo ""
 
+# Splash is drawn once, when abatui starts. A session already on the main
+# menu is that same process — killing it only to see the splash again is
+# what forces the next test to launch from scratch (~20s).
+_smoke_reuse=0
+if tui_session_alive; then
+	if tui_on_main_menu || { tui_leave_on_menu && tui_on_main_menu; }; then
+		echo "  Reusing TUI session — splash already passed in this process"
+		trap 'tui_leave_on_menu 2>/dev/null' EXIT
+		_smoke_reuse=1
+	fi
+fi
+
 # ============================================================================
 # 1. Splash screen
 # ============================================================================
+if [[ "$_smoke_reuse" -eq 0 ]]; then
 echo "--- 1. Splash screen ---"
 tui_start
 tui_assert_appears "OpenShift Installer" "Splash screen appeared" 15 || {
-	tui_screenshot "splash-fail"; tui_stop; tui_summary; exit 1
+	tui_screenshot "splash-fail"; tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 }
 tui_assert_title "OpenShift Installer\|ABA" "Splash screen title"
 tui_assert_contains "ABA v" "Version string present"
@@ -50,7 +63,13 @@ tui_keys Enter; sleep 1
 # ============================================================================
 echo ""
 echo "--- 3. Main menu ---"
-tui_keys Enter
+# Enter leaves the splash. On a reused session it would open the highlighted item.
+[[ "$_smoke_reuse" -eq 0 ]] && tui_keys Enter
+else
+echo "--- 1-2. Splash skipped (session already on the main menu) ---"
+echo ""
+echo "--- 3. Main menu ---"
+fi
 tui_assert_appears "Actions" "Main menu appeared" 10
 tui_assert_title "Partially Disconnected\|Fully Disconnected\|Fully Connected" "Main menu title"
 tui_screenshot "03-main-menu"

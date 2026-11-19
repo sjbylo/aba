@@ -157,7 +157,7 @@ if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
 else
 	echo "  ✗ FAIL: Basics page not visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	tui_stop; tui_summary; exit 1
+	tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 fi
 
 # ============================================================================

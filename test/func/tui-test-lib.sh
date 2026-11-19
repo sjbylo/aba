@@ -5,6 +5,10 @@
 # Requires: SSH access to the test host, tmux on the test host.
 #
 # All functions operate on a remote tmux session via SSH.
+#
+# TUI_CAPTURE_INTERVAL: parallel screen capture period. 0.5, 0.5s, 1, 1s, 2s.
+# Default 0.5. 0 or off disables it. Identical frames are not written.
+# TUI_WIDTH / TUI_HEIGHT: tmux pane size. Default 160x45.
 
 _TUI_HOST="${TUI_TEST_HOST:-conno.example.com}"
 _TUI_SESSION="${TUI_TEST_SESSION:-tui-test}"
@@ -12,8 +16,8 @@ _TUI_SSH_CFG="$HOME/.aba/ssh.conf"
 _TUI_SSH="ssh -F $_TUI_SSH_CFG $_TUI_HOST"
 _TUI_PASS=0
 _TUI_FAIL=0
-_TUI_WIDTH=160
-_TUI_HEIGHT=45
+_TUI_WIDTH="${TUI_WIDTH:-160}"
+_TUI_HEIGHT="${TUI_HEIGHT:-45}"
 
 # Drop the internet NIC on the disconnected bastion. SSH stays on the
 # management NIC (internet.sh uses SSH_CONNECTION). Call at the start of a
@@ -245,6 +249,120 @@ if [[ "${_TUI_LOCK_HELD:-}" != "1" ]]; then
 	unset _tui_lock_holder
 fi
 
+# Parallel capture. The test keeps driving the TUI; this loop only records
+# the pane. A dialog that flashes between two labeled screenshots is still
+# on disk, and a pane that sits still does not grow a file per tick.
+# test-tui-all sources this file too. Its children each have their own run
+# dir, which is the directory the summary prints, so the parent does not
+# also capture.
+_tui_capture_interval_secs() {
+	local raw="${TUI_CAPTURE_INTERVAL:-0.5}"
+	raw="${raw%[sS]}"
+	case "$raw" in
+		""|off|OFF|no|NO) printf '%s\n' 0 ;;
+		*[!0-9.]*|*.*.*|.) printf '%s\n' 0.5 ;;
+		*) printf '%s\n' "$raw" ;;
+	esac
+}
+
+_tui_capture_stop() {
+	if [[ -n "${_TUI_CAPTURE_PID:-}" ]]; then
+		kill "$_TUI_CAPTURE_PID" 2>/dev/null || true
+		wait "$_TUI_CAPTURE_PID" 2>/dev/null || true
+		_TUI_CAPTURE_PID=""
+	fi
+}
+
+# A cleared pane is only spaces and newlines. It is not a dialog.
+_tui_pane_blank() {
+	! grep -q '[^[:space:]]' "$1"
+}
+
+# ANSI copy of a plain snapshot, for a README or a GIF. The plain file stays
+# what tests grep. A failed or blank color grab is dropped.
+_tui_save_color_copy() {
+	local plain="$1"
+	local host="${2:-$_TUI_HOST}"
+	local session="${3:-$_TUI_SESSION}"
+	local cfg="${4:-$_TUI_SSH_CFG}"
+	local dest
+	dest="$(dirname "$plain")/color/$(basename "$plain")"
+	mkdir -p "$(dirname "$dest")"
+	if ssh -F "$cfg" -o ConnectTimeout=5 "$host" \
+		"tmux capture-pane -t $session -e -p" >"$dest" 2>/dev/null \
+		&& ! _tui_pane_blank "$dest"; then
+		return 0
+	fi
+	rm -f "$dest"
+	return 0
+}
+
+_tui_capture_loop() {
+	local parent="$1" interval="$2" dir="$3" host="$4" session="$5" cfg="$6"
+	local born now n=0 prev="" tmp=""
+	# A kill mid-capture must not leave the temp pane file behind.
+	# TERM is caught so the trap runs; exit so the loop does not resume.
+	trap '[[ -n "$tmp" ]] && rm -f "$tmp" "$tmp.norm"; exit 0' EXIT TERM INT
+	# lstart catches PID reuse: a new process with this pid is not our test.
+	born=$(ps -o lstart= -p "$parent" 2>/dev/null) || return 0
+	while true; do
+		now=$(ps -o lstart= -p "$parent" 2>/dev/null || true)
+		[[ -n "$now" && "$now" == "$born" ]] || break
+		tmp=$(mktemp "${dir}/.frame.XXXXXX" 2>/dev/null) || { sleep "$interval"; continue; }
+		# No retry sleep here. A missing tmux session is just "nothing to keep".
+		if ! ssh -F "$cfg" -o ConnectTimeout=5 "$host" \
+			"tmux capture-pane -t $session -p" >"$tmp" 2>/dev/null \
+			|| ! [[ -s "$tmp" ]]; then
+			rm -f "$tmp"
+			tmp=""
+			sleep "$interval"
+			continue
+		fi
+		# Pane padding is trailing spaces, not a dialog change.
+		sed 's/[[:space:]]*$//' "$tmp" > "$tmp.norm" && mv "$tmp.norm" "$tmp"
+		if _tui_pane_blank "$tmp"; then
+			rm -f "$tmp"
+			tmp=""
+			sleep "$interval"
+			continue
+		fi
+		if [[ -n "$prev" ]] && cmp -s "$prev" "$tmp"; then
+			rm -f "$tmp"
+			tmp=""
+		else
+			n=$(( n + 1 ))
+			prev="${dir}/frame-$(printf '%04d' "$n")-$(date +%H%M%S).txt"
+			mv "$tmp" "$prev"
+			tmp=""
+			_tui_save_color_copy "$prev" "$host" "$session" "$cfg"
+		fi
+		sleep "$interval"
+	done
+}
+
+_tui_capture_start() {
+	local interval
+	interval=$(_tui_capture_interval_secs)
+	_TUI_CAPTURE_EVERY="$interval"
+	# The suite runner's summary dir is not where a child failure is investigated.
+	if [[ "$_TUI_TEST_NAME" == "test-tui-all" ]]; then
+		return 0
+	fi
+	case "$interval" in
+		0|0.0)
+			echo "  Screen capture off (TUI_CAPTURE_INTERVAL=${TUI_CAPTURE_INTERVAL})"
+			return 0
+			;;
+	esac
+	# Re-source (disco switches host) must follow the new host and run dir.
+	_tui_capture_stop
+	_tui_capture_loop "$$" "$interval" "$_TUI_RUN_DIR" "$_TUI_HOST" "$_TUI_SESSION" "$_TUI_SSH_CFG" &
+	_TUI_CAPTURE_PID=$!
+	echo "  Screen capture every ${interval}s → $_TUI_RUN_DIR/ (identical and blank frames dropped)"
+}
+
+_tui_capture_start
+
 # --- Pre-test disk cleanup ---
 # Removes expendable artifacts to prevent "disk full" during tests.
 # Conservative: keeps oc-mirror cache (saves network downloads) and only
@@ -309,7 +427,7 @@ tui_session_alive() {
 	_tui_ssh_retry "tmux has-session -t $_TUI_SESSION 2>/dev/null"
 }
 
-# Capture the current tmux pane content
+# Capture the current tmux pane as plain text. Tests grep this.
 tui_capture() {
 	_tui_ssh_retry "tmux capture-pane -t $_TUI_SESSION -p"
 }
@@ -1390,8 +1508,14 @@ tui_screenshot() {
 	local file="$_TUI_RUN_DIR/${label}.txt"
 	local link="/tmp/tui-test-${label}.txt"
 	tui_capture > "$file"
+	# A blank pane is a redraw gap. Do not keep it or point the symlink at it.
+	if _tui_pane_blank "$file"; then
+		rm -f "$file"
+		return 0
+	fi
 	ln -sf "$file" "$link"
 	echo "  [screenshot: $file]"
+	_tui_save_color_copy "$file"
 }
 
 # Delete a test cluster. ALWAYS prefer the TUI; fall back to
@@ -1611,6 +1735,20 @@ tui_summary() {
 	echo "  PASS: $_TUI_PASS"
 	echo "  FAIL: $_TUI_FAIL"
 	echo "  Screenshots: $_TUI_RUN_DIR/"
+	if [[ -d "$_TUI_RUN_DIR/color" ]]; then
+		echo "  Color copies: $_TUI_RUN_DIR/color/"
+	fi
+	case "${_TUI_CAPTURE_EVERY:-0}" in
+		0|0.0|"") ;;
+		*)
+	if [[ "$_TUI_TEST_NAME" != "test-tui-all" ]]; then
+		local _frames
+		_frames=$(find "$_TUI_RUN_DIR" -maxdepth 1 -name 'frame-*.txt' 2>/dev/null | wc -l)
+		_frames="${_frames//[[:space:]]/}"
+		echo "  Screen changes: ${_frames:-0} (every ${_TUI_CAPTURE_EVERY}s, identical and blank frames dropped)"
+	fi
+		;;
+	esac
 	echo "========================================"
 	[ "$_TUI_FAIL" -eq 0 ]
 }
@@ -1750,6 +1888,26 @@ tui_wait_for_progress() {
 				echo "  ERROR: '$label' stuck on version picker after ${_elapsed}s"
 				tui_screenshot "${label}-stuck-version-picker"
 				return 3
+			fi
+			sleep 2
+			continue
+		fi
+
+		# Mirror Payload is a menu. It does not match the main-menu headers
+		# (── Mirror ── and the rest), so "anything else is progress" used to
+		# sit here for the whole timeout and log "running" while no sync started.
+		# A real sync dialog has In Progress / Overall Progress and is not this menu.
+		if echo "$_scr" | grep -q "Mirror Payload" && echo "$_scr" | grep -q "Prepare Upgrade" \
+			&& ! echo "$_scr" | grep -qi "In Progress\|Overall Progress\|Executing\|Syncing"; then
+			if [[ $_saw_progress -eq 1 ]] && (( _elapsed >= 10 )); then
+				echo "  Progress '$label' returned to Mirror Payload without verified success (${_elapsed}s)"
+				tui_screenshot "${label}-payload-menu-without-success"
+				return 1
+			fi
+			if (( _elapsed >= 45 )); then
+				echo "  ERROR: '$label' stuck on Mirror Payload menu after ${_elapsed}s — not a running sync"
+				tui_screenshot "${label}-stuck-payload-menu"
+				return 1
 			fi
 			sleep 2
 			continue

@@ -122,7 +122,7 @@ else
 	echo "  ✗ FAIL: Mirror not available"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	echo "  Skipping sync test (mirror not available)"
-	tui_stop 2>/dev/null
+	tui_leave_on_menu 2>/dev/null || true
 	tui_summary
 	exit 1
 fi

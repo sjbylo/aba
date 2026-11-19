@@ -40,7 +40,7 @@ echo "  Pre-cleanup: ensuring starting IP $_lab_starting_ip is free..."
 if ! tui_ensure_ip_free "$_lab_starting_ip"; then
 	echo "  ✗ FAIL: IP $_lab_starting_ip still in use after TUI/aba delete — cannot proceed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	tui_cleanup 2>/dev/null || tui_stop 2>/dev/null || true
+	tui_leave_on_menu 2>/dev/null || true
 	tui_summary
 	exit 1
 fi

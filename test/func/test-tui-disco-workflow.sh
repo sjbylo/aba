@@ -240,7 +240,7 @@ tui_disco_internet_down "$_DISCO"
 # Launch TUI
 tui_start
 tui_assert_appears "OpenShift Installer\|ABA" "TUI launched in DISCO mode" 30 || {
-	tui_stop; tui_summary; exit 1
+	tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 }
 
 # Past splash — retry Enter in case TUI wasn't ready
