@@ -31,7 +31,7 @@ else
 	hv_conf_dep =
 endif
 
-TARGET_DEPENDENCIES = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .install-complete
+TARGET_DEPENDENCIES = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .agent-wait-done .install-complete
 BOOTSTRAP_PRE_DEPS = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done
 
 .PHONY: install
@@ -237,16 +237,23 @@ refresh: $(hv_conf_dep) upload  ## Delete & re-create the VMs. Useful to redeplo
 	@if [ -z "$(HV_PREFIX)" ]; then echo "[ABA] refresh requires platform=vmw or platform=kvm"; exit 1; fi
 	$(SCRIPTS)/$(HV_PREFIX)-refresh.sh workers=$(workers) masters=$(masters)
 
-.install-complete: .bm-bmc-boot-done
-	# Best-effort agent probe only on first install (VMs/servers just booted).
-	# 'aba mon' must NOT wait — port 8090 is often gone once bootstrap advances.
-	@$(SCRIPTS)/wait-agent-up.sh || true
+# The probe runs once per boot. Make writes the stamp when wait-agent-up.sh
+# returns, including "Agent not detected". A failed monitor leaves the stamp,
+# so the next `aba install` goes straight to monitor-install.sh. A newer
+# .bm-bmc-boot-done (VM refresh, new ISO, BMC boot) runs the probe again.
+# `aba mon` does not depend on this stamp: port 8090 is often already gone.
+.agent-wait-done: .bm-bmc-boot-done
+	$(SCRIPTS)/wait-agent-up.sh
+	@touch .agent-wait-done
+
+.install-complete: .agent-wait-done
 	$(SCRIPTS)/monitor-install.sh
 	@touch .install-complete
 
 .PHONY: agent
 agent:
 	$(SCRIPTS)/wait-agent-up.sh
+	@touch .agent-wait-done
 
 .PHONY: mon
 mon:  ## Monitor for 'install complete' the agent-based installation of OpenShift.

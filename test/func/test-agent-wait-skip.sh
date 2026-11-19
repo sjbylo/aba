@@ -1,6 +1,6 @@
 #!/bin/bash
-# Test: continuous BM/VMW install chain; wait-agent on install only (not aba mon)
-# Regression for: #B80 — .bm-message/.bm-nextstep/.auto-agent-up removed
+# Test: continuous BM/VMW install chain; agent probe is the .agent-wait-done stamp.
+# `aba mon` must not wait. A second install skips the probe once the stamp exists.
 
 cd "$(dirname "$0")/../.." || exit 1
 source scripts/include_all.sh 2>/dev/null
@@ -71,10 +71,10 @@ EOF
 echo "=== Test: unified install chain (no BM stop markers) ==="
 
 # Old markers must not appear in Makefile.cluster
-if ! grep -qE '\.bm-message|\.bm-nextstep|\.autopoweroff|\.autoupload|\.autorefresh|\.auto-agent-up' templates/Makefile.cluster; then
-	_assert "Makefile.cluster has no old BM/VM stamps" "pass"
+if ! grep -qE '\.bm-message|\.bm-nextstep|\.autopoweroff|\.autoupload|\.autorefresh' templates/Makefile.cluster; then
+	_assert "Makefile.cluster has no old BM/VM stop stamps" "pass"
 else
-	_assert "Makefile.cluster has no old BM/VM stamps" "fail"
+	_assert "Makefile.cluster has no old BM/VM stop stamps" "fail"
 fi
 
 if grep -q '\.vms-stopped' templates/Makefile.cluster && grep -q '\.iso-uploaded' templates/Makefile.cluster && grep -q '\.vms-ready' templates/Makefile.cluster; then
@@ -122,10 +122,16 @@ else
 	_assert "monitor-install.sh does not call wait-agent-up" "fail"
 fi
 
-if awk '/^\.install-complete:/{p=1} p&&/wait-agent-up/{found=1} p&&/^[^[:space:]#]/{if(!/^\.install-complete:/) exit} END{exit !found}' templates/Makefile.cluster; then
-	_assert ".install-complete recipe calls wait-agent-up" "pass"
+if awk '/^\.agent-wait-done:/{p=1} p&&/wait-agent-up/{found=1} p&&/^[^[:space:]#]/{if(!/^\.agent-wait-done:/) exit} END{exit !found}' templates/Makefile.cluster; then
+	_assert ".agent-wait-done recipe calls wait-agent-up" "pass"
 else
-	_assert ".install-complete recipe calls wait-agent-up" "fail"
+	_assert ".agent-wait-done recipe calls wait-agent-up" "fail"
+fi
+
+if awk '/^\.install-complete:/{p=1} p&&/wait-agent-up/{found=1} p&&/^[^[:space:]#]/{if(!/^\.install-complete:/) exit} END{exit found}' templates/Makefile.cluster; then
+	_assert ".install-complete recipe does not call wait-agent-up" "pass"
+else
+	_assert ".install-complete recipe does not call wait-agent-up" "fail"
 fi
 
 _mon_recipe=$(awk '/^mon:/{p=1; next} p && /^[^[:space:]#]/{exit} p' templates/Makefile.cluster)
@@ -135,10 +141,42 @@ else
 	_assert "mon target does not call wait-agent-up" "fail"
 fi
 
-if ! grep -q '^\.auto-agent-up:' templates/Makefile.cluster; then
-	_assert ".auto-agent-up Make stamp removed" "pass"
+if grep -q '^\.agent-wait-done:' templates/Makefile.cluster && grep -q '^\.install-complete: \.agent-wait-done' templates/Makefile.cluster; then
+	_assert ".agent-wait-done stamp gates .install-complete" "pass"
 else
-	_assert ".auto-agent-up Make stamp removed" "fail"
+	_assert ".agent-wait-done stamp gates .install-complete" "fail"
+fi
+
+# Dry-run: missing stamp runs the probe; an existing newer stamp does not.
+# Touch in dependency order so Make does not rebuild the chain. A missing
+# mirror.conf or an older YAML makes the ISO look stale and the probe runs again.
+touch "$CLUSTER/mirror.conf" "$CLUSTER/.resolve-vips" "$CLUSTER/.infra-dns"
+touch "$CLUSTER/install-config.yaml" "$CLUSTER/agent-config.yaml"
+touch "$CLUSTER/.bm-config-reviewed" "$CLUSTER/.preflight-done"
+touch "$CLUSTER/iso-agent-based/agent.$(uname -m).iso"
+touch "$CLUSTER/.vms-stopped" "$CLUSTER/.iso-uploaded" "$CLUSTER/.vms-ready" "$CLUSTER/.bm-bmc-boot-done"
+rm -f "$CLUSTER/.agent-wait-done" "$CLUSTER/.install-complete"
+_output=$(make -n -C "$CLUSTER" .install-complete 2>&1) || true
+if echo "$_output" | grep -q 'wait-agent-up.sh' && echo "$_output" | grep -q 'monitor-install.sh'; then
+	_assert "install runs agent probe when .agent-wait-done is missing" "pass"
+else
+	_assert "install runs agent probe when .agent-wait-done is missing" "fail"
+	echo "$_output" | head -40
+fi
+touch "$CLUSTER/.agent-wait-done"
+_output=$(make -n -C "$CLUSTER" .install-complete 2>&1) || true
+if echo "$_output" | grep -q 'monitor-install.sh' && ! echo "$_output" | grep -q 'wait-agent-up.sh'; then
+	_assert "install skips agent probe when .agent-wait-done is current" "pass"
+else
+	_assert "install skips agent probe when .agent-wait-done is current" "fail"
+	echo "$_output" | head -40
+fi
+_output=$(make -n -C "$CLUSTER" mon 2>&1) || true
+if ! echo "$_output" | grep -q 'wait-agent-up.sh'; then
+	_assert "mon dry-run does not wait for the agent" "pass"
+else
+	_assert "mon dry-run does not wait for the agent" "fail"
+	echo "$_output" | head -20
 fi
 
 # Shared BMC host helpers (unit checks in stub cluster dir).

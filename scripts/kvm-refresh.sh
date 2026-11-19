@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Running: $0 $* at $(date) in dir: $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 . <(process_args "$@")
 
@@ -19,7 +19,8 @@ elif [ $_exists_rc -eq 0 ]; then
 	scripts/kvm-delete.sh || true
 fi
 
-rm -f .install-complete .vms-ready
+# New VMs have not been through the agent probe yet.
+rm -f .install-complete .vms-ready .agent-wait-done
 
 scripts/kvm-create.sh --start --nomaccheck
 

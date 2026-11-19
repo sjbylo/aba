@@ -12,7 +12,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-aba-conf)
 
@@ -112,6 +112,7 @@ tar cf "$_output_file" \
 	--exclude='.iso-uploaded' \
 	--exclude='.vms-ready' \
 	--exclude='.bm-bmc-boot-done' \
+	--exclude='.agent-wait-done' \
 	--exclude='.bm-config-reviewed' \
 	--exclude='.bm-config-asked' \
 	--exclude='.preflight-done' \
