@@ -4,7 +4,7 @@
 # Designed for extensibility: platform-specific vSphere and BMC checks can source and extend.
 
 source scripts/include_all.sh
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 aba_progress "START|ci_preflight"
 

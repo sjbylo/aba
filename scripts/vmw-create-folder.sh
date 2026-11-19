@@ -4,6 +4,7 @@
 [ ! "$1" ] && aba_abort "Usage: $(basename "$0") <vsphere folder>" 
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 ensure_govc
 

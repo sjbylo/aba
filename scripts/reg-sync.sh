@@ -9,7 +9,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # PLANs are emitted by _progress_plan-sync Makefile target (scripts/progress-plan.sh)
 

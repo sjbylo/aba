@@ -17,7 +17,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # -----------------------------------------------------------------------------
 # INT-03 gate: no bmc.conf or no bmc_host_* keys = nothing to do. Silent exit 0.

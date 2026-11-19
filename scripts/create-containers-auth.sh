@@ -5,7 +5,7 @@ set -eo pipefail
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
 [ "$1" = "--load" ] && public_pull_secret_file_needed= && shift

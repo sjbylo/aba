@@ -11,6 +11,7 @@ set -eo pipefail
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)

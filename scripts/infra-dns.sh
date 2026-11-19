@@ -21,6 +21,7 @@ set -eo pipefail
 
 _SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$_SCRIPT_DIR/include_all.sh"
+aba_debug "Starting: $0 $* in $PWD"
 
 _MARKER="/etc/dnsmasq.d/aba-upstream.conf"
 

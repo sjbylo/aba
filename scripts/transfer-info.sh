@@ -16,6 +16,7 @@ set -eo pipefail
 
 # is_version_greater and _isc_operator_list/_isc_operator_count live here.
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 

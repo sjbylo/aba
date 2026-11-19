@@ -42,7 +42,7 @@ source scripts/include_all.sh
 # any later step. Repeat START so a skipped resolve-vips/DNS still opens the row.
 aba_progress "START|ci_config"
 
-aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)

@@ -8,7 +8,7 @@ ensure_govc
 ARCH=$(uname -m)
 [ "$ARCH" = "amd64" ] && ARCH=x86_64
 
-aba_debug "Running: $0 $*" >&2
+aba_debug "Starting: $0 $* in $PWD"
 
 
 

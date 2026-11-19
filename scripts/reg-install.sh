@@ -7,7 +7,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
