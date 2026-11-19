@@ -39,8 +39,20 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 - **Day-2** — ongoing content updates, cluster upgrades (OSUS), OperatorHub, NTP, shutdown/startup
 
 <div align="center">
-<img src="https://github.com/sjbylo/aba/releases/download/readme-media/aba-mirror-sync.gif" alt="ABA TUI mirror sync" title="ABA TUI mirror sync" width="100%">
+<img src="https://github.com/sjbylo/aba/releases/download/readme-media/aba-mirror-sync.gif" alt="ABA TUI mirror sync" title="ABA TUI mirror sync">
 <br><sub>The ABA TUI — a guided wizard for the complete OpenShift installation workflow (<code>abatui</code>)</sub>
+<table>
+<tr>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-mirror.png" alt="Mirror sync" width="280"></a><br><sub>Mirror sync</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-version.png" alt="Version" width="280"></a><br><sub>Version</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-operators.png" alt="Operators" width="280"></a><br><sub>Operators</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-cluster.png" alt="Cluster install" width="280"></a><br><sub>Cluster install</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-day2.png" alt="Day-2" width="280"></a><br><sub>Day-2</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-load.png" alt="Disconnected load" width="280"></a><br><sub>Disconnected load</sub></td>
+</tr>
+</table>
 </div>
 
 > **Download ready-made ABA install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
