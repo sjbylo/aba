@@ -1,26 +1,29 @@
 #!/bin/bash
 # Record a TUI test on a smaller pane, then make a GIF from its color frames.
 #
-#   test/func/tui-record.sh drive
+#   test/func/tui-record.sh drive [HOST]
 #   test/func/tui-record.sh stop
-#   test/func/tui-record.sh gif [RUN_DIR] [OUT.gif]
-#   test/func/tui-record.sh mirror|cluster|day2
+#   test/func/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]
+#   test/func/tui-record.sh mirror|cluster|day2 [HOST]
 #
 # drive starts the TUI and records every pane change, including the cursor.
 # You attach from another terminal and drive it. stop ends the recording
 # without exiting the TUI. gif builds a small GIF: a small dialog is a short
 # pause, a large or important dialog is a longer one, a cursor move is brief.
 #
-# Defaults: bundle.example.com, 100x30. TUI_TEST_HOST=local records here.
-# Override with TUI_TEST_HOST, TUI_WIDTH, TUI_HEIGHT, TUI_CLUSTER_NAME.
+# Host defaults to conno. A short name is enough: drive disco.
+# TUI_TEST_HOST=disco is the same switch. local records on this machine.
+# Pane size defaults to 100x30. Override with TUI_WIDTH, TUI_HEIGHT,
+# TUI_CLUSTER_NAME. gif WIDTH is pixels; 900 matches a README column.
 
 cd "$(dirname "$0")/../.." || exit 1
 
 _usage() {
-	echo "Usage: test/func/tui-record.sh drive" >&2
+	echo "Usage: test/func/tui-record.sh drive [HOST]" >&2
 	echo "       test/func/tui-record.sh stop" >&2
-	echo "       test/func/tui-record.sh gif [RUN_DIR] [OUT.gif]" >&2
-	echo "       test/func/tui-record.sh mirror|cluster|day2" >&2
+	echo "       test/func/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]" >&2
+	echo "       test/func/tui-record.sh mirror|cluster|day2 [HOST]" >&2
+	echo "Host defaults to conno. Example: drive disco" >&2
 	exit 2
 }
 
@@ -36,8 +39,13 @@ _newest_run() {
 	dirname "$d"
 }
 
+# Argument wins, then TUI_TEST_HOST, then conno. conno and disco are SSH names.
 _host() {
-	printf '%s\n' "${TUI_TEST_HOST:-bundle.example.com}"
+	local h="${1:-}"
+	if [ -z "$h" ]; then
+		h="${TUI_TEST_HOST:-conno}"
+	fi
+	printf '%s\n' "$h"
 }
 
 _local_host() {
@@ -59,7 +67,7 @@ _on_host() {
 # Start abatui in tmux and record until the session ends or stop is requested.
 _drive() {
 	local host w h sess stamp remote local_dir
-	host=$(_host)
+	host=$(_host "${1:-}")
 	w="${TUI_WIDTH:-100}"
 	h="${TUI_HEIGHT:-30}"
 	sess=tui-drive
@@ -132,12 +140,16 @@ _gif() {
 		[ "$base" = color ] && base=$(basename "$(dirname "$src")")
 		out="${base}.gif"
 	fi
-	python3 test/func/tui-gif.py "$src" "$out"
+	if [ -n "${3:-}" ]; then
+		python3 test/func/tui-gif.py "$src" "$out" "$3"
+	else
+		python3 test/func/tui-gif.py "$src" "$out"
+	fi
 }
 
 _record() {
 	local which="$1" log rc dir
-	export TUI_TEST_HOST="${TUI_TEST_HOST:-bundle.example.com}"
+	export TUI_TEST_HOST="$(_host "${2:-}")"
 	export TUI_WIDTH="${TUI_WIDTH:-100}"
 	export TUI_HEIGHT="${TUI_HEIGHT:-30}"
 	export TUI_CLUSTER_NAME="${TUI_CLUSTER_NAME:-compact}"
@@ -156,9 +168,9 @@ _record() {
 }
 
 case "${1:-}" in
-	drive) _drive ;;
+	drive) _drive "${2:-}" ;;
 	stop) _stop ;;
-	mirror|cluster|day2) _record "$1" ;;
-	gif) _gif "${2:-}" "${3:-}" ;;
+	mirror|cluster|day2) _record "$1" "${2:-}" ;;
+	gif) _gif "${2:-}" "${3:-}" "${4:-}" ;;
 	*) _usage ;;
 esac

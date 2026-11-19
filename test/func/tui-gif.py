@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Turn a TUI color-frame directory into a GIF.
 
-A progress tick stays up briefly. A menu or confirm stays up long enough
-to read. Pass the run directory or its color/ subdirectory.
+A near-duplicate frame holds for half a second. A new dialog stays up
+for at least one second, longer when there is more to read. The GIF
+ends on a black frame held for three seconds. Pass the run directory
+or its color/ subdirectory. An optional width draws the GIF at that
+width so a page can show it without shrinking.
 """
 import re
 import shutil
@@ -34,13 +37,35 @@ FONTS = (
 
 # Large enough to read when the GIF is opened on its own.
 FONT_PX = 28
+# Cursor motion, a moved highlight, or a progress tick on the same screen.
+SAME_PAUSE_MS = 500
+# A new dialog. Larger and important dialogs hold longer than this.
+MIN_PAUSE_MS = 1000
+# Black frame after the last screen, before the loop starts again.
+END_BLACK_MS = 3000
 
 
-def load_fonts():
+def load_fonts(px=None):
+	px = FONT_PX if px is None else px
 	for regular, bold in FONTS:
 		if Path(regular).is_file() and Path(bold).is_file():
-			return ImageFont.truetype(regular, FONT_PX), ImageFont.truetype(bold, FONT_PX)
+			return ImageFont.truetype(regular, px), ImageFont.truetype(bold, px)
 	raise SystemExit("no monospace font found for the GIF")
+
+
+def font_px_for_width(cols, target):
+	# Largest font whose drawing is no wider than target. Never scale up.
+	if not target or cols < 1:
+		return FONT_PX
+	chosen = 8
+	for px in range(8, FONT_PX + 1):
+		font, _ = load_fonts(px)
+		cw, _ = cell_size(font)
+		if cols * cw + 32 <= target:
+			chosen = px
+		else:
+			break
+	return chosen
 
 
 def cell_size(font):
@@ -108,10 +133,6 @@ IMPORTANT = re.compile(
 )
 
 
-def is_progress(text):
-	return bool(re.search(r"In Progress|Overall Progress|Executing|Syncing|\d+%", text))
-
-
 def load_frame(path):
 	text = path.read_text(encoding="utf-8", errors="replace")
 	cursor = None
@@ -133,22 +154,16 @@ def same_screen(a, b):
 
 
 def delay_ms(text, prev, rows, cursor_only):
-	# The cursor moved and nothing else did. Show the motion, do not linger.
-	if cursor_only:
-		return 80
-	if prev and same_screen(text, prev):
-		if is_progress(text):
-			return 280
-		# Highlight or selection moved inside the same dialog.
-		return 200
+	# Same screen, or only the cursor moved. A new dialog stays readable.
+	if cursor_only or (prev and same_screen(text, prev)):
+		return SAME_PAUSE_MS
 	cells = 0
 	if rows:
 		cells = len(rows) * max(len(r) for r in rows)
-	# A small confirm is short. A large menu or review stays up long enough to read.
 	ms = 600 + min(2800, cells // 2)
 	if IMPORTANT.search(text):
 		ms += 1400
-	return min(ms, 4500)
+	return max(MIN_PAUSE_MS, min(ms, 4500))
 
 
 def crop_rows(rows, cursor):
@@ -159,11 +174,15 @@ def crop_rows(rows, cursor):
 		for x, (ch, *_) in enumerate(r):
 			if ch in "┌┐└┘":
 				corners.append((y, x, ch))
-	if corners:
-		top = min(y for y, _, ch in corners if ch in "┌┐")
-		bot = max(y for y, _, ch in corners if ch in "└┘")
-		lo = min(x for _, x, ch in corners if ch in "┌└")
-		hi = max(x for _, x, ch in corners if ch in "┐┘")
+	# A dialog taller than the pane has ┌┐ and no └┘. Skip the box
+	# measurement then and use the visible text for the pause.
+	tops = [y for y, _, ch in corners if ch in "┌┐"]
+	bots = [y for y, _, ch in corners if ch in "└┘"]
+	lefts = [x for _, x, ch in corners if ch in "┌└"]
+	rights = [x for _, x, ch in corners if ch in "┐┘"]
+	if tops and bots and lefts and rights:
+		top, bot = min(tops), max(bots)
+		lo, hi = min(lefts), max(rights)
 		if bot >= top and hi >= lo:
 			cropped = [r[lo:hi + 1] if len(r) > lo else [] for r in rows[top:bot + 1]]
 			return cropped, _shift_cursor(cursor, lo, top, cropped)
@@ -262,7 +281,7 @@ def frames_in(directory):
 	return files
 
 
-def build(src, dest):
+def build(src, dest, width=None):
 	files = frames_in(src)
 	if not files:
 		print(f"no color frames in {src}", file=sys.stderr)
@@ -289,7 +308,7 @@ def build(src, dest):
 			w = max((len(r) for r in rows), default=0)
 			shapes.append((w, len(rows)))
 		cols, nrows = max(set(shapes), key=shapes.count)
-	font, font_b = load_fonts()
+	font, font_b = load_fonts(font_px_for_width(cols, width))
 	images, durations, prev, prev_cursor = [], [], "", None
 	for rows, body, cursor in kept:
 		cursor_only = bool(prev) and body == prev and cursor != prev_cursor
@@ -311,8 +330,16 @@ def build(src, dest):
 	flat.extend([0] * (768 - len(flat)))
 	base = Image.new("P", (1, 1))
 	base.putpalette(flat)
-	frames = [im.quantize(palette=base, dither=Image.Dither.NONE) for im in images]
 	durations[-1] = max(durations[-1], 2500)
+	if width and images[0].size[0] > width:
+		scaled = []
+		for im in images:
+			h = max(1, round(im.size[1] * width / images[0].size[0]))
+			scaled.append(im.resize((width, h), Image.Resampling.LANCZOS))
+		images = scaled
+	images.append(Image.new("RGB", images[0].size, (0, 0, 0)))
+	durations.append(END_BLACK_MS)
+	frames = [im.quantize(palette=base, dither=Image.Dither.NONE) for im in images]
 	Path(dest).parent.mkdir(parents=True, exist_ok=True)
 	frames[0].save(
 		dest,
@@ -348,7 +375,13 @@ def _compress(path):
 
 
 if __name__ == "__main__":
-	if len(sys.argv) != 3:
-		print(f"usage: {sys.argv[0]} RUN_DIR DEST.gif", file=sys.stderr)
+	if len(sys.argv) not in (3, 4):
+		print(f"usage: {sys.argv[0]} RUN_DIR DEST.gif [WIDTH]", file=sys.stderr)
 		sys.exit(2)
-	sys.exit(build(sys.argv[1], sys.argv[2]))
+	width = None
+	if len(sys.argv) == 4:
+		if not sys.argv[3].isdigit() or int(sys.argv[3]) < 1:
+			print("WIDTH must be a positive number of pixels", file=sys.stderr)
+			sys.exit(2)
+		width = int(sys.argv[3])
+	sys.exit(build(sys.argv[1], sys.argv[2], width))
