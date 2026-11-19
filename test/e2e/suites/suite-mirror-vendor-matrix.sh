@@ -600,23 +600,38 @@ test_end
 # ============================================================================
 test_begin "Cleanup: uninstall and verify"
 
+# aba uninstall has to succeed before any working dir is removed.
+# Otherwise the exit trap sees a missing dir and leaves the registry up.
+# The rms below are suite mirror dirs and registry data, not ~/aba.
 e2e_run "Uninstall leftover e2e-vm registries" \
-	"shopt -s nullglob; for _d in e2e-vm-*/; do \
+	"shopt -s nullglob; _fail=0; \
+	for _d in e2e-vm-*/; do \
 		_dn=\"\${_d%/}\"; \
-		if [ -f \"\$_dn/.available\" ]; then \
+		if [ -f \"\$_dn/mirror.conf\" ] || [ -f \"\$_dn/.available\" ]; then \
 			echo \"[cleanup] Uninstalling \$_dn\"; \
-			aba -d \$_dn uninstall --delete-data || echo \"[cleanup] uninstall failed for \$_dn\"; \
+			aba -y -d \$_dn uninstall --delete-data || _fail=1; \
 		fi; \
-	done"
+	done; \
+	if [ \"\$_fail\" -ne 0 ]; then \
+		echo '[cleanup] aba uninstall failed; leaving mirror dirs for the exit trap' >&2; \
+		exit 1; \
+	fi; \
+	for _d in e2e-vm-*/; do \
+		_dn=\"\${_d%/}\"; \
+		if [ -f \"\$_dn/mirror.conf\" ] || [ -f \"\$_dn/.available\" ]; then \
+			e2e_remove_from_mirror_cleanup \"\$PWD/\$_dn\"; \
+			rm -rf \"\$_dn\" \"\$HOME/.aba/mirror/\$_dn\"; \
+		fi; \
+	done; \
+	_left=0; \
+	for _d in e2e-vm-*/; do _left=1; done; \
+	if [ \"\$_left\" -eq 0 ]; then \
+		rm -rf \$HOME/e2e-vm-data-* \$HOME/docker-reg \$HOME/quay-install \$HOME/omr; \
+		ssh -F ~/.aba/ssh.conf steve@${DIS_HOST} 'sudo rm -rf /root/e2e-vm-data-* /home/*/e2e-vm-data-* /root/docker-reg /home/*/docker-reg /root/quay-install /home/*/quay-install /root/omr /home/*/omr'; \
+	fi"
 
 e2e_run "Assert: no registries on disN" "e2e_assert_registry_removed"
 e2e_run "Assert: no registries on conN" "e2e_assert_registry_removed local"
-
-e2e_run "Remove mirror dirs on conN" "rm -rf e2e-vm-*"
-e2e_run_remote "Remove data dirs on disN (all users)" \
-	"sudo rm -rf /root/e2e-vm-data-* /home/*/e2e-vm-data-* /root/docker-reg /home/*/docker-reg /root/quay-install /home/*/quay-install /root/omr /home/*/omr"
-e2e_run "Remove data dirs on conN" "rm -rf ~/e2e-vm-data-* ~/docker-reg ~/quay-install ~/omr"
-e2e_run "Remove regcreds" "rm -rf ~/.aba/mirror/e2e-vm-*"
 
 test_end
 
