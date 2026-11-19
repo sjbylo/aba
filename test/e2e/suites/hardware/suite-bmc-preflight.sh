@@ -45,13 +45,13 @@
 set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_SUITE_DIR/../lib/framework.sh"
-source "$_SUITE_DIR/../lib/config-helpers.sh"
-source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
-source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../../lib/framework.sh"
+source "$_SUITE_DIR/../../lib/config-helpers.sh"
+source "$_SUITE_DIR/../../lib/remote.sh"
+source "$_SUITE_DIR/../../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../../lib/setup.sh"
 # Phase 9: redfish helpers (provides redfish_powerstate_on)
-source "$_SUITE_DIR/../lib/redfish-helpers.sh"
+source "$_SUITE_DIR/../../lib/redfish-helpers.sh"
 
 # --- Configuration ------------------------------------------------------------
 
@@ -76,8 +76,8 @@ suite_begin "bmc-preflight"
 # ============================================================================
 test_begin "Setup: install ABA on con${POOL_NUM}"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+# Keep the existing ~/aba tree. File endurance: do not rm -rf or git clone.
+e2e_install_aba
 
 e2e_run "Configure aba.conf (baremetal platform, pool base domain)" \
 	"cd ~/aba && aba --noask --platform bm --base-domain $(pool_domain)"
@@ -93,8 +93,8 @@ test_begin "Setup: write bmc.conf from pools.conf BMC_* fields, snapshot pre-exi
 e2e_run "Assert pool BMC_TYPE_master0 is irmc (v1.1 requirement)" \
 	"[ \"\${BMC_TYPE_master0:-}\" = irmc ] || { echo 'ERROR: pool BMC_TYPE_master0 must be irmc in v1.1; got: \${BMC_TYPE_master0:-unset}' >&2; exit 1; }"
 
-# CLUSTER_DIR is the working dir for this cluster; aba subcommands are run from here
-CLUSTER_DIR="$HOME/$CLUSTER"
+# aba cluster -n, run from ~/aba, creates this directory.
+CLUSTER_DIR="$HOME/aba/$CLUSTER"
 
 # Register cleanup BEFORE any cluster-mutating action (crash-safe; Phase 4 D-09 rule)
 e2e_add_to_cluster_cleanup "$CLUSTER_DIR"

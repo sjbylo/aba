@@ -12,6 +12,10 @@
 #      NEVER force-clean / rm -rf registry state after an aba failure.
 #   3. If the cluster/mirror dir is already gone → success (nothing to do).
 #      (aba -d requires the directory to exist, so we short-circuit here.)
+#   4. A cluster dir with .bm-sim was booted by tools/bm-sim-boot.sh.
+#      aba delete does not destroy those VMs when platform=bm, so
+#      tools/bm-sim-delete.sh runs first. If that fails, STOP. The dir
+#      and the marker stay so the next pass can retry. Never rm -rf ~/aba.
 #
 # Depends on: lib/remote.sh (_essh)
 # =============================================================================
@@ -26,6 +30,14 @@ _e2e_cleanup_cluster_entry() {
 		"if [ ! -d '$abs_path' ]; then
 			echo '  (cluster dir $abs_path already gone -- nothing to delete)'
 			exit 0
+		fi
+		if [ -f '$abs_path/.bm-sim' ]; then
+			echo '  BM sim VMs: tools/bm-sim-delete.sh before aba delete'
+			if [ ! -x \"\$HOME/aba/tools/bm-sim-delete.sh\" ]; then
+				echo 'ERROR: .bm-sim set but ~/aba/tools/bm-sim-delete.sh is missing' >&2
+				exit 1
+			fi
+			\"\$HOME/aba/tools/bm-sim-delete.sh\" '$abs_path' || exit 1
 		fi
 		\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete --force" \
 		< /dev/null

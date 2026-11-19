@@ -227,8 +227,13 @@ test_end
 # ============================================================================
 test_begin "Cleanup"
 
-e2e_run "Remove mirror dir" \
-	"rm -rf $_MIRROR_NAME"
+# Uninstall first. The dir stays until aba returns 0, then it is dropped
+# from the cleanup list and removed. A failure stops before either, so the
+# exit trap can still uninstall. This removes the suite mirror dir only.
+e2e_run "Uninstall and remove mirror dir" \
+	"if [ -d $_MIRROR_NAME ]; then aba -y -d $_MIRROR_NAME uninstall --delete-data; fi
+	e2e_remove_from_mirror_cleanup \"$PWD/$_MIRROR_NAME\"
+	rm -rf $_MIRROR_NAME"
 
 test_end
 
