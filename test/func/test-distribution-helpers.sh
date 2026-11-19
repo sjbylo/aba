@@ -421,5 +421,48 @@ else
 fi
 
 echo ""
+# save/sync reachability gate: one quick curl, curl --retry 2, abort with curl's error.
+_bin=$(mktemp -d)
+_clog=$(mktemp)
+cat > "$_bin/curl" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "${ABA_CURL_LOG:?}"
+if [ "${ABA_CURL_RC:-0}" != 0 ]; then
+	echo "curl: (28) Failed to connect" >&2
+	exit "$ABA_CURL_RC"
+fi
+exit 0
+EOF
+chmod +x "$_bin/curl"
+_ps=$(mktemp)
+printf '%s\n' '{"auths":{"registry.redhat.io":{"auth":"eHg="}}}' > "$_ps"
+_rc=0
+_err=$(
+	PATH="$_bin:$PATH" ABA_CURL_LOG="$_clog" ABA_CURL_RC=28 pull_secret_file="$_ps" \
+		require_internet_and_pull_secret 2>&1
+) || _rc=$?
+if [ "$_rc" -ne 0 ] && printf '%s\n' "$_err" | grep -q 'curl: (28) Failed to connect' \
+	&& grep -q -- '--retry 2' "$_clog" \
+	&& grep -q -- '--connect-timeout 5' "$_clog" \
+	&& grep -q -- '--max-time 10' "$_clog"; then
+	_pass "save/sync probe aborts with curl's error and --retry 2"
+else
+	_fail "save/sync probe aborts with curl's error and --retry 2 (rc $_rc)"
+	printf '%s\n' "$_err" | head -20
+fi
+: > "$_clog"
+_rc=0
+_err=$(
+	PATH="$_bin:$PATH" ABA_CURL_LOG="$_clog" ABA_CURL_RC=0 pull_secret_file="$_ps" \
+		require_internet_and_pull_secret 2>&1
+) || _rc=$?
+if [ "$_rc" -eq 0 ]; then
+	_pass "save/sync probe continues when the registry answers"
+else
+	_fail "save/sync probe continues when the registry answers (rc $_rc)"
+	printf '%s\n' "$_err" | head -20
+fi
+rm -rf "$_bin" "$_clog" "$_ps"
+
 echo "Results: $pass passed, $fail failed"
 exit "$fail"

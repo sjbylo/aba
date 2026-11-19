@@ -363,6 +363,38 @@ _test_output "output with all specials"    'Kd8#f&2|xQ!@^z'
 echo
 
 # =====================================================================
+# cluster-info: the screen shows the kubeadmin password, the trace does not
+# =====================================================================
+
+_ci=$(mktemp -d)
+ln -s "$REPO_ROOT/scripts" "$_ci/scripts"
+mkdir -p "$_ci/iso-agent-based/auth"
+printf 'cluster_name=ci\nbase_domain=example.com\n' > "$_ci/cluster.conf"
+printf 'apiVersion: v1\n' > "$_ci/iso-agent-based/auth/kubeconfig"
+printf '%s' 's3cret word' > "$_ci/iso-agent-based/auth/kubeadmin-password"
+_ci_rc=0
+(
+	cd "$_ci" || exit 1
+	INFO_ABA=1 ABA_TRACE_FILE="$_ci/trace.log" verify_conf=off \
+		bash scripts/cluster-info.sh >"$_ci/out" 2>"$_ci/err"
+) || _ci_rc=$?
+
+if [ "$_ci_rc" -ne 0 ]; then
+	test_fail "cluster-info trace mask" "exit $_ci_rc stderr=$(cat "$_ci/err")"
+elif ! grep -F -q 's3cret word' "$_ci/out"; then
+	test_fail "cluster-info trace mask" "screen hid the password: $(cat "$_ci/out")"
+elif grep -F -q 's3cret word' "$_ci/trace.log" || grep -F -q 's3cret word' "$_ci/err"; then
+	test_fail "cluster-info trace mask" "password reached the trace or stderr"
+elif ! grep -F -q 'password: "***"' "$_ci/trace.log"; then
+	test_fail "cluster-info trace mask" "trace missing the mask: $(cat "$_ci/trace.log")"
+else
+	test_pass "cluster-info shows the password and masks the trace"
+fi
+rm -rf "$_ci"
+
+echo
+
+# =====================================================================
 # Summary
 # =====================================================================
 

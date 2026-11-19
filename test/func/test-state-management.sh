@@ -222,6 +222,64 @@ fi
 
 rm -rf "$_test_cluster_dir" "$_test_cluster_state"
 
+# 4g: a directory that is still there, but missing cluster.conf, is filled
+# in place. aba info must not nest <name>/<name>.
+echo "--- Phase 4: partial directory restore ---"
+_test_cluster_dir="$PWD/_test-partial"
+_test_cluster_state="$HOME/.aba/clusters/_test-partial.example.com"
+rm -rf "$_test_cluster_dir" "$_test_cluster_state"
+mkdir -p "$_test_cluster_state/backup" "$_test_cluster_dir"
+chmod 700 "$_test_cluster_state"
+cat > "$_test_cluster_state/state.sh" <<'STATE'
+cluster_name=_test-partial
+base_domain=example.com
+platform=bm
+STATE
+cat > "$_test_cluster_state/backup/cluster.conf" <<'CONF'
+cluster_name=_test-partial
+base_domain=example.com
+CONF
+touch "$_test_cluster_state/backup/.install-complete"
+_out=$(aba --dir _test-partial info 2>&1 || true)
+if [ -s "$_test_cluster_dir/cluster.conf" ] && grep -q "cluster_name=_test-partial" "$_test_cluster_dir/cluster.conf" && [ ! -d "$_test_cluster_dir/_test-partial" ]; then
+	test_pass "aba info restored a partial cluster directory in place"
+else
+	test_fail "aba info did not restore the partial cluster directory in place"
+fi
+if echo "$_out" | grep -q "Not in a cluster directory"; then
+	test_fail "aba info rejected a partial cluster directory"
+else
+	test_pass "aba info did not reject the partial cluster directory"
+fi
+rm -rf "$_test_cluster_dir" "$_test_cluster_state"
+
+# 4h: a deleted working dir is recreated and aba delete continues.
+echo "--- Phase 4: aba delete recreates a deleted directory ---"
+_test_cluster_dir="$PWD/_test-delete-recreate"
+_test_cluster_state="$HOME/.aba/clusters/_test-delete-recreate.example.com"
+rm -rf "$_test_cluster_dir" "$_test_cluster_state"
+mkdir -p "$_test_cluster_state/backup"
+chmod 700 "$_test_cluster_state"
+cat > "$_test_cluster_state/state.sh" <<'STATE'
+cluster_name=_test-delete-recreate
+base_domain=example.com
+platform=bm
+STATE
+cat > "$_test_cluster_state/backup/cluster.conf" <<'CONF'
+cluster_name=_test-delete-recreate
+base_domain=example.com
+CONF
+touch "$_test_cluster_state/backup/.install-complete"
+_rc=0
+_out=$(aba --dir _test-delete-recreate delete 2>&1) || _rc=$?
+if [ "$_rc" -eq 0 ] && echo "$_out" | grep -q "Recreating cluster directory" && [ -d "$_test_cluster_dir" ] && [ -s "$_test_cluster_dir/cluster.conf" ] && [ ! -d "$_test_cluster_dir/_test-delete-recreate" ]; then
+	test_pass "aba delete recreated the missing cluster directory and continued"
+else
+	test_fail "aba delete recreate rc=$_rc dir=$(test -d "$_test_cluster_dir" && echo yes || echo no)"
+	echo "$_out" | tail -30
+fi
+rm -rf "$_test_cluster_dir" "$_test_cluster_state"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 4: _recreate_cluster_dir helper function
 # ─────────────────────────────────────────────────────────────────────────────
@@ -245,7 +303,7 @@ CONF
 
 touch "$_test_cluster_state/backup/.init"
 
-# 4g: helper returns 0 on success
+# 4i: helper returns 0 on success
 _rc=0
 bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; _recreate_cluster_dir _test-helper-recreate test.example.com" || _rc=$?
 if [ "$_rc" -eq 0 ] && [ -d "$_test_cluster_dir" ]; then
@@ -256,7 +314,7 @@ fi
 
 rm -rf "$_test_cluster_dir" "$_test_cluster_state"
 
-# 4h: helper returns 1 when no state exists
+# 4j: helper returns 1 when no state exists
 _rc=0
 bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; _recreate_cluster_dir _nonexistent_cluster_xyz nonexistent.domain" || _rc=$?
 if [ "$_rc" -eq 1 ]; then

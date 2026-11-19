@@ -1996,7 +1996,7 @@ externalize_cluster_state() {
 
 	# Backup marker/flag files
 	local _flag
-	for _flag in .install-complete .init .preflight-done .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .bootstrap-complete; do
+	for _flag in .install-complete .init .preflight-done .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .agent-wait-done .bootstrap-complete; do
 		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
 	done
 
@@ -2161,8 +2161,13 @@ _state_override_mirror() {
 # Recreate a deleted cluster directory from externalized state backup.
 # Returns 0 if successfully recreated, 1 if no backup exists.
 # backup/ holds everything needed: configs, markers, macs.conf.
+# The third argument is the directory to fill. The default is a new
+# child named $_name. Pass "." when already inside aba/<name>.
 _recreate_cluster_dir() {
-	local _name="$1" _domain="$2"
+	local _name="$1" _domain="$2" _dest="$3"
+	# local clears every name in the statement before the values are set,
+	# so ${_dest:-$_name} in that same line would see an empty _name.
+	[ -n "$_dest" ] || _dest="$_name"
 	local _state_dir="$HOME/.aba/clusters/$_name.$_domain"
 	local _backup="$_state_dir/backup"
 
@@ -2171,12 +2176,12 @@ _recreate_cluster_dir() {
 
 	aba_info "Recreating cluster directory '$_name' from state backup"
 
-	mkdir -p "$_name"
-	cp -pa "$_backup/." "$_name/"
-	ln -fs ../templates/Makefile.cluster "$_name/Makefile"
-	rm -f "$_name/.init"
-	make -s -C "$_name" init 2>/dev/null || true
-	ln -sfn "$_state_dir" "$_name/clusterstate"
+	mkdir -p "$_dest"
+	cp -pa "$_backup/." "$_dest/"
+	ln -fs ../templates/Makefile.cluster "$_dest/Makefile"
+	rm -f "$_dest/.init"
+	make -s -C "$_dest" init 2>/dev/null || true
+	ln -sfn "$_state_dir" "$_dest/clusterstate"
 
 	return 0
 }
@@ -4082,6 +4087,15 @@ _sed_escape_replacement() {
 	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/[&|]/\\&/g'
 }
 
+# True for keys whose values must not be written to a log line.
+# The file still receives the real value.
+_rvc_secret_key() {
+	case "$1" in
+		reg_pw|GOVC_PASSWORD|bmc_password_*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
 	# -n <string> : name of value to change
@@ -4095,10 +4109,10 @@ replace-value-conf() {
 	# Auto-quotes new values that contain spaces or '#'.
 	# If the caller already pre-quotes (e.g. -v "'password'"), no double-quoting occurs.
 
-	# Redact reg_pw values from debug output
+	# Saved before the loop consumes the arguments. A password value is
+	# replaced below, after the key name is known. vSphere passwords can
+	# contain spaces, so this is a literal replace, not a single token.
 	local _rvc_dbg_args="$*"
-	[[ "$_rvc_dbg_args" == *"reg_pw"* ]] && _rvc_dbg_args=$(echo "$_rvc_dbg_args" | sed -E "s/(-v[[:space:]]+)[^[:space:]]+/\1***/")
-	aba_debug "Calling: replace-value-conf() $_rvc_dbg_args"
 
 	local quiet=
 	local _rvc_case=
@@ -4140,6 +4154,12 @@ replace-value-conf() {
 		esac
 	done
 
+	# Hide the password in the call line now that the key name is known.
+	if _rvc_secret_key "${name:-}" && [ -n "${value:-}" ]; then
+		_rvc_dbg_args="${_rvc_dbg_args//"$value"/***}"
+	fi
+	aba_debug "Calling: replace-value-conf() $_rvc_dbg_args"
+
 	# Apply case transformation if requested
 	if [ -n "$_rvc_case" ] && [ -n "${value:-}" ]; then
 		local _orig_value="$value"
@@ -4148,7 +4168,9 @@ replace-value-conf() {
 			upper) value="${value^^}" ;;
 		esac
 		if [ "$value" != "$_orig_value" ]; then
-			aba_info "Converted $name to ${_rvc_case}case: $value" >&2
+			local _case_show="$value"
+			_rvc_secret_key "${name:-}" && _case_show="***"
+			aba_info "Converted $name to ${_rvc_case}case: $_case_show" >&2
 		fi
 	fi
 
@@ -4179,12 +4201,13 @@ replace-value-conf() {
 
 	# Step through the files by priority...
 	local _first_file=
+	local _log_val="${_write_value:-}"
+	_rvc_secret_key "${name:-}" && _log_val="***"
 	for f in $files
 	do
 		[ ! -s "$f" ] && continue # Try next file
 		[ ! "$_first_file" ] && _first_file="$f"
 
-		local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
 		aba_debug "Replacing config value [$name] with [$_log_val] in file: $f" >&2
 
 		# Idempotency: if the file already has the desired state, skip the write.
@@ -4234,7 +4257,6 @@ replace-value-conf() {
 	done
 
 	# Key not found in any file — append to the first valid file
-	local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
 	if [ "$_first_file" ] && [ "$value" ]; then
 		echo "${name}=${_write_value}" >> "$_first_file"
 		if [ ! "$quiet" ]; then
@@ -6980,13 +7002,16 @@ require_internet_and_pull_secret() {
 	local errors=()
 	local has_internet=true
 
-	# Check internet (quick probe, 5s timeout). The host is the distribution's.
+	# Reachability gate for the registry save/sync pull from. One short curl.
+	# --retry 2 is curl's own retry for a timeout, not the oc-mirror --retry count.
+	# -sS keeps curl's error for the abort. HTTP 401 means the host answered.
 	local _inet_err _probe
 	_probe="$(dist_quick_probe_host)"
-	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 "https://${_probe}/v2/" 2>&1 >/dev/null); then
+	if ! _inet_err=$(curl -sS -ILk --connect-timeout 5 --max-time 10 --retry 2 \
+		"https://${_probe}/v2/" 2>&1 >/dev/null); then
 		has_internet=false
-		errors+=("No internet access (cannot reach ${_probe})")
-		aba_debug "Internet check failed: $_inet_err"
+		_inet_err="${_inet_err//$'\n'/ }"
+		errors+=("No internet access (cannot reach ${_probe}: ${_inet_err:-curl failed})")
 	fi
 
 	# Check pull secret (global, then fallback). OKD without operators needs none.

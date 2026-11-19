@@ -47,6 +47,22 @@ A few bypass Make and call scripts directly: `bundle`, `ssh`, `run`, `info`,
 `rescue`, `upgrade`, and VM lifecycle commands (`create`, `ls`, `start`, `stop`,
 `kill`, `delete`, `refresh`, `upload`).
 
+## Where a command runs
+
+ABA was first a set of Makefiles. Make runs a recipe in the directory that
+holds that Makefile, and the scripts keep that assumption. A command runs
+in the directory that owns the work:
+
+- Mirror operations run in `aba/mirror/` or another mirror directory (`aba/mymirror/`).
+- Cluster operations run in `aba/<cluster>/` (for example `aba/mycluster/`).
+- Global operations run in `aba/`.
+- `make` runs in the directory next to the Makefile it drives: `aba/`, `aba/cli/`, `aba/mirror/`, `aba/mymirror/`, or `aba/<cluster>/`.
+
+Most scripts run in that same directory. From there they find `scripts/`,
+`cli/`, `templates/`, and the other repo directories by relative path.
+`$ABA_ROOT` is set by `aba.sh`. `scripts/include_all.sh` and the files under
+`tui/v2/` also read it. Other scripts use relative paths.
+
 ---
 
 ## Data Flow
@@ -427,7 +443,7 @@ remove these -- only Makefiles may.
 | `~/.aba/config` | User-level config overrides | User / install script |
 | `~/.aba/runner/` | run_once task state | run_once() only |
 | `~/.aba/mirror/<name>/` | Per-mirror credentials, state, config backups | Mirror Makefile + scripts |
-| `~/.aba/clusters/<name>/` | Per-cluster auth, state, config backups | monitor-install.sh (write), aba.sh (recreate) |
+| `~/.aba/clusters/<name>.<domain>/` | Per-cluster auth, state, config backups | monitor-install.sh (write), aba.sh (recreate) |
 | `~/.aba/ssh.conf` | SSH config for remote commands | Install script |
 | `~/.aba/cache/`, `~/.aba/tmp/` | Temporary data | Various scripts; wiped by `aba reset` |
 | Marker files (in-tree) | Lifecycle state | Makefiles only |
@@ -437,7 +453,7 @@ remove these -- only Makefiles may.
 Installed-object state lives outside the working dir in `~/.aba/`:
 
 - **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw), operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened, reg_running), and version tracking (mirror_ocp_version, last_action, last_action_at, reg_installed_at)
-- **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
+- **Cluster**: `~/.aba/clusters/<name>.<domain>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
 
 State files use lowercase vars matching config file names. Normalize functions
 source state.sh after config; immutable fields (locked after install) are
@@ -451,7 +467,24 @@ preserve timestamps (critical for Make dependency tracking).
 
 If a cluster working dir is deleted, `aba delete` recreates it from the
 state backup (restoring config files, Makefile, symlinks, markers) and
-proceeds normally. All dirs under `~/.aba/clusters/` are mode 700.
+proceeds normally. The same restore runs when `aba/<name>` is only partly
+there (`cluster.conf` missing) and a full backup exists, for these
+commands: `info`, `login`, `shell`, `terminal` (`term`), `getco`,
+`unstick`, `day2`, `day2-ntp`, `day2-osus`, `day2-virt`, `upgrade`,
+`upgrade-mon`, `shutdown`, `startup`, `rescue`, `create`, `ls`, `kill`,
+`poweroff`, `delete`, `refresh`, `upload`, `write-usb`, and `deploy`
+(`deploy-primed`). `start`, `stop`, `ssh`, `run`, `install`, `bundle`,
+`transfer`, and `status` do not restore that partial directory.
+
+The backup is `~/.aba/clusters/<name>.<domain>/` (`state.sh` and
+`backup/cluster.conf`). The recreated directory is only `aba/<name>`, a
+direct child of the repo root (the directory whose Makefile is the
+top-level Makefile). `aba -d <name>` (or `--dir`) recreates a missing
+directory there before the command runs. A name that is already the
+current directory is filled in place, not nested as `<name>/<name>`. A
+missing name with no backup is an error. A missing name whose parent is
+not the repo root is an error, and nothing is created in the current
+directory. All dirs under `~/.aba/clusters/` are mode 700.
 
 Helper functions (`cluster_kubeconfig()`, `cluster_state_dir()`,
 `cluster_is_installed()`) encapsulate lookups — scripts never hard-code
@@ -682,8 +715,7 @@ re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
 ## Script Calling Rules
 
 1. Scripts under `scripts/` are called ONLY via Make targets or `aba` CLI
-2. `$ABA_ROOT` is used only by `aba.sh` and `abatui2.sh`; all other scripts use
-   relative paths
+2. `$ABA_ROOT` is set by `aba.sh`. `scripts/include_all.sh` and the files under `tui/v2/` also read it. Other scripts use relative paths
 3. Scripts that `cd` from `$0` must resolve symlinks:
    `SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"`
 4. A runtime guardrail (env var check) is planned to enforce rule 1 (backlog)
