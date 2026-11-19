@@ -1601,8 +1601,8 @@ These commands control VMs directly without performing any OpenShift-level drain
 | Command | Description |
 |---------|-------------|
 | `aba start` | Power on all cluster VMs |
-| `aba stop` | Guest shutdown (VMware Tools / QEMU agent) — no drain |
-| `aba poweroff` / `aba kill` | Immediate power off — no drain, no guest shutdown |
+| `aba stop` | Guest shutdown (VMware Tools / QEMU agent) — no drain. Bare metal: Redfish GracefulShutdown of each `bmc.conf` node |
+| `aba poweroff` / `aba kill` | Immediate power off — no drain, no guest shutdown. Bare metal: Redfish ForceOff of each `bmc.conf` node |
 
 > **Tip:** Prefer `aba shutdown` / `aba startup` for routine maintenance. Use `aba stop`/`aba start` only when you need quick VM-level power cycling without the full graceful workflow.
 
