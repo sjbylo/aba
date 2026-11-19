@@ -40,7 +40,9 @@ echo "--- 0. Verify cluster and resolve upgrade target ---"
 
 _inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" != "yes" ]]; then
-	echo "  ✗ FAIL: Cluster '$_CLUSTER' not installed — cannot run upgrade test"
+	echo "  ✗ FAIL: Cluster '$_CLUSTER' is not installed. This test only upgrades an existing cluster."
+	echo "  Install it first (about 45 min; it leaves $_CLUSTER running):"
+	echo "    test/func/test-tui-cluster.sh"
 	_TUI_FAIL=1; tui_summary; exit 1
 fi
 
@@ -130,16 +132,26 @@ _nav_prepare_upgrade() {
 	tui_back_to "Actions" 5
 	tui_select_item "Mirror Payload\|Payload"
 	sleep 1
-	tui_select_item "Prepare Upgrade\|Upgrade"
+	# The first look often hits "One moment please..." and misses the item.
+	# The loop below selects it once the payload menu is actually up.
+	tui_select_item "Prepare Upgrade\|Upgrade" || true
 	sleep 1
 	tui_wait_isc_done 180
 
 	# Multiple dialogs may appear — handle each one
 	local _s _i
-	for _i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+	for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
 		sleep 2
 		_s=$(tui_capture)
 		tui_screenshot "upg-02-nav-step${_i}"
+
+		# Payload menu. "Prepare Upgrade" is the sync entry. Selecting it
+		# only while this menu is showing avoids pressing U on a later dialog.
+		if echo "$_s" | grep -q "Mirror Payload" && echo "$_s" | grep -q "Prepare Upgrade"; then
+			tui_select_item "Prepare Upgrade"
+			sleep 2
+			continue
+		fi
 
 		# Fast-channel version list. Item 2 is "Current target". The list
 		# has no Manual/Change-base text, so the Next branch below never saw it

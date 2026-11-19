@@ -70,7 +70,7 @@ trap _disco_cleanup EXIT
 # ============================================================================
 tui_start
 tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
+	tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 }
 
 # ============================================================================
@@ -133,7 +133,7 @@ for _gate_i in 1 2 3 4 5; do
 	if echo "$_scr" | grep -qi "Image Archives Needed\|This is a \*light\* install bundle"; then
 		echo "  ✗ FAIL: Image Archives Needed — not falling back to connected mode"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_stop 2>/dev/null || true
+		tui_leave_on_menu 2>/dev/null || true
 		tui_summary
 		exit 1
 	fi
@@ -141,7 +141,7 @@ for _gate_i in 1 2 3 4 5; do
 	if echo "$_scr" | grep -qi "Cannot Proceed\|Bundle incomplete\|no imageset-config"; then
 		echo "  ✗ FAIL: Bundle incomplete — not relaunching in connected mode"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_stop 2>/dev/null || true
+		tui_leave_on_menu 2>/dev/null || true
 		tui_summary
 		exit 1
 	fi
@@ -150,7 +150,7 @@ for _gate_i in 1 2 3 4 5; do
 	if echo "$_scr" | grep -qi "Internet Access Required\|Internet access required\|Exiting\.\.\."; then
 		echo "  ✗ FAIL: Internet Access Required — DISCO smoke has no air-gap payload"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_stop 2>/dev/null || true
+		tui_leave_on_menu 2>/dev/null || true
 		tui_summary
 		exit 1
 	fi
@@ -270,7 +270,7 @@ if [[ "$_detected_disco" != "true" ]]; then
 	echo "  ✗ FAIL: DISCO smoke is not in Fully Disconnected mode"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_screenshot "disco-03-not-disco"
-	tui_stop 2>/dev/null || true
+	tui_leave_on_menu 2>/dev/null || true
 	tui_summary
 	exit 1
 fi

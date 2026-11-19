@@ -21,15 +21,19 @@ echo "=== TUI Progress Integration Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
 
-# Kill any stale sessions/processes from previous progress / TUI runs.
-# A leftover abatui (e.g. Confirm Exit) trips the stray-process assert at end.
-$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
-$_TUI_SSH "pkill -9 -f aba-progress-wrapper 2>/dev/null; pkill -9 -f aba-progress-test 2>/dev/null; true"
-$_TUI_SSH "pkill -9 -f abatui2 2>/dev/null; true"
-sleep 0.5
-
+# Deploy while the session name is still tui-test, so a real code change
+# stops that abatui. The stub below must not. It runs in its own tmux
+# session; killing abatui here is what made the next test launch from scratch.
 tui_deploy_code
 echo ""
+
+_TUI_SESSION=tui-progress
+# The capture loop was aimed at tui-test. Point it at the stub session.
+_tui_capture_stop
+_tui_capture_start
+$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
+$_TUI_SSH "pkill -9 -f aba-progress-wrapper 2>/dev/null; pkill -9 -f aba-progress-test 2>/dev/null; true"
+sleep 0.5
 
 # Create a quick-running progress test script on the remote host
 # This script emits real PLAN/START/DONE events through the FIFO.
@@ -457,19 +461,19 @@ echo ""
 echo "--- Cleanup ---"
 $_TUI_SSH "rm -f /tmp/aba-progress-test.sh /tmp/aba-progress-test-fail.sh \
 	/tmp/aba-progress-test-slow.sh /tmp/aba-progress-wrapper.sh" 2>/dev/null
-# Kill tmux session first, then check for strays
+# Kill only the stub session. The live abatui in tui-test stays for the next test.
 tui_stop
-$_TUI_SSH "pkill -9 -f abatui2 2>/dev/null; pkill -9 -f aba-progress- 2>/dev/null; true"
-sleep 2
-_strays=$($_TUI_SSH "ps -eo pid,ppid,args | grep -E '\bdialog\b|abatui|progress-wrapper' | grep -v grep" 2>/dev/null || true)
+$_TUI_SSH "pkill -9 -f aba-progress- 2>/dev/null; true"
+sleep 1
+_strays=$($_TUI_SSH "ps -eo args | grep -E 'aba-progress-wrapper|aba-progress-test' | grep -v grep" 2>/dev/null || true)
 if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray processes"
+	echo "  ✓ PASS: No stray progress processes"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
-	echo "  ✗ FAIL: Stray processes after cleanup:"
+	echo "  ✗ FAIL: Stray progress processes after cleanup:"
 	echo "$_strays" | sed 's/^/      /'
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	$_TUI_SSH "pkill -9 -f 'progress-wrapper\|progress-test\|abatui\|dialog --' 2>/dev/null; true"
+	$_TUI_SSH "pkill -9 -f 'aba-progress-wrapper\|aba-progress-test' 2>/dev/null; true"
 	sleep 1
 fi
 tui_summary

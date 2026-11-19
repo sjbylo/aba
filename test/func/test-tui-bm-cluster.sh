@@ -47,13 +47,14 @@ tui_start_to_menu || { tui_summary; _restore_platform; exit 1; }
 # tui_start_to_menu installs its own EXIT trap. Keep platform restore + BM
 # leftovers cleanup (compact/standard/sno4) even if the test aborts mid-run.
 _bm_exit_cleanup() {
-	tui_stop 2>/dev/null || true
 	_bm_sim_cleanup
 	_restore_platform
 	# Do not leave ISO/dir leftovers consuming lab IPs for later suites.
+	# Leave the TUI process up. The next test reuses it from the main menu.
 	tui_delete_cluster "$_CLUSTER" 2>/dev/null || true
 	tui_delete_cluster compact 2>/dev/null || true
 	tui_delete_cluster standard 2>/dev/null || true
+	tui_leave_on_menu 2>/dev/null || true
 }
 trap '_bm_exit_cleanup' EXIT
 
@@ -346,6 +347,39 @@ _bm_type_gates() {
 	tui_back_to "Actions" 8 || true
 }
 
+# Answer "build the agent ISO". Live Output swallows every key except Space,
+# and the (y/n) line in that log is not the TUI button — the header can scroll
+# off while the prompt is still on screen. Space returns to the progress loop,
+# which draws Yes. Enter on the progress dialog hits Output or Quit and leaves
+# the CLI read waiting, so Yes is pressed only when that button is on screen.
+# shot is the labeled screenshot. tries is how many polls (about 3s each).
+_bm_answer_build() {
+	local shot="$1"
+	local tries="${2:-90}"
+	local _wa _scr _shot=0
+	for _wa in $(seq 1 "$tries"); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "ABA Live Output\|press Space to return\|(y/n)"; then
+			tui_keys Space
+			sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+			if [[ "$_shot" -eq 0 ]]; then
+				tui_screenshot "$shot"
+				_shot=1
+			fi
+			if tui_press_button "Yes"; then
+				return 0
+			fi
+			sleep 1
+			continue
+		fi
+		sleep 3
+	done
+	return 1
+}
+
 # The stop dialog is already dismissed. Go back into the wizard, replace the
 # short MAC list, and let install build the ISO. No on the boot ask stops
 # this run only; there are no servers to boot here.
@@ -382,44 +416,7 @@ _bm_fix_in_wizard() {
 	tui_wait_for "Review\|Install" 20 || true
 	tui_press_button "Install" || tui_keys Enter
 	sleep 2
-	# MAC ask runs under Generate configs. Compact often overlays the yesno on
-	# the progress frame; standard has been seen with the prompt only in Output
-	# for minutes while the main view stays at Generate configs [In Progress].
-	_saw_build=0
-	for _wa in $(seq 1 90); do
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -q "ABA Live Output"; then
-			tui_keys Space
-			sleep 1
-			continue
-		fi
-		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-			_saw_build=1
-			break
-		fi
-		if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
-			if (( _wa % 10 == 0 )); then
-				tui_keys Space 2>/dev/null || true
-				sleep 1
-				_scr=$(tui_capture)
-				tui_screenshot "bm-${name}-build-output-${_wa}"
-				if echo "$_scr" | grep -q "ABA Live Output" \
-					&& echo "$_scr" | grep -q "build the agent ISO" \
-					&& ! echo "$_scr" | grep -q "Yes: re-check"; then
-					_saw_build=1
-					tui_keys Space
-					sleep 1
-					break
-				fi
-				if echo "$_scr" | grep -q "ABA Live Output"; then
-					tui_keys Space
-					sleep 1
-				fi
-			fi
-		fi
-		sleep 3
-	done
-	if [[ "$_saw_build" -ne 1 ]]; then
+	if ! _bm_answer_build "bm-${name}-build-ask"; then
 		echo "  ✗ FAIL: $name did not reach the build ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "bm-${name}-no-build"
@@ -433,11 +430,8 @@ _bm_fix_in_wizard() {
 		tui_back_to "Actions" 8 || true
 		return 0
 	fi
-	_scr=$(tui_capture)
-	tui_screenshot "bm-${name}-build-ask"
 	echo "  ✓ PASS: $name install asks to build after the wizard fix"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_press_button "Yes" || tui_keys Enter
 	sleep 2
 
 	_saw=0
@@ -654,48 +648,9 @@ echo "--- 5. Fix the MAC, Retry, then boot ---"
 # The stop dialog is still up. Retry re-runs this install; the wizard is behind it.
 _bm_prepare_boot_conf
 tui_press_button "Retry" || true
-# The build ask can overlay the progress frame, or only show up in Output
-# while Generate configs stays In Progress at 0%.
-_saw_build=0
-for _wa in $(seq 1 60); do
-	_scr=$(tui_capture)
-	if echo "$_scr" | grep -q "ABA Live Output"; then
-		tui_keys Space
-		sleep 1
-		continue
-	fi
-	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-		_saw_build=1
-		break
-	fi
-	if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
-		if (( _wa % 10 == 0 )); then
-			tui_keys Space 2>/dev/null || true
-			sleep 1
-			_scr=$(tui_capture)
-			tui_screenshot "bm-05-build-output-${_wa}"
-			if echo "$_scr" | grep -q "ABA Live Output" \
-				&& echo "$_scr" | grep -q "build the agent ISO" \
-				&& ! echo "$_scr" | grep -q "Yes: re-check"; then
-				_saw_build=1
-				tui_keys Space
-				sleep 1
-				break
-			fi
-			if echo "$_scr" | grep -q "ABA Live Output"; then
-				tui_keys Space
-				sleep 1
-			fi
-		fi
-	fi
-	sleep 3
-done
-if [[ "$_saw_build" -eq 1 ]]; then
-	_scr=$(tui_capture)
-	tui_screenshot "bm-05-retry-ask"
+if _bm_answer_build "bm-05-retry-ask" 60; then
 	echo "  ✓ PASS: Retry after the MAC was fixed asks to build"
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_press_button "Yes" || tui_keys Enter
 	sleep 2
 	_build_yes=1
 else

@@ -157,7 +157,7 @@ _run_test "Settings Deep" "test/func/test-tui-settings-deep.sh" || true
 _run_test "Addl Images Deep" "test/func/test-tui-addl-images-deep.sh" || true
 _run_test "Platform Config" "test/func/test-tui-platform-config-deep.sh" || true
 _run_test "ISC Verify" "test/func/test-tui-isc-verify.sh" || true
-# Progress Integration uses raw tmux sessions (not the TUI); run last to avoid stale sessions
+# Progress Integration uses tmux session tui-progress, not the live abatui.
 _run_test "Progress Integration" "test/func/test-tui-progress-integration.sh" || true
 
 if [[ "$_QUICK" == "true" ]]; then
