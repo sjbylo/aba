@@ -84,28 +84,32 @@ while [ $i -le $# ]; do
 				# Validate directory argument
 				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
 				case "$target_dir" in "~/"*) target_dir="$HOME/${target_dir#\~/}" ;; "~") target_dir="$HOME" ;; esac  # expand tilde
-				# If relative path doesn't exist at CWD, walk up to find it or reach ABA root
-				if [[ "$target_dir" != /* ]] && [ ! -e "$target_dir" ]; then
-					for _up in .. ../.. ../../..; do
-						if [ -e "$_up/$target_dir" ]; then
-							target_dir="$_up/$target_dir"
-							break
-						fi
-						# Reached ABA root - resolve target here, not inside a subdir
-						if grep -q "Top level Makefile" "$_up/Makefile" 2>/dev/null; then
-							target_dir="$_up/$target_dir"
-							break
-						fi
-					done
-				fi
-				# ADR-007: if dir is missing, recreate from external state backup
-				if [ ! -e "$target_dir" ]; then
-					_bn=$(basename "$target_dir")
-					# Find state dir matching this cluster name (name.domain pattern)
+				# Only the path that was typed. Do not search parent directories.
+				# aba_abort is not loaded yet.
+				if [ ! -d "$target_dir" ]; then
+					if [ -e "$target_dir" ]; then
+						echo "Error: cannot change to $target_dir: not a directory!" >&2
+						exit 1
+					fi
+					# ADR-007: recreate a missing cluster dir from its state
+					# backup only when the typed path's parent is the aba repo.
+					# Anywhere else, mkdir would create the dir in the current
+					# directory (aba/mirror/<name>, or <name>/<name>).
+					_parent=$(dirname -- "$target_dir")
+					if [ "$_parent" = "." ]; then
+						_parent_abs=$PWD
+					elif [ -d "$_parent" ]; then
+						_parent_abs=$(cd -- "$_parent" && pwd)
+					else
+						_parent_abs=""
+					fi
 					_sdir=""
-					for _candidate in "$HOME/.aba/clusters/${_bn}."*; do
-						[ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ] && _sdir="$_candidate" && break
-					done
+					if [ -n "$_parent_abs" ] && [ -s "$_parent_abs/Makefile" ] && grep -q "Top level Makefile" "$_parent_abs/Makefile"; then
+						_bn=$(basename -- "$target_dir")
+						for _candidate in "$HOME/.aba/clusters/${_bn}."*; do
+							[ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ] && _sdir="$_candidate" && break
+						done
+					fi
 					if [ "$_sdir" ]; then
 						echo "[ABA] Recreating cluster directory '$target_dir' from state backup" >&2
 						mkdir -p "$target_dir"
@@ -115,10 +119,10 @@ while [ $i -le $# ]; do
 						make -s -C "$target_dir" init 2>/dev/null || true
 						ln -sfn "$_sdir" "$target_dir/clusterstate"
 					else
-						echo "Error: directory $target_dir does not exist!" >&2 && exit 1
+						echo "Error: directory $target_dir does not exist!" >&2
+						exit 1
 					fi
 				fi
-				[ ! -d "$target_dir" ] && echo "Error: cannot change to $target_dir: not a directory!" >&2 && exit 1
 
 				[ "$DEBUG_ABA" ] && echo "Changing dir to: $target_dir"
 
@@ -328,7 +332,7 @@ aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 export RUN_ONCE_CLEANED=1 # Be sure it's only run once!
 
 aba_debug DEBUG_ABA=$DEBUG_ABA
-aba_debug "Starting: $0 $(_redact_args "$*")"
+aba_debug "Starting: $0 $(_redact_args "$*") in $PWD"
 aba_debug "ABA_ROOT=[$ABA_ROOT]"
 
 # Guard: mirror config flags require WORK_DIR to be a mirror directory.
@@ -742,9 +746,12 @@ do
 		[ -z "$_img_action" ] && aba_abort "Usage: aba image {add|remove|list|set} [<image:tag> ...]"
 		shift
 
-		# Resolve which images.conf to edit
-		if [ "$target_dir" ]; then
-			_img_file="$target_dir/images.conf"
+		# -d: the directory that was entered (WORK_DIR). Its original
+		# relative string is not a path from here.
+		# No -d, and this directory is a mirror: its own images.conf.
+		# Otherwise the repo file next to aba.conf.
+		if [ "$target_dir" ] || grep -qs '^# Mirror Makefile' "$WORK_DIR/Makefile"; then
+			_img_file="$WORK_DIR/images.conf"
 		else
 			_img_file="$ABA_ROOT/images.conf"
 		fi
@@ -807,14 +814,14 @@ do
 							"  registry.redhat.io/rhel9/support-tools@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 					fi
 				done
-				touch "$_img_file"
+				touch "$_img_file" || aba_abort "Cannot write $_img_file"
 				_added=0
 				for _img in "$@"; do
 					# Skip if already present (exact match)
 					if grep -qxF "$_img" "$_img_file" 2>/dev/null; then
 						aba_info "Image already in $_img_file: $_img"
 					else
-						echo "$_img" >> "$_img_file"
+						echo "$_img" >> "$_img_file" || aba_abort "Cannot write $_img_file"
 						_added=$(( _added + 1 ))
 						aba_info "Added to $_img_file: $_img"
 					fi
@@ -846,7 +853,11 @@ do
 				;;
 			list|ls)
 				cd "$ABA_ROOT"
-				_mirror_dir="${target_dir:-.}"
+				if [ "$target_dir" ] || grep -qs '^# Mirror Makefile' "$WORK_DIR/Makefile"; then
+					_mirror_dir="$WORK_DIR"
+				else
+					_mirror_dir="."
+				fi
 				_merged=$(_merge_images_conf "$_mirror_dir")
 				if [ "$_merged" = "[]" ]; then
 					echo "No additional images configured."
@@ -1560,22 +1571,31 @@ if [ "$cur_target" ]; then
 		exit $?
 	fi
 
-	# Externalized targets require a cluster directory (cluster.conf present)
-	# ADR-007: if cluster.conf is missing, try restoring from state backup
+	# Externalized targets require a cluster directory (cluster.conf present).
+	# A partial aba/<name> (directory there, cluster.conf gone) is restored
+	# in place from its backup. Restoring into a child would nest <name>/<name>.
 	case $cur_target in
 		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|day2-virt|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
-				for _candidate in "$HOME/.aba/clusters/${_cn}."*; do
-					if [ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ]; then
-						_bd=$(grep '^base_domain=' "$_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
-						if [ "$_bd" ] && _recreate_cluster_dir "$_cn" "$_bd"; then
-							_recreated=true
-							break
+				case "$_cn" in
+					mirror|scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel)
+						;;
+					*)
+						if [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
+							for _candidate in "$HOME/.aba/clusters/${_cn}."*; do
+								if [ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ]; then
+									_bd=$(grep '^base_domain=' "$_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
+									if [ "$_bd" ] && _recreate_cluster_dir "$_cn" "$_bd" .; then
+										_recreated=true
+										break
+									fi
+								fi
+							done
 						fi
-					fi
-				done
+						;;
+				esac
 				$_recreated || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
 			fi
 			;;

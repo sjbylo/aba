@@ -17,6 +17,8 @@
 #   - Mirror: unregister reads lowercase state.sh correctly
 #   - Mirror: reinstall after uninstall (no stale state)
 #   - Helpers: cluster_state_dir, cluster_kubeconfig, cluster_is_installed
+#   - Cluster dir: missing dir recreated under ~/aba, partial dir filled in place,
+#     aba delete continues after recreate, mirror/ does not receive the dir
 #
 # Duration: ~5 minutes (Docker registry install + register/unregister cycles)
 #
@@ -60,6 +62,9 @@ plan_tests \
 	"Helper functions: cluster state helpers" \
 	"Phase 3: drift detection overrides config with state" \
 	"Phase 4: dir recreation from state backup" \
+	"Phase 4: partial dir restored in place" \
+	"Phase 4: aba delete recreates then continues" \
+	"Phase 4: mirror dir does not receive a cluster" \
 	"Cleanup: uninstall mirror"
 
 suite_begin "state-management"
@@ -544,7 +549,110 @@ e2e_run -q "Cleanup recreate test" \
 test_end
 
 # ============================================================================
-# 12. Cleanup
+# 12. Phase 4: partial directory is filled in place
+# ============================================================================
+test_begin "Phase 4: partial dir restored in place"
+
+# The directory exists and cluster.conf does not. info may still exit
+# non-zero (no kubeconfig). The directory must be filled, not nested.
+e2e_run "aba info restores a partial cluster directory" \
+	"name=e2e-test-partial
+state=\$HOME/.aba/clusters/\${name}.example.com
+rm -rf \$HOME/aba/\$name \"\$state\"
+mkdir -p \"\$state/backup\" \$HOME/aba/\$name
+chmod 700 \"\$state\"
+cat > \"\$state/state.sh\" <<'STATE'
+cluster_name=e2e-test-partial
+base_domain=example.com
+platform=bm
+STATE
+cat > \"\$state/backup/cluster.conf\" <<'CONF'
+cluster_name=e2e-test-partial
+base_domain=example.com
+CONF
+touch \"\$state/backup/.install-complete\"
+out=\$(cd \$HOME/aba && aba --dir \$name info 2>&1) || true
+printf '%s\n' \"\$out\"
+if printf '%s\n' \"\$out\" | grep -q 'Not in a cluster directory'; then
+	echo 'ERROR: aba info rejected the partial cluster directory'
+	exit 1
+fi
+test -s \$HOME/aba/\$name/cluster.conf
+grep -q 'cluster_name=e2e-test-partial' \$HOME/aba/\$name/cluster.conf
+test ! -d \$HOME/aba/\$name/\$name
+rm -rf \$HOME/aba/\$name \"\$state\""
+
+test_end
+
+# ============================================================================
+# 13. Phase 4: aba delete recreates a missing dir, then deletes
+# ============================================================================
+test_begin "Phase 4: aba delete recreates then continues"
+
+# platform=bm so delete does not call govc or virsh.
+e2e_run "aba delete recreates the missing directory and continues" \
+	"name=e2e-test-delete
+state=\$HOME/.aba/clusters/\${name}.example.com
+rm -rf \$HOME/aba/\$name \"\$state\"
+mkdir -p \"\$state/backup\"
+chmod 700 \"\$state\"
+cat > \"\$state/state.sh\" <<'STATE'
+cluster_name=e2e-test-delete
+base_domain=example.com
+platform=bm
+STATE
+cat > \"\$state/backup/cluster.conf\" <<'CONF'
+cluster_name=e2e-test-delete
+base_domain=example.com
+CONF
+touch \"\$state/backup/.install-complete\"
+out=\$(cd \$HOME/aba && aba --dir \$name delete 2>&1) || { printf '%s\n' \"\$out\"; exit 1; }
+printf '%s\n' \"\$out\"
+printf '%s\n' \"\$out\" | grep -q 'Recreating cluster directory'
+test -s \$HOME/aba/\$name/cluster.conf
+grep -q 'cluster_name=e2e-test-delete' \$HOME/aba/\$name/cluster.conf
+test ! -d \$HOME/aba/\$name/\$name
+test ! -d \"\$state\"
+rm -rf \$HOME/aba/\$name"
+
+test_end
+
+# ============================================================================
+# 14. Phase 4: a missing name typed from mirror/ is not created
+# ============================================================================
+test_begin "Phase 4: mirror dir does not receive a cluster"
+
+e2e_run "aba --dir from mirror/ does not recreate the cluster" \
+	"name=e2e-test-side
+state=\$HOME/.aba/clusters/\${name}.example.com
+rm -rf \$HOME/aba/\$name \$HOME/aba/mirror/\$name \"\$state\"
+mkdir -p \"\$state/backup\"
+chmod 700 \"\$state\"
+cat > \"\$state/state.sh\" <<'STATE'
+cluster_name=e2e-test-side
+base_domain=example.com
+platform=bm
+STATE
+cat > \"\$state/backup/cluster.conf\" <<'CONF'
+cluster_name=e2e-test-side
+base_domain=example.com
+CONF
+cd \$HOME/aba/mirror
+set +e
+out=\$(aba --dir \$name info 2>&1)
+rc=\$?
+set -e
+printf '%s\n' \"\$out\"
+test \"\$rc\" -ne 0
+printf '%s\n' \"\$out\" | grep -q 'does not exist'
+test ! -d \$HOME/aba/mirror/\$name
+test ! -d \$HOME/aba/\$name
+rm -rf \"\$state\""
+
+test_end
+
+# ============================================================================
+# 15. Cleanup
 # ============================================================================
 test_begin "Cleanup: uninstall mirror"
 
@@ -565,9 +673,9 @@ e2e_run_remote "Close firewall port $_MIRROR_PORT on disN" \
 e2e_run "Remove mirror working dir" \
 	"cd ~/aba && rm -rf $_MIRROR_NAME"
 
-# Remove fake cluster state from helper tests
+# Remove fake cluster state from helper tests and the phase 4 dir checks.
 e2e_run -q "Remove fake cluster state" \
-	"rm -rf ~/.aba/clusters/e2e-helper-test.test.example.com"
+	"rm -rf ~/.aba/clusters/e2e-helper-test.test.example.com ~/.aba/clusters/e2e-test-partial.example.com ~/.aba/clusters/e2e-test-delete.example.com ~/.aba/clusters/e2e-test-side.example.com ~/aba/e2e-test-partial ~/aba/e2e-test-delete ~/aba/e2e-test-side ~/aba/mirror/e2e-test-side"
 
 test_end
 

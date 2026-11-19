@@ -536,6 +536,72 @@ else
 	_fail "--ca-cert missing file was accepted"
 fi
 
+# A missing -d name with a state backup is recreated at that path.
+mkdir -p "$SANDBOX_HOME/.aba/clusters/ghost.example.com/backup"
+printf '%s\n' 'cluster_name=ghost' 'base_domain=example.com' >"$SANDBOX_HOME/.aba/clusters/ghost.example.com/state.sh"
+printf '%s\n' 'cluster_name=ghost' >"$SANDBOX_HOME/.aba/clusters/ghost.example.com/backup/cluster.conf"
+_invoke --dir ghost info
+if [ -s "$REPO/ghost/cluster.conf" ] && grep -qx 'cluster_name=ghost' "$REPO/ghost/cluster.conf"; then
+	_pass "--dir missing cluster is recreated from its state backup"
+else
+	_fail "--dir missing cluster was not recreated from state"
+	_show_err
+fi
+_invoke --dir no-such-cluster-name info
+if [ "$(_rc)" -ne 0 ] && [ ! -d "$REPO/no-such-cluster-name" ]; then
+	_pass "--dir missing name with no backup aborts"
+else
+	_fail "--dir missing name with no backup rc=$(_rc)"
+fi
+# From a mirror dir the same backup must not create mirror/<name>.
+mkdir -p "$SANDBOX_HOME/.aba/clusters/sidecluster.example.com/backup"
+printf '%s\n' 'cluster_name=sidecluster' 'base_domain=example.com' >"$SANDBOX_HOME/.aba/clusters/sidecluster.example.com/state.sh"
+printf '%s\n' 'cluster_name=sidecluster' >"$SANDBOX_HOME/.aba/clusters/sidecluster.example.com/backup/cluster.conf"
+(
+	cd "$REPO/mirror" || exit 97
+	env -u ABA_ROOT HOME="$SANDBOX_HOME" ABA_DO_NOT_UPDATE=1 ABA_CACHE_TTL=10000h \
+		timeout 40 "$REPO/scripts/aba.sh" --dir sidecluster info
+) >"$WORK/out" 2>"$WORK/err"
+printf '%s\n' "$?" >"$WORK/rc"
+if [ "$(_rc)" -ne 0 ] && [ ! -d "$REPO/mirror/sidecluster" ] && [ ! -d "$REPO/sidecluster" ]; then
+	_pass "--dir from a mirror dir does not recreate a cluster there"
+else
+	_fail "--dir from a mirror dir rc=$(_rc) mirror/sidecluster=$(test -d "$REPO/mirror/sidecluster" && echo yes || echo no)"
+	_show_err
+fi
+
+# image add: repo root writes the repo file. A mirror directory writes its own.
+_invoke image add registry.redhat.io/ubi9/ubi:latest
+if [ "$(_rc)" -eq 0 ] && grep -qxF 'registry.redhat.io/ubi9/ubi:latest' "$REPO/images.conf"; then
+	_pass "image add from the repo root writes images.conf"
+else
+	_fail "image add from the repo root did not write images.conf"
+fi
+(
+	cd "$REPO/mirror" || exit 97
+	env -u ABA_ROOT HOME="$SANDBOX_HOME" ABA_DO_NOT_UPDATE=1 ABA_CACHE_TTL=10000h \
+		timeout 40 "$REPO/scripts/aba.sh" image add docker.io/library/nginx:latest
+) >"$WORK/out" 2>"$WORK/err"
+printf '%s\n' "$?" >"$WORK/rc"
+if [ "$(_rc)" -eq 0 ] && grep -qxF 'docker.io/library/nginx:latest' "$REPO/mirror/images.conf" \
+	&& ! grep -qxF 'docker.io/library/nginx:latest' "$REPO/images.conf"; then
+	_pass "image add inside a mirror dir writes that images.conf"
+else
+	_fail "image add inside a mirror dir wrote the wrong images.conf"
+	_show_err
+fi
+(
+	cd "$REPO/mirror" || exit 97
+	env -u ABA_ROOT HOME="$SANDBOX_HOME" ABA_DO_NOT_UPDATE=1 ABA_CACHE_TTL=10000h \
+		timeout 40 "$REPO/scripts/aba.sh" -d mirror image add docker.io/library/nginx:latest
+) >"$WORK/out" 2>"$WORK/err"
+printf '%s\n' "$?" >"$WORK/rc"
+if [ "$(_rc)" -ne 0 ]; then
+	_pass "-d mirror from inside the mirror dir is rejected"
+else
+	_fail "-d mirror from inside the mirror dir was accepted"
+fi
+
 # --- every parser flag was exercised ---------------------------------------
 grep -oE '"-{1,2}[A-Za-z][A-Za-z0-9-]*"' "$REPO/scripts/aba.sh" | tr -d '"' | sort -u >"$WORK/parser"
 sort -u "$WORK/covered" >"$WORK/covered.u"

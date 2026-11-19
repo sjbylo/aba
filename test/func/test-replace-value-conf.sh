@@ -623,6 +623,50 @@ _test_safe_char "password with = is safe" \
 _test_safe_char "GOVC_PASSWORD with # and !" \
 	"GOVC_PASSWORD='oldpass'" "GOVC_PASSWORD" "F4ke#Pass!w0rD"
 
+# Password keys are logged as ***. The file keeps the real value.
+# A spaced vSphere password must disappear whole, not just its first word.
+_test_secret_log() {
+	local test_name="$1" name="$2" new_value="$3" secret="$4" expect_secret_in_log="$5"
+	local conf="$_tmp/secret-$RANDOM.conf"
+	local trace="$_tmp/secret-$RANDOM.log"
+	local out
+
+	echo "${name}=old" > "$conf"
+	out=$(ABA_TRACE_FILE="$trace" DEBUG_ABA=1 INFO_ABA=1 \
+		replace-value-conf -n "$name" -v "$new_value" -f "$conf" 2>&1) || true
+
+	if [ "$expect_secret_in_log" = "yes" ]; then
+		if grep -F -q "$secret" "$trace"; then
+			test_pass "$test_name"
+		else
+			test_fail "$test_name" "expected [$secret] in the trace: $(cat "$trace")"
+		fi
+		return
+	fi
+
+	if grep -F -q "$secret" "$trace" || grep -F -q "$secret" <<<"$out"; then
+		test_fail "$test_name" "secret leaked. trace=$(cat "$trace") stderr=$out"
+	elif ! grep -F -q '***' "$trace"; then
+		test_fail "$test_name" "trace has no mask: $(cat "$trace")"
+	elif ! grep -F -q "$secret" "$conf"; then
+		test_fail "$test_name" "file lost the value: $(cat "$conf")"
+	else
+		test_pass "$test_name"
+	fi
+}
+
+_test_secret_log "reg_pw is masked in the log" \
+	reg_pw "'s3cretPw9'" "s3cretPw9" no
+
+_test_secret_log "GOVC_PASSWORD with a space is masked in the log" \
+	GOVC_PASSWORD "'hello world'" "hello world" no
+
+_test_secret_log "bmc_password is masked in the log" \
+	bmc_password_master0 "'bmc-s3cret'" "bmc-s3cret" no
+
+_test_secret_log "a normal key is still logged" \
+	reg_host "reg.example.com" "reg.example.com" yes
+
 # =========================================================================
 echo
 echo "=== Results: $pass passed, $fail failed ==="
