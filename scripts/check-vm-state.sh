@@ -10,6 +10,7 @@
 # Exit 1: problem detected that blocks the build.
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Nothing to check if VMs were never created
 [ -f .vms-ready ] || exit 0
@@ -43,9 +44,10 @@ case "$_rc" in
 		# VMs exist — proceed normally
 		;;
 	1)
-		# VMs are gone — remove stale markers to allow re-creation
+		# VMs are gone — remove stale markers to allow re-creation.
+		# The agent probe was for those VMs, so the next boot waits again.
 		aba_warn "VMs no longer exist — removing stale markers to allow re-creation"
-		rm -f .vms-stopped .iso-uploaded .vms-ready
+		rm -f .vms-stopped .iso-uploaded .vms-ready .agent-wait-done
 		;;
 	*)
 		# Hypervisor unreachable — warn but don't block

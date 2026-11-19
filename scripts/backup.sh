@@ -20,7 +20,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
@@ -222,6 +222,7 @@ file_list=$(find				\
 	! -name ".iso-uploaded"						\
 	! -name ".vms-ready"						\
 	! -name ".bm-bmc-boot-done"					\
+	! -name ".agent-wait-done"					\
 	! -name ".bm-config-reviewed"						\
 	! -name ".bm-config-asked"						\
 	! -name ".preflight-done"					\

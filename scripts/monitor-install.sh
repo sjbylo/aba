@@ -18,7 +18,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 trap - ERR  # We don't want to catch on error. error handling added below. 
 
@@ -37,9 +37,9 @@ opts=
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
-# Agent wait is NOT here — only on the install Make chain (.install-complete
-# recipe). Standalone 'aba mon' must go straight to openshift-install monitor:
-# by then the agent API (8090) is often already gone after bootstrap.
+# Agent wait is NOT here. It is the .agent-wait-done stamp, and only a missing
+# or stale stamp runs it. Standalone 'aba mon' must go straight to
+# openshift-install monitor: port 8090 is often already gone after bootstrap.
 # A full install already planned this id. Standalone mon has no Makefile
 # plan, so declare the one step here or the progress dialog has nothing to show.
 aba_progress "PLAN|ci_mon|Monitor installation|70"
