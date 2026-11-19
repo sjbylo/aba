@@ -23,6 +23,7 @@
 #   1-2 = seconds, 5 = tens of seconds, 10-20 = minutes, 50+ = many minutes
 
 source "$(dirname "$0")/include_all.sh"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Submit a child's plan. The child prints PLAN lines and does not write
 # the FIFO, so the parent decides when they are sent.

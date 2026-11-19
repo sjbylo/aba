@@ -82,6 +82,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Parse required parameters
 catalog_name="${1:?Usage: $0 <catalog_name> <version_short>}"

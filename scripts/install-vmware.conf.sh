@@ -6,7 +6,7 @@ source scripts/include_all.sh
 
 ensure_govc
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Verify that vSphere objects referenced in vmware.conf actually exist.
 # Called after normalize-vmware-conf has been sourced (VC=1 for vCenter, VC= for ESXi).

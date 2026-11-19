@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Honor wait= from aba (e.g. wait=1) or any argv token (robust if order differs).
 wait=

@@ -8,7 +8,7 @@
 [ ! -f scripts/include_all.sh ] && echo "Error: Cluster directory $PWD not yet initialized! See: aba cluster --help" >&2 && exit 1
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $* from $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 

@@ -11,7 +11,7 @@
 
 source scripts/reg-common.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 reg_pre_uninstall "Quay"
 

@@ -9,7 +9,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 if [ ! -s data/imageset-config.yaml ]; then
 	# Nothing to check

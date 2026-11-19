@@ -47,6 +47,7 @@ fi
 _dir=$(cd "$(dirname "$0")" && pwd)
 # shellcheck disable=SC1091
 source "$_dir/include_all.sh"
+aba_debug "Starting: $0 $* in $PWD"
 
 if ! command -v jq >/dev/null 2>&1; then
 	printf 'ERROR: jq is required.\n' >&2

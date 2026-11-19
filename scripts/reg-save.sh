@@ -24,7 +24,7 @@ fi
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value

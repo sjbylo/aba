@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh && trap - ERR 
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 ask "$@"
 exit $?

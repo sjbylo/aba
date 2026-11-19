@@ -2,6 +2,7 @@
 # Delete all VMs in the cluster, as defined by agent config files
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 ensure_govc
 

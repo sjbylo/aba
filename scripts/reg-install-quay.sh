@@ -4,7 +4,7 @@
 
 source scripts/reg-common.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 reg_install_begin quay
 reg_check_quay_resources

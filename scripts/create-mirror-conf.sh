@@ -5,7 +5,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 [ "$1" = "-f" ] && force=$2 && shift 2
 

@@ -26,7 +26,7 @@ source scripts/include_all.sh
 
 [ "$1" = "-f" ] && _isc_force=$2 && shift 2
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 umask 077
 

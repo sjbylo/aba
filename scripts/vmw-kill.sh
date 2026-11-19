@@ -3,6 +3,7 @@
 # Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 aba_progress "START|ci_vms" || true
 

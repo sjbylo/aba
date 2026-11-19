@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)

@@ -4,7 +4,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 if [ -s vmware.conf ]; then
 	ensure_govc
