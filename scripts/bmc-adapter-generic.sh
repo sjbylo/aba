@@ -502,8 +502,10 @@ _bm_wait_power_state() {
 	local sys_path="/redfish/v1/Systems/$sys"
 
 	local elapsed=0 interval=2 max=120
+	# A poll that hits Redfish retries can take much longer than 2s: cap the real time too.
+	local deadline=$(( SECONDS + max ))
 	local state last_err=
-	while [ "$elapsed" -lt "$max" ]; do
+	while [ "$elapsed" -lt "$max" ] && [ "$SECONDS" -lt "$deadline" ]; do
 		_redfish_request "$node" GET "$sys_path"
 		# 401: return now, the callers log in again and poll once more.
 		if [ "$_REDFISH_LAST_CODE" = "401" ]; then
