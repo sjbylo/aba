@@ -4110,3 +4110,65 @@ Before writing the OKD answers, confirm the community operator's `HyperConverged
 
 **Workaround:** After `aba day2`, install `community-kubevirt-hyperconverged` from OperatorHub, or apply a Subscription to the community CatalogSource by hand.
 
+---
+
+## #B118: Reject a `reg_path` that ends with `/`
+
+**Severity:** LOW
+**Status:** Done
+**Added:** 2026-11-19
+**Updated:** 2026-11-20
+
+**Problem:** `aba -d mirror sync` on a bundle host failed inside oc-mirror before any image was copied: `parse reference "bundle.example.com:8449/ocp4/": invalid reference format`. The registry was up. The destination string is not a valid image reference because it ends with `/`.
+
+**Root cause:** `scripts/reg-sync.sh` builds `docker://$reg_host:$reg_port$reg_path` and adds nothing after `reg_path`. On that host `mirror.conf` had `reg_path=/ocp4/`. `_valid_abs_path` treats a trailing slash as a directory, so `verify-mirror-conf` accepts it and oc-mirror is the first thing that rejects it. The same string is passed by `scripts/reg-load.sh`.
+
+**Proposed fix:** One check, `_valid_reg_path`, rejects a final `/`. `verify-mirror-conf` and `--reg-path` abort through `_reg_path_abort_if_slash`. The TUI image-path field uses `_valid_reg_path` and asks again. Do not strip the slash. Leave a path that does not end with `/` unchanged.
+
+**Workaround:** Edit `reg_path` in `mirror.conf` and remove the final `/`, then run sync again.
+
+---
+
+## #B119: Ask to power on bare-metal nodes via the BMC at aba startup
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-20
+
+**Problem:** `aba startup` on a bare-metal cluster asks the operator to turn the servers on by hand, then waits for the API. It does that even when `bmc.conf` lists BMC hosts that ABA can already reach. After #B110, `aba stop` and `aba kill` can power those servers off. Startup cannot power them back on.
+
+**Root cause:** `scripts/cluster-startup.sh` has one bare-metal branch. When the API is down it calls `ask -y --always` with the manual "power the servers on yourself" text. The virtual branch calls `aba start`. Nothing in startup looks at `bmc.conf`. The boot helper `bmc_power_reset` is the wrong call here: a machine that is already `On` gets `ForceRestart`.
+
+**Proposed fix:** Three cases, only when startup finds the API down. If the API is already up, do not ask and do not send a Reset.
+
+- BMC: `platform=bm` and `bmc.conf` has at least one `bmc_host_*` entry. Ask "Power on bare-metal nodes via BMC?" with Yes as the default (`ask -y`). Yes powers each listed host on, then the existing API wait runs. The action posts `ResetType On` only when `PowerState` is `Off`. `On` and `PoweringOn` are left alone, then wait until `PowerState` is `On` (same 120s / 2s poll as boot). Do not call `bmc_power_reset`. Do not insert media or set a boot override. No exits non-zero and sends nothing. `aba -y` skips the prompt and must not power the servers on.
+- Bare metal without a BMC: no `bmc_host_*` entries. Keep the current manual prompt and the current wait. No code change on this path.
+- Virtual (`vmw` or `kvm`): keep `aba start`. No BMC question.
+
+One question only. A No to the BMC question does not also show the manual prompt. The progress dialog shows the same question text as the CLI.
+
+**Workaround:** Power the servers on in the BMC UI, then run `aba startup` and answer Yes to the manual prompt.
+
+---
+
+## #B120: Bare-metal power-off bugs to fix before merging the BMC stop/kill change
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-11-20
+
+**Problem:** Pull request 53 ([#53](https://github.com/sjbylo/aba/pull/53), #B110) makes `aba stop` and `aba kill` power off every host in `bmc.conf`. One bug is worth fixing before that merges. If you answer no to the power-off prompt, `scripts/bm-poweroff.sh` exits 0. The servers stay on, and the command looks successful. They keep answering on the node IPs and VIPs. A following install that runs preflight cannot start: `preflight-check.sh` counts each answering address as an IP conflict and aborts. The exit 0 hides that the addresses were not freed. A retry in the same directory can still continue, because `.preflight-done` is already stamped and that check does not run again. `aba --verify conf` also skips it.
+
+**Root cause:** The prompt is `ask "Power off ..." || exit 0`. A no from `ask` is a failure of that command, and the script turns that failure into exit 0. Delete already exits 1 when the operator declines. This prompt does the opposite.
+
+**Proposed fix:** Fix the exit code before merge. A no sends no Reset and exits non-zero. The same rule is already written into #B119 for the startup power-on question.
+
+Two smaller faults in the same change, same script and `bmc_power_off`:
+
+- A 401 during the power-off wait logs in again and calls `bmc_power_off` a second time. The comment says that sends no second Reset. That is true only when the machine is already `Off` or `PoweringOff`. If the session died while `PowerState` was still `On`, the retry posts the Reset again. The test covers the already-off case only.
+- One failed power-state read ends the 120 second wait. A 401 is retried once by the script. Any other error, after Redfish's own three tries, fails that node even if time is left. The same poll is used for power-on. A BMC often drops the connection while it is shutting down, so a stop can fail and then suggest `aba kill` for a machine that is already going down.
+
+`aba stop --wait` does nothing on bare metal. The wait is always that 120 second poll, and the help text still shows `--wait`. Leave that out of the pre-merge fix unless the help line is cheap to correct.
+
+**Workaround:** Until the exit code is fixed, do not answer no and then trust the exit code. Answer no only when nothing will run next, or skip the prompt with the servers already off.
+
