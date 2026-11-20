@@ -177,7 +177,7 @@ is hidden behind the toggle.
 ## #B5: Add operator/cluster checks to "aba status" command
 
 **Severity:** LOW
-**Status:** Planned
+**Status:** Partially Done (`aba status` and `aba -d <cluster> status` exist, with human output, `--all`, and `--shell`. No `--full` operator or CSV checks.)
 **Added:** 2026-10-31
 
 **Problem:** Pre-flight checks like "is the Cincinnati operator available on
@@ -434,7 +434,7 @@ The `[ABA] Excluded: ...` summary line at the end is sufficient.
 ## #B14: Cross-validate networking values (IPs, CIDRs, collisions)
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Partially Done (`_validate_network_consistency` does the four checks and `verify-cluster-conf` calls it. The TUI networking page does not.)
 **Added:** 2026-10-14
 
 **Problem:** The networking page (Cluster — Networking) validates each field
@@ -640,7 +640,7 @@ menu item produces multi-page output and opens `less -r` on completion.
 ## #B21: Uninstall: keep the mirror data directory unless the user asks to delete it
 
 **Severity:** HIGH
-**Status:** Planned
+**Status:** Done (uninstall keeps the data directory. `--delete-data` removes it. The interactive delete prompt was not added.)
 **Added:** 2026-10-06
 
 **Problem:** `aba uninstall` removes the registry and then deletes its data directory. That directory is the mirror: often hundreds of GB of images. One confirmation today means the images are gone. Putting the same vendor back means downloading them again.
@@ -1118,7 +1118,7 @@ helper (e.g. `require_cluster_stable`) could be extracted for reuse.
 ## #B33: `oc-mirror`: check port 55000 before invoking
 
 **Severity:** LOW
-**Status:** Planned
+**Status:** Partially Done (a busy port 55000 is named before `oc-mirror`, and a retry kills that process. There is no 30-second wait before the first run.)
 **Added:** 2026-07-10
 
 **Problem:** `oc-mirror` v2 starts an ephemeral local registry on port 55000
@@ -2473,7 +2473,7 @@ Do NOT mix with other changes.
 ## #B62: Feature: Unified `aba status` command
 
 **Severity:** MEDIUM — UX improvement, central diagnostic/preflight tool
-**Status:** Planned
+**Status:** Partially Done (`aba status` and `aba -d <cluster> status` exist. No `status mirror`, `status upgrade`, or `status day2`.)
 **Added:** 2026-09-10
 
 **Problem:** ABA lacks a single command to show the state of the mirror,
@@ -2524,7 +2524,7 @@ day2 CS version check) into a unified `scripts/aba-status.sh` dispatcher.
 ## #B63: Agent-config / install-config: remove "ownership invitation" comment, add dynamic user-managed notice
 
 **Severity:** LOW — UX improvement, consistency with ISC behavior
-**Status:** Planned
+**Status:** Partially Done (the ownership-invitation line is gone from the agent-config and install-config templates. The dynamic user-managed notice and the sentinel were not added.)
 **Added:** 2026-09-24
 
 **Problem:** All agent-config and install-config templates contain a static
