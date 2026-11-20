@@ -388,12 +388,17 @@ else
         [[ "$(basename "$script")" == "reg-install.sh" ]] && continue
 
         _script_events=$(grep -o 'aba_progress "[A-Z]*|[a-z_0-9]*"' "$script" 2>/dev/null || true)
+        # Local installers close reg_config inside reg_install_begin, not in this file.
+        if grep -q 'reg_install_begin' "$script"; then
+            _script_events="${_script_events}"$'\n''aba_progress "DONE|reg_config"'
+        fi
         _missing=()
         for id in "${_plan_ids[@]}"; do
             # rpms_ext: Makefile prereq. reg_prep: closed by the dispatcher.
             [[ "$id" == "rpms_ext" || "$id" == "reg_prep" ]] && continue
-            # reg_config START is emitted by the dispatcher (reg-install.sh)
-            # Vendor scripts only need DONE|reg_config
+            # reg_config START is emitted by the dispatcher (reg-install.sh).
+            # Remote vendor scripts emit DONE|reg_config themselves. Local ones
+            # emit it from reg_install_begin.
             _has_done=$(echo "$_script_events" | grep -c "DONE|${id}" || true)
             if [ "$_has_done" -eq 0 ]; then
                 _missing+=("$id")

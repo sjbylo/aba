@@ -35,6 +35,7 @@
 - **The MAC count is omitted when the list is ready** — The node × port formula is only printed when the list is short.
 - **Script start lines name the working directory** — A failing command is easier to place in the trace.
 - **Save and sync report curl's own error** — The reachability check no longer replaces that error with a generic line.
+- **The release check sees the shared registry prelude** — Local Quay, Docker, and mirror-registry installs close the config step inside `reg_install_begin`. The pre-commit progress check counts that call.
 
 ---
 
