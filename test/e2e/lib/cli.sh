@@ -55,9 +55,9 @@ _usage() {
 	  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
 	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
-	  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
+	  run.sh stop [-p 2,3] [--no-clean]       Stop those pools and shut down their VMs
 	  run.sh kill                              Kill daemon + all children + remove all locks
-	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
+	  run.sh start [-p 1-4]                    Power pool VMs on and return them to the daemon
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
 	  run.sh verify-code [-p all]              Verify source code sync between workspace and pools

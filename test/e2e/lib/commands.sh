@@ -33,29 +33,258 @@ cmd_kill() {
 			kill -- -"$_dmpid" || kill "$_dmpid"
 			echo "Daemon (pid $_dmpid) killed."
 		fi
-		rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META"
+		rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META" "$E2E_ACTIVE_POOLS"
 	fi
 	pkill -f 'run\.sh.*(run|daemon)' || true
-	rm -f ${E2E_POOL_LOCK_PREFIX}-*.lock "$E2E_GLOBAL_LOCK"
+	rm -f ${E2E_POOL_LOCK_PREFIX}-*.lock "$E2E_GLOBAL_LOCK" "$E2E_ACTIVE_POOLS"
 	echo "All locks cleaned."
 }
 
+# --- Pool service set --------------------------------------------------------
+# The daemon writes this at start. stop drops pools; start puts them back.
+# The dispatcher re-reads the file on every search, including after it is
+# relaunched with the original -p list.
+
+_e2e_normalize_pools() {
+	local raw="$1"
+	printf '%s\n' $raw | sed '/^$/d' | sort -n | uniq | paste -sd' ' -
+}
+
+_e2e_read_active_pools() {
+	[ -f "$E2E_ACTIVE_POOLS" ] || return 1
+	local raw
+	raw=$(tr '\n' ' ' < "$E2E_ACTIVE_POOLS")
+	_e2e_normalize_pools "$raw"
+}
+
+_e2e_write_active_pools() {
+	local list="$1"
+	: > "$E2E_ACTIVE_POOLS"
+	local p
+	for p in $list; do
+		printf '%s\n' "$p" >> "$E2E_ACTIVE_POOLS"
+	done
+}
+
+# Active file when it exists, otherwise the daemon meta line.
+_e2e_managed_pool_list() {
+	local cur=""
+	if [ -f "$E2E_ACTIVE_POOLS" ]; then
+		cur=$(_e2e_read_active_pools) || cur=""
+		printf '%s\n' "$cur"
+		return 0
+	fi
+	if [ -f "${E2E_DAEMON_META:-}" ]; then
+		cur=$(grep '^pools=' "$E2E_DAEMON_META" | cut -d= -f2-)
+		cur=$(_e2e_normalize_pools "$cur")
+		[ -n "$cur" ] || return 1
+		printf '%s\n' "$cur"
+		return 0
+	fi
+	return 1
+}
+
+_e2e_set_meta_pools() {
+	local list="$1"
+	[ -f "${E2E_DAEMON_META:-}" ] || return 0
+	local tmp
+	tmp=$(mktemp)
+	awk -v pools="$list" '
+		BEGIN { done = 0 }
+		/^pools=/ { print "pools=" pools; done = 1; next }
+		{ print }
+		END { if (!done) print "pools=" pools }
+	' "$E2E_DAEMON_META" > "$tmp"
+	mv "$tmp" "$E2E_DAEMON_META"
+}
+
+# Missing file means every pool in the dispatcher's own list is eligible.
+_e2e_pool_in_service() {
+	local p="$1" cur x
+	if ! cur=$(_e2e_read_active_pools); then
+		return 0
+	fi
+	for x in $cur; do
+		[ "$x" = "$p" ] && return 0
+	done
+	return 1
+}
+
+# Drop $1 from the managed set. Prints what remains. Fails if nothing is managing pools.
+_e2e_retire_pools() {
+	local drop="$1"
+	local cur="" p d skip keep=""
+	cur=$(_e2e_managed_pool_list) || return 1
+	for p in $cur; do
+		skip=""
+		for d in $drop; do
+			[ "$d" = "$p" ] && skip=1 && break
+		done
+		[ -n "$skip" ] && continue
+		keep="$keep $p"
+	done
+	keep=$(_e2e_normalize_pools "$keep")
+	_e2e_write_active_pools "$keep"
+	_e2e_set_meta_pools "$keep"
+	printf '%s\n' "$keep"
+}
+
+# Add $1 back into the managed set. Prints the new set.
+_e2e_return_pools() {
+	local add="$1"
+	local cur="" keep="" p c seen
+	cur=$(_e2e_managed_pool_list) || return 1
+	keep="$cur"
+	for p in $add; do
+		seen=""
+		for c in $keep; do
+			[ "$c" = "$p" ] && seen=1 && break
+		done
+		[ -n "$seen" ] && continue
+		keep="$keep $p"
+	done
+	keep=$(_e2e_normalize_pools "$keep")
+	_e2e_write_active_pools "$keep"
+	_e2e_set_meta_pools "$keep"
+	printf '%s\n' "$keep"
+}
+
+_e2e_vm_power_state() {
+	local vm="$1" state=""
+	state=$(govc vm.info "$vm" 2>/dev/null | awk -F': ' '/Power state/{print $2; exit}') || state=""
+	state="${state//$'\r'/}"
+	state="${state// /}"
+	printf '%s\n' "$state"
+}
+
+# Guest halt, then wait until vSphere reports poweredOff. A hard power-off
+# skips the guest shutdown and is only the fallback when halt does not finish.
+_e2e_guest_shutdown() {
+	local vm="$1"
+	local target="$2"
+	local polls="${_E2E_HALT_POLLS:-30}"
+	local _tries=0 _state=""
+
+	echo "    ${vm}: sudo halt -p"
+	_essh "$target" "sudo halt -p" || true
+	while [ "$_tries" -lt "$polls" ]; do
+		_state=$(_e2e_vm_power_state "$vm")
+		[ "$_state" = "poweredOff" ] && break
+		sleep "${_E2E_HALT_POLL_SECS:-2}"
+		_tries=$(( _tries + 1 ))
+	done
+	if [ "$_state" = "poweredOff" ]; then
+		echo "    ${vm}: halted"
+		return 0
+	fi
+	echo "    ${vm}: halt did not finish, powering off" >&2
+	if govc vm.power -off "$vm"; then
+		echo "    ${vm}: powered off"
+	else
+		echo "    ${vm}: power off failed" >&2
+	fi
+}
+
+# action is "on" or "off". Each pool uses its own VMWARE_CONF when pools.conf sets one.
+# "off" halts the guest. "on" is a vSphere power-on.
+_e2e_power_pool_vms() {
+	local action="$1"
+	local pool_list="$2"
+	local pools_file="${_RUN_DIR:-}/pools.conf"
+	local _verb
+	if [ "$action" = "on" ]; then
+		_verb="Powering on"
+	else
+		action="off"
+		_verb="Shutting down"
+	fi
+
+	_ensure_govc
+	echo ""
+	echo "  ${_verb} pool VMs (pool(s) ${pool_list}) ..."
+	local p
+	for p in $pool_list; do
+		local _vmconf=""
+		if [ -f "$pools_file" ]; then
+			_vmconf=$(_pool_vmware_conf "$pools_file" "$p") || _vmconf=""
+		fi
+		_vmconf="${_vmconf/#\~/$HOME}"
+		if [ -n "$_vmconf" ] && [ -f "$_vmconf" ]; then
+			set -a
+			source "$_vmconf"
+			set +a
+		elif [ -f "$HOME/.vmware.conf" ]; then
+			set -a
+			source "$HOME/.vmware.conf"
+			set +a
+		fi
+		local prefix
+		for prefix in con dis; do
+			local vm="${prefix}${p}"
+			local _info _state
+			_info=$(govc vm.info "$vm" 2>/dev/null) || _info=""
+			if [ -z "$_info" ]; then
+				echo "    ${vm}: not found (skipped)"
+				continue
+			fi
+			_state=$(printf '%s\n' "$_info" | awk -F': ' '/Power state/{print $2; exit}')
+			_state="${_state//$'\r'/}"
+			_state="${_state// /}"
+			if [ "$action" = "on" ]; then
+				if [ "$_state" = "poweredOn" ]; then
+					echo "    ${vm}: already on"
+				elif govc vm.power -on "$vm"; then
+					echo "    ${vm}: powered on"
+				else
+					echo "    ${vm}: power on failed" >&2
+				fi
+			elif [ "$_state" = "poweredOff" ]; then
+				echo "    ${vm}: already off"
+			else
+				local _target=""
+				if [ "$prefix" = "con" ]; then
+					_target=$(_con_target "$p")
+				else
+					_target=$(_dis_target "$p")
+				fi
+				_e2e_guest_shutdown "$vm" "$_target"
+			fi
+		done
+	done
+	echo ""
+}
+
 # --- stop --------------------------------------------------------------------
-# Kill runners on selected pools. Optionally --clean: delete clusters/mirrors.
+# Stop runners on the named pools. A partial stop also halts those VMs
+# and leaves the daemon assigning new suites only to the pools that remain.
+# stop of every configured pool still stops the daemon and leaves the VMs on.
 
 cmd_stop() {
 	local pool_list="$1"
 	local all_pools="${2:-$pool_list}"
 	local do_clean="${CLI_CLEAN:-}"
 
-	# Kill the dispatcher + daemon only when stopping ALL configured pools.
-	# Normalize both lists (sort + dedupe) to avoid whitespace/ordering mismatches.
-	local _sorted_req _sorted_all
-	_sorted_req=$(echo "$pool_list" | tr ' ' '\n' | sort -n | tr '\n' ' ' | sed 's/ *$//')
-	_sorted_all=$(echo "$all_pools" | tr ' ' '\n' | sort -n | tr '\n' ' ' | sed 's/ *$//')
+	local _sorted_req _sorted_all _full_stop="" _remaining=""
+	_sorted_req=$(_e2e_normalize_pools "$pool_list")
+	_sorted_all=$(_e2e_normalize_pools "$all_pools")
 	if [ "$_sorted_req" = "$_sorted_all" ]; then
+		_full_stop=1
+	fi
+
+	# Shrink the set before killing runners, so the dispatcher cannot
+	# hand a new suite to a pool that is about to go away.
+	if [ -z "$_full_stop" ] && _e2e_pid_alive "$E2E_DAEMON_PID"; then
+		if _remaining=$(_e2e_retire_pools "$pool_list"); then
+			if [ -z "$_remaining" ]; then
+				_full_stop=1
+			fi
+		fi
+	fi
+
+	if [ -n "$_full_stop" ]; then
 		_stop_pid_file "$E2E_DISPATCHER_PID" "Dispatcher" "$E2E_DISPATCH_STATE"
 		_stop_pid_file "$E2E_DAEMON_PID" "Daemon" "$E2E_DAEMON_META"
+		rm -f "$E2E_ACTIVE_POOLS"
 	fi
 
 	# Kill orphaned setup-infra.sh processes on bastion
@@ -93,42 +322,36 @@ cmd_stop() {
 		rm -f "${E2E_POOL_LOCK_PREFIX}-${p}.lock"
 	done
 
-	# --clean: process .cleanup and .mirror-cleanup files
+	# --clean: process .cleanup and .mirror-cleanup files while the VMs are still up
 	if [ -n "$do_clean" ]; then
 		_process_cleanup_on_pools "$pool_list"
+	fi
+
+	# stop -p all leaves the VMs running. Any smaller set is shut down.
+	if [ "$_sorted_req" != "$_sorted_all" ]; then
+		_e2e_power_pool_vms off "$pool_list"
+		echo "  Pool(s) ${_sorted_req} stopped. Their VMs are shut down."
+		if _e2e_pid_alive "$E2E_DAEMON_PID"; then
+			_remaining=$(_e2e_read_active_pools) || _remaining=""
+			echo "  New suites will use pool(s): ${_remaining}"
+			echo "  Bring a pool back with: ./run.sh start -p N"
+		fi
 	fi
 }
 
 # --- start -------------------------------------------------------------------
-# Power on conN + disN VMs for selected pools.
+# Power on conN + disN and, when a daemon is managing pools, let it use them again.
 
 cmd_start() {
 	local pool_list="$1"
+	local _back=""
 
-	_ensure_govc
-	local _vmconf="$HOME/.vmware.conf"
-	[ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
-
-	echo ""
-	echo "  Powering on pool VMs (pool(s) ${pool_list}) ..."
-	local p
-	for p in $pool_list; do
-		local prefix
-		for prefix in con dis; do
-			local vm="${prefix}${p}"
-			local _state=""
-			_state=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1) || _state=""
-			if [[ "$_state" == *"poweredOn"* ]]; then
-				echo "    ${vm}: already on"
-			elif govc vm.info "$vm" >/dev/null; then
-				govc vm.power -on "$vm"
-				echo "    ${vm}: powered on"
-			else
-				echo "    ${vm}: not found (skipped)"
-			fi
-		done
-	done
-	echo ""
+	_e2e_power_pool_vms on "$pool_list"
+	if _e2e_pid_alive "$E2E_DAEMON_PID" || [ -f "$E2E_ACTIVE_POOLS" ]; then
+		if _back=$(_e2e_return_pools "$pool_list"); then
+			echo "  New suites may use pool(s): ${_back}"
+		fi
+	fi
 	echo "  Done. Wait ~30s for SSH, then: run.sh deploy -p ${pool_list// /,}"
 }
 
