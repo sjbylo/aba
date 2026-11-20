@@ -221,13 +221,51 @@ mirror operations so live edits take effect.
 
 1. Empty fields in `aba.conf` are filled by `get_domain()`, `get_machine_network()`,
    `get_dns_servers()`, `get_next_hop()`, `get_ntp_servers()`.
-2. If `ask=true` (interactive), the script aborts after detection so the user can review.
+2. If prompts are on (`ask_is_on`), the script exits 1 after detection so the user can review. `aba -y` and `ask=false` keep the detected values and continue.
 3. For existing `cluster.conf`: empty network fields are filled from the now-populated `aba.conf`.
 4. Detection functions return empty on failure (no hardcoded fallbacks except
    `get_domain()` → `example.com`).
 5. NTP uses `pool.ntp.org` only for `image_source=direct` (UDP 123 not proxied).
 
 The TUI delegates entirely to core for auto-detection (no in-memory detection).
+
+### Prompts (`ask`)
+
+`ask()` in `scripts/include_all.sh` is the only yes/no prompt. Return 0 means proceed. Return 1 means do not. The prompt is printed on stderr. Callers pass the question text without a trailing `?`.
+
+`aba.conf` `ask=` is read through `normalize-aba-conf`. A missing `aba.conf` becomes `ask=true`. `ask=false` and `ask=0` become empty. `ask=1` becomes `ask=true`. Any other non-empty value is left as written, including `ask=yes` and `ask=False`. Empty means prompts are off. Non-empty means prompts are on. The template default is `ask=true`.
+
+`ask()` chooses in this order:
+
+1. `ASK_OVERRIDE` is set (`aba -y` or `aba -Y` for this process). Do not read. Return 0, unless this call passed `--auto-no`, then return 1. The log line says `[default: -y]`.
+2. `ASK_ALWAYS` is set, or this call passed `--always`. Read from the tty even when `ask` is empty. `aba -y` still wins over `--always`.
+3. Otherwise re-read `aba.conf`. If `ask` is empty, do not read. The answer is `--auto-yes` or `--auto-no` when one of those was passed, otherwise the call's own default. The log line says `[default: ask=false]` and does not print that answer. That display is backlog #B102.
+
+On a real read, Enter uses the call's default. `y`, `Y`, `yes`, `Yes`, and `YES` return 0. `n`, `N`, `no`, `No`, and `NO` return 1. Any other text returns 1. `-t SECONDS` stops the read; no input then uses the default.
+
+The call's own flags are taken from the left, in this order: `-n` (default no) or `-y` (default yes), then `--always`, then `--auto-yes` or `--auto-no`, then `-t SECONDS`, then the question. With no `-n` or `-y`, the default is yes.
+
+`aba` flags:
+
+| Flag | This process | `aba.conf` |
+|------|----------------|------------|
+| `-y`, `--yes` | Answer yes (`ASK_OVERRIDE`), except `ask --auto-no` | unchanged |
+| `-Y`, `--yes-permanent` | Answer yes, same as `-y` | `ask=false` |
+| `--noask` | Prompts off. Each call uses its own default, or `--auto-yes` / `--auto-no` | `ask=false` |
+| `--ask`, `-a` | Prompts on | `ask=true` |
+| `--interactive` | No-argument menu, and prompts on | `ask=true` |
+
+`-y` does not apply the `[y]` or `[n]` printed on the prompt. A call written `ask -n` still returns 0 under `-y`. `ask=false` and `--noask` do use that `[y]` or `[n]`, unless the call passed `--auto-yes` or `--auto-no`. `ask -n --auto-yes` is the usual destructive confirm: a person gets no, a non-interactive run proceeds.
+
+`ask_is_on` is true only when `ASK_OVERRIDE` is unset and `ask` is non-empty. `edit_file` opens `$editor` only then. With prompts off it skips the editor, returns 0, and the message says `ask=false` even when the reason was `-y`. `editor=` empty or `none` returns 1 and does not open an editor.
+
+Running `aba` with no arguments from the repo root sets `ask=1`, clears `ASK_OVERRIDE`, and sets `ASK_ALWAYS`, so that menu prompts even when `aba.conf` has `ask=false`.
+
+Bare-metal boot and edit (`bm-ask-boot.sh`, `bm-ask-edit.sh`) call `ask --always`, so they still prompt when `ask=false`. `aba -y` skips them.
+
+The TUI progress path exports `ASK_OVERRIDE=1`. A terminal run appends `--yes` when the normalized `ask` value is exactly `true`, so aba does not prompt again after the TUI dialog. An interactive `ask()` can also emit `PROMPT` on `ABA_PROGRESS_FIFO`. A non-interactive return does not.
+
+Covered by `test/func/test-ask-function.sh`.
 
 ---
 
