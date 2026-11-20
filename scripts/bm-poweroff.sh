@@ -25,17 +25,27 @@ source scripts/bmc-adapter-generic.sh
 node_list=$(bmc_host_list)
 
 if [ "${ask:-}" ]; then
-	ask "Power off ($reset_type) bare-metal node(s): ${node_list//$'\n'/ }" || exit 0
+	# A no leaves the nodes on and their IPs in use: exit non-zero so the caller
+	# does not report success.
+	if ! ask "Power off ($reset_type) bare-metal node(s): ${node_list//$'\n'/ }"; then
+		aba_info "Nodes not powered off."
+		exit 1
+	fi
 fi
 
-# Some BMCs (iRMC S4, some iLO) drop the session on a power change, so the Off poll
-# gets 401. Log in once more and poll again; the node is then Off or PoweringOff,
-# so bmc_power_off sends no second Reset.
+# Some BMCs (iRMC S4, some iLO) drop the session on a power change, so a request
+# gets 401. Log in once more. If the Reset already went out, only wait for Off:
+# a second Reset while the node shuts down can fail with 409.
 _bm_retry_after_401() {
 	[ "$_REDFISH_LAST_CODE" = "401" ] || return 1
 	aba_debug "BMC: $1 401 during power-off, re-authenticating once"
 	_bm_delete_session "$1" || true
-	bmc_session_login "$1" && bmc_power_off "$1" "$reset_type"
+	bmc_session_login "$1" || return 1
+	if [ "$_BM_RESET_SENT" ]; then
+		_bm_wait_power_state "$1" Off
+	else
+		bmc_power_off "$1" "$reset_type"
+	fi
 }
 
 total=0
