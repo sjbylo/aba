@@ -30,6 +30,9 @@
 #                                     # Reset ForceOff/GracefulShutdown -> Off, other -> On
 #   _STUB_GRACEFUL_400=true           # 400 on Reset GracefulShutdown
 #   _STUB_STUCK_HOST=<host>           # Reset leaves this host's PowerState unchanged
+#   _STUB_SLOW_OFF_HOST=<host>        # after a Reset to Off, one more read still sees On
+#   _STUB_POLL_ERR=<code>             # with _STUB_STATE_FILE: after each Reset, the next
+#                                     # 3 System GETs (one Redfish retry run) answer <code>
 #
 # Phase 10 EthernetInterfaces control flags (TEST-06 MAC discovery scenarios):
 #   _STUB_NIC_SCENARIO=<name>         # one of: happy | ambiguous | no-linkup |
@@ -524,8 +527,16 @@ _stub_url_host() {
 }
 
 _stub_power_of() {
+	local host state
 	[ -n "${_STUB_POWER_FILE:-}" ] || return 0
-	grep "^$(_stub_url_host "$1")=" "$_STUB_POWER_FILE" | tail -1 | cut -d= -f2
+	host=$(_stub_url_host "$1")
+	state=$(grep "^$host=" "$_STUB_POWER_FILE" | tail -1 | cut -d= -f2)
+	# On-then-Off: this read still sees On, the next one sees Off.
+	if [ "$state" = "On-then-Off" ]; then
+		printf '%s=Off\n' "$host" >> "$_STUB_POWER_FILE"
+		state=On
+	fi
+	printf '%s' "$state"
 }
 
 _stub_power_reset() {
@@ -537,6 +548,7 @@ _stub_power_reset() {
 		ForceOff|GracefulShutdown) state=Off ;;
 		*) state=On ;;
 	esac
+	[ "$state" = "Off" ] && [ "$host" = "${_STUB_SLOW_OFF_HOST:-}" ] && state=On-then-Off
 	printf '%s=%s\n' "$host" "$state" >> "$_STUB_POWER_FILE"
 }
 
@@ -550,7 +562,7 @@ _bmc_stub_reset_globals() {
 	unset _STUB_VENDOR_MODEL _STUB_FIRMWARE_VERSION _STUB_POWER_STATE
 	unset _STUB_MEDIA_INSERTED _STUB_MEDIA_CONNECTED _STUB_202_TASK _STUB_MANAGER_ID _STUB_USBCD_TARGET
 	unset _STUB_LENOVO_LICENSE_TIER _STUB_POST_RESET_401
-	unset _STUB_POWER_FILE _STUB_GRACEFUL_400 _STUB_STUCK_HOST
+	unset _STUB_POWER_FILE _STUB_GRACEFUL_400 _STUB_STUCK_HOST _STUB_SLOW_OFF_HOST _STUB_POLL_ERR
 	# Phase 10 EthernetInterfaces fixture flags (TEST-06).
 	unset _STUB_NIC_SCENARIO _STUB_NIC_MACS _STUB_NIC_IDS _STUB_SYSTEM_ID
 	# Clear _STUB_STATE_FILE content (reset stateful insert/eject tracking) but keep the path
@@ -789,17 +801,26 @@ _bmc_stub_curl() {
 						printf 'post_reset_401=true\n' >> "$_STUB_STATE_FILE"
 					fi
 				fi
+				if [ -n "${_STUB_POLL_ERR:-}" ] && [ -n "${_STUB_STATE_FILE:-}" ]; then
+					printf 'poll_err_left=3\n' >> "$_STUB_STATE_FILE"
+				fi
 			fi
 			;;
 		*/Systems/*)
 			# Bare ComputerSystem GET or PATCH on Boot.
 			# ERR-05 support: if post_reset_401=true in state file, return 401 ONCE
 			# (one-shot: immediately clear the flag so subsequent polls return 200).
-			local _sf_post_reset=""
+			local _sf_post_reset="" _sf_err_left=""
 			if [ -n "${_STUB_STATE_FILE:-}" ] && [ -f "$_STUB_STATE_FILE" ]; then
 				_sf_post_reset=$(grep '^post_reset_401=' "$_STUB_STATE_FILE" | cut -d= -f2)
+				_sf_err_left=$(grep '^poll_err_left=' "$_STUB_STATE_FILE" | tail -1 | cut -d= -f2)
 			fi
-			if [ "$_sf_post_reset" = "true" ] && [ "$verb" = "GET" ]; then
+			if [ "${_sf_err_left:-0}" -gt 0 ] && [ "$verb" = "GET" ]; then
+				printf 'poll_err_left=%s\n' "$(( _sf_err_left - 1 ))" >> "$_STUB_STATE_FILE"
+				_REDFISH_LAST_CODE=$_STUB_POLL_ERR
+				_REDFISH_LAST_REASON="stub: poll error"
+				_stub_emit_empty_body
+			elif [ "$_sf_post_reset" = "true" ] && [ "$verb" = "GET" ]; then
 				# Clear the one-shot flag before returning
 				if [ -n "${_STUB_STATE_FILE:-}" ]; then
 					sed -i '/^post_reset_401=/d' "$_STUB_STATE_FILE"

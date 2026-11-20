@@ -414,12 +414,15 @@ _bm_post_reset() {
 # Arg 2: GracefulShutdown or ForceOff. Already Off -> success, no POST.
 # GracefulShutdown answered with 400 (firmware does not support it) -> ForceOff.
 # Waits for PowerState=Off so the node IPs are free when it returns.
+# Sets _BM_RESET_SENT=1 once a Reset is accepted, so a caller that logs in again
+# after a 401 only waits and sends no second Reset.
 # -----------------------------------------------------------------------------
 
 bmc_power_off() {
 	local node="$1" reset_type="$2"
 	local sys
 	sys=$(_bm_system_id "$node")
+	_BM_RESET_SENT=
 
 	_redfish_request "$node" GET "/redfish/v1/Systems/$sys"
 	if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
@@ -449,6 +452,7 @@ bmc_power_off() {
 		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "Reset $reset_type POST HTTP ${_REDFISH_LAST_CODE} (PowerState was $state)")
 		return 1
 	fi
+	_BM_RESET_SENT=1
 	_bm_wait_power_state "$node" Off
 }
 
@@ -468,23 +472,31 @@ _bm_wait_power_state() {
 	local sys_path="/redfish/v1/Systems/$sys"
 
 	local elapsed=0 interval=2 max=120
-	local state
+	local state last_err=
 	while [ "$elapsed" -lt "$max" ]; do
-		_redfish_request "$node" GET "$sys_path" || return 1
-		if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
-			_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP ${_REDFISH_LAST_CODE} on PowerState poll")
+		_redfish_request "$node" GET "$sys_path"
+		# 401: return now, the callers log in again and poll once more.
+		if [ "$_REDFISH_LAST_CODE" = "401" ]; then
+			_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP 401 on PowerState poll")
 			return 1
 		fi
-		state=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
-		if [ "$state" = "$want" ]; then
-			aba_debug "BMC: $node PowerState=$want (after ${elapsed}s)"
-			return 0
+		if [ "${_REDFISH_LAST_CODE:0:1}" = "2" ]; then
+			state=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
+			if [ "$state" = "$want" ]; then
+				aba_debug "BMC: $node PowerState=$want (after ${elapsed}s)"
+				return 0
+			fi
+			last_err=
+		else
+			# A BMC often drops requests while the server changes power state: keep polling.
+			last_err="HTTP ${_REDFISH_LAST_CODE}"
+			aba_debug "BMC: $node $last_err on PowerState poll, polling again"
 		fi
 		sleep "$interval"
 		elapsed=$(( elapsed + interval ))
 	done
 	_REDFISH_LAST_CODE="0"
-	_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "PowerState never reached $want after 120s")
+	_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "PowerState never reached $want after 120s${last_err:+ (last poll: $last_err)}")
 	return 1
 }
 
