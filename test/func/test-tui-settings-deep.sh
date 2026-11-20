@@ -86,8 +86,7 @@ for _step in 1 2 3 4; do
 	tui_screenshot "sd-01-vendor-${_exp}"
 
 	if echo "$_scr" | grep -qi "Registry Type.*$_disp"; then
-		echo "  ✓ PASS: Vendor toggled to '$_disp' (display)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Vendor toggled to '$_disp' (display)" "$_scr"
 	else
 		echo "  ✗ FAIL: Expected '$_disp' in settings display"
 		echo "    Screen: $(echo "$_scr" | grep -i 'Registry Type')"
@@ -97,8 +96,7 @@ for _step in 1 2 3 4; do
 	# Verify config file was updated
 	_file_val=$(_read_vendor)
 	if [[ "$_file_val" == "$_exp" ]]; then
-		echo "  ✓ PASS: mirror.conf updated to reg_vendor=$_exp"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "mirror.conf updated to reg_vendor=$_exp"
 	else
 		echo "  ✗ FAIL: Expected reg_vendor=$_exp in mirror.conf, got '$_file_val'"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -136,8 +134,7 @@ for idx in "${!_expected_retries[@]}"; do
 	tui_screenshot "sd-02-retry-${_exp}"
 
 	if echo "$_scr" | grep -qi "Retry Count.*$_disp\|Retry.*$_disp"; then
-		echo "  ✓ PASS: Retry toggled to '$_disp' (display)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Retry toggled to '$_disp' (display)" "$_scr"
 	else
 		echo "  ✗ FAIL: Expected '$_disp' in retry display"
 		echo "    Screen: $(echo "$_scr" | grep -i 'Retry')"
@@ -147,8 +144,7 @@ for idx in "${!_expected_retries[@]}"; do
 	# Verify config file was updated
 	_file_val=$(_read_retry)
 	if [[ "$_file_val" == "$_exp" ]]; then
-		echo "  ✓ PASS: ~/.aba/config updated to TUI_OC_MIRROR_RETRY_COUNT=$_exp"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "~/.aba/config updated to TUI_OC_MIRROR_RETRY_COUNT=$_exp"
 	else
 		echo "  ✗ FAIL: Expected retry=$_exp in ~/.aba/config, got '$_file_val'"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -186,8 +182,7 @@ _scr=$(tui_capture)
 tui_screenshot "sd-03-main-label"
 
 if echo "$_scr" | grep -qi "Configure.*$_label_v_disp.*retry=$_label_r_disp"; then
-	echo "  ✓ PASS: Main menu shows '$_label_v_disp, retry=$_label_r_disp'"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Main menu shows '$_label_v_disp, retry=$_label_r_disp'" "$_scr"
 else
 	echo "  ✗ FAIL: Main menu label doesn't reflect $_label_v_disp/retry=$_label_r_disp"
 	echo "    Configure line: $(echo "$_scr" | grep -i 'Configure')"
@@ -221,8 +216,7 @@ _actual_suffix=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/nul
 
 if [[ "$_actual_suffix" == *"$_expected_suffix"* ]] || \
    { [[ "$_cur_retry" -eq 0 ]] && [[ -z "$_actual_suffix" || "$_actual_suffix" == "" ]]; }; then
-	echo "  ✓ PASS: _tui_oc_mirror_retry_suffix returns correct value"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "_tui_oc_mirror_retry_suffix returns correct value"
 else
 	echo "  ✗ FAIL: Expected suffix '$_expected_suffix', got '$_actual_suffix'"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -238,16 +232,14 @@ _sync_cmd=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/null && 
 
 if [[ "$_cur_retry" -gt 0 ]]; then
 	if echo "$_sync_cmd" | grep -q -- "--retry $_cur_retry"; then
-		echo "  ✓ PASS: Sync command includes '--retry $_cur_retry': $_sync_cmd"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Sync command includes '--retry $_cur_retry': $_sync_cmd"
 	else
 		echo "  ✗ FAIL: Sync command missing retry: $_sync_cmd"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 else
 	if ! echo "$_sync_cmd" | grep -q -- "--retry"; then
-		echo "  ✓ PASS: Sync command has no --retry when OFF: $_sync_cmd"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Sync command has no --retry when OFF: $_sync_cmd"
 	else
 		echo "  ✗ FAIL: Sync command has --retry when retry=0: $_sync_cmd"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -266,8 +258,7 @@ _expect_vendor=$($_TUI_SSH "cd ~/aba && source scripts/include_all.sh 2>/dev/nul
 	resolved_reg_vendor" 2>/dev/null || echo "ERR")
 
 if [ "$_install_label" = "Install ${_expect_vendor} Mirror" ]; then
-	echo "  ✓ PASS: Install title uses resolved vendor '$_expect_vendor' (config=$_cur_vendor): $_install_label"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Install title uses resolved vendor '$_expect_vendor' (config=$_cur_vendor): $_install_label"
 else
 	echo "  ✗ FAIL: Install title '$_install_label' != 'Install ${_expect_vendor} Mirror' (config=$_cur_vendor)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -301,8 +292,7 @@ _scr=$(tui_capture)
 # Check vendor survived
 _post_vendor=$(_read_vendor)
 if [[ "$_post_vendor" == "$_set_vendor" ]]; then
-	echo "  ✓ PASS: Vendor persisted across restart: $_post_vendor"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Vendor persisted across restart: $_post_vendor"
 else
 	echo "  ✗ FAIL: Vendor changed after restart: $_set_vendor → $_post_vendor"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -311,8 +301,7 @@ fi
 # Check retry survived
 _post_retry=$(_read_retry)
 if [[ "$_post_retry" == "$_set_retry" ]]; then
-	echo "  ✓ PASS: Retry persisted across restart: $_post_retry"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Retry persisted across restart: $_post_retry"
 else
 	echo "  ✗ FAIL: Retry changed after restart: $_set_retry → $_post_retry"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -320,8 +309,7 @@ fi
 
 # Verify screen display matches files
 if echo "$_scr" | grep -qi "Registry Type"; then
-	echo "  ✓ PASS: Settings menu shows Registry Type after restart"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Settings menu shows Registry Type after restart" "$_scr"
 fi
 
 # ============================================================================
@@ -356,8 +344,7 @@ echo "  Restored: vendor='$_orig_vendor' retry='$_orig_retry'"
 _final_vendor=$(_read_vendor)
 _final_retry=$(_read_retry)
 if [[ "$_final_vendor" == "$_orig_vendor" && "$_final_retry" == "$_orig_retry" ]]; then
-	echo "  ✓ PASS: Original values restored"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Original values restored"
 else
 	echo "  ✗ FAIL: Restoration incomplete: vendor=$_final_vendor, retry=$_final_retry"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))

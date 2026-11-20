@@ -6,6 +6,28 @@
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
+# Rename the pull secret out of the way, then put it back with mv.
+_WIZ_PS=
+_wiz_ps_restore() {
+	[ -n "${_WIZ_PS:-}" ] || return 0
+	local _away _orig
+	_away=$(printf '%q' "${_WIZ_PS}.tui-away")
+	_orig=$(printf '%q' "$_WIZ_PS")
+	$_TUI_SSH "if [ -f $_away ]; then mv $_away $_orig; fi" || return 1
+	if $_TUI_SSH "test -f $_orig"; then
+		_WIZ_PS=
+		return 0
+	fi
+	return 1
+}
+_wiz_ps_hide() {
+	# Do not use an unquoted ~ in the remote case pattern. Bash expands it
+	# before the match, so ~/.pull-secret.json never hits ~/*.
+	_WIZ_PS=$($_TUI_SSH 'f=$(grep "^pull_secret_file=" "$HOME/aba/aba.conf" | head -1 | cut -d= -f2- | tr -d "\"'\''[:space:]"); [ -n "$f" ] || f="~/.pull-secret.json"; if [ "${f:0:2}" = "~/" ]; then f="$HOME/${f:2}"; elif [ "$f" = "~" ]; then f="$HOME"; fi; [ -f "$f" ] || exit 1; mv "$f" "$f.tui-away"; printf "%s\n" "$f"') || return 1
+	[ -n "$_WIZ_PS" ]
+}
+trap '_wiz_ps_restore || true' EXIT
+
 echo "=== TUI Wizard Test ==="
 echo "  Host: $_TUI_HOST"
 echo ""
@@ -21,6 +43,13 @@ tui_start_to_menu || { tui_summary; exit 1; }
 # ============================================================================
 echo ""
 echo "--- 1. Launch wizard ---"
+if ! _wiz_ps_hide; then
+	echo "  ✗ FAIL: could not rename the pull secret file"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_summary
+	exit 1
+fi
+echo "  Pull secret moved aside: $_WIZ_PS"
 tui_select_item "Wizard"
 sleep 3
 tui_screenshot "wiz-01-start"
@@ -29,8 +58,7 @@ tui_screenshot "wiz-01-start"
 # Press "Reconfigure" to enter the wizard pages.
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Resume Configuration\|Continue with this"; then
-	echo "  ✓ PASS: Resume Configuration dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Resume Configuration dialog appeared" "$_scr"
 	tui_assert_contains "Channel" "Shows current channel"
 	tui_assert_contains "Version" "Shows current version"
 	tui_assert_contains "Platform" "Shows current platform"
@@ -39,14 +67,39 @@ if echo "$_scr" | grep -qi "Resume Configuration\|Continue with this"; then
 	sleep 3
 fi
 
-# If pull-secret page appears (first run or no pull-secret)
-_scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Pull Secret"; then
-	echo "  ✓ PASS: Pull Secret page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_keys Enter
-	sleep 2
+# The file is missing, so the wizard must show the pull-secret dialog.
+# Submit the old path, require the not-found error, mv the file back,
+# then submit the path again and continue.
+if ! tui_wait_for "pull secret is required\|Pull Secret" 25; then
+	echo "  ✗ FAIL: pull secret dialog did not appear"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "wiz-ps-missing-dialog"
+	_wiz_ps_restore || true
+	tui_summary
+	exit 1
 fi
+tui_pass "Pull secret required dialog" "$(tui_capture)"
+tui_press_button "Enter file path" || tui_keys Enter
+sleep 1
+tui_keys Enter
+sleep 1
+if tui_capture | grep -qi "File not found"; then
+	tui_pass "Pull secret file-not-found dialog" "$(tui_capture)"
+else
+	echo "  ✗ FAIL: expected File not found after the pull secret was renamed"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "wiz-ps-no-error"
+fi
+if ! _wiz_ps_restore; then
+	echo "  ✗ FAIL: could not move the pull secret back"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_summary
+	exit 1
+fi
+tui_keys Enter
+sleep 1
+tui_keys Enter
+sleep 2
 
 # ============================================================================
 # 2. Channel selection page
@@ -79,7 +132,8 @@ fi
 # ============================================================================
 echo ""
 echo "--- 3. Version selection ---"
-tui_wait_for "Version\|version" 15
+# "Fetching versions" contains the word version. Wait for the list itself.
+tui_wait_for "Latest\|Manual entry" 60
 tui_assert_title "Version" "Version dialog title"
 tui_screenshot "wiz-03-version"
 # Should show Latest, Previous, Older, Manual options
@@ -110,7 +164,7 @@ fi
 # ============================================================================
 echo ""
 echo "--- 4. Platform selection ---"
-tui_wait_for "Platform\|platform\|Bare\|metal\|VMware\|KVM" 10
+tui_wait_for "Platform\|platform\|Bare\|metal\|VMware\|KVM" 30
 tui_assert_title "Platform" "Platform dialog title"
 tui_screenshot "wiz-04-platform"
 tui_assert_contains "Bare\|bare" "Bare metal option"
@@ -147,16 +201,16 @@ for _pw in 1 2 3; do
 	fi
 	break
 done
-# This page may take time (catalog indexes)
-tui_wait_for "Operator\|operator\|Select Operators" 60
+# "Downloading operator catalog indexes" contains the word operator.
+# Wait for the menu itself.
+tui_wait_for "Select Operators\|Operator Sets" 120
 tui_assert_title "Select Operators" "Operator selection dialog title"
 tui_screenshot "wiz-05-operators"
 
 # Should show operator sets, search, view options
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Operator"; then
-	echo "  ✓ PASS: Operator selection page reached"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+if echo "$_scr" | grep -qi "Select Operators\|Operator Sets"; then
+	tui_pass "Operator selection page reached" "$_scr"
 
 	# Check help
 	tui_press_button "Help"

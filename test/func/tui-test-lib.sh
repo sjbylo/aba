@@ -185,15 +185,13 @@ tui_apply_lab_network() {
 	# Assert critical fields
 	pane=$(tui_capture)
 	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS}"; then
-		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "DNS servers set to ${TUI_LAB_DNS}" "$pane"
 	else
 		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$pane" | grep -qE "Starting IP:[[:space:]]*${_lab_starting_ip}"; then
-		echo "  ✓ PASS: Starting IP set to ${_lab_starting_ip}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Starting IP set to ${_lab_starting_ip}" "$pane"
 	else
 		echo "  ✗ FAIL: Starting IP not ${_lab_starting_ip}"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -356,7 +354,9 @@ _tui_capture_start() {
 	esac
 	# Re-source (disco switches host) must follow the new host and run dir.
 	_tui_capture_stop
-	_tui_capture_loop "$$" "$interval" "$_TUI_RUN_DIR" "$_TUI_HOST" "$_TUI_SESSION" "$_TUI_SSH_CFG" &
+	# 9>&- so this loop does not inherit the flock. The parent exits
+	# before the loop notices, and the next test would otherwise see the lock.
+	_tui_capture_loop "$$" "$interval" "$_TUI_RUN_DIR" "$_TUI_HOST" "$_TUI_SESSION" "$_TUI_SSH_CFG" 9>&- &
 	_TUI_CAPTURE_PID=$!
 	echo "  Screen capture every ${interval}s → $_TUI_RUN_DIR/ (identical and blank frames dropped)"
 }
@@ -432,6 +432,52 @@ tui_capture() {
 	_tui_ssh_retry "tmux capture-pane -t $_TUI_SESSION -p"
 }
 
+# File the pane a PASS was judged on. Never sends keys, never retries, and
+# a failed write does not change the pass/fail count. $2, when set, is the
+# exact text the assertion grepped, so the file is that frame.
+_tui_write_pass_frame() {
+	local _desc="$1"
+	local _have=0
+	local _text=""
+	local _n _slug _file
+	if [[ $# -ge 2 ]]; then
+		_have=1
+		_text="$2"
+	fi
+	[[ -n "${_TUI_RUN_DIR:-}" ]] || return 0
+	_TUI_PASS_FRAME=$(( ${_TUI_PASS_FRAME:-0} + 1 ))
+	_n=$(printf '%04d' "$_TUI_PASS_FRAME")
+	_slug=$(printf '%s' "$_desc" | tr -c 'A-Za-z0-9' '-' | tr -s '-' | cut -c1-48)
+	_slug="${_slug#-}"
+	_slug="${_slug%-}"
+	[[ -n "$_slug" ]] || _slug="pass"
+	_file="${_TUI_RUN_DIR}/pass-${_n}-${_slug}.txt"
+	if [[ "$_have" -eq 1 ]]; then
+		printf '%s' "$_text" >"$_file" 2>/dev/null || return 0
+	elif ! $_TUI_SSH "tmux capture-pane -t $_TUI_SESSION -p" >"$_file" 2>/dev/null; then
+		printf '%s\n' "(no tmux pane at this pass)" >"$_file" 2>/dev/null || return 0
+	fi
+	echo "  [pass-frame: $_file]"
+	return 0
+}
+
+# Same line the tests already print, plus the frame from that moment.
+# Pass the grepped pane as $2 when the test already holds it.
+tui_pass() {
+	local _desc="$1"
+	echo "  ✓ PASS: $_desc"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	if [[ $# -ge 2 && -n "$2" ]]; then
+		_tui_write_pass_frame "$_desc" "$2" || true
+	elif [[ -n "${_TUI_JUDGED_PANE:-}" ]]; then
+		_tui_write_pass_frame "$_desc" "$_TUI_JUDGED_PANE" || true
+	else
+		_tui_write_pass_frame "$_desc" || true
+	fi
+	unset _TUI_JUDGED_PANE
+	return 0
+}
+
 # Send keys to the tmux session
 tui_keys() {
 	_tui_ssh_retry "tmux send-keys -t $_TUI_SESSION $*"
@@ -450,7 +496,9 @@ tui_wait_for() {
 			tui_screenshot "GONE-$(date +%H%M%S)"
 			return 1
 		fi
-		if tui_capture | grep -qi "$pattern"; then
+		# Keep this pane. tui_assert_appears files it; a later capture can be a different screen.
+		_TUI_WAIT_PANE=$(tui_capture) || _TUI_WAIT_PANE=""
+		if printf '%s\n' "$_TUI_WAIT_PANE" | grep -qi "$pattern"; then
 			return 0
 		fi
 		sleep 0.5
@@ -641,7 +689,11 @@ tui_select_item() {
 # Get the dialog title from screen capture.
 # Titles appear as: ┌──── Some Title ────┐
 tui_dialog_title() {
-	tui_capture | sed -n 's/.*┌[─ ]*\(.*[^ ─]\)[─ ]*┐.*/\1/p' | head -1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+	local pane
+	# Stash the pane the title came from. The pass frame must be that screen.
+	pane=$(tui_capture) || pane=""
+	_TUI_TITLE_PANE=$pane
+	printf '%s\n' "$pane" | sed -n 's/.*┌[─ ]*\(.*[^ ─]\)[─ ]*┐.*/\1/p' | head -1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
 # Assert the dialog title matches a pattern (case-insensitive).
@@ -652,8 +704,7 @@ tui_assert_title() {
 	local title
 	title=$(tui_dialog_title)
 	if echo "$title" | grep -qi "$pattern"; then
-		echo "  ✓ PASS: $desc (title: '$title')"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$desc (title: '$title')" "${_TUI_TITLE_PANE:-}"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (expected title matching '$pattern', got '$title')"
@@ -1146,6 +1197,7 @@ tui_assert_mirror_dns_reachable() {
 			;;
 	esac
 	echo "  ✓ PASS: Mirror DNS bastion.example.com → $_got:8443 (HTTP $_code)"
+	_tui_write_pass_frame "Mirror DNS bastion.example.com → $_got:8443 (HTTP $_code)" || true
 	return 0
 }
 
@@ -1157,6 +1209,58 @@ tui_mirror_available() {
 # True when mirror/.available exists AND port 8443 is listening on the host.
 tui_mirror_listening() {
 	$_TUI_SSH "ss -ltn 2>/dev/null | grep -q ':8443' || netstat -ltn 2>/dev/null | grep -q ':8443'" 2>/dev/null
+}
+
+# After Yes on Reinstall, wait until the local/remote install menu is up.
+# Uninstall keeps the data directory. 150 * 2s.
+# Usage: tui_wait_mirror_install_choice [screenshot-tag]
+tui_wait_mirror_install_choice() {
+	local _tag="${1:-mirror-uninstall}" i _scr
+	for (( i=0; i<150; i++ )); do
+		_scr=$(tui_capture) || return 1
+		if echo "$_scr" | grep -qi "Install locally\|remote host"; then
+			return 0
+		fi
+		if echo "$_scr" | grep -qiE "Error.*─|─.*FAILED|A step failed"; then
+			tui_screenshot "${_tag}-error"
+			return 1
+		fi
+		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|── Success ──"; then
+			tui_keys Enter
+			sleep 1
+			continue
+		fi
+		# The first paint is 0% with every step N/A and Quit already drawn.
+		# q there aborts the uninstall before Remove registry starts.
+		if echo "$_scr" | grep -qi "Stopped before all steps"; then
+			tui_keys Enter
+			sleep 1
+			tui_screenshot "${_tag}-stopped"
+			return 1
+		fi
+		sleep 2
+	done
+	tui_screenshot "${_tag}-timeout"
+	return 1
+}
+
+# Put the registry service back. The data directory is not deleted.
+# Set _TUI_MIRROR_SERVICE_DOWN=yes before the uninstall. A no-op when
+# that flag is unset or the service is already listening.
+tui_mirror_restore_service() {
+	[ "${_TUI_MIRROR_SERVICE_DOWN:-no}" = yes ] || return 0
+	if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+		_TUI_MIRROR_SERVICE_DOWN=no
+		return 0
+	fi
+	echo "  Installing mirror service again (data dir kept)"
+	$_TUI_SSH "cd ~/aba/mirror && ABA_DO_NOT_UPDATE=1 aba install --yes" >/tmp/tui-mirror-restore.log 2>&1 || true
+	if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+		_TUI_MIRROR_SERVICE_DOWN=no
+		return 0
+	fi
+	echo "  ✗ Mirror service was not restored (see /tmp/tui-mirror-restore.log)"
+	return 1
 }
 
 # After a host wipe (or first run), cluster/mirror UI tests need a local registry.
@@ -1430,14 +1534,12 @@ tui_stop() {
 # (e.g. a test exercised Exit), PASS with a note — the next start will relaunch.
 tui_cleanup() {
 	if ! tui_session_alive 2>/dev/null; then
-		echo "  ✓ PASS: Cleanup complete (no TUI session — next test will launch)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cleanup complete (no TUI session — next test will launch)"
 		return 0
 	fi
 
 	if tui_leave_on_menu && tui_on_main_menu; then
-		echo "  ✓ PASS: TUI left on main menu"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "TUI left on main menu"
 		return 0
 	fi
 
@@ -1454,9 +1556,10 @@ tui_cleanup() {
 tui_assert_contains() {
 	local pattern="$1"
 	local desc="$2"
-	if tui_capture | grep -qi "$pattern"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	local pane
+	pane=$(tui_capture) || pane=""
+	if printf '%s\n' "$pane" | grep -qi "$pattern"; then
+		tui_pass "$desc" "$pane"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (expected: $pattern)"
@@ -1470,9 +1573,10 @@ tui_assert_contains() {
 tui_assert_not_contains() {
 	local pattern="$1"
 	local desc="$2"
-	if ! tui_capture | grep -qi "$pattern"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	local pane
+	pane=$(tui_capture) || pane=""
+	if ! printf '%s\n' "$pane" | grep -qi "$pattern"; then
+		tui_pass "$desc" "$pane"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (unexpected: $pattern)"
@@ -1488,8 +1592,7 @@ tui_assert_appears() {
 	local desc="$2"
 	local timeout="${3:-10}"
 	if tui_wait_for "$pattern" "$timeout"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$desc" "${_TUI_WAIT_PANE:-}"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (never appeared: $pattern)"
@@ -1701,8 +1804,7 @@ tui_assert_isc_contains() {
 	tui_wait_isc_file 30
 	_isc=$(tui_read_isc)
 	if echo "$_isc" | grep -qiE "$_pat"; then
-		echo "  ✓ PASS: ISC contains $_label"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC contains $_label"
 	else
 		echo "  ✗ FAIL: ISC missing $_label (pattern: $_pat)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -1721,8 +1823,7 @@ tui_assert_isc_not_contains() {
 		echo "  ✗ FAIL: ISC still contains $_label (should have been removed)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
-		echo "  ✓ PASS: ISC no longer contains $_label"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC no longer contains $_label"
 	fi
 }
 
@@ -1735,6 +1836,7 @@ tui_summary() {
 	echo "  PASS: $_TUI_PASS"
 	echo "  FAIL: $_TUI_FAIL"
 	echo "  Screenshots: $_TUI_RUN_DIR/"
+	echo "  Pass frames: $_TUI_RUN_DIR/pass-*.txt (one file per PASS)"
 	if [[ -d "$_TUI_RUN_DIR/color" ]]; then
 		echo "  Color copies: $_TUI_RUN_DIR/color/"
 	fi
@@ -1803,6 +1905,9 @@ _tui_capture_output() {
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -q "ABA Live Output"; then
 			tui_keys Space
+		elif echo "$_scr" | grep -q "Press Q to quit\|(END)"; then
+			# less ignores Escape. q is what returns to the error dialog.
+			tui_keys q
 		else
 			tui_keys Escape
 		fi
@@ -1822,6 +1927,8 @@ tui_wait_for_progress() {
 
 	_start=$(date +%s)
 	_last_ss=0
+	# A new wait must not hand the previous success screen to a later pass.
+	unset _TUI_JUDGED_PANE
 
 	while true; do
 		_elapsed=$(( $(date +%s) - _start ))
@@ -1956,6 +2063,8 @@ tui_wait_for_progress() {
 		# Success: completed dialog (progress or confirm_and_execute)
 		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|─── Success ───\|── Success ──\|installed successfully"; then
 			echo "  Progress '$label' completed successfully (${_elapsed}s)"
+			# The next pass files this pane. Dismiss keys below would show a later screen.
+			_TUI_JUDGED_PANE=$_scr
 			_tui_capture_output "$label"
 			# Dismiss OK/success dialog — but NOT post-install yesno dialogs
 			# ("Configure OperatorHub" has Yes/No, not OK)
@@ -2005,6 +2114,12 @@ tui_wait_for_progress() {
 				fi
 				local _has_fail=0
 				echo "$_scr" | grep -qi "Failed" && _has_fail=1
+				# q leaves this dialog. Keep the pane the result was judged on.
+				if [[ $_has_fail -eq 0 ]]; then
+					_TUI_JUDGED_PANE=$_scr
+				else
+					unset _TUI_JUDGED_PANE
+				fi
 				tui_keys q; sleep 1
 				if [[ $_has_fail -eq 1 ]]; then
 					echo "  Progress '$label' completed with step failures (${_elapsed}s)"

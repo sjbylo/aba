@@ -5,6 +5,7 @@
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
+trap 'tui_mirror_restore_service || true' EXIT
 
 echo "=== TUI Mirror Config & Platform Test ==="
 echo "  Host: $_TUI_HOST"
@@ -34,23 +35,29 @@ if ! $_mirror_found; then
 	echo "  ✗ FAIL: Neither 'Install Mirror' nor 'Install Registry' found"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 else
-	echo "  ✓ PASS: Mirror/Registry menu item found"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Mirror/Registry menu item found"
 fi
 
-# Mirror is already installed on conno, so we should see "reinstall?" dialog
+# An installed registry shows Reinstall. Yes removes the service and keeps
+# the data dir, then the config form is tested. The service is installed again.
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "already installed\|reinstall\|Uninstall"; then
-	echo "  ✓ PASS: Mirror reinstall confirmation appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	# Press No/Cancel to skip reinstall
-	tui_press_button "No" 2>/dev/null || tui_keys Escape
-	sleep 1
-	tui_screenshot "mc-01-reinstall"
-elif echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; then
+	tui_pass "Mirror reinstall confirmation appeared" "$_scr"
+	echo "  Uninstalling mirror so the config form opens (data dir kept)"
+	_TUI_MIRROR_SERVICE_DOWN=yes
+	tui_confirm_yes
+	if ! tui_wait_mirror_install_choice "mc-uninstall"; then
+		echo "  ✗ FAIL: mirror uninstall did not reach the install form"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		_scr=""
+	else
+		tui_pass "Install form opened after uninstall" "$(tui_capture)"
+		_scr=$(tui_capture)
+	fi
+fi
+if echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; then
 	# No mirror yet (fresh host / after wipe) — install dialog is correct
-	echo "  ✓ PASS: Install dialog appeared (mirror not yet installed)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Install dialog appeared (mirror not yet installed)" "$_scr"
 	tui_screenshot "mc-01-choice"
 	tui_assert_contains "locally\|Install locally\|local" "Local install option"
 	tui_assert_contains "remote\|remote host" "Remote install option"
@@ -76,8 +83,7 @@ elif echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; t
 
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "Mirror Configuration\|Hostname\|Port"; then
-			echo "  ✓ PASS: Local mirror config form appeared"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Local mirror config form appeared" "$_scr"
 			tui_assert_title "Install Mirror\|Mirror Configuration" "Mirror config dialog title"
 
 			# Verify config form fields
@@ -99,6 +105,14 @@ elif echo "$_scr" | grep -qi "locally\|remote\|local.*remote\|Install.*where"; t
 
 	# Cancel back to main menu
 	tui_keys Escape; sleep 1
+else
+	echo "  ✗ FAIL: mirror install screen not recognized"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "mc-01-unknown"
+fi
+if ! tui_mirror_restore_service; then
+	echo "  ✗ FAIL: mirror service was not installed again"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # ============================================================================
@@ -117,8 +131,7 @@ tui_screenshot "mc-02-platform-select"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Bare Metal\|VMware\|KVM"; then
-	echo "  ✓ PASS: Platform selection dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Platform selection dialog appeared" "$_scr"
 	tui_assert_contains "Bare Metal" "Bare Metal option"
 	tui_assert_contains "VMware" "VMware option"
 	tui_assert_contains "KVM" "KVM option"
@@ -134,8 +147,7 @@ if echo "$_scr" | grep -qi "Bare Metal\|VMware\|KVM"; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "VMware.*Configuration\|ESXi\|vCenter"; then
-		echo "  ✓ PASS: VMware config form appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "VMware config form appeared" "$_scr"
 
 		# Verify VMware form fields
 		tui_assert_contains "vCenter.*URL\|ESXi.*URL" "vCenter/ESXi URL field"
@@ -151,8 +163,7 @@ if echo "$_scr" | grep -qi "Bare Metal\|VMware\|KVM"; then
 
 		# Check that values are populated (vmware.conf exists on conno)
 		if echo "$_scr" | grep -qi "URL:.*[a-z0-9]"; then
-			echo "  ✓ PASS: vCenter URL populated"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "vCenter URL populated" "$_scr"
 		else
 			echo "  ✗ FAIL: vCenter URL not populated (vmware.conf may be template)"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -189,8 +200,7 @@ if echo "$_scr" | grep -qi "Stop.*Registry\|Start.*Registry\|Uninstall.*Registry
 	tui_assert_contains "Uninstall.*Registry" "Uninstall Mirror Registry item"
 else
 	# Fresh wipe / never installed — Advanced still valid without stop/start/uninstall
-	echo "  ✓ PASS: Mirror management items absent (mirror not installed yet)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Mirror management items absent (mirror not installed yet)" "$_scr"
 fi
 
 # Check mode switch items (labels vary by current mode)
@@ -226,8 +236,7 @@ tui_screenshot "mc-04-feedback"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Feedback\|github\|discussion\|bug\|issue"; then
-	echo "  ✓ PASS: Feedback dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Feedback dialog appeared" "$_scr"
 else
 	echo "  ✗ FAIL: Feedback screen unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))

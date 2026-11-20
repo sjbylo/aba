@@ -151,24 +151,21 @@ _scr=$(tui_capture)
 
 # A3: Verify all steps show as Succeeded
 if echo "$_scr" | grep -qi "Install packages.*Succeeded"; then
-	echo "  ✓ PASS: Step 1 (Install packages) shows Succeeded"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Step 1 (Install packages) shows Succeeded" "$_scr"
 else
 	echo "  ✗ FAIL: Step 1 status not clearly visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "Download files.*Succeeded"; then
-	echo "  ✓ PASS: Step 2 (Download files) shows Succeeded"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Step 2 (Download files) shows Succeeded" "$_scr"
 else
 	echo "  ✗ FAIL: Step 2 status not clearly visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "Apply config.*Succeeded"; then
-	echo "  ✓ PASS: Step 3 (Apply config) shows Succeeded"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Step 3 (Apply config) shows Succeeded" "$_scr"
 else
 	echo "  ✗ FAIL: Step 3 status not clearly visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -185,8 +182,7 @@ tui_screenshot "pi-a5-output"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "ABA\|Installing\|Downloaded\|Configuration\|complete"; then
-	echo "  ✓ PASS: Output pager shows command output"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Output pager shows command output" "$_scr"
 else
 	echo "  ✗ FAIL: Output pager content not visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -194,8 +190,7 @@ fi
 
 # A6: Check for navigation hint (scroll instructions)
 if echo "$_scr" | grep -qi "scroll\|PgUp\|PgDn\|press Q\|quit"; then
-	echo "  ✓ PASS: Output pager shows navigation hint"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Output pager shows navigation hint" "$_scr"
 else
 	echo "  ✗ FAIL: Navigation hint not visible (may be off-screen)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -207,8 +202,7 @@ sleep 1
 tui_screenshot "pi-a7-top"
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Executing"; then
-	echo "  ✓ PASS: Pager scroll to top shows command header"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Pager scroll to top shows command header" "$_scr"
 else
 	echo "  ✗ FAIL: Top of output not clearly showing command header"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -243,8 +237,7 @@ _scr=$(tui_capture)
 
 # B2: Verify error details are shown
 if echo "$_scr" | grep -qi "Connection refused\|Apply changes.*Failed\|Failed"; then
-	echo "  ✓ PASS: Error details shown"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Error details shown" "$_scr"
 else
 	echo "  ✗ FAIL: Specific error details not visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -252,8 +245,7 @@ fi
 
 # B3: Verify "next steps" shown
 if echo "$_scr" | grep -qi "mirror registry\|next step\|Check"; then
-	echo "  ✓ PASS: Next steps suggestion shown"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Next steps suggestion shown" "$_scr"
 else
 	echo "  ✗ FAIL: Next steps not visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -275,8 +267,7 @@ if echo "$_scr" | grep -qiE '<[[:space:]]*Dismiss[[:space:]]*>' && \
 	echo "  ✗ FAIL: Still on Error dialog — View Output did not open pager"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 elif echo "$_scr" | grep -qiE 'Press Q to quit|Executing:|connection refused|\[ABA\] (Error|Validating|Applying)|output\.log'; then
-	echo "  ✓ PASS: Error output pager shows error details"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Error output pager shows error details" "$_scr"
 else
 	echo "  ✗ FAIL: Error output content not clearly visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -335,8 +326,7 @@ sleep 5
 # C1: Verify progress is showing
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "First step\|Second step\|Progress\|Test Live"; then
-	echo "  ✓ PASS: Progress dialog running"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Progress dialog running" "$_scr"
 else
 	echo "  ✗ FAIL: Progress dialog state unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -357,8 +347,7 @@ done
 tui_screenshot "pi-c2-live-output"
 # Require Live Output header — bare "ABA" matches the backtitle false-PASS.
 if [[ "$_live_ok" == "true" ]]; then
-	echo "  ✓ PASS: Live output view opened"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Live output view opened"
 else
 	echo "  ✗ FAIL: Live output view unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -380,8 +369,7 @@ for _try in 1 2 3 4 5 6; do
 done
 tui_screenshot "pi-c3-back-to-progress"
 if [[ "$_back_ok" == "true" ]]; then
-	echo "  ✓ PASS: Returned to progress/completion dialog"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Returned to progress/completion dialog"
 else
 	echo "  ✗ FAIL: Return from live output unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -440,8 +428,7 @@ else
 	tui_screenshot "pi-d2-after-quit"
 	# Only post-quit outcomes — never match the live "Quit (Q/ESC)" button label.
 	if [[ "$_quit_ok" == "true" ]]; then
-		echo "  ✓ PASS: Quit during progress acknowledged"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Quit during progress acknowledged"
 		tui_keys Enter 2>/dev/null || true
 		sleep 1
 	else
@@ -467,8 +454,7 @@ $_TUI_SSH "pkill -9 -f aba-progress- 2>/dev/null; true"
 sleep 1
 _strays=$($_TUI_SSH "ps -eo args | grep -E 'aba-progress-wrapper|aba-progress-test' | grep -v grep" 2>/dev/null || true)
 if [ -z "$_strays" ]; then
-	echo "  ✓ PASS: No stray progress processes"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "No stray progress processes"
 else
 	echo "  ✗ FAIL: Stray progress processes after cleanup:"
 	echo "$_strays" | sed 's/^/      /'

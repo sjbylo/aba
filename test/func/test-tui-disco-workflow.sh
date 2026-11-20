@@ -62,8 +62,7 @@ echo ""
 if [[ -n "$_BUNDLE_PATH" ]]; then
 	echo "  Using pre-built bundle: $_BUNDLE_PATH"
 	_BUNDLE_DEST="$_BUNDLE_PATH"
-	echo "  ✓ PASS: Bundle exists (pre-built)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Bundle exists (pre-built)"
 else
 	# Check conno mirror is synced
 	_mirror_ok=$($_SSH_CONNO "test -f ~/aba/mirror/.available && echo yes || echo no")
@@ -73,8 +72,7 @@ else
 		tui_summary
 		exit 1
 	fi
-	echo "  ✓ PASS: Conno mirror available"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Conno mirror available"
 
 	# Create full bundle (includes save + packaging)
 	echo "  Creating bundle on conno (this takes 30-60 min for save)..."
@@ -83,8 +81,7 @@ else
 	_rc=${PIPESTATUS[0]}
 	if [[ $_rc -eq 0 ]] && $_SSH_CONNO "test -s $_BUNDLE_DEST"; then
 		_bsize=$($_SSH_CONNO "ls -lh $_BUNDLE_DEST | awk '{print \$5}'")
-		echo "  ✓ PASS: Bundle created ($_BUNDLE_DEST, $_bsize)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Bundle created ($_BUNDLE_DEST, $_bsize)"
 	else
 		echo "  ✗ FAIL: Bundle creation failed (exit=$_rc)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -155,8 +152,7 @@ $_SSH_DISCO "
   rm -f ~/.vmware.conf ~/.pull-secret.json
   echo 'wipe-done'
 "
-echo "  ✓ PASS: Disco host wiped"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Disco host wiped"
 
 # ============================================================================
 # Phase 3: Transfer and unpack bundle
@@ -179,8 +175,7 @@ else
 fi
 
 if $_SSH_DISCO "test -s $_BUNDLE_ON_DISCO"; then
-	echo "  ✓ PASS: Bundle transferred to disco"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Bundle transferred to disco"
 else
 	echo "  ✗ FAIL: Bundle transfer failed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -192,8 +187,7 @@ fi
 echo "  Unpacking bundle on disco..."
 $_SSH_DISCO "cd ~ && tar xf $_BUNDLE_ON_DISCO" 2>&1
 if $_SSH_DISCO "test -f ~/aba/.bundle && test -f ~/aba/install"; then
-	echo "  ✓ PASS: Bundle unpacked (.bundle marker present)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Bundle unpacked (.bundle marker present)"
 	# Drop the transferred tar immediately — load needs that disk (~46G).
 	$_SSH_DISCO "rm -f $_BUNDLE_ON_DISCO" 2>/dev/null || true
 	echo "  Freed disco disk after unpack (removed $_BUNDLE_ON_DISCO)"
@@ -208,8 +202,7 @@ fi
 echo "  Running ./install on disco..."
 $_SSH_DISCO "cd ~/aba && ./install --yes 2>&1" | tail -10
 if $_SSH_DISCO "command -v aba >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
-	echo "  ✓ PASS: ABA installed on disco"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ABA installed on disco"
 else
 	echo "  ✗ FAIL: ABA install failed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -268,8 +261,7 @@ fi
 
 # Handle bundle info dialog
 if echo "$_scr" | grep -qi "Install Bundle\|payload summary\|Disconnected.*payload"; then
-	echo "  ✓ PASS: Bundle info dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Bundle info dialog appeared" "$_scr"
 	tui_screenshot "disco-wf-02-bundle-info"
 	tui_keys Enter  # dismiss info
 	sleep 5
@@ -319,8 +311,7 @@ while true; do
 
 	# Bundle info / payload summary dialog — dismiss
 	if echo "$_scr" | grep -qi "Install Bundle\|payload summary\|Disconnected.*payload\|Next:.*install.*mirror"; then
-		echo "  ✓ PASS: Bundle info dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Bundle info dialog appeared" "$_scr"
 		tui_screenshot "disco-wf-02-bundle-info"
 		tui_keys Enter; sleep 5
 		continue
@@ -406,8 +397,7 @@ while true; do
 
 	# Check for DISCO main menu (section headers unique to the menu)
 	if echo "$_scr" | grep -q "── Registry ──\|── Cluster ──\|── Advanced ──"; then
-		echo "  ✓ PASS: DISCO main menu reached (${_elapsed}s)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "DISCO main menu reached (${_elapsed}s)" "$_scr"
 		tui_screenshot "disco-wf-03-menu"
 		break
 	fi
@@ -422,8 +412,7 @@ echo ""
 echo "--- 4b. Verify mirror state ---"
 _mirror_ok=$($_SSH_DISCO "test -f ~/aba/mirror/.available && echo yes || echo no")
 if [[ "$_mirror_ok" == "yes" ]]; then
-	echo "  ✓ PASS: Mirror registry installed on disco"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Mirror registry installed on disco"
 else
 	echo "  Mirror not installed yet — attempting via TUI menu..."
 
@@ -445,23 +434,18 @@ else
 	fi
 
 	if [[ "$_mirror_ok" == "yes" ]]; then
-		echo "  ✓ PASS: Mirror registry installed via TUI"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Mirror registry installed via TUI"
 	else
 		echo "  ✗ FAIL: Mirror registry install failed after retries"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 fi
 
-# Check if images are loaded — if not, load them via TUI
+# Always drive Load. A mirror that already has images still has to go
+# through the dialog and the load command.
 echo ""
 echo "--- 4c. Load images ---"
-# Check if release image is available (indicates successful load)
-_loaded=$($_SSH_DISCO "grep -q 'last_action=load\|last_action=sync' ~/.aba/mirror/*/state.sh 2>/dev/null && echo yes || echo no" 2>/dev/null || echo "no")
-if [[ "$_loaded" == "yes" ]]; then
-	echo "  ✓ PASS: Images already loaded in mirror"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
+_loaded=no
 	_nav_load_images() {
 		tui_back_to "Actions" 5
 		tui_select_item "Load images"
@@ -486,13 +470,11 @@ else
 	fi
 
 	if [[ "$_loaded" == "yes" ]]; then
-		echo "  ✓ PASS: Images loaded into mirror"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Images loaded into mirror"
 	else
 		echo "  ✗ FAIL: Image load failed after retries"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
-fi
 
 # ============================================================================
 # Phase 5: Cluster install via TUI
@@ -552,8 +534,7 @@ tui_screenshot "disco-wf-05b-name-set"
 echo "  Set cluster name to: $_CLUSTER"
 
 if tui_force_type "$_lab_type"; then
-	echo "  ✓ PASS: Cluster type is $_lab_type"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster type is $_lab_type"
 else
 	echo "  ✗ FAIL: Cluster type not $_lab_type"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -626,8 +607,7 @@ tui_dismiss_exec_mode
 # Wait for install to complete (SNO ~30-45 min)
 echo "  Waiting for cluster install (up to 60 min)..."
 if tui_wait_for_progress "disco-wf-install" 3600; then
-	echo "  ✓ PASS: Cluster install completed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster install completed"
 else
 	echo "  ✗ FAIL: Cluster install failed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -660,8 +640,7 @@ echo ""
 
 _inst=$($_SSH_DISCO "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" == "yes" ]]; then
-	echo "  ✓ PASS: Cluster '$_CLUSTER' .install-complete exists"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster '$_CLUSTER' .install-complete exists"
 else
 	echo "  ✗ FAIL: Cluster '$_CLUSTER' not installed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -669,13 +648,11 @@ fi
 
 _kubeconfig=$($_SSH_DISCO "test -f ~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig && echo yes || echo no")
 if [[ "$_kubeconfig" == "yes" ]]; then
-	echo "  ✓ PASS: kubeconfig exists"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "kubeconfig exists"
 
 	_nodes=$($_SSH_DISCO "export KUBECONFIG=~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig; oc get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null || echo 0)
 	if [[ "$_nodes" -gt 0 ]]; then
-		echo "  ✓ PASS: Cluster has $_nodes node(s)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster has $_nodes node(s)"
 	else
 		echo "  ✗ FAIL: Cannot reach cluster nodes"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))

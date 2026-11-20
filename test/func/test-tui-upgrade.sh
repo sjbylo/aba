@@ -26,6 +26,7 @@ echo ""
 # without this, dual-homed hosts rewrite bastion → mgmt IP and upgrade pulls fail.
 tui_ensure_bastion_mirror_dns || true
 if tui_assert_mirror_dns_reachable; then
+	# Count only. The check already printed this PASS and saved its frame.
 	_TUI_PASS=$(( _TUI_PASS + 1 ))
 else
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -56,8 +57,7 @@ if [[ -z "$_current_ver" ]]; then
 	_TUI_FAIL=1; tui_summary; exit 1
 fi
 echo "  Cluster running: $_current_ver"
-echo "  ✓ PASS: Cluster is installed and reachable"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Cluster is installed and reachable"
 
 # ============================================================================
 # 1. Resolve upgrade target from the OCP release graph
@@ -105,8 +105,7 @@ if [[ -z "$_target_ver" ]]; then
 fi
 
 echo "  Upgrade plan: $_current_ver → $_target_ver"
-echo "  ✓ PASS: Valid upgrade target resolved"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Valid upgrade target resolved"
 
 # ============================================================================
 # 2. Set upgrade target and sync upgrade images via TUI
@@ -114,19 +113,32 @@ _TUI_PASS=$(( _TUI_PASS + 1 ))
 echo ""
 echo "--- 2. Sync upgrade images ($_target_ver) ---"
 
+# OSUS refuses to install when no redhat-operators catalog is mirrored.
+# Pin cincinnati-operator into this sync, and put the previous ops value back
+# in cleanup. imagesetconf below reads aba.conf.
+_upg_ops=$(tui_get_aba_conf ops)
+_upg_ops_saved=yes
+_upg_restore_ops() {
+	[ "${_upg_ops_saved:-no}" = yes ] || return 0
+	tui_set_aba_conf ops "${_upg_ops}"
+	_upg_ops_saved=no
+	echo "  Restored ops=${_upg_ops:-<empty>}"
+}
+tui_set_aba_conf ops cincinnati-operator
+echo "  Set ops=cincinnati-operator so the sync mirrors the OSUS catalog"
+
 # Set ocp_upgrade_to and force-regenerate imageset-config so sync includes the target
 $_TUI_SSH "cd ~/aba && aba -d mirror --upgrade-to $_target_ver && aba --force -d mirror imagesetconf" 2>&1 | tail -5
 _upgrade_to=$($_TUI_SSH "grep '^ocp_upgrade_to=' ~/aba/mirror/mirror.conf | cut -d= -f2 | awk '{print \$1}'" 2>/dev/null)
 if [[ "$_upgrade_to" == "$_target_ver" ]]; then
-	echo "  ✓ PASS: ocp_upgrade_to=$_target_ver set in mirror.conf"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ocp_upgrade_to=$_target_ver set in mirror.conf"
 else
 	echo "  ✗ FAIL: Failed to set ocp_upgrade_to (got: $_upgrade_to)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 # Sync upgrade images via TUI: Mirror Payload → Prepare Upgrade
-tui_start_to_menu || { tui_summary; exit 1; }
+tui_start_to_menu || { _upg_restore_ops || true; tui_summary; exit 1; }
 
 _nav_prepare_upgrade() {
 	tui_back_to "Actions" 5
@@ -202,12 +214,12 @@ _nav_prepare_upgrade() {
 }
 
 if tui_run_operation "upg-sync" _nav_prepare_upgrade 2 2700; then
-	echo "  ✓ PASS: Upgrade images synced"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Upgrade images synced"
 	tui_dismiss_result
 else
 	echo "  ✗ FAIL: Upgrade image sync failed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	_upg_restore_ops || true
 	tui_cleanup; tui_summary; exit 1
 fi
 
@@ -215,8 +227,10 @@ fi
 tui_ensure_bastion_mirror_dns || true
 if ! tui_assert_mirror_dns_reachable; then
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	_upg_restore_ops || true
 	tui_cleanup; tui_summary; exit 1
 fi
+# Count only. The check already printed this PASS and saved its frame.
 _TUI_PASS=$(( _TUI_PASS + 1 ))
 
 # ============================================================================
@@ -268,8 +282,7 @@ tui_pick_cluster "$_CLUSTER" || true
 tui_dismiss_exec_mode
 
 if tui_wait_for_progress "upg-day2" 600; then
-	echo "  ✓ PASS: Day-2 OperatorHub config completed via TUI"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 OperatorHub config completed via TUI"
 else
 	echo "  ✗ FAIL: Day-2 OperatorHub config failed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -287,24 +300,7 @@ _osus_running=$($_TUI_SSH "
 _osus_running=${_osus_running//[^0-9]/}
 : "${_osus_running:=0}"
 
-if [[ "$_osus_running" -gt 0 ]]; then
-	echo "  OSUS already running ($_osus_running pod(s)) — skipping configuration"
-	echo "  ✓ PASS: OSUS is active"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	# Check if operator catalogs are mirrored (OSUS requires redhat-operators)
-	_has_catalogs=$($_TUI_SSH "
-		ls ~/aba/mirror/data/oc-mirror-workspace/results-*/catalogSource-*.yaml 2>/dev/null | grep -c . || echo 0
-	" 2>/dev/null | tail -1 || echo 0)
-	_has_catalogs=${_has_catalogs//[^0-9]/}
-	: "${_has_catalogs:=0}"
-
-	if [[ "$_has_catalogs" -eq 0 ]]; then
-		echo "  No operator catalogs mirrored — OSUS cannot be installed (requires redhat-operators)"
-		echo "  ✓ PASS: OSUS correctly skipped (no redhat-operators catalog)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  OSUS not running — configuring via TUI..."
+echo "  Configuring OSUS via TUI (running pods before: ${_osus_running})"
 		_nav_to_day2_menu
 		tui_screenshot "upg-03-day2-menu-for-osus"
 
@@ -338,16 +334,19 @@ else
 				fi
 			done
 
-			if tui_wait_for_progress "upg-osus" 600; then
-				echo "  ✓ PASS: OSUS configured via TUI"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
+			# "Wait for cluster stable" stays In Progress after the pods are
+			# already Running. 600s timed out at 55% and the next Escape
+			# left the upgrade menu walk on the wrong screen.
+			if tui_wait_for_progress "upg-osus" 2400; then
+				tui_pass "OSUS configured via TUI"
 			else
 				echo "  ✗ FAIL: OSUS configuration failed"
 				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			fi
 			tui_dismiss_result
 		else
-			echo "  WARNING: OSUS not found on Day-2 menu"
+			echo "  ✗ FAIL: OSUS not found on Day-2 menu"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			tui_screenshot "upg-03-osus-not-found"
 		fi
 
@@ -360,12 +359,11 @@ else
 		_osus_running=${_osus_running//[^0-9]/}
 		: "${_osus_running:=0}"
 		if [[ "$_osus_running" -gt 0 ]]; then
-			echo "  ✓ Verified: OSUS running ($_osus_running pod(s))"
+			tui_pass "OSUS running ($_osus_running pod(s))"
 		else
-			echo "  ⚠ Warning: OSUS pods not running yet — upgrade may use force mode"
+			echo "  ✗ FAIL: OSUS pods are not running after configuration"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
-	fi
-fi
 
 # ============================================================================
 # 4. Upgrade via TUI
@@ -377,12 +375,19 @@ echo "--- 4. Upgrade $_current_ver → $_target_ver ---"
 tui_ensure_bastion_mirror_dns || true
 if ! tui_assert_mirror_dns_reachable; then
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	_upg_restore_ops || true
 	tui_cleanup; tui_summary; exit 1
 fi
+# Count only. The check already printed this PASS and saved its frame.
 _TUI_PASS=$(( _TUI_PASS + 1 ))
 
 if ! tui_session_alive; then
-	tui_start_to_menu || { tui_summary; exit 1; }
+	tui_start_to_menu || { _upg_restore_ops || true; tui_summary; exit 1; }
+fi
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "In Progress\|day2-osus"; then
+	echo "  OSUS gauge still up — waiting before the upgrade menu"
+	tui_wait_for_progress "upg-osus-tail" 1200 || true
 fi
 tui_back_to "Actions" 5
 
@@ -428,8 +433,7 @@ elif [[ "$_ver_ready" -ne 1 ]]; then
 	tui_screenshot "upg-04-no-target"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 elif echo "$_scr" | grep -qi "Select target version"; then
-	echo "  ✓ PASS: Upgrade version list displayed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Upgrade version list displayed" "$_scr"
 
 	# Default highlight is the first z-stream — not our target. Use Manual
 	# entry (hotkey M) so we always upgrade to $_target_ver exactly.
@@ -505,8 +509,7 @@ elif echo "$_scr" | grep -qi "Select target version"; then
 			# Wait for upgrade (up to 90 min)
 			echo "  Waiting for upgrade to complete (up to 90 min)..."
 			if tui_wait_for_progress "upg-upgrade" 5400; then
-				echo "  ✓ PASS: Upgrade completed via TUI"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
+				tui_pass "Upgrade completed via TUI"
 			else
 				echo "  ✗ FAIL: Upgrade failed or timed out"
 				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -545,8 +548,7 @@ done
 if [[ -n "$_new_ver" ]]; then
 	echo "  Cluster desired version: $_new_ver"
 	if [[ "$_new_ver" == "$_target_ver" ]]; then
-		echo "  ✓ PASS: Cluster upgrading to $_target_ver"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster upgrading to $_target_ver"
 	else
 		echo "  ✗ FAIL: desired=$_new_ver (expected $_target_ver, was $_current_ver)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -562,8 +564,7 @@ _nodes=$($_TUI_SSH "
 	oc get nodes --no-headers 2>/dev/null | grep -c Ready
 " 2>/dev/null || echo 0)
 if [[ "$_nodes" -gt 0 ]]; then
-	echo "  ✓ PASS: Cluster has $_nodes Ready node(s) post-upgrade"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster has $_nodes Ready node(s) post-upgrade"
 else
 	echo "  ✗ FAIL: No Ready nodes after upgrade"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -578,6 +579,7 @@ echo "--- 6. Cleanup ---"
 # Remove upgrade target from mirror.conf
 $_TUI_SSH "cd ~/aba && sed -i '/^ocp_upgrade_to=/d' mirror/mirror.conf 2>/dev/null" || true
 echo "  Cleared ocp_upgrade_to from mirror.conf"
+_upg_restore_ops || true
 
 tui_cleanup
 tui_summary

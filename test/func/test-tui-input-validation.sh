@@ -1,8 +1,9 @@
 #!/bin/bash
 # Input validation only. Standalone — not called from test-tui-all.sh.
-# Types bad values into the cluster wizard and, when the install form is
-# already on screen, the mirror form. A rejected value must show the error
-# and leave the saved config unchanged. Nothing is installed.
+# Types bad values into the cluster wizard and the mirror form. A rejected
+# value must show the error and leave the saved config unchanged. The cluster
+# is not installed. The mirror service is uninstalled (data dir kept) so the
+# image-path field is on screen, then installed again.
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
@@ -16,6 +17,10 @@ _iv_cleanup() {
 			rm -rf ~/aba/${_IV_NAME}" >/dev/null 2>&1 || true
 		_IV_CREATED=no
 	fi
+	if [ "${_TUI_MIRROR_SERVICE_DOWN:-no}" = yes ]; then
+		tui_stop 2>/dev/null || true
+	fi
+	tui_mirror_restore_service || true
 }
 trap _iv_cleanup EXIT
 
@@ -74,8 +79,7 @@ _iv_accept() {
 	_iv_replace "$value"
 	tui_keys Enter
 	if _iv_wait_title "$parent_title"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$desc"
 	else
 		echo "  ✗ FAIL: $desc (still on '$(tui_dialog_title)')"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -96,8 +100,7 @@ _iv_next() {
 _iv_goto() {
 	local pattern="$1" desc="$2" timeout="${3:-20}"
 	if tui_wait_for "$pattern" "$timeout"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$desc" "${_TUI_WAIT_PANE:-}"
 		return 0
 	fi
 	echo "  ✗ FAIL: $desc"
@@ -195,8 +198,7 @@ while [ "$_n" -lt 3 ]; do
 	_n=$(( _n + 1 ))
 done
 if tui_capture | grep -q "Type:.*standard"; then
-	echo "  ✓ PASS: type is standard"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "type is standard"
 else
 	echo "  ✗ FAIL: could not set type to standard"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -307,8 +309,7 @@ echo "--- Leave the wizard without installing ---"
 tui_back_to "Actions" 8
 tui_assert_contains "Actions" "back at the main menu"
 if $_TUI_SSH "test -d ~/aba/${_IV_NAME} && test ! -f ~/aba/${_IV_NAME}/.install-complete"; then
-	echo "  ✓ PASS: $_IV_NAME was not installed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "$_IV_NAME was not installed"
 else
 	echo "  ✗ FAIL: $_IV_NAME is missing or was installed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -316,17 +317,29 @@ fi
 
 echo ""
 echo "--- Mirror form ---"
-# Install Mirror on a host that already has a registry offers to uninstall it.
-# This suite must not do that. The form is tested only when it is already open.
+# The image-path field is on the install form. An installed registry shows
+# Reinstall first. Yes removes the service and keeps the data dir, then the
+# form opens. Next at the end installs the service again.
 tui_select_item "Install Mirror" 2>/dev/null || tui_select_item "Install Registry" 2>/dev/null || true
 sleep 2
 _scr=$(tui_capture)
+_iv_mirror_reinstall=no
 if echo "$_scr" | grep -qi "already installed\|Reinstall"; then
-	echo "  ✓ PASS: mirror form is behind reinstall — left it alone"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_press_button "No" 2>/dev/null || tui_keys Escape
-	sleep 1
-elif echo "$_scr" | grep -qi "Install locally\|remote host"; then
+	echo "  Uninstalling mirror so the config form opens (data dir kept)"
+	_TUI_MIRROR_SERVICE_DOWN=yes
+	_iv_mirror_reinstall=yes
+	tui_confirm_yes
+	if ! tui_wait_mirror_install_choice "iv-mirror-uninstall"; then
+		echo "  ✗ FAIL: mirror uninstall did not reach the install form"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_screenshot "iv-mirror-no-form"
+		_scr=""
+	else
+		tui_pass "mirror uninstalled, install form is open"
+		_scr=$(tui_capture)
+	fi
+fi
+if echo "$_scr" | grep -qi "Install locally\|remote host"; then
 	tui_keys Enter
 	sleep 2
 	if _iv_goto "Hostname\|Mirror Configuration\|Install Mirror" "mirror config form" 15; then
@@ -350,20 +363,40 @@ elif echo "$_scr" | grep -qi "Install locally\|remote host"; then
 		_iv_mirror_reject P "0" "Invalid port" "mirror port 0"
 		_iv_mirror_reject U "1bad" "Invalid username" "mirror username starting with a digit"
 		_iv_mirror_reject I "quay" "Invalid image path" "mirror image path without a leading slash"
+		_iv_mirror_reject I "/ocp4/" "Must not end with" "mirror image path with a trailing slash"
 		_iv_mirror_reject D "quay-data" "Invalid directory path" "mirror data dir that is not absolute"
 		_after=$($_TUI_SSH "grep -E '^(reg_host|reg_port|reg_user|reg_path|data_dir)=' ~/aba/mirror/mirror.conf 2>/dev/null" || true)
 		if [ "$_before" = "$_after" ]; then
-			echo "  ✓ PASS: mirror.conf unchanged after rejected values"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "mirror.conf unchanged after rejected values"
 		else
 			echo "  ✗ FAIL: mirror.conf changed after rejected values"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
-		tui_keys Escape
-		sleep 0.5
-		tui_keys Escape
-		sleep 0.5
+		if [ "$_iv_mirror_reinstall" = yes ]; then
+			# Back to the main menu, then install the service again.
+			# The data dir is still on disk. Do not press Next here: focus
+			# is on the menu row, and Next is the extra button.
+			tui_keys Escape
+			sleep 0.5
+			tui_keys Escape
+			sleep 0.5
+			tui_back_to "Actions" 5
+			echo "  Reinstalling mirror (data dir kept)"
+			if tui_mirror_restore_service; then
+				tui_pass "mirror reinstalled and listening"
+			else
+				echo "  ✗ FAIL: mirror reinstall failed (see /tmp/tui-mirror-restore.log)"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			fi
+		else
+			tui_keys Escape
+			sleep 0.5
+			tui_keys Escape
+			sleep 0.5
+		fi
 	fi
+elif [ "$_iv_mirror_reinstall" = yes ]; then
+	:
 else
 	echo "  ✗ FAIL: mirror install screen not recognized"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
