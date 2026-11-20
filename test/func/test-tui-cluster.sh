@@ -92,15 +92,13 @@ fi
 # Verify the name field specifically (not just Type which also contains "sno")
 _scr=$(tui_capture)
 if tui_cluster_name_is "$_CLUSTER" "$_scr"; then
-	echo "  ✓ PASS: Cluster name set to $_CLUSTER"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster name set to $_CLUSTER"
 else
 	# One retry: dialog may still be settling after Enter
 	sleep 1
 	_scr=$(tui_capture)
 	if tui_cluster_name_is "$_CLUSTER" "$_scr"; then
-		echo "  ✓ PASS: Cluster name set to $_CLUSTER (after settle)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster name set to $_CLUSTER (after settle)"
 	else
 		echo "  ✗ FAIL: Cluster name not set (expected $_CLUSTER)"
 		echo "    Current: $(echo "$_scr" | grep -oi 'Cluster name:[^│]*' | head -1)"
@@ -109,8 +107,7 @@ else
 fi
 # Force Type from skill table (SNO leftover "standard" fails VIP validation).
 if tui_force_type "$_lab_type"; then
-	echo "  ✓ PASS: Cluster type is $_lab_type"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster type is $_lab_type"
 else
 	echo "  ✗ FAIL: Cluster type not $_lab_type (got: $(tui_capture | grep -oiE 'Type:[^│]*' | head -1))"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -222,8 +219,7 @@ echo "  Waiting for cluster install to complete (up to 90 min)..."
 echo "  (Monitor: ssh to $_TUI_HOST and check 'tmux a -t $_TUI_SESSION')"
 
 if tui_wait_for_progress "cl-06" 5400; then
-	echo "  ✓ PASS: Cluster install completed successfully"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster install completed successfully"
 else
 	echo "  ✗ FAIL: Cluster install failed"
 	tui_screenshot "cl-06-install-fail"
@@ -240,8 +236,7 @@ echo ""
 echo "--- 7. Verify cluster state ---"
 _inst=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 if [[ "$_inst" == "yes" ]]; then
-	echo "  ✓ PASS: Cluster '$_CLUSTER' .install-complete exists"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster '$_CLUSTER' .install-complete exists"
 else
 	echo "  ✗ FAIL: Cluster '$_CLUSTER' not installed"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -250,13 +245,11 @@ fi
 # Verify cluster is reachable
 _kubeconfig=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig && echo yes || echo no")
 if [[ "$_kubeconfig" == "yes" ]]; then
-	echo "  ✓ PASS: kubeconfig exists"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "kubeconfig exists"
 
 	_nodes=$($_TUI_SSH "export KUBECONFIG=~/aba/$_CLUSTER/iso-agent-based/auth/kubeconfig; oc get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null || echo 0)
 	if [[ "$_nodes" -gt 0 ]]; then
-		echo "  ✓ PASS: Cluster has $_nodes node(s)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster has $_nodes node(s)"
 	else
 		echo "  ✗ FAIL: Cannot reach cluster nodes"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))

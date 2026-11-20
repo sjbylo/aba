@@ -141,8 +141,7 @@ sleep 2
 tui_screenshot "05b-settings-help"
 tui_capture > /tmp/_tui_settings_help.txt
 if grep -qiE "toggle|setting" /tmp/_tui_settings_help.txt; then
-	echo "  ✓ PASS: Settings help appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Settings help appeared"
 else
 	echo "  ✗ FAIL: Settings help content unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -187,13 +186,11 @@ sleep 2
 tui_screenshot "07-day2"
 tui_capture > /tmp/_tui_day2_check.txt
 if grep -qiE "No clusters configured" /tmp/_tui_day2_check.txt; then
-	echo "  ✓ PASS: Day-2 shows 'No clusters configured' (expected — no cluster installed)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 shows 'No clusters configured' (expected — no cluster installed)"
 	tui_keys Enter; sleep 1
 	tui_back_to "Actions"
 elif grep -qiE "Day-2|Cluster Management" /tmp/_tui_day2_check.txt; then
-	echo "  ✓ PASS: Day-2 menu reached"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 menu reached"
 
 	echo "  Day-2 menu items:"
 	tui_menu_items | while IFS=$'\t' read -r key label; do

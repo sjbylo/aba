@@ -71,8 +71,7 @@ $_TUI_SSH "> ~/aba/images.conf"
 _count=$(_read_img_count)
 echo "  Image count after clear: $_count"
 if [[ "$_count" -eq 0 ]]; then
-	echo "  ✓ PASS: Clean slate (0 images)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Clean slate (0 images)"
 else
 	echo "  ✗ FAIL: Expected 0 images, got $_count"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -90,24 +89,21 @@ _scr=$(tui_capture)
 
 # When empty: only Add, Recommended, Edit should be shown (no List, Remove, Clear, Toggle)
 if echo "$_scr" | grep -qi "Add image"; then
-	echo "  ✓ PASS: Add image shown when empty"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Add image shown when empty" "$_scr"
 else
 	echo "  ✗ FAIL: Add image not shown"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "Recommended"; then
-	echo "  ✓ PASS: Recommended Images shown when empty"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Recommended Images shown when empty" "$_scr"
 else
 	echo "  ✗ FAIL: Recommended Images not shown"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "Edit images.conf"; then
-	echo "  ✓ PASS: Edit shown when empty"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Edit shown when empty" "$_scr"
 else
 	echo "  ✗ FAIL: Edit not shown"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -118,8 +114,7 @@ if echo "$_scr" | grep -qi "List images"; then
 	echo "  ✗ FAIL: List images should be hidden when empty"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 else
-	echo "  ✓ PASS: List images hidden when empty"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "List images hidden when empty" "$_scr"
 fi
 
 # ============================================================================
@@ -152,8 +147,7 @@ if ! tui_wait_for "Add Image\|image reference\|container image" 8; then
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_screenshot "ai-04-add-input-missing"
 else
-	echo "  ✓ PASS: Add image input dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Add image input dialog appeared"
 	tui_screenshot "ai-04-add-input"
 
 	# Type the image reference
@@ -171,8 +165,7 @@ tui_screenshot "ai-04-after-add"
 # Verify in images.conf
 _count=$(_read_img_count)
 if [[ "$_count" -ge 1 ]]; then
-	echo "  ✓ PASS: Image added (count=$_count)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Image added (count=$_count)"
 else
 	echo "  ✗ FAIL: Image not added to images.conf"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -182,8 +175,7 @@ _has_ubi=$($_TUI_SSH "grep -c 'ubi9/ubi' ~/aba/images.conf 2>/dev/null || true")
 _has_ubi=${_has_ubi//[^0-9]/}
 _has_ubi=${_has_ubi:-0}
 if [[ "$_has_ubi" -ge 1 ]]; then
-	echo "  ✓ PASS: ubi9/ubi found in images.conf"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ubi9/ubi found in images.conf"
 else
 	echo "  ✗ FAIL: ubi9/ubi not in images.conf"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -210,8 +202,7 @@ fi
 
 _count=$(_read_img_count)
 if [[ "$_count" -ge 2 ]]; then
-	echo "  ✓ PASS: Second image added (count=$_count)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Second image added (count=$_count)"
 else
 	echo "  ✗ FAIL: Expected ≥2 images, got $_count"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -236,16 +227,14 @@ tui_screenshot "ai-06-list"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "ubi9/ubi"; then
-	echo "  ✓ PASS: List shows ubi9/ubi"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "List shows ubi9/ubi" "$_scr"
 else
 	echo "  ✗ FAIL: ubi9/ubi not in list"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "support-tools"; then
-	echo "  ✓ PASS: List shows support-tools"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "List shows support-tools" "$_scr"
 else
 	echo "  ✗ FAIL: support-tools not in list"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -283,8 +272,7 @@ sleep 2
 
 _excl=$(tui_get_aba_conf excl_additional)
 if [[ "$_excl" == "true" ]]; then
-	echo "  ✓ PASS: Toggle set excl_additional=true"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Toggle set excl_additional=true"
 	echo "  Verifying ISC excludes additional images..."
 	tui_assert_isc_not_contains "^  additionalImages:" "active additionalImages (should be excluded)"
 else
@@ -297,8 +285,7 @@ sleep 1
 _scr=$(tui_capture)
 tui_screenshot "ai-08-excluded"
 if echo "$_scr" | grep -qi "excluded"; then
-	echo "  ✓ PASS: Menu shows 'excluded' label"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Menu shows 'excluded' label" "$_scr"
 else
 	echo "  ✗ FAIL: 'excluded' label not shown"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -316,8 +303,7 @@ fi
 sleep 2
 _excl=$(tui_get_aba_conf excl_additional)
 if [[ "$_excl" == "false" ]]; then
-	echo "  ✓ PASS: Toggle restored excl_additional=false"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Toggle restored excl_additional=false"
 else
 	echo "  ✗ FAIL: Expected excl_additional=false, got '$_excl'"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -337,8 +323,7 @@ tui_screenshot "ai-09-remove"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "ubi9/ubi\|support-tools"; then
-	echo "  ✓ PASS: Remove checklist shows images"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Remove checklist shows images" "$_scr"
 	# Select first item (Space to toggle, Enter to confirm)
 	tui_keys Space; sleep 0.3
 	tui_keys Enter
@@ -349,8 +334,7 @@ if echo "$_scr" | grep -qi "ubi9/ubi\|support-tools"; then
 	fi
 	_count=$(_read_img_count)
 	if [[ "$_count" -eq 1 ]]; then
-		echo "  ✓ PASS: One image removed (count=$_count)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "One image removed (count=$_count)"
 	else
 		echo "  ✗ FAIL: Expected 1 image after remove, got $_count"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -362,8 +346,7 @@ if echo "$_scr" | grep -qi "ubi9/ubi\|support-tools"; then
 	_isc_after_rm=$(tui_read_isc)
 	_img_count=$(echo "$_isc_after_rm" | grep -c 'additionalImages:' 2>/dev/null) || _img_count=0
 	if [[ "$_img_count" -ge 1 ]]; then
-		echo "  ✓ PASS: ISC still has additionalImages section (1 image remains)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC still has additionalImages section (1 image remains)"
 	else
 		echo "  ✗ FAIL: ISC lost additionalImages section entirely"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -385,8 +368,7 @@ tui_screenshot "ai-10-recommended"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "Recommended\|image set\|Image Sets\|ocp\|virt\|ai"; then
-	echo "  ✓ PASS: Recommended Images dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Recommended Images dialog appeared" "$_scr"
 else
 	echo "  ✗ FAIL: Recommended Images content unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -406,16 +388,14 @@ tui_screenshot "ai-11-clear-confirm"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "Remove all\|Clear All\|cannot be undone"; then
-	echo "  ✓ PASS: Clear confirmation dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Clear confirmation dialog appeared" "$_scr"
 	# --defaultno focuses Cancel; Tab to Clear All, then Enter
 	tui_keys Tab; sleep 0.3
 	tui_keys Enter
 	sleep 2
 	_count=$(_read_img_count)
 	if [[ "$_count" -eq 0 ]]; then
-		echo "  ✓ PASS: All images cleared (count=0)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "All images cleared (count=0)"
 	else
 		echo "  ✗ FAIL: Expected 0 images after clear, got $_count"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -426,8 +406,7 @@ if echo "$_scr" | grep -qi "Remove all\|Clear All\|cannot be undone"; then
 	_isc_cleared=$(tui_read_isc)
 	_addl_active=$(echo "$_isc_cleared" | grep -c '^  additionalImages:' 2>/dev/null) || _addl_active=0
 	if [[ "$_addl_active" -eq 0 ]]; then
-		echo "  ✓ PASS: ISC has no additionalImages after clear"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC has no additionalImages after clear"
 	else
 		echo "  ✗ FAIL: ISC still has additionalImages section after clear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -445,8 +424,7 @@ echo "--- 12. Restore originals ---"
 $_TUI_SSH "cp ~/aba/images.conf.test-backup ~/aba/images.conf 2>/dev/null; rm -f ~/aba/images.conf.test-backup"
 tui_set_aba_conf excl_additional "$_orig_excl"
 echo "  Restored images.conf and excl_additional=$_orig_excl"
-echo "  ✓ PASS: Originals restored"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Originals restored"
 
 # ============================================================================
 # 13. Cleanup

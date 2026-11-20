@@ -80,8 +80,7 @@ _count=$(echo "$_scr" | grep -oP 'View/Edit Selection \(\K[0-9]+' || echo "0")
 tui_screenshot "od-01-cleared"
 
 if [[ "$_count" == "0" ]]; then
-	echo "  ✓ PASS: Basket cleared to 0 operators"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Basket cleared to 0 operators"
 else
 	echo "  ✗ FAIL: Expected 0 operators after clear, got $_count"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -147,8 +146,7 @@ fi
 	sleep 1
 	_count=$(tui_capture | grep -oP 'View/Edit Selection \(\K[0-9]+' || echo "0")
 	if [[ "$_count" -gt 0 ]]; then
-		echo "  ✓ PASS: Added logging set, basket now has $_count operators"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Added logging set, basket now has $_count operators"
 	else
 		echo "  ✗ FAIL: Basket still empty after adding logging set"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -209,8 +207,7 @@ if [[ "$_found_quay" == "true" ]]; then
 	sleep 1
 	_count=$(tui_capture | grep -oP 'View/Edit Selection \(\K[0-9]+' || echo "0")
 	if [[ "$_count" -gt "${_logging_count:-0}" ]]; then
-		echo "  ✓ PASS: Added quay set, basket now has $_count operators (was $_logging_count)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Added quay set, basket now has $_count operators (was $_logging_count)"
 	else
 		echo "  ✗ FAIL: Basket did not grow after adding quay set (count: $_count)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -234,8 +231,7 @@ tui_screenshot "od-04-basket"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Operator Selection\|operator\|\\[X\\]\|\\[ \\]"; then
-	echo "  ✓ PASS: Basket view shows operator list"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Basket view shows operator list" "$_scr"
 
 	# Count items in the basket view
 	_basket_items=$(echo "$_scr" | grep -c '\[.\]' || true)
@@ -243,8 +239,7 @@ if echo "$_scr" | grep -qi "Operator Selection\|operator\|\\[X\\]\|\\[ \\]"; the
 
 	# Verify some operators from logging set are present
 	if echo "$_scr" | grep -qi "logging\|loki\|elasticsearch"; then
-		echo "  ✓ PASS: Logging operators visible in basket"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Logging operators visible in basket" "$_scr"
 	else
 		echo "  ✗ FAIL: No logging-related operator names visible in first screen"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -303,8 +298,7 @@ if [[ "$_found_logging" == "true" ]]; then
 		sleep 1
 		_count=$(tui_capture | grep -oP 'View/Edit Selection \(\K[0-9]+' || echo "0")
 		if [[ "$_count" -lt "${_both_count:-999}" ]]; then
-			echo "  ✓ PASS: Removed logging set, basket decreased: $_both_count → $_count"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Removed logging set, basket decreased: $_both_count → $_count"
 		else
 			# Count can lag; confirm logging-unique packages left the basket.
 			# cincinnati may remain — other sets (e.g. quay) also include it.
@@ -313,8 +307,7 @@ if [[ "$_found_logging" == "true" ]]; then
 			tui_screenshot "od-05b-basket-after-remove"
 			_scr=$(tui_capture)
 			if ! echo "$_scr" | grep -qiE 'cluster-logging|loki-operator'; then
-				echo "  ✓ PASS: Logging operators gone from basket (count still $_count)"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
+				tui_pass "Logging operators gone from basket (count still $_count)" "$_scr"
 			else
 				echo "  ✗ FAIL: Basket did not decrease after removing logging (count: $_count); logging ops still listed"
 				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -342,8 +335,7 @@ sleep 2
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Search\|keyword\|operator name"; then
-	echo "  ✓ PASS: Search input appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Search input appeared" "$_scr"
 
 	# Type search term
 	tui_keys "web-terminal"
@@ -354,8 +346,7 @@ if echo "$_scr" | grep -qi "Search\|keyword\|operator name"; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "web-terminal"; then
-		echo "  ✓ PASS: Search found 'web-terminal'"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Search found 'web-terminal'" "$_scr"
 
 		# Toggle it on (Space on first result)
 		tui_keys Space; sleep 0.5
@@ -364,8 +355,7 @@ if echo "$_scr" | grep -qi "Search\|keyword\|operator name"; then
 		# Accept selection
 		tui_keys Enter; sleep 2
 	elif echo "$_scr" | grep -qi "No.*results\|0 matches\|not found"; then
-		echo "  ✓ PASS: Search returned 'no results' (catalog index may not cover it)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Search returned 'no results' (catalog index may not cover it)" "$_scr"
 		tui_keys Escape; sleep 1
 	else
 		echo "  ✗ FAIL: Search results unclear"
@@ -397,11 +387,9 @@ if echo "$_scr" | grep -qi "Search\|keyword"; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "compliance"; then
-		echo "  ✓ PASS: Search found 'compliance'"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Search found 'compliance'" "$_scr"
 	elif echo "$_scr" | grep -qi "No.*results\|not found"; then
-		echo "  ✓ PASS: Search returned 'no results' for 'compliance'"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Search returned 'no results' for 'compliance'" "$_scr"
 	else
 		echo "  ✗ FAIL: Compliance search results unclear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -428,8 +416,7 @@ sleep 2
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Remove all\|clear.*selection\|Are you sure"; then
-	echo "  ✓ PASS: Clear confirmation appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Clear confirmation appeared" "$_scr"
 	# --defaultno focuses Cancel; Tab to Clear (first button), then Enter
 	tui_keys Tab; sleep 0.3
 	tui_keys Enter; sleep 2
@@ -438,8 +425,7 @@ if echo "$_scr" | grep -qi "Remove all\|clear.*selection\|Are you sure"; then
 		tui_keys Enter; sleep 1
 	fi
 elif echo "$_scr" | grep -qi "already empty\|nothing to clear\|no operators"; then
-	echo "  ✓ PASS: Already empty — clear reports that"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Already empty — clear reports that" "$_scr"
 	tui_keys Enter; sleep 1
 fi
 
@@ -448,8 +434,7 @@ _goto_operators
 sleep 1
 _count=$(tui_capture | grep -oP 'View/Edit Selection \(\K[0-9]+' || echo "0")
 if [[ "$_count" == "0" ]]; then
-	echo "  ✓ PASS: Basket is empty after clear"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Basket is empty after clear"
 else
 	echo "  ✗ FAIL: Basket not empty after clear (count: $_count)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -464,8 +449,7 @@ tui_wait_isc_file 60
 _isc_cleared=$(tui_read_isc)
 _pkg_lines=$(echo "$_isc_cleared" | grep -c '^\s*- name:.*operator' 2>/dev/null) || _pkg_lines=0
 if [[ "$_pkg_lines" -eq 0 ]]; then
-	echo "  ✓ PASS: ISC has no operator packages after clear"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC has no operator packages after clear"
 else
 	echo "  ✗ FAIL: ISC still has $_pkg_lines operator packages after clear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -483,8 +467,7 @@ tui_screenshot "od-09-empty-basket"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "empty\|No operators\|no.*selected"; then
-	echo "  ✓ PASS: Empty basket message shown"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Empty basket message shown" "$_scr"
 else
 	echo "  ✗ FAIL: Empty basket view unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))

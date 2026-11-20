@@ -59,8 +59,7 @@ if [[ "$_api_ok" != "yes" ]]; then
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_summary; exit 1
 fi
-echo "  ✓ PASS: Cluster '$_CLUSTER' installed and API reachable"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Cluster '$_CLUSTER' installed and API reachable"
 
 tui_start_to_menu || { tui_summary; exit 1; }
 
@@ -101,8 +100,7 @@ if echo "$_scr" | grep -qiE "Select cluster for Day-2|Select cluster"; then
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_summary; exit 1
 fi
-echo "  ✓ PASS: cleared Detecting/Select cluster"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "cleared Detecting/Select cluster"
 tui_screenshot "csr-03-after-pick"
 
 tui_dismiss_exec_mode
@@ -121,8 +119,7 @@ if echo "$_scr" | grep -qiE "Select cluster for Day-2"; then
 	echo "  ✗ FAIL: wait left us on Select cluster (hang race not fixed)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 elif [[ "$_rc" -eq 0 ]]; then
-	echo "  ✓ PASS: day2 completed successfully after cluster select (${_elapsed}s)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "day2 completed successfully after cluster select (${_elapsed}s)"
 else
 	echo "  ✗ FAIL: day2 did not complete successfully (rc=$_rc elapsed=${_elapsed}s)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))

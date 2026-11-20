@@ -62,32 +62,28 @@ echo "--- 1. ISC exists and has valid YAML structure ---"
 
 _isc=$(_read_isc)
 if [[ -n "$_isc" ]]; then
-	echo "  ✓ PASS: ISC file exists and is non-empty"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC file exists and is non-empty"
 else
 	echo "  ✗ FAIL: ISC file is empty or missing"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_isc" | grep -q "^kind: ImageSetConfiguration"; then
-	echo "  ✓ PASS: ISC has 'kind: ImageSetConfiguration'"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC has 'kind: ImageSetConfiguration'"
 else
 	echo "  ✗ FAIL: ISC missing 'kind: ImageSetConfiguration'"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_isc" | grep -q "apiVersion:"; then
-	echo "  ✓ PASS: ISC has apiVersion"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC has apiVersion"
 else
 	echo "  ✗ FAIL: ISC missing apiVersion"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_isc" | grep -q "^mirror:"; then
-	echo "  ✓ PASS: ISC has mirror: section"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC has mirror: section"
 else
 	echo "  ✗ FAIL: ISC missing mirror: section"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -101,8 +97,7 @@ echo "--- 2. ISC version and channel ---"
 
 if [[ -n "$_ocp_ver" ]]; then
 	if echo "$_isc" | grep -q "minVersion: $_ocp_ver\|maxVersion: $_ocp_ver"; then
-		echo "  ✓ PASS: ISC contains version $_ocp_ver"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC contains version $_ocp_ver"
 	else
 		echo "  ✗ FAIL: ISC does not contain version $_ocp_ver"
 		echo "    Version lines: $(echo "$_isc" | grep -i 'version' | head -5)"
@@ -113,8 +108,7 @@ fi
 if [[ -n "$_ocp_ch" && -n "$_ver_short" ]]; then
 	_expected_channel="${_ocp_ch}-${_ver_short}"
 	if echo "$_isc" | grep -q "name: ${_expected_channel}"; then
-		echo "  ✓ PASS: ISC contains channel '${_expected_channel}'"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC contains channel '${_expected_channel}'"
 	else
 		echo "  ✗ FAIL: ISC does not contain channel '${_expected_channel}'"
 		echo "    Channel lines: $(echo "$_isc" | grep 'name:' | head -3)"
@@ -140,32 +134,28 @@ fi
 
 if [[ "$_excl_plat" == "false" ]]; then
 	if echo "$_isc" | grep -q "platform:" && ! echo "$_isc" | grep -B1 "platform:" | grep -q "^#"; then
-		echo "  ✓ PASS: Platform section is present (excl_platform=false)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Platform section is present (excl_platform=false)"
 	else
 		echo "  ✗ FAIL: Platform section missing despite excl_platform=false"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	if echo "$_isc" | grep -q "channels:"; then
-		echo "  ✓ PASS: Platform has channels section"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Platform has channels section"
 	else
 		echo "  ✗ FAIL: Platform missing channels section"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	if echo "$_isc" | grep -q "type: ocp"; then
-		echo "  ✓ PASS: Channel type is 'ocp'"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Channel type is 'ocp'"
 	else
 		echo "  ✗ FAIL: Missing 'type: ocp'"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 
 	if echo "$_isc" | grep -q "graph: true"; then
-		echo "  ✓ PASS: Graph is enabled"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Graph is enabled"
 	else
 		echo "  ✗ FAIL: Graph not enabled in ISC (expected graph: true)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -190,8 +180,7 @@ _plat_lines=$(echo "$_isc_excl" | grep -c "^  platform:" 2>/dev/null) || _plat_l
 _plat_commented=$(echo "$_isc_excl" | grep -c "^#.*platform:" 2>/dev/null) || _plat_commented=0
 
 if [[ "$_plat_lines" -eq 0 ]] || [[ "$_plat_commented" -gt 0 ]]; then
-	echo "  ✓ PASS: Platform section excluded when excl_platform=true"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Platform section excluded when excl_platform=true"
 else
 	echo "  ✗ FAIL: Platform section still present when excl_platform=true"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -220,8 +209,7 @@ _isc_with_ops=$(_read_isc)
 if [[ "$_excl_ops" == "false" ]]; then
 	# Uncommented operators: line (not starting with #)
 	if echo "$_isc_with_ops" | grep -qP '^  operators:'; then
-		echo "  ✓ PASS: Operators section present in ISC"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Operators section present in ISC"
 	elif echo "$_isc_with_ops" | grep -q "operators:"; then
 		echo "  ✗ FAIL: Operators section exists but may be commented out"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -231,11 +219,9 @@ if [[ "$_excl_ops" == "false" ]]; then
 	fi
 
 	if echo "$_isc_with_ops" | grep -qP '^\s+- name: web-terminal'; then
-		echo "  ✓ PASS: web-terminal operator found in ISC"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "web-terminal operator found in ISC"
 	elif echo "$_isc_with_ops" | grep -q "web-terminal"; then
-		echo "  ✓ PASS: web-terminal referenced in ISC (may be commented)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "web-terminal referenced in ISC (may be commented)"
 	else
 		echo "  ✗ FAIL: web-terminal not found in ISC"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -243,8 +229,7 @@ if [[ "$_excl_ops" == "false" ]]; then
 
 	# Verify catalog reference
 	if echo "$_isc_with_ops" | grep -q "redhat-operator-index:v${_ver_short}"; then
-		echo "  ✓ PASS: Correct operator catalog reference (v${_ver_short})"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Correct operator catalog reference (v${_ver_short})"
 	else
 		echo "  ✗ FAIL: Catalog reference format may differ"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -252,8 +237,7 @@ if [[ "$_excl_ops" == "false" ]]; then
 
 	# Verify packages section structure
 	if echo "$_isc_with_ops" | grep -q "packages:"; then
-		echo "  ✓ PASS: Packages section present under operators"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Packages section present under operators"
 	else
 		echo "  ✗ FAIL: Packages section missing"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -274,8 +258,7 @@ _ops_lines=$(echo "$_isc_no_ops" | grep -c "^  operators:" 2>/dev/null) || _ops_
 _ops_commented=$(echo "$_isc_no_ops" | grep -c "^#.*operators:" 2>/dev/null) || _ops_commented=0
 
 if [[ "$_ops_lines" -eq 0 ]] || [[ "$_ops_commented" -gt 0 ]]; then
-	echo "  ✓ PASS: Operators excluded when excl_operators=true"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Operators excluded when excl_operators=true"
 else
 	echo "  ✗ FAIL: Operators still present when excl_operators=true"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -299,16 +282,14 @@ _regen_isc
 _isc_with_img=$(_read_isc)
 
 if echo "$_isc_with_img" | grep -q "additionalImages:"; then
-	echo "  ✓ PASS: additionalImages section present in ISC"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "additionalImages section present in ISC"
 else
 	echo "  ✗ FAIL: additionalImages section missing in ISC"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_isc_with_img" | grep -q "ubi9/ubi"; then
-	echo "  ✓ PASS: ubi9/ubi image found in ISC"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ubi9/ubi image found in ISC"
 else
 	echo "  ✗ FAIL: ubi9/ubi not in ISC"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -329,8 +310,7 @@ _addl_lines=$(echo "$_isc_no_img" | grep -c "^  additionalImages:" 2>/dev/null) 
 _addl_commented=$(echo "$_isc_no_img" | grep -c "^#.*additionalImages:" 2>/dev/null) || _addl_commented=0
 
 if [[ "$_addl_lines" -eq 0 ]] || [[ "$_addl_commented" -gt 0 ]]; then
-	echo "  ✓ PASS: Additional images excluded when excl_additional=true"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Additional images excluded when excl_additional=true"
 else
 	echo "  ✗ FAIL: Additional images still present when excl_additional=true"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -389,8 +369,7 @@ fi
 _regen_isc
 _isc_upgrade=$(_read_isc)
 if echo "$_isc_upgrade" | grep -qE "maxVersion:[[:space:]]*${_upgrade_to}([[:space:]]|$)"; then
-	echo "  ✓ PASS: Upgrade target $_upgrade_to found in ISC"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Upgrade target $_upgrade_to found in ISC"
 else
 	echo "  ✗ FAIL: Upgrade target $_upgrade_to not in ISC"
 	echo "    maxVersion lines: $(echo "$_isc_upgrade" | grep -E 'maxVersion|minVersion' | head -5)"
@@ -434,24 +413,21 @@ tui_screenshot "isc-10-view"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "ImageSetConfiguration\|kind:\|apiVersion:"; then
-	echo "  ✓ PASS: ISC content visible in View dialog"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC content visible in View dialog" "$_scr"
 else
 	echo "  ✗ FAIL: ISC content not visible in View dialog"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if echo "$_scr" | grep -qi "mirror:"; then
-	echo "  ✓ PASS: View shows mirror: section"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "View shows mirror: section" "$_scr"
 else
 	echo "  ✗ FAIL: mirror: section not in View"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
 if [[ -n "$_ocp_ver" ]] && echo "$_scr" | grep -qi "$_ocp_ver"; then
-	echo "  ✓ PASS: View shows OCP version $_ocp_ver"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "View shows OCP version $_ocp_ver" "$_scr"
 else
 	echo "  ✗ FAIL: OCP version not visible in current View page"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -487,8 +463,7 @@ for _op in "cluster-logging" "loki-operator" "cincinnati-operator"; do
 done
 
 if $_logging_found; then
-	echo "  ✓ PASS: ISC regenerated with logging operators"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC regenerated with logging operators"
 else
 	echo "  ✗ FAIL: ISC not regenerated with logging operators"
 	echo "    ISC operator lines: $(echo "$_isc_after" | grep -i 'name:.*operator' | head -5)"
@@ -497,8 +472,7 @@ fi
 
 # Verify ISC has operators section (not commented out)
 if echo "$_isc_after" | grep -q "^  operators:"; then
-	echo "  ✓ PASS: ISC has active operators section"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC has active operators section"
 else
 	echo "  ✗ FAIL: ISC missing active operators section"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -515,8 +489,7 @@ $_TUI_SSH "cp ~/aba/images.conf.isc-backup ~/aba/images.conf 2>/dev/null; rm -f 
 $_TUI_SSH "cp ~/aba/mirror/mirror.conf.isc-backup ~/aba/mirror/mirror.conf 2>/dev/null; rm -f ~/aba/mirror/mirror.conf.isc-backup"
 # Backup may reintroduce a deleted custom op_set — sanitize again.
 tui_sanitize_op_sets
-echo "  ✓ PASS: Originals restored"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Originals restored"
 
 # ============================================================================
 # 13. Cleanup

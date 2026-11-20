@@ -82,12 +82,10 @@ tui_screenshot "disco-01-splash"
 tui_assert_contains "ABA" "Splash shows ABA branding"
 _btns=$(tui_buttons)
 if echo "$_btns" | grep -qi "Continue"; then
-	echo "  ✓ PASS: Continue button present"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Continue button present"
 fi
 if echo "$_btns" | grep -qi "Help"; then
-	echo "  ✓ PASS: Help button present"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Help button present"
 fi
 
 # Check splash help
@@ -122,8 +120,7 @@ for _gate_i in 1 2 3 4 5; do
 
 	# "Install Bundle on Connected Host" — select "Fully Disconnected" (first button)
 	if echo "$_scr" | grep -qi "Connected Host\|Fully Disconnected.*Connected mode"; then
-		echo "  ✓ PASS: Connected Host dialog — selecting Fully Disconnected"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Connected Host dialog — selecting Fully Disconnected" "$_scr"
 		tui_keys Enter; sleep 5
 		continue
 	fi
@@ -157,8 +154,7 @@ for _gate_i in 1 2 3 4 5; do
 
 	# Bundle payload summary (title "ABA Install Bundle", not "install bundle was detected")
 	if echo "$_scr" | grep -qi "ABA Install Bundle\|payload summary\|Disconnected.*payload summary"; then
-		echo "  ✓ PASS: ABA Install Bundle info dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ABA Install Bundle info dialog appeared" "$_scr"
 		tui_keys Enter; sleep 5
 		continue
 	fi
@@ -261,8 +257,7 @@ _detected_disco=false
 # The status bar always says Fully Disconnected. The actions menu is the
 # title "– Actions" or the Registry section rule.
 if echo "$_scr" | grep -q "– Actions\|── Registry ──"; then
-	echo "  ✓ PASS: Fully Disconnected mode detected"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Fully Disconnected mode detected" "$_scr"
 	_detected_disco=true
 fi
 
@@ -321,12 +316,10 @@ tui_assert_contains "Cluster\|cluster\|Install" "Help mentions cluster"
 # Day-2 and Navigation may not appear in all help variants
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Day-2\|Day"; then
-	echo "  ✓ PASS: Help mentions Day-2"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Help mentions Day-2" "$_scr"
 fi
 if echo "$_scr" | grep -qi "Navigation\|Arrow\|ESC\|Enter"; then
-	echo "  ✓ PASS: Help has navigation section"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Help has navigation section" "$_scr"
 fi
 tui_keys Enter; sleep 1
 
@@ -341,8 +334,7 @@ tui_screenshot "disco-05-settings"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
-	echo "  ✓ PASS: Settings menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Settings menu appeared" "$_scr"
 	tui_assert_contains "Registry Type" "Registry Type setting"
 	tui_assert_contains "Retry" "Retry setting"
 	tui_keys Escape; sleep 1
@@ -363,15 +355,13 @@ tui_screenshot "disco-06-advanced"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Advanced\|Platform\|Switch"; then
-	echo "  ✓ PASS: Advanced menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Advanced menu appeared" "$_scr"
 
 	tui_assert_contains "Platform Settings\|Platform" "Platform Settings item"
 
 	# Check for mode switch items
 	if echo "$_scr" | grep -qi "Switch"; then
-		echo "  ✓ PASS: Mode switch option present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Mode switch option present" "$_scr"
 	fi
 
 	# Check help
@@ -399,8 +389,7 @@ tui_screenshot "disco-07-day2"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Day-2\|Cluster Management"; then
-	echo "  ✓ PASS: Day-2 menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 menu appeared" "$_scr"
 
 	tui_assert_contains "OperatorHub" "OperatorHub item"
 	tui_assert_contains "NTP\|Network Time" "NTP item"
@@ -418,8 +407,7 @@ if echo "$_scr" | grep -qi "Day-2\|Cluster Management"; then
 
 	tui_keys Escape; sleep 1
 elif echo "$_scr" | grep -qi "No cluster\|install.*cluster\|Install.*first"; then
-	echo "  ✓ PASS: Day-2 blocked — no installed cluster"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 blocked — no installed cluster" "$_scr"
 	tui_keys Enter; sleep 1
 else
 	echo "  ✗ FAIL: Day-2 menu unclear"
@@ -447,12 +435,10 @@ tui_screenshot "disco-08-payload"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "imageset\|apiVersion\|storageConfig"; then
-	echo "  ✓ PASS: ISC content displayed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "ISC content displayed" "$_scr"
 	tui_keys Enter; sleep 1  # dismiss textbox
 elif echo "$_scr" | grep -qi "Mirror Payload\|Select Operators\|OCP Version"; then
-	echo "  ✓ PASS: Mirror Payload menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Mirror Payload menu appeared" "$_scr"
 
 	# Verify payload items
 	tui_assert_contains "OCP Version" "OCP Version item"
@@ -482,8 +468,7 @@ if [[ "$_detected_disco" == "true" ]]; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "Load\|OCP\|Operator\|Confirm\|loaded"; then
-		echo "  ✓ PASS: Load dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Load dialog appeared" "$_scr"
 	fi
 	# Cancel without executing — use button, not Escape (Escape may confirm)
 	tui_press_button "Cancel" 2>/dev/null || tui_press_button "Back" 2>/dev/null || tui_keys Escape
@@ -502,8 +487,7 @@ else
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "Sync\|OCP\|Operator\|Confirm\|synced"; then
-		echo "  ✓ PASS: Sync confirmation appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Sync confirmation appeared" "$_scr"
 	fi
 	tui_keys Escape; sleep 1
 fi
@@ -576,8 +560,7 @@ if [ -n "$_installed" ]; then
 	done
 	tui_screenshot "disco-10-status"
 	if [[ "$_status_ok" -eq 1 ]]; then
-		echo "  ✓ PASS: Cluster status displayed on disco host"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster status displayed on disco host"
 	else
 		echo "  ✗ FAIL: Status unclear on disco host"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -588,8 +571,7 @@ if [ -n "$_installed" ]; then
 	tui_keys Escape; sleep 1  # back from Day-2
 	fi  # end of "could navigate to Day-2" block
 else
-	echo "  ✓ PASS: No installed cluster on disco host (status N/A)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "No installed cluster on disco host (status N/A)"
 fi
 
 # ============================================================================
