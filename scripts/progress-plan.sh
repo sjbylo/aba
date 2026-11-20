@@ -188,7 +188,7 @@ case "$1" in
 			_emit_child_plan day2.sh
 		fi
 		aba_progress "PLAN|ug_trigger|Trigger upgrade|5"
-		aba_progress "PLAN|ug_progress|Wait for upgrade|70"
+		aba_progress "PLAN|ug_progress|Check upgrade progressing|70"
 		;;
 
 	*)

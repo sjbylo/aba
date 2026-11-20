@@ -356,7 +356,7 @@ rm -f "$up_fifo"
 
 up2_fifo=$(mktemp /tmp/test-up2-fifo.XXXXXX)
 _from_tmp "$up2_fifo" cluster-upgrade --with-day2
-up2_expect=$(printf '%s\n' "PLAN|ug_preflight|Preflight checks|2" "$day2_stdout" "PLAN|ug_trigger|Trigger upgrade|5" "PLAN|ug_progress|Wait for upgrade|70")
+up2_expect=$(printf '%s\n' "PLAN|ug_preflight|Preflight checks|2" "$day2_stdout" "PLAN|ug_trigger|Trigger upgrade|5" "PLAN|ug_progress|Check upgrade progressing|70")
 if [ "$(_plan_lines "$up2_fifo")" = "$up2_expect" ]; then
 	pass "upgrade --with-day2 inserts day2.sh plan between its own steps"
 else
