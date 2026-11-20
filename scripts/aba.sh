@@ -1441,7 +1441,16 @@ for i in imgs:
 		_flag="$1"
 		ssh_key_val=
 		if [[ -n $2 && $2 != -* ]]; then
-			ssh_key_val=$2
+			# A missing <key>.pub would lead to a new key pair, not the named key.
+			# A path without .pub still allows generation. A relative path is
+			# resolved later from the cluster dir, so only / and ~ paths are checked.
+			if [[ $2 == *.pub && ( $2 == /* || $2 == \~* ) ]] && [ ! -f "${2/#\~/$HOME}" ]; then
+				aba_abort "SSH public key file not found: $2" \
+					"Give an existing <key>.pub, or the key path without .pub to create a new key pair."
+			fi
+			# ssh_key_file is the key path without .pub: its users append .pub,
+			# so a given <key>.pub would turn into <key>.pub.pub.
+			ssh_key_val=${2%.pub}
 			shift
 		fi
 		_set_cluster_conf ssh_key_file "$ssh_key_val" "$_flag"

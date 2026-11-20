@@ -10,6 +10,14 @@ if [ ! "$1" = "--exec" ]; then
 
 	verify-cluster-conf || exit 1
 
+	ssh_id_opts=()	# set by cluster_ssh_id_opts
+	if ! cluster_ssh_id_opts "$ssh_key_file"; then
+		# A key in the cluster dir would ship in bundles, so the hint points outside it.
+		# shellcheck disable=SC2088 # literal ~ for the user to type
+		aba_info -m "No private SSH key at $ssh_key_file: ssh tries ssh-agent and the ~/.ssh default keys." \
+			"If that fails, run: $(aba_cmd --ssh-key '~/.ssh/<key>')"
+	fi
+
 	if [ ! "$CLUSTER_NAME" ]; then
 		scripts/cluster-config-check.sh || exit 1
 		eval "$(scripts/cluster-config.sh "$@")" || exit 1
@@ -20,10 +28,10 @@ if [ ! "$1" = "--exec" ]; then
 
 	ip=$(cat $ASSETS_DIR/rendezvousIP)
 
-	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip mkdir -p scripts
-	scp -F ~/.aba/ssh.conf -i $ssh_key_file scripts/include_all.sh core@$ip:scripts
-	scp -F ~/.aba/ssh.conf -i $ssh_key_file $0 core@$ip:
-	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip -- sudo bash $(basename $0) --exec
+	ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@$ip mkdir -p scripts
+	scp -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" scripts/include_all.sh core@$ip:scripts
+	scp -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" $0 core@$ip:
+	ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@$ip -- sudo bash $(basename $0) --exec
 
 
 	exit $?

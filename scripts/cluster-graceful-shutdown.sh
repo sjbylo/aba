@@ -214,9 +214,15 @@ fi
 aba_debug "Node names: $_all_nodes"
 
 _ssh_available=false
-if [ -n "${ssh_key_file:-}" ] && [ -f "${ssh_key_file/#\~/$HOME}" ] && [ ${#_node_ip[@]} -gt 0 ]; then  # expand tilde for -f test
-	_ssh_available=true
-	_ssh_key="${ssh_key_file/#\~/$HOME}"                # ~/foo → /home/user/foo
+ssh_id_opts=()	# set by cluster_ssh_id_opts
+if [ -n "${ssh_key_file:-}" ] && [ ${#_node_ip[@]} -gt 0 ]; then
+	# No private key file (only <key>.pub): ssh goes on without -i (ssh-agent and
+	# ~/.ssh defaults). A failed SSH falls back to oc debug below. With neither
+	# file there is no key for these nodes, so no SSH timeouts are spent.
+	cluster_ssh_id_opts "$ssh_key_file" || true
+	if [ -f "${ssh_key_file/#\~/$HOME}" ] || [ -f "${ssh_key_file/#\~/$HOME}.pub" ]; then
+		_ssh_available=true
+	fi
 fi
 
 # Hypervisor, so a VM that is already off is not SSH'd or debugged.
@@ -284,7 +290,7 @@ if [ -n "${api_vip:-}" ] && [ "$_ssh_available" = true ]; then
 	for node in $_all_nodes; do
 		_ip="${_node_ip[$node]:-}"
 		[ -n "$_ip" ] || continue
-		if timeout 8 ssh -F ~/.aba/ssh.conf -i "$_ssh_key" -o ConnectTimeout=5 core@"$_ip" "ip -4 -o addr | grep -q ' ${api_vip}/'" >>$logfile 2>&1; then
+		if timeout 8 ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" -o ConnectTimeout=5 core@"$_ip" "ip -4 -o addr | grep -q ' ${api_vip}/'" >>$logfile 2>&1; then
 			_vip_node=$node
 			aba_debug "API VIP $api_vip is on $node"
 			break
@@ -317,8 +323,8 @@ for node in $_ordered; do
 
 	# Try SSH first (fast, no image pull needed)
 	if [ "$_ssh_available" = "true" ] && [ -n "$_ip" ]; then
-		aba_debug "Running: ssh -F ~/.aba/ssh.conf -i $_ssh_key core@$_ip 'sudo shutdown -h 1'"
-		if timeout 30 ssh -F ~/.aba/ssh.conf -i "$_ssh_key" core@"$_ip" 'sudo shutdown -h 1' >> $logfile 2>&1; then
+		aba_debug "Running: ssh -F ~/.aba/ssh.conf ${ssh_id_opts[*]} core@$_ip 'sudo shutdown -h 1'"
+		if timeout 30 ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@"$_ip" 'sudo shutdown -h 1' >> $logfile 2>&1; then
 			aba_info "$node ($_ip): shutdown via SSH" 2>&1 | tee -a $logfile
 			_ok=true
 		else
@@ -424,7 +430,7 @@ _shutdown_try_halt_now() {
 		_ip="${_node_ip[$node]:-}"
 		[ -n "$_ip" ] || continue
 		aba_debug "Running: ssh core@$_ip sudo shutdown -h now"
-		if timeout 15 ssh -F ~/.aba/ssh.conf -i "$_ssh_key" -o ConnectTimeout=8 core@"$_ip" 'sudo shutdown -h now' >>$logfile 2>&1; then
+		if timeout 15 ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" -o ConnectTimeout=8 core@"$_ip" 'sudo shutdown -h now' >>$logfile 2>&1; then
 			aba_info "$node ($_ip): shutdown -h now" 2>&1 | tee -a $logfile
 		else
 			echo "[ABA] $node ($_ip): SSH refused for shutdown -h now" >>$logfile

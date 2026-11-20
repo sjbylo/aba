@@ -26,6 +26,14 @@ source <(normalize-cluster-conf)
 
 verify-cluster-conf || exit 1
 
+ssh_id_opts=()	# set by cluster_ssh_id_opts
+if ! cluster_ssh_id_opts "$ssh_key_file"; then
+	# A key in the cluster dir would ship in bundles, so the hint points outside it.
+	# shellcheck disable=SC2088 # literal ~ for the user to type
+	aba_info -m "No private SSH key at $ssh_key_file: ssh tries ssh-agent and the ~/.ssh default keys." \
+		"If that fails, run: $(aba_cmd --ssh-key '~/.ssh/<key>')"
+fi
+
 if [ -n "$ALL_NODES" ]; then
 	[ -z "$*" ] && aba_abort "--all requires --cmd <command>"
 
@@ -45,7 +53,7 @@ if [ -n "$ALL_NODES" ]; then
 	for _ip in $_all_ips; do
 		aba_info "[$_ip] Running: $*"
 		_rc=0
-		ssh -F ~/.aba/ssh.conf -i "$ssh_key_file" core@"$_ip" -- "$@" > "$ABA_TMP/ssh-all.$$" 2>&1 || _rc=$?
+		ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@"$_ip" -- "$@" > "$ABA_TMP/ssh-all.$$" 2>&1 || _rc=$?
 		while IFS= read -r line; do echo "[$_ip] $line"; done < "$ABA_TMP/ssh-all.$$"
 		rm -f "$ABA_TMP/ssh-all.$$"
 		if [ "$_rc" -ne 0 ]; then
@@ -62,10 +70,10 @@ fi
 ip=$(cat iso-agent-based/rendezvousIP)
 
 if [ "$*" ]; then
-	aba_info "Running: ssh -i $ssh_key_file core@$ip -- $*"
-	ssh -F ~/.aba/ssh.conf -i "$ssh_key_file" core@"$ip" -- "$@"
+	aba_info "Running: ssh ${ssh_id_opts[*]} core@$ip -- $*"
+	ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@"$ip" -- "$@"
 else
-	aba_info "Running: ssh -i $ssh_key_file core@$ip"
-	ssh -F ~/.aba/ssh.conf -i "$ssh_key_file" core@"$ip"
+	aba_info "Running: ssh ${ssh_id_opts[*]} core@$ip"
+	ssh -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@"$ip"
 fi
 
