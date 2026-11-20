@@ -27,7 +27,8 @@
 #   _STUB_MANAGER_ID=<string>         # override Manager ID (default: iRMC)
 #   _STUB_USBCD_TARGET=true           # AllowableValues has UsbCd instead of Cd
 #   _STUB_POWER_FILE=<file>           # per-host PowerState ("<host>=<state>" lines);
-#                                     # Reset ForceOff/GracefulShutdown -> Off, other -> On
+#                                     # Reset ForceOff/GracefulShutdown -> Off, other -> On;
+#                                     # "<A>-then-<B>": one read sees A, later reads see B
 #   _STUB_GRACEFUL_400=true           # 400 on Reset GracefulShutdown
 #   _STUB_STUCK_HOST=<host>           # Reset leaves this host's PowerState unchanged
 #   _STUB_SLOW_OFF_HOST=<host>        # after a Reset to Off, one more read still sees On
@@ -531,10 +532,10 @@ _stub_power_of() {
 	[ -n "${_STUB_POWER_FILE:-}" ] || return 0
 	host=$(_stub_url_host "$1")
 	state=$(grep "^$host=" "$_STUB_POWER_FILE" | tail -1 | cut -d= -f2)
-	# On-then-Off: this read still sees On, the next one sees Off.
-	if [ "$state" = "On-then-Off" ]; then
-		printf '%s=Off\n' "$host" >> "$_STUB_POWER_FILE"
-		state=On
+	# <A>-then-<B> (e.g. On-then-Off): this read sees A, the next one sees B.
+	if [[ "$state" == *-then-* ]]; then
+		printf '%s=%s\n' "$host" "${state#*-then-}" >> "$_STUB_POWER_FILE"
+		state=${state%%-then-*}
 	fi
 	printf '%s' "$state"
 }

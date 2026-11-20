@@ -420,17 +420,10 @@ _bm_post_reset() {
 
 bmc_power_off() {
 	local node="$1" reset_type="$2"
-	local sys
-	sys=$(_bm_system_id "$node")
 	_BM_RESET_SENT=
 
-	_redfish_request "$node" GET "/redfish/v1/Systems/$sys"
-	if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
-		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP ${_REDFISH_LAST_CODE} on GET System for PowerState read")
-		return 1
-	fi
-	local state
-	state=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
+	_bm_read_power_state "$node" || return 1
+	local state=$_BM_POWER_STATE
 	if [ "$state" = "Off" ]; then
 		aba_debug "BMC: $node PowerState=Off, no Reset needed"
 		return 0
@@ -454,6 +447,43 @@ bmc_power_off() {
 	fi
 	_BM_RESET_SENT=1
 	_bm_wait_power_state "$node" Off
+}
+
+# -----------------------------------------------------------------------------
+# bmc_power_on - power the system on (aba startup on platform=bm).
+# Not bmc_power_reset: that sends ForceRestart to a node that is already On.
+# Off -> Reset On. Any other state (On, PoweringOn, ...) -> no POST. Then waits
+# for PowerState=On. No media, no boot override. Sets _BM_RESET_SENT like
+# bmc_power_off, so a caller that logs in again after a 401 sends no second Reset.
+# -----------------------------------------------------------------------------
+
+bmc_power_on() {
+	local node="$1"
+	_BM_RESET_SENT=
+
+	_bm_read_power_state "$node" || return 1
+	if [ "$_BM_POWER_STATE" = "Off" ]; then
+		_bm_post_reset "$node" On
+		if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ] && [ "${_REDFISH_LAST_CODE:0:1}" != "3" ]; then
+			_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "Reset On POST HTTP ${_REDFISH_LAST_CODE} (PowerState was Off)")
+			return 1
+		fi
+		_BM_RESET_SENT=1
+	else
+		aba_debug "BMC: $node PowerState=$_BM_POWER_STATE, no Reset needed"
+	fi
+	bmc_wait_power_on "$node"
+}
+
+# _bm_read_power_state - GET the System and set _BM_POWER_STATE.
+_bm_read_power_state() {
+	local node="$1"
+	_redfish_request "$node" GET "/redfish/v1/Systems/$(_bm_system_id "$node")"
+	if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
+		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP ${_REDFISH_LAST_CODE} on GET System for PowerState read")
+		return 1
+	fi
+	_BM_POWER_STATE=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
 }
 
 # -----------------------------------------------------------------------------
