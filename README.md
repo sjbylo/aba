@@ -552,7 +552,7 @@ aba -d mycluster install
 `--starting-ip` takes the first node IP (the other nodes get the next addresses), or a comma list with one IP per node, masters first. In a list, a bare last octet keeps the prefix of the previous full address: `10.0.0.10,11,12,10.0.1.60,61,62`.
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
-For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
+For bare metal, set MACs (`macs.conf` or `agent-config.yaml`) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
@@ -845,7 +845,7 @@ Once the cluster directory exists, run `aba -d mycluster install` (or `cd myclus
 
 | Stage         | What it does                                                | What to review / do |
 | -----         | ------------                                                | ------------------- |
-| **agentconf** | Generates `install-config.yaml` and `agent-config.yaml` from `cluster.conf` / `macs.conf` / `bmc.conf`. | Confirm **MAC addresses**. Optionally set `disk_hint` if needed (rendered as `rootDeviceHints`). Prefer config/CLI over hand-editing YAML. |
+| **agentconf** | Generates `install-config.yaml` and `agent-config.yaml` from `cluster.conf` / `macs.conf`. | Confirm **MAC addresses**. Optionally set `disk_hint` if needed (rendered as `rootDeviceHints`). Prefer config/CLI over hand-editing YAML. |
 | **iso**       | Runs pre-flight checks, then builds the bootable Agent ISO. | For bare-metal: write the ISO to your servers' boot media and boot them (see [below](#booting-bare-metal-servers)). For VMware/KVM: nothing — ABA proceeds automatically. |
 | **mon**       | Monitors host discovery, validation, bootstrap, and installation progress. | Observe progress until `Install complete!`. |
 
@@ -1059,7 +1059,7 @@ aba install
 
 **What bare-metal users typically configure (prefer `cluster.conf` / `macs.conf` over hand-editing YAML):**
 
-- **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory (or BMC auto-discovery when `bmc.conf` is set).
+- **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory, or edit them in `agent-config.yaml`. BMC MAC discovery (when `bmc.conf` is set) runs at preflight and does not fill `agent-config.yaml`.
 - **Installation disk (optional)** — only if the default disk is wrong: set `disk_hint` in `cluster.conf` (or CLI `--disk-hint` / `--disk-hint-master` / `--disk-hint-worker`). Supports a device path or criteria (`path=…,minSizeGigabytes=200`). Per-node overrides: `disk_hint_node_<hostname>=…` (node > role > global). A hyphen in the hostname is written as an underscore in that name (`e2e-bm-sno1` → `disk_hint_node_e2e_bm_sno1`). ABA renders these into `rootDeviceHints` in `agent-config.yaml`.
 - **Hostnames** — defaults are generated from the cluster name. If you need different hostnames, update `cluster.conf` and re-run `aba install` (which regenerates `agent-config.yaml`) rather than editing `agent-config.yaml` directly.
 
@@ -1695,7 +1695,9 @@ See [Bare-metal Network Planning Example](docs/bare-metal-example.md) for a comp
   Provide one MAC per node per network port (e.g., 3 masters × 1 port = 3 MACs; with port bonding, 3 masters × 2 ports = 6 MACs).
   MACs are assigned top-to-bottom, grouped by host — for example, with 2 bonded ports per node, the first 2 MACs go to host 1, the next 2 to host 2, and so on.
   The file format is flexible — MACs can appear anywhere on each line (surrounding text is ignored).
-  Without `macs.conf` (the default), MACs are generated from the `mac_prefix` template in `cluster.conf`.
+  For a new bare-metal cluster without `macs.conf`, ABA writes placeholder MACs (`xx:xx:xx:xx:xx:xx`) into `agent-config.yaml`. In a cluster directory without a `.primed` marker, `aba install` then pauses at the config review (unless `-y`) and stops if placeholders remain, before preflight (including BMC checks) runs and before the ISO is built.
+  Provide the MACs in `macs.conf`, or replace the placeholders in `agent-config.yaml`, then re-run `aba install`. Without `macs.conf`, ABA keeps an existing `agent-config.yaml` unless `cluster.conf` is newer.
+  The `mac_prefix` template in `cluster.conf` generates MACs only for VMware and KVM VMs.
 - **VMware**: Ensure sufficient [vCenter privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs. Run `aba vmw` for interactive vCenter/ESXi configuration, or edit `vmware.conf` directly. See the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 - **KVM/libvirt**: Passwordless SSH from the bastion to the KVM host is required. Run `aba kvm` for interactive configuration, or edit `kvm.conf` directly to set the connection URI, storage pool, and bridge network.
 
