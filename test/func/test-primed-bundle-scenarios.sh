@@ -9,6 +9,7 @@
 # 4. mirror.conf is included/excluded based on .available
 # 5. No dangling symlinks exist in the bundle
 # 6. Symlinks resolved to real copies for self-contained tarball
+# 7. regcreds links (into the bundling user's ~/.aba/mirror) are not shipped
 #
 # Verification uses `make -n` (dry-run) to confirm Make behavior.
 
@@ -471,6 +472,38 @@ MACEOF
 EXTRACTED=$(run_bundle_and_extract)
 
 assert_file_exists "macs.conf included in bundle" "$EXTRACTED/sno1/macs.conf"
+
+echo ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SCENARIO 11: regcreds links are not shipped
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_yellow "Scenario 11: regcreds links (cluster and mirror dir) not in bundle"
+
+# regcreds points into the bundling user's ~/.aba/mirror, which the bundle does
+# not carry: on the disconnected side (other user or host) the link dangles.
+rm -rf "$MOCK_REPO"/sno* "$MOCK_REPO"/compact*
+_creds="$TEST_DIR/home-a/.aba/mirror/mirror"
+mkdir -p "$_creds"
+echo '{"auths":{}}' > "$_creds/pull-secret-mirror.json"
+create_cluster_dir "sno1" "vmw" "yes" "2026-07-01 10:00:00"
+ln -sfn "$_creds" "$MOCK_REPO/sno1/regcreds"
+ln -sfn "$_creds" "$MOCK_REPO/mirror/regcreds"
+# Only the link at the top of the cluster dir is dropped, not a file of that name.
+mkdir -p "$MOCK_REPO/sno1/docs"
+echo "notes" > "$MOCK_REPO/sno1/docs/regcreds"
+
+EXTRACTED=$(run_bundle_and_extract)
+_listing=$(tar tf "$TEST_DIR/bundle.tar")
+
+assert_eq "tar has no aba/sno1/regcreds" "0" "$(grep -cE '^aba/sno1/regcreds(/|$)' <<< "$_listing" || true)"
+assert_eq "tar has no aba/mirror/regcreds" "0" "$(grep -c '^aba/mirror/regcreds' <<< "$_listing" || true)"
+assert_regular_file "regular file named regcreds elsewhere still shipped" "$EXTRACTED/sno1/docs/regcreds"
+assert_file_exists "sno1/cluster.conf still in bundle" "$EXTRACTED/sno1/cluster.conf"
+assert_file_exists "sno1/.init still in bundle (no recipe re-creates the link)" "$EXTRACTED/sno1/.init"
+
+rm -f "$MOCK_REPO/mirror/regcreds"
 
 echo ""
 
