@@ -1574,7 +1574,7 @@ aba shutdown --wait   # Same, but wait until all VMs are powered off
 aba startup           # Power on VMs, uncordon nodes, approve CSRs, wait for Ready
 ```
 
-- Powers on all cluster VMs (bare-metal: prompts you to power on servers manually)
+- Powers on all cluster VMs (bare-metal: asks to power on the `bmc.conf` nodes through the BMC, else prompts you to power on servers manually)
 - Waits for the cluster API to become reachable
 - Uncordons all nodes and approves any pending CSRs
 - Waits for all nodes to reach `Ready` state and all cluster operators to become available
