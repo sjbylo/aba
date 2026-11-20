@@ -272,6 +272,11 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 							"Invalid image path.\n\nMust start with / (e.g. /ocp4/openshift4)." 0 0
 						continue
 					fi
+					if ! _valid_reg_path "$m_path"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid image path.\n\nMust not end with / (e.g. /ocp4/openshift4)." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_path -v "$m_path" -f "$mcf"
 				fi
 				;;
