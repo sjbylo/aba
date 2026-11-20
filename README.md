@@ -911,21 +911,24 @@ Example output on successful install:
 
 ```
 [ABA] Cluster installed successfully!
-[ABA]   Name:     mycluster.example.com
-[ABA]   Version:  4.21.20
-[ABA]   Type:     sno (1 node(s))
-[ABA]   Platform: KVM
-[ABA]   API:      https://api.mycluster.example.com:6443
 
-[ABA] Next steps:
-[ABA]   aba terminal       — open interactive cluster shell
-[ABA]   . <(aba shell)     — access cluster (kubeconfig)
-[ABA]   . <(aba login)     — log in as kubeadmin
-[ABA]   aba day2           — configure OperatorHub with mirror registry
-[ABA]   aba day2-osus      — configure OpenShift Update Service
-[ABA]   aba day2-ntp       — configure NTP
-[ABA]   aba info           — view this information again
-[ABA]   aba help           — more options
+[ABA] mycluster.example.com    4.21.20    KVM    sno, 1 master
+[ABA] Console     https://console-openshift-console.apps.mycluster.example.com
+[ABA] User        kubeadmin
+[ABA] Password    xxxxx-xxxxx-xxxxx-xxxxx
+[ABA] API         https://api.mycluster.example.com:6443
+[ABA] Kubeconfig  /home/user/aba/mycluster/iso-agent-based/auth/kubeconfig
+
+[ABA] Optionally, set these values in /etc/hosts to access the cluster.
+192.168.1.10 api.mycluster.example.com
+192.168.1.10 console-openshift-console.apps.mycluster.example.com
+192.168.1.10 oauth-openshift.apps.mycluster.example.com
+
+[ABA] Terminal    aba terminal
+[ABA] Shell       . <(aba shell)
+[ABA] Login       . <(aba login)
+[ABA] Later       aba day2, aba day2-osus, aba day2-ntp
+[ABA] Help        /home/user/aba/README.md, Day-2 Operations
 ```
 
 If OpenShift fails to install or is not progressing, see the [Troubleshooting](Troubleshooting.md) guide.

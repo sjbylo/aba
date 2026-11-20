@@ -1513,6 +1513,15 @@ for i in imgs:
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
+				cluster)
+					# The cluster Makefile has no cluster target. This command belongs at the repo root.
+					if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
+						aba_abort "Run aba cluster from the ABA repo root." \
+							"cd $ABA_ROOT && aba cluster --name <name> ..."
+					fi
+					BUILD_COMMAND="$BUILD_COMMAND $1"
+					aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
+					;;
 				*)
 					BUILD_COMMAND="$BUILD_COMMAND $1"
 					aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND 

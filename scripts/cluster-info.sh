@@ -15,32 +15,6 @@ verify-cluster-conf || exit 1
 kc=$(cluster_kubeconfig)
 [ -z "$kc" ] && aba_abort "Cluster not ready! Cannot find kubeconfig."
 
-# Resolve kubeadmin password (prefer local, fall back to externalized state)
-if [ -f "iso-agent-based/auth/kubeadmin-password" ]; then
-	pw=$(cat "iso-agent-based/auth/kubeadmin-password")
-else
-	_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
-	if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
-		pw=$(cat "$_sd/kubeadmin-password")
-	fi
-fi
-
-aba_info "To access the cluster as the system:admin user when using 'oc', run"
-aba_info "    export KUBECONFIG=$kc"
-aba_info "Access the OpenShift web-console here: https://console-openshift-console.apps.$cluster_name.$base_domain"
-if [ -n "$pw" ]; then
-	# The screen shows the password so the user can log in.
-	# The trace file is what gets shared, so that copy stores ***.
-	if [ "${INFO_ABA:-}" ]; then
-		echo_white "[ABA] Login to the console with user: \"kubeadmin\", and password: \"$pw\""
-		if [ -n "${ABA_TRACE_FILE:-}" ]; then
-			echo "[ABA] Login to the console with user: \"kubeadmin\", and password: \"***\"" >> "$ABA_TRACE_FILE"
-		fi
-	fi
-else
-	aba_info "Login to the console with user: \"kubeadmin\" (password not available)"
-fi
-
-show_cluster_summary
+show_cluster_card
 
 

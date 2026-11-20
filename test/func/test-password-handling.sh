@@ -385,7 +385,7 @@ elif ! grep -F -q 's3cret word' "$_ci/out"; then
 	test_fail "cluster-info trace mask" "screen hid the password: $(cat "$_ci/out")"
 elif grep -F -q 's3cret word' "$_ci/trace.log" || grep -F -q 's3cret word' "$_ci/err"; then
 	test_fail "cluster-info trace mask" "password reached the trace or stderr"
-elif ! grep -F -q 'password: "***"' "$_ci/trace.log"; then
+elif ! grep -F -q 'Password    ***' "$_ci/trace.log"; then
 	test_fail "cluster-info trace mask" "trace missing the mask: $(cat "$_ci/trace.log")"
 else
 	test_pass "cluster-info shows the password and masks the trace"

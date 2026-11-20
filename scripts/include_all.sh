@@ -2051,51 +2051,199 @@ aba_cmd() {
 	fi
 }
 
-# Display post-install summary and next steps.
-# Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
-# and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
-show_cluster_summary() {
-	local _regcreds="${regcreds_dir:-}"
-	local _cn="${CLUSTER_NAME:-${cluster_name:-?}}"
-	local _bd="${BASE_DOMAIN:-${base_domain:-?}}"
-	local _masters="${CP_REPLICAS:-${num_masters:-0}}"
-	local _workers="${WORKER_REPLICAS:-${num_workers:-0}}"
+# /etc/hosts lines for the console. A hosts file cannot express *.apps, so the
+# console name and the login redirect are listed on their own.
+# api_vip and ingress_vip are the addresses DNS publishes. Use them whenever
+# they are set, including when cluster.conf still says one master. A single
+# node with those fields empty uses the node address for every name. The three
+# lines have no [ABA] prefix so they paste into /etc/hosts.
+# Args: cluster name, base domain, master count, worker count.
+_show_console_hosts() {
+	[ ! "${INFO_ABA:-}" ] && return 0
+	local _cn=$1 _bd=$2 _api_ip="" _apps_ip="" _node_ip=""
 
-	local _type
-	_type=$(cluster_type "$_masters" "$_workers")
+	if [ -n "${api_vip:-}" ] && [ -n "${ingress_vip:-}" ]; then
+		_api_ip=$api_vip
+		_apps_ip=$ingress_vip
+	elif is_sno "$3" "$4"; then
+		[ -n "${starting_ip:-}" ] || return 0
+		_node_ip=$(expand_starting_ips "$starting_ip" 1 2>/dev/null) || return 0
+		_node_ip=${_node_ip%% *}
+		[ -n "$_node_ip" ] || return 0
+		_api_ip=$_node_ip
+		_apps_ip=$_node_ip
+	else
+		return 0
+	fi
 
-	local _nodes=$(( _masters + _workers ))
+	aba_info "Optionally, set these values in /etc/hosts to access the cluster."
+	echo "$_api_ip api.${_cn}.${_bd}"
+	echo "$_apps_ip console-openshift-console.apps.${_cn}.${_bd}"
+	echo "$_apps_ip oauth-openshift.apps.${_cn}.${_bd}"
+}
 
-	# Platform label
-	local _plat="${platform:-unknown}"
+# One field from clusterstate/state.sh. Empty when the file or the field is missing.
+# state.sh is written at install time and is the record of what was installed.
+_card_state_file() {
+	if [ -s clusterstate/state.sh ]; then
+		printf '%s\n' clusterstate/state.sh
+		return 0
+	fi
+	local _sd
+	_sd=$(cluster_state_dir 2>/dev/null) || return 1
+	[ -s "$_sd/state.sh" ] || return 1
+	printf '%s\n' "$_sd/state.sh"
+}
+
+_card_state_val() {
+	local line val
+	[ -s "$1" ] || return 1
+	line=$(grep -m1 "^${2}=" "$1" 2>/dev/null) || return 1
+	val=${line#*=}
+	val=${val#\"}; val=${val%\"}
+	val=${val#\'}; val=${val%\'}
+	printf '%s\n' "$val"
+}
+
+# One aligned card row. The password row is not this: aba_info copies its
+# text into the trace file, and that copy must not contain the password.
+_card_row() {
+	aba_info "$(printf '%-12s%s' "$1" "$2")"
+}
+
+# Access card for a finished cluster. Same text after install and from aba info.
+# Identity fields come from clusterstate/state.sh when it has them, then from
+# the cluster directory. The password and the hosts lines are always shown.
+# The password line on screen is clear; the trace file stores ***.
+show_cluster_card() {
+	local _state="" _sv=""
+	local _cn="" _bd="" _type="" _plat="" _start="" _workers_named="" _masters_named=""
+	local _masters _workers _role _kc _pw _pw_row
+
+	_state=$(_card_state_file 2>/dev/null) || _state=""
+	if [ -n "$_state" ]; then
+		_sv=$(_card_state_val "$_state" cluster_name) || _sv=""
+		[ -n "$_sv" ] && _cn=$_sv
+		_sv=$(_card_state_val "$_state" base_domain) || _sv=""
+		[ -n "$_sv" ] && _bd=$_sv
+		_sv=$(_card_state_val "$_state" cluster_type) || _sv=""
+		[ -n "$_sv" ] && _type=$_sv
+		_sv=$(_card_state_val "$_state" platform) || _sv=""
+		[ -n "$_sv" ] && _plat=$_sv
+		_sv=$(_card_state_val "$_state" starting_ip) || _sv=""
+		[ -n "$_sv" ] && _start=$_sv
+		_sv=$(_card_state_val "$_state" cp_names) || _sv=""
+		[ -n "$_sv" ] && _masters_named=$_sv
+		_sv=$(_card_state_val "$_state" worker_names) || _sv=""
+		[ -n "$_sv" ] && _workers_named=$_sv
+	fi
+
+	[ -n "$_cn" ] || _cn="${CLUSTER_NAME:-${cluster_name:-?}}"
+	[ -n "$_bd" ] || _bd="${BASE_DOMAIN:-${base_domain:-?}}"
+	[ -n "$_plat" ] || _plat="${platform:-unknown}"
+	[ -n "$_start" ] || _start="${starting_ip:-}"
+
+	# A recorded type beats cluster.conf counts. Those counts can be rewritten
+	# after install and then describe a different cluster than the one running.
+	case "$_type" in
+		sno)
+			_masters=1
+			_workers=0
+			;;
+		compact)
+			_masters=3
+			_workers=0
+			;;
+		standard)
+			_masters=3
+			_workers=${WORKER_REPLICAS:-${num_workers:-0}}
+			if [ -n "$_masters_named" ]; then
+				_masters=$(printf '%s' "$_masters_named" | wc -w | tr -d ' ')
+			fi
+			if [ -n "$_workers_named" ]; then
+				_workers=$(printf '%s' "$_workers_named" | wc -w | tr -d ' ')
+			fi
+			;;
+		*)
+			_masters=${CP_REPLICAS:-${num_masters:-0}}
+			_workers=${WORKER_REPLICAS:-${num_workers:-0}}
+			_type=$(cluster_type "$_masters" "$_workers")
+			;;
+	esac
+
+	if [ "$_masters" -eq 1 ]; then
+		_role="1 master"
+	else
+		_role="$_masters masters"
+	fi
+	if [ "$_workers" -eq 1 ]; then
+		_role="$_role, 1 worker"
+	elif [ "$_workers" -gt 0 ]; then
+		_role="$_role, $_workers workers"
+	fi
+
 	case "$_plat" in
 		kvm) _plat="KVM" ;;
 		vmw) _plat="VMware" ;;
 		bm)  _plat="bare-metal" ;;
 	esac
 
+	_kc=$(cluster_kubeconfig 2>/dev/null) || _kc=""
+	_pw=""
+	if [ -f iso-agent-based/auth/kubeadmin-password ]; then
+		_pw=$(cat iso-agent-based/auth/kubeadmin-password)
+	else
+		local _sd=""
+		_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
+		if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
+			_pw=$(cat "$_sd/kubeadmin-password")
+		fi
+	fi
+
+	[ "${INFO_ABA:-}" ] && echo
+	aba_info "$_cn.$_bd    ${ocp_version:-?}    $_plat    $_type, $_role"
+	_card_row "Console" "https://console-openshift-console.apps.$_cn.$_bd"
+	_card_row "User" "kubeadmin"
+	if [ -n "$_pw" ]; then
+		if [ "${INFO_ABA:-}" ]; then
+			_pw_row=$(printf '%-12s%s' "Password" "$_pw")
+			echo_white "[ABA] $_pw_row"
+			if [ -n "${ABA_TRACE_FILE:-}" ]; then
+				echo "[ABA] $(printf '%-12s%s' "Password" "***")" >> "$ABA_TRACE_FILE"
+			fi
+		fi
+	else
+		_card_row "Password" "(not available)"
+	fi
+	_card_row "API" "https://api.$_cn.$_bd:6443"
+	if [ -n "$_kc" ]; then
+		_card_row "Kubeconfig" "$_kc"
+	else
+		_card_row "Kubeconfig" "(not available)"
+	fi
+	[ "${INFO_ABA:-}" ] && echo
+	starting_ip="$_start" _show_console_hosts "$_cn" "$_bd" "$_masters" "$_workers"
+	[ "${INFO_ABA:-}" ] && echo
+	_card_row "Terminal" "$(aba_cmd terminal)"
+	_card_row "Shell" ". <($(aba_cmd shell))"
+	_card_row "Login" ". <($(aba_cmd login))"
+	_card_row "Later" "$(aba_cmd day2), $(aba_cmd day2-osus), $(aba_cmd day2-ntp)"
+	if [ -n "${ABA_ROOT:-}" ]; then
+		_card_row "Help" "$ABA_ROOT/README.md, Day-2 Operations"
+	else
+		_card_row "Help" "README.md, Day-2 Operations"
+	fi
+}
+
+# Install just finished. aba info calls show_cluster_card and skips this line.
+show_cluster_summary() {
 	echo
 	if [ "${installed_from:-}" = "imported" ]; then
 		aba_success "Cluster imported successfully!"
 	else
 		aba_success "Cluster installed successfully!"
 	fi
-	aba_info "  Name:     $_cn.$_bd"
-	aba_info "  Version:  ${ocp_version:-?}"
-	aba_info "  Type:     $_type ($_nodes node(s))"
-	aba_info "  Platform: $_plat"
-	aba_info "  API:      https://api.$_cn.$_bd:6443"
-	echo
-	aba_info "Next steps:"
-	aba_info "  $(aba_cmd terminal)       — open interactive cluster shell"
-	aba_info "  . <($(aba_cmd shell))     — access cluster (kubeconfig)"
-	aba_info "  . <($(aba_cmd login))     — log in as kubeadmin"
-	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then
-		aba_info "  $(aba_cmd day2)           — configure OperatorHub with mirror registry"
-		aba_info "  $(aba_cmd day2-osus)      — configure OpenShift Update Service"
-	fi
-	aba_info "  $(aba_cmd day2-ntp)       — configure NTP"
-	aba_info "  $(aba_cmd info)           — view this information again"
+	show_cluster_card
 }
 
 # Emit export lines for cluster status fields from state.sh.
