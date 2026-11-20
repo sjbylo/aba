@@ -1110,6 +1110,7 @@ for i in imgs:
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		_rp="$2"
 		[[ "$_rp" =~ ^/ ]] || _rp="/$_rp"
+		_reg_path_abort_if_slash "$_rp"
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_path -v "$_rp" -f $WORK_DIR/mirror.conf

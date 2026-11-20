@@ -846,6 +846,9 @@ verify-mirror-conf() {
 
 	[ "$data_dir" ] && { _valid_abs_path "$data_dir" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
 
+	# Same rule as the TUI and --reg-path. Do not copy the test.
+	_reg_path_abort_if_slash "$reg_path"
+
 	[ "$reg_path" ] && { _valid_abs_path "$reg_path" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
 
 	[ "$reg_ssh_key" ] && { _valid_abs_path "$reg_ssh_key" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
@@ -1419,6 +1422,21 @@ _valid_username() {
 # Returns 0 if valid, 1 if invalid.
 _valid_abs_path() {
 	[[ "$1" =~ ^(/|~(/|$))([A-Za-z0-9._-]+/)*([A-Za-z0-9._-]+)?$ ]]
+}
+
+# reg_path is pasted into an image reference. A final slash is not a
+# reference, so oc-mirror rejects it. Empty is allowed. Returns 0 when
+# the value may be stored.
+_valid_reg_path() {
+	[[ "${1:-}" != */ ]]
+}
+
+# Abort with the one message for a bad reg_path. Callers that can ask
+# again (the TUI) use _valid_reg_path and do not abort.
+_reg_path_abort_if_slash() {
+	_valid_reg_path "$1" && return 0
+	aba_abort "reg_path [$1] must not end with /." \
+		"Remove the final slash in mirror.conf."
 }
 
 # Validate a fully qualified domain name (at least 2 labels, dot-separated).
