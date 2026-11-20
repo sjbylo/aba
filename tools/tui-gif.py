@@ -23,6 +23,8 @@ FG = [
 ]
 ANSI = re.compile(r"\x1b\[([0-9;]*)m")
 BLUE = (20, 40, 160)
+# Red Hat Mono's box-drawing glyphs are solid blocks, so the TUI frame
+# is drawn with Source Code Pro.
 FONTS = (
 	(
 		"/usr/share/fonts/adobe-source-code-pro/SourceCodePro-Regular.otf",

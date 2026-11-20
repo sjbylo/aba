@@ -1,10 +1,10 @@
 #!/bin/bash
 # Record a TUI test on a smaller pane, then make a GIF from its color frames.
 #
-#   test/func/tui-record.sh drive [HOST]
-#   test/func/tui-record.sh stop
-#   test/func/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]
-#   test/func/tui-record.sh mirror|cluster|day2 [HOST]
+#   tools/tui-record.sh drive [HOST]
+#   tools/tui-record.sh stop
+#   tools/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]
+#   tools/tui-record.sh mirror|cluster|day2 [HOST]
 #
 # drive starts the TUI and records every pane change, including the cursor.
 # You attach from another terminal and drive it. stop ends the recording
@@ -16,13 +16,13 @@
 # Pane size defaults to 100x30. Override with TUI_WIDTH, TUI_HEIGHT,
 # TUI_CLUSTER_NAME. gif WIDTH is pixels; 900 matches a README column.
 
-cd "$(dirname "$0")/../.." || exit 1
+cd "$(dirname "$0")/.." || exit 1
 
 _usage() {
-	echo "Usage: test/func/tui-record.sh drive [HOST]" >&2
-	echo "       test/func/tui-record.sh stop" >&2
-	echo "       test/func/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]" >&2
-	echo "       test/func/tui-record.sh mirror|cluster|day2 [HOST]" >&2
+	echo "Usage: tools/tui-record.sh drive [HOST]" >&2
+	echo "       tools/tui-record.sh stop" >&2
+	echo "       tools/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]" >&2
+	echo "       tools/tui-record.sh mirror|cluster|day2 [HOST]" >&2
 	echo "Host defaults to conno. Example: drive disco" >&2
 	exit 2
 }
@@ -86,10 +86,10 @@ _drive() {
 	fi
 	_on_host "$host" "mkdir -p '$remote/color'" || exit 1
 	if _local_host "$host"; then
-		cp test/func/tui-capture.sh "$remote/tui-capture.sh"
+		cp tools/tui-capture.sh "$remote/tui-capture.sh"
 		chmod +x "$remote/tui-capture.sh"
 	else
-		ssh -F "$HOME/.aba/ssh.conf" -o BatchMode=yes "$host" "cat > '$remote/tui-capture.sh' && chmod +x '$remote/tui-capture.sh'" < test/func/tui-capture.sh
+		ssh -F "$HOME/.aba/ssh.conf" -o BatchMode=yes "$host" "cat > '$remote/tui-capture.sh' && chmod +x '$remote/tui-capture.sh'" < tools/tui-capture.sh
 	fi
 	# window-size manual: attaching from a bigger or smaller terminal does not
 	# change the pane. Every frame stays ${w}x${h}.
@@ -101,7 +101,7 @@ _drive() {
 	else
 		echo "Attach and drive it:  ssh -t $host tmux attach -t $sess"
 	fi
-	echo "Stop recording early:  test/func/tui-record.sh stop"
+	echo "Stop recording early:  tools/tui-record.sh stop"
 	echo "Recording every change, including the cursor."
 
 	_on_host "$host" "'$remote/tui-capture.sh' $sess '$remote'"
@@ -112,7 +112,7 @@ _drive() {
 	fi
 	echo ""
 	echo "Color frames: $local_dir/color/"
-	echo "GIF:          test/func/tui-record.sh gif $local_dir"
+	echo "GIF:          tools/tui-record.sh gif $local_dir"
 }
 
 _stop() {
@@ -141,9 +141,9 @@ _gif() {
 		out="${base}.gif"
 	fi
 	if [ -n "${3:-}" ]; then
-		python3 test/func/tui-gif.py "$src" "$out" "$3"
+		python3 tools/tui-gif.py "$src" "$out" "$3"
 	else
-		python3 test/func/tui-gif.py "$src" "$out"
+		python3 tools/tui-gif.py "$src" "$out"
 	fi
 }
 
@@ -162,7 +162,7 @@ _record() {
 	if [ -n "$dir" ]; then
 		echo ""
 		echo "Color frames: $dir/color/"
-		echo "GIF:          test/func/tui-record.sh gif $dir"
+		echo "GIF:          tools/tui-record.sh gif $dir"
 	fi
 	exit "$rc"
 }
