@@ -54,7 +54,7 @@ source <(normalize-mirror-conf)
 
 # ADR-005: ocp_major is not a normalize output. The content-sources template
 # applies | int to it. A failed j2 used to be swallowed by the assignment, so
-# install-config.yaml was written with no ImageDigestSources and still reported success.
+# install-config.yaml was written with no imageDigestSources and still reported success.
 _ocp_render_image_content_sources() {
 	export ocp_major="$(ocp_major_of "${ocp_version:-}")"
 	if [ -z "$ocp_major" ]; then
