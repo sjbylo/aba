@@ -3,7 +3,7 @@
 # Run this on the host where the tmux session lives. It exits when the
 # session ends, or when OUTDIR/stop appears.
 #
-#   test/func/tui-capture.sh SESSION OUTDIR
+#   tools/tui-capture.sh SESSION OUTDIR
 #
 # Each kept frame is OUTDIR/color/frame-NNNN.txt. The last line is a
 # cursor record (RS + "CURSOR x y") so the GIF step can draw the cursor.
@@ -12,7 +12,7 @@
 session="${1:-}"
 out="${2:-}"
 if [ -z "$session" ] || [ -z "$out" ]; then
-	echo "Usage: test/func/tui-capture.sh SESSION OUTDIR" >&2
+	echo "Usage: tools/tui-capture.sh SESSION OUTDIR" >&2
 	exit 2
 fi
 
