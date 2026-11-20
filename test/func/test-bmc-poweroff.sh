@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test: scripts/bm-poweroff.sh and the 'aba stop' / 'aba kill' dispatch on platform=bm.
+# Test: scripts/bm-power.sh and the 'aba stop' / 'aba kill' dispatch on platform=bm.
 # Offline: a curl shim on PATH answers from test/func/lib/bmc-redfish-stub.sh; no real BMC.
 # A sleep shim makes the 120s PowerState poll instant.
 
@@ -48,12 +48,11 @@ for n in master1 master2 worker1; do
 done > "$CL/bmc.conf"
 chmod 600 "$CL/bmc.conf"
 
-# _run <ResetType>: run bm-poweroff.sh with every host On; sets out, rc, resets.
+# _run <ResetType>: run bm-power.sh with every host in ${STATE:-On}; sets out, rc, resets.
 _run() {
-	printf 'h-master1.example=On\nh-master2.example=On\nh-worker1.example=On\n' > "$_STUB_POWER_FILE"
-	[ "${ALL_OFF:-}" ] && sed -i 's/=On$/=Off/' "$_STUB_POWER_FILE"
+	printf 'h-%s.example=%s\n' master1 "${STATE:-On}" master2 "${STATE:-On}" worker1 "${STATE:-On}" > "$_STUB_POWER_FILE"
 	: > "$WORK/resets.log"
-	out=$(cd "$CL" && printf '%s\n' "${ANSWER:-}" | bash scripts/bm-poweroff.sh "$1" 2>&1) && rc=0 || rc=$?
+	out=$(cd "$CL" && printf '%s\n' "${ANSWER:-}" | bash scripts/bm-power.sh "$1" 2>&1) && rc=0 || rc=$?
 	resets=$(tr '\n' ' ' < "$WORK/resets.log")
 }
 
@@ -78,7 +77,7 @@ _run ForceOff
 	&& _pass "kill: ForceOff on each node" \
 	|| _fail "kill: rc=$rc resets=[$resets] out: $out"
 
-ALL_OFF=1 _run ForceOff
+STATE=Off _run ForceOff
 [ "$rc" = 0 ] && [ -z "$resets" ] && echo "$out" | grep -q "powered off 3/3" \
 	&& _pass "already Off: no Reset POST, counts as success" \
 	|| _fail "already Off: rc=$rc resets=[$resets] out: $out"
@@ -114,8 +113,47 @@ printf 'ask=false\n' > "$CL/aba.conf"
 	&& _pass "answer no: no Reset, exit non-zero" \
 	|| _fail "answer no: rc=$rc resets=[$resets] out: $out"
 
+# Power on ('aba startup'): Reset On only from Off, never ForceRestart.
+STATE=Off _run On
+[ "$rc" = 0 ] && [ "$resets" = "On On On " ] && echo "$out" | grep -q "powered on 3/3" \
+	&& _pass "on: Off node gets one Reset On, waits for On" \
+	|| _fail "on: rc=$rc resets=[$resets] out: $out"
+
+_run On
+[ "$rc" = 0 ] && [ -z "$resets" ] && echo "$out" | grep -q "powered on 3/3" \
+	&& _pass "on: already On, no Reset POST" \
+	|| _fail "on already On: rc=$rc resets=[$resets] out: $out"
+
+STATE=PoweringOn-then-On _run On
+[ "$rc" = 0 ] && [ -z "$resets" ] && echo "$out" | grep -q "powered on 3/3" \
+	&& _pass "on: PoweringOn, no Reset POST, waits for On" \
+	|| _fail "on PoweringOn: rc=$rc resets=[$resets] out: $out"
+
+_STUB_STUCK_HOST=h-worker1.example; export _STUB_STUCK_HOST
+STATE=Off _run On
+unset _STUB_STUCK_HOST
+[ "$rc" = 1 ] && echo "$out" | grep -q "failed: worker1" && echo "$out" | grep -q "never reached On" \
+	&& _pass "on: stuck Off, exit 1 and names the node" \
+	|| _fail "on stuck: rc=$rc out: $out"
+
+export _STUB_POST_RESET_401=true _STUB_STATE_FILE=$WORK/state
+: > "$_STUB_STATE_FILE"
+STATE=Off _run On
+unset _STUB_POST_RESET_401 _STUB_STATE_FILE
+[ "$rc" = 0 ] && [ "$resets" = "On On On " ] \
+	&& _pass "on: 401 after Reset, log in again, no second Reset" \
+	|| _fail "on 401: rc=$rc resets=[$resets] out: $out"
+
+# The startup caller asks: the script itself must not prompt for On.
+printf 'ask=true\n' > "$CL/aba.conf"
+STATE=Off ANSWER=n _run On
+printf 'ask=false\n' > "$CL/aba.conf"
+[ "$rc" = 0 ] && [ "$resets" = "On On On " ] \
+	&& _pass "on: no prompt in the script" \
+	|| _fail "on no prompt: rc=$rc resets=[$resets] out: $out"
+
 grep -qE 'EjectMedia|^PATCH ' "$_STUB_CALL_LOG" \
-	&& _fail "power-off sent EjectMedia or a boot PATCH" \
+	&& _fail "power on/off sent EjectMedia or a boot PATCH" \
 	|| _pass "no media eject and no boot override PATCH"
 
 mv "$CL/bmc.conf" "$CL/bmc.conf.bak"
@@ -125,12 +163,12 @@ mv "$CL/bmc.conf.bak" "$CL/bmc.conf"
 	&& _pass "no bmc.conf hosts: abort, points to the BMC UI" \
 	|| _fail "no hosts: rc=$rc out: $out"
 
-# aba dispatch: a sandbox repo with platform=bm and a recorder in place of bm-poweroff.sh.
+# aba dispatch: a sandbox repo with platform=bm and a recorder in place of bm-power.sh.
 REPO=$WORK/repo
 mkdir -p "$REPO/bm1" "$WORK/home"
 cp -a "$ROOT/scripts" "$REPO/scripts"
 cp -f "$ROOT/Makefile" "$ROOT/VERSION" "$REPO/"
-printf '#!/bin/bash\necho "$*" > %s\n' "$WORK/dispatch.log" > "$REPO/scripts/bm-poweroff.sh"
+printf '#!/bin/bash\necho "$*" > %s\n' "$WORK/dispatch.log" > "$REPO/scripts/bm-power.sh"
 printf 'platform=bm\nask=false\nocp_version=4.19.0\n' > "$REPO/aba.conf"
 printf 'cluster_name=bm1\nbase_domain=example.com\n' > "$REPO/bm1/cluster.conf"
 
@@ -142,10 +180,10 @@ _aba() {
 }
 
 _aba stop
-[ "$rc" = 0 ] && [ "$called" = "GracefulShutdown" ] && _pass "aba stop on bm runs bm-poweroff.sh GracefulShutdown" \
+[ "$rc" = 0 ] && [ "$called" = "GracefulShutdown" ] && _pass "aba stop on bm runs bm-power.sh GracefulShutdown" \
 	|| _fail "aba stop: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
 _aba kill
-[ "$rc" = 0 ] && [ "$called" = "ForceOff" ] && _pass "aba kill on bm runs bm-poweroff.sh ForceOff" \
+[ "$rc" = 0 ] && [ "$called" = "ForceOff" ] && _pass "aba kill on bm runs bm-power.sh ForceOff" \
 	|| _fail "aba kill: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
 _aba stop --workers
 [ "$rc" != 0 ] && [ -z "$called" ] && echo "$out" | grep -q "not supported on bare metal" \

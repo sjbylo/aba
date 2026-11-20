@@ -1549,7 +1549,7 @@ _bm_poweroff_if_bm() {
 			"Run the command without them to power off every node in bmc.conf."
 	fi
 	make -s init
-	$ABA_ROOT/scripts/bm-poweroff.sh "$1" || exit $?
+	$ABA_ROOT/scripts/bm-power.sh "$1" || exit $?
 	exit
 }
 
