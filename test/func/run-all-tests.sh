@@ -158,6 +158,7 @@ unit_tests=(
 	test/func/test-ocp-major-render.sh
 	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh
+	test/func/test-cluster-cwd-guard.sh
 	test/func/test-resource-pool-resolution.sh
 
 	# Cluster / VM
@@ -171,6 +172,8 @@ unit_tests=(
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
 	test/func/test-install-stamp.sh
+	test/func/test-console-hosts.sh
+	test/func/test-cluster-info-card.sh
 	test/func/test-install-guard-stale-vms.sh
 	test/func/test-cluster-clean-gate.sh
 	test/func/test-oc-mirror-url.sh
@@ -179,6 +182,8 @@ unit_tests=(
 	test/func/test-image-digest.sh
 	test/func/test-reg-port.sh
 	test/func/test-day2-ntp-order.sh
+	test/func/test-day2-ntp-stratum.sh
+	test/func/test-setup-ntp-stratum-warn.sh
 	test/func/test-catalog-source-naming.sh
 	test/func/test-catalog-container-sweep.sh
 	test/func/test-agent-wait-skip.sh

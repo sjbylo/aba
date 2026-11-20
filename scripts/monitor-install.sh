@@ -96,8 +96,6 @@ aba_progress "DONE|ci_mon"
 #   (3) scripts/bmc-unmount.sh non-zero (D-13 says never; belt+braces).
 [ "$platform" = "bm" ] && [ -f bmc.conf ] && scripts/bmc-unmount.sh || true
 
-aba_success "The cluster has been successfully installed!"
-
 # --- Externalize cluster state (ADR-007) ---
 externalize_cluster_state
 
