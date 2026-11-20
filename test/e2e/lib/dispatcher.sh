@@ -199,6 +199,8 @@ _auto_deploy_dev_branch() {
 	local _any_stale=""
 	local _p _p_meta _p_last
 	for _p in $CLI_POOL_LIST; do
+		# A stopped pool is powered off. Do not treat it as stale or SSH to it.
+		_e2e_pool_in_service "$_p" || continue
 		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
 		_p_last=""
 		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
@@ -254,6 +256,7 @@ _auto_deploy_dev_branch() {
 	# Deploy to every pool that is behind HEAD
 	local _p _p_meta _p_last _p_target _deployed_any=""
 	for _p in $CLI_POOL_LIST; do
+		_e2e_pool_in_service "$_p" || continue
 		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
 		_p_last=""
 		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
@@ -512,6 +515,9 @@ _check_hung() {
 _find_free_pool() {
 	local _now=${SECONDS:-0}
 	for _p in $CLI_POOL_LIST; do
+		# Re-read every search. stop can shrink the set while this process is alive,
+		# and a relaunch still carries the original -p list.
+		_e2e_pool_in_service "$_p" || continue
 		if [ -z "${_busy_pools[$_p]:-}" ]; then
 			# Skip unreachable pools (state unknown -- could be running a suite)
 			if [ -n "${_unreachable_pools[$_p]:-}" ]; then
@@ -638,6 +644,7 @@ _detect_running_and_completed() {
 	local -A _running_suites=()
 	local _max_ssh_retries=3
 	for _p in $CLI_POOL_LIST; do
+		_e2e_pool_in_service "$_p" || continue
 		_export_pool_ssh_users "$_p"
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
@@ -696,6 +703,7 @@ _detect_running_and_completed() {
 
 	# Pass 2: detect completed suites (.rc files)
 	for _p in $CLI_POOL_LIST; do
+		_e2e_pool_in_service "$_p" || continue
 		_export_pool_ssh_users "$_p"
 		local rc_files=""
 		rc_files=$(_ssh_con "$_p" "ls ${_RC_PREFIX}-*.rc") || rc_files=""
@@ -732,6 +740,8 @@ _is_running_on_external_pool() {
 _recheck_unreachable_pools() {
 	[ ${#_unreachable_pools[@]} -eq 0 ] && return
 	for _p in "${!_unreachable_pools[@]}"; do
+		# Powering the VM back on is not enough. start puts the pool in service again.
+		_e2e_pool_in_service "$_p" || continue
 		_export_pool_ssh_users "$_p"
 		if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 			local sess_exists=""

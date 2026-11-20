@@ -222,7 +222,7 @@ case "$CLI_COMMAND" in
 		fi
 
 		echo $$ > "$E2E_DAEMON_PID"
-		trap 'rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META"' EXIT
+		trap 'rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META" "$E2E_ACTIVE_POOLS"' EXIT
 		trap '' PIPE  # Ignore SIGPIPE so piping daemon output can't crash it
 
 		# Write metadata so `status` can show daemon config
@@ -232,6 +232,9 @@ case "$CLI_COMMAND" in
 		started=$(date '+%Y-%m-%d %H:%M:%S')
 		args=${_daemon_args[*]}
 		META_EOF
+		# Fresh daemon declares its own set. A later stop shrinks this file;
+		# dispatcher restarts keep reading it and must not put retired pools back.
+		_e2e_write_active_pools "$CLI_POOL_LIST"
 
 		_daemon_log "Daemon started (PID=$$, max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
 		_daemon_log "Args: ${_daemon_args[*]}"
@@ -331,7 +334,8 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 					echo "  WARNING: Daemon (PID $_daemon_pid) manages pools: $_running_pools"
 					echo "           Your -p includes pools not in the daemon:${_new_only}"
 					echo "           Those pools will NOT receive dispatched suites."
-					echo "           To manage all pools, stop the daemon and restart with the correct -p range."
+					echo "           A pool you stopped comes back with: ./run.sh start -p N"
+					echo "           A pool this daemon was not started with needs a new daemon."
 					echo ""
 				fi
 			fi
@@ -421,7 +425,8 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 		echo "    ./run.sh reschedule -s suite-name"
 		echo ""
 		echo "  Stop:"
-		echo "    ./run.sh stop                    # stop all pools + daemon"
+		echo "    ./run.sh stop -p 3,4             # stop those pools and shut down their VMs"
+		echo "    ./run.sh stop                    # stop every pool and the daemon"
 		echo ""
 		echo "  Logs: $_DAEMON_LOG"
 		echo ""

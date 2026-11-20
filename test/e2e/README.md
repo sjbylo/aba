@@ -154,8 +154,8 @@ Commands:
   run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
   run.sh deploy [-p 2,3]                   Push source code + harness to conN
   run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
-  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
-  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
+  run.sh stop [-p 2,3] [--no-clean]       Stop those pools and shut down their VMs
+  run.sh start [-p 1-4]                    Power pool VMs on and return them to the daemon
   run.sh status [-p 3]                     Show what's running
   run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
   run.sh list                              List available suites (dummy suites shown separately)
@@ -207,11 +207,14 @@ Options:
 # Live multi-pane dashboard:
 ./run.sh live
 
-# Stop all pools:
-./run.sh stop -p all
+# Stop pools 3 and 4. Their guests halt. Other pools keep running:
+./run.sh stop -p 3-4
 
-# Stop pool 3 and clean up its clusters/mirrors:
-./run.sh stop -p 3 -c
+# Bring pool 3 back (power on, daemon may assign suites to it again):
+./run.sh start -p 3
+
+# Stop every pool and the daemon (VMs stay on):
+./run.sh stop -p all
 
 # Re-run the last suite on pool 2, skipping passed tests:
 ./run.sh restart -p 2 -r
