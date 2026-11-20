@@ -25,10 +25,12 @@ dxoperator-v2 DxOperator alpha
 dynatrace-operator Dynatrace Operator alpha
 eginnovations-operator eG Innovations Universal Agent Operator beta
 elasticsearch-eck-operator-certified Elasticsearch (ECK) Operator stable
+f5-bigip-ctlr-operator F5 Container Ingress Services stable
 falcon-operator CrowdStrike Falcon Platform - Operator certified-1.0
 flow-cni-operator nutanix-flow-cni alpha
 fujitsu-enterprise-postgres-operator Fujitsu Enterprise Postgres Operator stable
 function-mesh Function Mesh Operator alpha
+gpu-operator-certified NVIDIA GPU Operator v26.7
 habana-ai-operator Intel Gaudi Base Operator stable
 hammerspace-csi-operator Hammerspace CSI Operator stable
 hammu-platform Hammu Platform alpha
@@ -41,6 +43,7 @@ hpe-csi-operator HPE CSI Operator for OpenShift stable
 hpe-ezmeral-csi-operator HPE Ezmeral Data Fabric CSI Operator for Kubernetes stable
 ibm-application-gateway-operator IBM Application Gateway Operator stable
 ibm-security-verify-access-operator IBM Verify Identity Access Operator stable
+infinibox-operator-certified InfiniBox CSI Driver - Operator stable
 infoscale-dr-manager InfoScale™ DR Manager fast
 infoscale-licensing-operator InfoScale™ Licensing Operator fast
 infoscale-sds-operator InfoScale™ SDS Operator fast
@@ -56,7 +59,10 @@ linstor-operator LINSTOR Operator stable-v2
 mariadb-enterprise-operator MariaDB Enterprise Operator stable
 mediation-openstack-operator Turbonomic OpenStack Probe Operator stable
 merak-ai-agent Merak AI Agent Operator alpha
+microsoft-defender-for-containers-operator Microsoft Defender for Containers Operator insiderfast
 minio-directpv DirectPV stable
+minio-minkms-operator Minio AIStor Key management System (KMS) stable
+minio-object-store-operator MinIO AIStor stable
 mongodb-atlas-kubernetes MongoDB Atlas Operator stable
 mongodb-kubernetes MongoDB Controllers for Kubernetes stable
 mto-dependencies-operator MTO Dependencies Operator alpha
@@ -75,6 +81,8 @@ odigos-operator Odigos Operator alpha
 open-liberty-certified Open Liberty v1.6
 operator-aims-mobile AIMS Mobile Operator alpha
 operator-certification-operator Operator Certification Operator alpha
+portworx-certified Portworx Enterprise stable
+portworx-multi-cluster-certified Portworx Multi-Cluster Operator stable
 prometurbo-certified Prometurbo Operator stable
 pubsubplus-eventbroker-operator Solace PubSub+ Event Broker Operator stable
 runtime-component-operator-certified Runtime Component v1.6
@@ -87,8 +95,10 @@ t8c-tsc-client-certified Turbonomic Secure Connect Client stable
 tawon-operator Tawon alpha
 template-operator Template Operator release-0.1
 tenant-operator Multi Tenant Operator release-1.11
+tenanttab-operator Denegra TenantTab alpha
 tensormesh-platform Tensormesh Platform stable
 tigera-operator Tigera Operator v1.44 release-v1.44
+trident-protect-operator NetApp Trident Protect stable
 truenas-csi TrueNAS CSI Driver stable
 tvo-operator Trilio for OpenStack 6.0.x
 vast-csi-operator VAST CSI driver operator stable

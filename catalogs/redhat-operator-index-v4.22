@@ -1,5 +1,5 @@
 3scale-operator Red Hat Integration - 3scale threescale-2.16
-advanced-cluster-management Advanced Cluster Management for Kubernetes release-5.0
+advanced-cluster-management Advanced Cluster Management for Kubernetes stable-5.0
 agent-sandbox-operator Red Hat build of Agent Sandbox preview-0.9
 amq7-interconnect-operator Red Hat Integration - AMQ Interconnect 1.10.x
 amq-broker-rhel8 Red Hat Integration - AMQ Broker for RHEL 8 (Multiarch) 7.12.x

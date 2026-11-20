@@ -167,4 +167,6 @@ __pycache__/
 .??*.log
 */*sha256sum.txt
 */cluster.conf
+hub/
+virt/
 xxx/
