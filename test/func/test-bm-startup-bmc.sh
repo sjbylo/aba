@@ -65,6 +65,11 @@ _startup y
 	&& _pass "bmc hosts, yes: runs bm-power.sh On, one BMC question" \
 	|| _fail "yes: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
 
+_startup ""
+[ "$called" = "On" ] \
+	&& _pass "bmc hosts, empty answer: Yes is the default" \
+	|| _fail "default: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
+
 _startup n
 [ "$rc" != 0 ] && [ -z "$called" ] && ! echo "$out" | grep -q "$MANUAL_Q" && echo "$out" | grep -q "re-run" \
 	&& _pass "bmc hosts, no: exit non-zero, no power-on, no manual prompt" \

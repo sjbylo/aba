@@ -136,10 +136,11 @@ unset _STUB_STUCK_HOST
 	&& _pass "on: stuck Off, exit 1 and names the node" \
 	|| _fail "on stuck: rc=$rc out: $out"
 
-export _STUB_POST_RESET_401=true _STUB_STATE_FILE=$WORK/state
+# master1 still reads Off after the 401: only a wait, not a second Reset, may follow.
+export _STUB_POST_RESET_401=true _STUB_STATE_FILE=$WORK/state _STUB_SLOW_ON_HOST=h-master1.example
 : > "$_STUB_STATE_FILE"
 STATE=Off _run On
-unset _STUB_POST_RESET_401 _STUB_STATE_FILE
+unset _STUB_POST_RESET_401 _STUB_STATE_FILE _STUB_SLOW_ON_HOST
 [ "$rc" = 0 ] && [ "$resets" = "On On On " ] \
 	&& _pass "on: 401 after Reset, log in again, no second Reset" \
 	|| _fail "on 401: rc=$rc resets=[$resets] out: $out"
@@ -152,9 +153,9 @@ printf 'ask=false\n' > "$CL/aba.conf"
 	&& _pass "on: no prompt in the script" \
 	|| _fail "on no prompt: rc=$rc resets=[$resets] out: $out"
 
-grep -qE 'EjectMedia|^PATCH ' "$_STUB_CALL_LOG" \
-	&& _fail "power on/off sent EjectMedia or a boot PATCH" \
-	|| _pass "no media eject and no boot override PATCH"
+grep -qE 'EjectMedia|InsertMedia|^PATCH ' "$_STUB_CALL_LOG" \
+	&& _fail "power on/off sent EjectMedia, InsertMedia or a boot PATCH" \
+	|| _pass "no media change and no boot override PATCH"
 
 mv "$CL/bmc.conf" "$CL/bmc.conf.bak"
 _run ForceOff
