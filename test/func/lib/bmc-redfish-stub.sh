@@ -32,6 +32,7 @@
 #   _STUB_GRACEFUL_400=true           # 400 on Reset GracefulShutdown
 #   _STUB_STUCK_HOST=<host>           # Reset leaves this host's PowerState unchanged
 #   _STUB_SLOW_OFF_HOST=<host>        # after a Reset to Off, one more read still sees On
+#   _STUB_SLOW_ON_HOST=<host>         # after a Reset to On, one more read still sees Off
 #   _STUB_POLL_ERR=<code>             # with _STUB_STATE_FILE: after each Reset, the next
 #                                     # 3 System GETs (one Redfish retry run) answer <code>
 #
@@ -550,6 +551,7 @@ _stub_power_reset() {
 		*) state=On ;;
 	esac
 	[ "$state" = "Off" ] && [ "$host" = "${_STUB_SLOW_OFF_HOST:-}" ] && state=On-then-Off
+	[ "$state" = "On" ] && [ "$host" = "${_STUB_SLOW_ON_HOST:-}" ] && state=Off-then-On
 	printf '%s=%s\n' "$host" "$state" >> "$_STUB_POWER_FILE"
 }
 
@@ -563,7 +565,7 @@ _bmc_stub_reset_globals() {
 	unset _STUB_VENDOR_MODEL _STUB_FIRMWARE_VERSION _STUB_POWER_STATE
 	unset _STUB_MEDIA_INSERTED _STUB_MEDIA_CONNECTED _STUB_202_TASK _STUB_MANAGER_ID _STUB_USBCD_TARGET
 	unset _STUB_LENOVO_LICENSE_TIER _STUB_POST_RESET_401
-	unset _STUB_POWER_FILE _STUB_GRACEFUL_400 _STUB_STUCK_HOST _STUB_SLOW_OFF_HOST _STUB_POLL_ERR
+	unset _STUB_POWER_FILE _STUB_GRACEFUL_400 _STUB_STUCK_HOST _STUB_SLOW_OFF_HOST _STUB_SLOW_ON_HOST _STUB_POLL_ERR
 	# Phase 10 EthernetInterfaces fixture flags (TEST-06).
 	unset _STUB_NIC_SCENARIO _STUB_NIC_MACS _STUB_NIC_IDS _STUB_SYSTEM_ID
 	# Clear _STUB_STATE_FILE content (reset stateful insert/eject tracking) but keep the path
