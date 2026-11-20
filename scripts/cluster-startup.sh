@@ -90,7 +90,9 @@ if [ "$platform" = "bm" ]; then
 	if ! _cluster_startup_api_up; then
 		if bmc_has_hosts; then
 			# aba -y must not power servers on: it only waits for the API.
-			if [ -z "${ASK_OVERRIDE:-}" ]; then
+			if [ "${ASK_OVERRIDE:-}" ]; then
+				aba_info "aba -y: not powering on the bare-metal nodes through the BMC."
+			else
 				ask -y "Power on bare-metal nodes via BMC" || _bm_startup_stop
 				scripts/bm-power.sh On || _bm_startup_stop
 			fi
