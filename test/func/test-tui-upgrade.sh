@@ -464,7 +464,7 @@ elif echo "$_scr" | grep -qi "Select target version"; then
 			sleep 3
 			_scr=$(tui_capture)
 			tui_screenshot "upg-04d-exec-wait-${_exec_wait}"
-			if echo "$_scr" | grep -qiE "In Progress|Overall Progress|Trigger upgrade|Wait for upgrade|Executing|Running.*step|Progress.*step|── Success ──|── FAILED ──|All steps completed"; then
+			if echo "$_scr" | grep -qiE "In Progress|Overall Progress|Trigger upgrade|Check upgrade progressing|Executing|Running.*step|Progress.*step|── Success ──|── FAILED ──|All steps completed"; then
 				echo "  Execution dialog detected (attempt $_exec_wait)"
 				_exec_started=1
 				break
