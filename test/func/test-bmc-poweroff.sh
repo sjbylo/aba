@@ -53,7 +53,7 @@ _run() {
 	printf 'h-master1.example=On\nh-master2.example=On\nh-worker1.example=On\n' > "$_STUB_POWER_FILE"
 	[ "${ALL_OFF:-}" ] && sed -i 's/=On$/=Off/' "$_STUB_POWER_FILE"
 	: > "$WORK/resets.log"
-	out=$(cd "$CL" && bash scripts/bm-poweroff.sh "$1" </dev/null 2>&1) && rc=0 || rc=$?
+	out=$(cd "$CL" && printf '%s\n' "${ANSWER:-}" | bash scripts/bm-poweroff.sh "$1" 2>&1) && rc=0 || rc=$?
 	resets=$(tr '\n' ' ' < "$WORK/resets.log")
 }
 
@@ -90,13 +90,29 @@ unset _STUB_STUCK_HOST
 	&& _pass "stuck On: exit 1 and names the node" \
 	|| _fail "stuck: rc=$rc out: $out"
 
-export _STUB_POST_RESET_401=true _STUB_STATE_FILE=$WORK/state
+# master1 still reads On after the 401: only a wait, not a second Reset, may follow.
+export _STUB_POST_RESET_401=true _STUB_STATE_FILE=$WORK/state _STUB_SLOW_OFF_HOST=h-master1.example
 : > "$_STUB_STATE_FILE"
 _run ForceOff
-unset _STUB_POST_RESET_401 _STUB_STATE_FILE
+unset _STUB_POST_RESET_401 _STUB_SLOW_OFF_HOST
 [ "$rc" = 0 ] && [ "$resets" = "ForceOff ForceOff ForceOff " ] \
 	&& _pass "401 after Reset: log in again, no second Reset" \
 	|| _fail "401 after Reset: rc=$rc resets=[$resets] out: $out"
+
+export _STUB_POLL_ERR=503
+: > "$_STUB_STATE_FILE"
+_run ForceOff
+unset _STUB_POLL_ERR _STUB_STATE_FILE
+[ "$rc" = 0 ] && echo "$out" | grep -q "powered off 3/3" \
+	&& _pass "failed PowerState read: keeps polling until Off" \
+	|| _fail "poll error: rc=$rc out: $out"
+
+printf 'ask=true\n' > "$CL/aba.conf"
+ANSWER=n _run ForceOff
+printf 'ask=false\n' > "$CL/aba.conf"
+[ "$rc" != 0 ] && [ -z "$resets" ] \
+	&& _pass "answer no: no Reset, exit non-zero" \
+	|| _fail "answer no: rc=$rc resets=[$resets] out: $out"
 
 grep -qE 'EjectMedia|^PATCH ' "$_STUB_CALL_LOG" \
 	&& _fail "power-off sent EjectMedia or a boot PATCH" \
