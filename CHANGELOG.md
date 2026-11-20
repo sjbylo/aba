@@ -1,5 +1,41 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.6...HEAD)
 
+### Added
+
+- **OKD from the CLI** — `distribution=okd`, or `aba --distribution okd`, loads one OKD file. Versions come from the OKD graph, `oc` and `openshift-install` come from the OKD GitHub release, and the mirror pins the release digest from `release.txt`. A release-only install fills a placeholder when no Red Hat pull secret is present. VMware is allowed, with secure boot off. x86_64 only. The TUI does not run. Upgrade and Red Hat services abort with the reason.
+- **A list of node IPs** (Contributed by @mateuszslugocki) — `starting_ip` accepts one address per node, masters first. A bare last octet keeps the prefix of the previous address (`10.0.1.101,102,110`). `--starting-ip` and the TUI take the same list. Resolve-VIPs and preflight use those addresses. Every address must sit inside `machine_network`.
+- **Cluster access card** — `aba info` and a finished install print the console URL, kubeadmin user and password, API, kubeconfig path, optional `/etc/hosts` lines, and the terminal, shell, login, and day-2 commands. The type and role come from the installed state.
+- **A rough mirror duration** — save and sync assume 10 MB/s, and load assumes 40 MB/s, until a finished mirror has a measured rate. The line says about how many minutes the imageset will take.
+- **Distribution facts live in one file each** — OpenShift catalog names and the graph URL are in `scripts/dist-ocp.sh`. OKD replaces that file with `scripts/dist-okd.sh`. Call sites do not test `dist_of`.
+
+### Changed
+
+- **Upgrade progress says it is checking** — The long upgrade row is "Check upgrade progressing". The gauge stays on that row while the cluster reports progress.
+- **Prepare Upgrade and monitor use the progress dialog** — Those runs no longer open the old full-output chooser. Mirror install has a Preparation row for the registry extract.
+- **`oc adm upgrade` retries twice** — Three attempts after day-2 settle races.
+- **The agent is probed once per boot** — `.agent-wait-done` records that `wait-agent-up.sh` already returned, so a later install goes to the monitor. Refresh and a missing VM clear the stamp.
+- **Day-2 NTP follows a deep server** — Chrony's local stratum 3 orphan ignores a source at stratum 3 or worse. When the configured server is that deep, day-2 raises the local stratum so the nodes still select it, and says so. A stratum 1 or 2 server stays at local stratum 3. An unreadable server stays at 3 with a warning.
+- **Registry installers share one prelude** — Quay, Docker, and the mirror registry share the local install setup. `-u` is the same option as `--reg-user`.
+- **Repeated `aba` flags share one parser** — The CLI contract is unchanged. A later edit cannot drift between copies of the same flag.
+- **The mirror directory is chosen when Make runs** — Registry targets no longer depend on a `mirror` symlink to themselves. Stale self-links are removed. A `run_once` replay still uses the old link until that task finishes.
+- **Port 55000 is seen with `ss`** — The oc-mirror retry does not need `lsof`.
+- **Catalog and Quay extracts survive a partial tree** — A running catalog container is left alone. The Quay execution-environment tar is extracted again when the mirror tree is incomplete. `run_once` jobs are stopped before install deletes the runner directory.
+- **README shows the TUI** — The mirror-sync clip and six stills. The ask() rules are in the spec. ADR-019 records the OpenShift/OKD split.
+- **Catalog indexes refreshed** — Certified 4.18–5.1, community 4.18–4.22 and 5.0–5.1, and Red Hat 4.22, where the channel list changed. Red Hat 4.18–4.21 and 5.0 were unchanged.
+
+### Fixed
+
+- **A mirror path cannot end with `/`** — `verify-mirror-conf`, `aba --reg-path`, and the TUI image-path field reject it. The slash is not stripped. oc-mirror would refuse the empty last segment.
+- **Mirror registry 3 trusts `rootCA.pem`** — The leaf in `ssl.cert` is not installed as the trust anchor, so oc-mirror accepts the registry.
+- **OKD signatures verify against the CI key** — sync no longer drops signatures and then fails because quay.io/okd published none. save and load still pass `--remove-signatures`. The digest is the one `release.txt` records.
+- **Mirror DNS prefers the lab NIC** — On a dual-homed host the default route is often the management network, which guests cannot reach. The registry A record follows `next_hop` / `machine_network`.
+- **Old registry tasks are forgotten** — Tasks saved under a deleted or moved aba directory are not replayed.
+- **`aba -d` stays inside the repo** — A missing cluster directory is recreated only under the repo root. `-d` does not walk parent directories. `aba cluster` outside the repo root does not rewrite `cluster.conf`.
+- **Secrets stay out of the trace and out of log lines** — The access card still prints the kubeadmin password. The trace copy stores `***`. Registry, vSphere, and BMC passwords are hidden in `replace-value-conf` log lines. A bare `--distribution` aborts like every other flag, and OKD pull-secret failures go to stderr.
+- **The MAC count is omitted when the list is ready** — The node × port formula is only printed when the list is short.
+- **Script start lines name the working directory** — A failing command is easier to place in the trace.
+- **Save and sync report curl's own error** — The reachability check no longer replaces that error with a generic line.
+
 ---
 
 ## [1.4.6](https://github.com/sjbylo/aba/releases/tag/v1.4.6) - 2026-11-13
