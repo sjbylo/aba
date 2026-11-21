@@ -2,6 +2,7 @@
 # Delete all VMs in the cluster on the KVM host
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 if [ -s kvm.conf ]; then
 	ensure_virsh

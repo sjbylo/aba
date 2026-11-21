@@ -4,7 +4,8 @@
 # Exercises:
 #   1.  VMware config form: all fields present, edit a field, verify vmware.conf
 #   2.  KVM config form: all fields present, edit a field, verify kvm.conf
-#   3.  Pull secret path: verify auto-skip when valid, info dialog when missing
+#   3.  Pull secret path: file exists, valid JSON, wizard auto-skips it
+#       (the missing-file dialog is test-tui-wizard.sh)
 #   4.  Mirror config form: all fields present (hostname, port, user, etc.)
 #   5.  Restore originals
 #
@@ -12,6 +13,7 @@
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
+trap 'tui_mirror_restore_service || true' EXIT
 
 echo "=== TUI Platform Config Deep Test ==="
 echo "  Host: $_TUI_HOST"
@@ -51,8 +53,7 @@ tui_screenshot "pc-01-vmware"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "VMware\|vCenter\|ESXi"; then
-	echo "  ✓ PASS: VMware configuration form opened"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "VMware configuration form opened" "$_scr"
 	tui_assert_title "VMware\|ESXi" "VMware config dialog title"
 
 	# Verify all expected fields
@@ -75,8 +76,7 @@ if echo "$_scr" | grep -qi "VMware\|vCenter\|ESXi"; then
 	_scr=$(tui_capture)
 	tui_screenshot "pc-01b-datacenter-input"
 	if echo "$_scr" | grep -qi "Datacenter\|datacenter"; then
-		echo "  ✓ PASS: Datacenter input dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Datacenter input dialog appeared" "$_scr"
 
 		# Clear existing value and type new
 		# Ctrl+U clears input in dialog
@@ -89,8 +89,7 @@ if echo "$_scr" | grep -qi "VMware\|vCenter\|ESXi"; then
 		# Verify in vmware.conf
 		_dc_val=$($_TUI_SSH "grep '^GOVC_DATACENTER=' ~/aba/vmware.conf 2>/dev/null | head -1 | cut -d= -f2 | awk '{print \$1}' | tr -d \"'\"" || echo "")
 		if [[ "$_dc_val" == "test-dc-01" ]]; then
-			echo "  ✓ PASS: Datacenter persisted to vmware.conf: '$_dc_val'"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Datacenter persisted to vmware.conf: '$_dc_val'"
 		else
 			echo "  ✗ FAIL: Expected 'test-dc-01' in vmware.conf, got '$_dc_val'"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -107,8 +106,7 @@ if echo "$_scr" | grep -qi "VMware\|vCenter\|ESXi"; then
 	sleep 1
 
 elif echo "$_scr" | grep -qi "KVM\|Libvirt"; then
-	echo "  ✓ PASS: Platform is KVM — will verify KVM form in section 2"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Platform is KVM — will verify KVM form in section 2" "$_scr"
 	tui_keys Escape; sleep 1
 else
 	echo "  ✗ FAIL: Platform config form not shown"
@@ -130,28 +128,24 @@ $_TUI_SSH "[ -f ~/aba/kvm.conf ] || cp ~/aba/templates/kvm.conf ~/aba/kvm.conf 2
 _kvm_has_uri=$($_TUI_SSH "grep 'LIBVIRT_URI=' ~/aba/kvm.conf 2>/dev/null | head -1 | cut -d= -f2" || echo "")
 
 if [[ -n "$_kvm_has_uri" ]] || $_TUI_SSH "[ -f ~/aba/kvm.conf ]" 2>/dev/null; then
-	echo "  ✓ PASS: kvm.conf exists or created from template"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "kvm.conf exists or created from template"
 
 	# Verify kvm.conf has expected fields
 	_kvm_fields=$($_TUI_SSH "cat ~/aba/kvm.conf 2>/dev/null" || echo "")
 	if echo "$_kvm_fields" | grep -qi "LIBVIRT_URI"; then
-		echo "  ✓ PASS: kvm.conf has LIBVIRT_URI field"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "kvm.conf has LIBVIRT_URI field"
 	else
 		echo "  ✗ FAIL: kvm.conf missing LIBVIRT_URI"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$_kvm_fields" | grep -qi "KVM_STORAGE_POOL"; then
-		echo "  ✓ PASS: kvm.conf has KVM_STORAGE_POOL field"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "kvm.conf has KVM_STORAGE_POOL field"
 	else
 		echo "  ✗ FAIL: kvm.conf missing KVM_STORAGE_POOL"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$_kvm_fields" | grep -qi "KVM_NETWORK"; then
-		echo "  ✓ PASS: kvm.conf has KVM_NETWORK field"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "kvm.conf has KVM_NETWORK field"
 	else
 		echo "  ✗ FAIL: kvm.conf missing KVM_NETWORK"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -170,8 +164,7 @@ echo "--- 3. Pull secret path ---"
 # Verify pull secret is configured in aba.conf
 _ps_path=$($_TUI_SSH "grep '^pull_secret_file=' ~/aba/aba.conf 2>/dev/null | cut -d= -f2 | awk '{print \$1}'" || echo "")
 if [[ -n "$_ps_path" ]]; then
-	echo "  ✓ PASS: pull_secret_file configured: $_ps_path"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "pull_secret_file configured: $_ps_path"
 else
 	echo "  ✗ FAIL: pull_secret_file not in aba.conf"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -181,8 +174,7 @@ fi
 _ps_expanded="${_ps_path/#\~/$HOME}"
 _ps_exists=$($_TUI_SSH "[ -f '$_ps_expanded' ] && echo yes || echo no" 2>/dev/null)
 if [[ "$_ps_exists" == "yes" ]]; then
-	echo "  ✓ PASS: Pull secret file exists at $_ps_path"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Pull secret file exists at $_ps_path"
 else
 	echo "  ✗ FAIL: Pull secret file not found at $_ps_path"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -191,8 +183,7 @@ fi
 # Verify pull secret is valid JSON
 _ps_valid=$($_TUI_SSH "python3 -c 'import json,sys; json.load(open(sys.argv[1]))' '$_ps_expanded' 2>/dev/null && echo yes || echo no" 2>/dev/null)
 if [[ "$_ps_valid" == "yes" ]]; then
-	echo "  ✓ PASS: Pull secret is valid JSON"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Pull secret is valid JSON"
 else
 	echo "  ✗ FAIL: Pull secret is not valid JSON"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -209,8 +200,7 @@ _scr=$(tui_capture)
 
 # When pull secret is valid, wizard should skip directly to channel/resume
 if echo "$_scr" | grep -qi "Resume\|channel\|version\|platform\|Continue with"; then
-	echo "  ✓ PASS: Wizard auto-skipped pull secret (valid file exists)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Wizard auto-skipped pull secret (valid file exists)" "$_scr"
 elif echo "$_scr" | grep -qi "Pull Secret\|pull secret\|Enter file path"; then
 	echo "  ✗ FAIL: Wizard showed pull secret dialog despite valid file"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -234,36 +224,25 @@ sleep 3
 tui_screenshot "pc-04-mirror-pre"
 _scr=$(tui_capture)
 
-# If mirror already installed, reinstall confirmation is the expected CONNO path.
-# IMPORTANT: this yesno is often --defaultno (focus on No). tui_press_button "No"
-# assumes focus on the first button and Tab→Enter can land on Yes → starts uninstall!
-# Escape cancels safely without touching the installed mirror.
+# An installed registry shows Reinstall. Yes removes the service and keeps
+# the data dir so the config form can be checked. --defaultno focuses No;
+# tui_confirm_yes moves to Yes.
 if echo "$_scr" | grep -qi "reinstall\|already installed\|existing"; then
-	echo "  ✓ PASS: Mirror reinstall confirmation shown (mirror already installed)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_keys Escape
-	sleep 2
-	_scr=$(tui_capture)
-	# Cancel must NOT start uninstall/reinstall progress
-	if echo "$_scr" | grep -qi "Uninstall Existing\|Remove registry\|Reinstall\|In Progress\|Overall Progress"; then
-		echo "  ✗ FAIL: Canceling reinstall started a destructive mirror operation"
+	tui_pass "Mirror reinstall confirmation shown (mirror already installed)" "$_scr"
+	echo "  Uninstalling mirror so the config form opens (data dir kept)"
+	_TUI_MIRROR_SERVICE_DOWN=yes
+	tui_confirm_yes
+	if ! tui_wait_mirror_install_choice "pc-uninstall"; then
+		echo "  ✗ FAIL: mirror uninstall did not reach the install form"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_screenshot "pc-04-after-decline-unexpected"
-		# Try to quit any progress dialog immediately
-		tui_keys q 2>/dev/null || true
-		sleep 1
-		tui_keys Escape 2>/dev/null || true
-	elif echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host\|Hostname\|Actions\|Mirror Payload\|Install Mirror\|Advanced\|Configure"; then
-		echo "  ✓ PASS: Declined reinstall returns to a known menu/form"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		_scr=""
 	else
-		echo "  ✗ FAIL: After declining reinstall, screen was unexpected"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-		tui_screenshot "pc-04-after-decline-unexpected"
+		tui_pass "Install form opened after uninstall" "$(tui_capture)"
+		_scr=$(tui_capture)
 	fi
-elif echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host"; then
-	echo "  ✓ PASS: Install location choice shown"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+fi
+if echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host"; then
+	tui_pass "Install location choice shown" "$_scr"
 
 	# Select "Install locally" to see config form
 	tui_keys 1; sleep 0.3; tui_keys Enter
@@ -272,8 +251,7 @@ elif echo "$_scr" | grep -qi "locally\|remote\|Install locally\|local.*host"; th
 	_scr=$(tui_capture)
 
 	if echo "$_scr" | grep -qi "Hostname\|Port\|Username\|Password"; then
-		echo "  ✓ PASS: Mirror config form appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Mirror config form appeared" "$_scr"
 
 		tui_assert_contains "Hostname\|hostname" "Mirror hostname field"
 		tui_assert_contains "Port\|port" "Mirror port field"
@@ -294,6 +272,10 @@ else
 fi
 
 tui_back_to "Actions" 5
+if ! tui_mirror_restore_service; then
+	echo "  ✗ FAIL: mirror service was not installed again"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+fi
 
 # ============================================================================
 # 5. Cluster wizard page 1 — verify all basics fields
@@ -312,21 +294,46 @@ if echo "$_scr" | grep -qi "existing\|previous\|Use Existing"; then
 		tui_keys Tab; sleep 0.3; tui_keys Enter
 	}
 	sleep 2
+	_scr=$(tui_capture)
 fi
 
+# Mirror missing or empty offers Install & Sync / Sync Now. Take it.
+# The wizard page is the check. Backing out is not a pass.
+if echo "$_scr" | grep -qi "Mirror Required\|No mirror registry\|Install & Sync\|Release Image Missing\|Sync Now\|Load Now"; then
+	echo "  Mirror gate is up — installing or syncing so the wizard opens"
+	_pc_i=0
+	while [ "$_pc_i" -lt 40 ]; do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Cluster Name\|Base domain\|Cluster – Basics"; then
+			break
+		fi
+		if echo "$_scr" | grep -qi "In Progress\|Overall Progress\|Executing\|Syncing"; then
+			tui_wait_for_progress "pc-wizard-gate" 3600 || break
+			tui_dismiss_result 2>/dev/null || true
+		elif echo "$_scr" | grep -qi "Mirror Required\|Release Image Missing\|Install & Sync\|Sync Now\|Load Now"; then
+			tui_keys Enter
+		elif echo "$_scr" | grep -qi "existing\|previous\|Use Existing\|New Cluster\|already installed"; then
+			tui_press_button "New Cluster" 2>/dev/null || tui_keys Enter
+		elif echo "$_scr" | grep -qi "Mirror Updated\|updated successfully"; then
+			tui_keys Enter
+		elif echo "$_scr" | grep -qi "Continue"; then
+			tui_press_button "Continue" 2>/dev/null || tui_keys Enter
+		fi
+		sleep 2
+		_pc_i=$(( _pc_i + 1 ))
+	done
+	_scr=$(tui_capture)
+fi
 tui_screenshot "pc-05-cluster-basics"
-_scr=$(tui_capture)
-
 if echo "$_scr" | grep -qi "Cluster Name\|Name\|Type\|Domain"; then
-	echo "  ✓ PASS: Cluster basics page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-
+	tui_pass "Cluster basics page appeared" "$_scr"
 	tui_assert_contains "Name\|name" "Cluster name field"
 	tui_assert_contains "Domain\|domain" "Base domain field"
 	tui_assert_contains "Type\|type\|sno\|compact\|standard" "Cluster type field"
 else
 	echo "  ✗ FAIL: Cluster basics page not reached"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+	tui_screenshot "pc-05-basics-missing"
 fi
 
 # Back out
@@ -344,8 +351,7 @@ $_TUI_SSH "cp ~/aba/kvm.conf.test-backup ~/aba/kvm.conf 2>/dev/null; rm -f ~/aba
 # Persistence check writes a fake DC (test-dc-01). If the backup itself was
 # already poisoned, ensure_install_prereqs rewrites to a real govc DC.
 tui_ensure_install_prereqs
-echo "  ✓ PASS: Original configs restored"
-_TUI_PASS=$(( _TUI_PASS + 1 ))
+tui_pass "Original configs restored"
 
 # ============================================================================
 # 7. Cleanup

@@ -91,4 +91,5 @@ ABA runs pre-flight checks automatically before ISO generation.
 
 - API and Ingress VIPs **must** be on the same L2 subnet as the cluster nodes (`machine_network`). They are managed via keepalived, which requires L2 adjacency.
 - `starting_ip` assigns sequential IPs: master1 gets `.101`, master2 gets `.102`, master3 gets `.103`.
+- To skip addresses, list one IP per node, masters first: `starting_ip=10.0.1.101,102,110` gives master3 `.110`. A bare last octet keeps the prefix of the previous full address. Every address must be inside `machine_network`.
 - For SNO clusters: `api_vip` and `ingress_vip` are ignored — both DNS records point to the single node IP.

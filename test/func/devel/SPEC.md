@@ -154,9 +154,9 @@ the air-gap workflow actually works without connectivity.
 Use `~/bin/internet.sh` on the target host:
 
 ```bash
-$_SSH_DISCO "~/bin/internet.sh down"   # before TUI workflow
+$_SSH_DISCO "~/bin/internet.sh down"   # at start, and again on EXIT
 # ... run TUI workflow ...
-$_SSH_DISCO "~/bin/internet.sh up"     # restore in cleanup
+# Do not call internet.sh up in cleanup. Leave the NIC down.
 ```
 
 The script safely identifies the management interface (the one carrying the
@@ -996,8 +996,9 @@ on each host:
 
 ```bash
 ssh -F ~/.aba/ssh.conf disco.example.com "~/bin/internet.sh down"  # disconnect
-ssh -F ~/.aba/ssh.conf disco.example.com "~/bin/internet.sh up"    # reconnect
 ```
+
+A test that must bring the NIC up calls `~/bin/internet.sh down` as soon as that step finishes, and again from its EXIT trap. Cleanup does not reconnect it.
 
 The script safely identifies the management NIC (via `SSH_CONNECTION`) and
 only touches the internet-facing NIC — SSH access is preserved.

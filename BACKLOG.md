@@ -177,7 +177,7 @@ is hidden behind the toggle.
 ## #B5: Add operator/cluster checks to "aba status" command
 
 **Severity:** LOW
-**Status:** Planned
+**Status:** Partially Done (`aba status` and `aba -d <cluster> status` exist, with human output, `--all`, and `--shell`. No `--full` operator or CSV checks.)
 **Added:** 2026-10-31
 
 **Problem:** Pre-flight checks like "is the Cincinnati operator available on
@@ -434,7 +434,7 @@ The `[ABA] Excluded: ...` summary line at the end is sufficient.
 ## #B14: Cross-validate networking values (IPs, CIDRs, collisions)
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Partially Done (`_validate_network_consistency` does the four checks and `verify-cluster-conf` calls it. The TUI networking page does not.)
 **Added:** 2026-10-14
 
 **Problem:** The networking page (Cluster — Networking) validates each field
@@ -640,7 +640,7 @@ menu item produces multi-page output and opens `less -r` on completion.
 ## #B21: Uninstall: keep the mirror data directory unless the user asks to delete it
 
 **Severity:** HIGH
-**Status:** Planned
+**Status:** Done (uninstall keeps the data directory. `--delete-data` removes it. The interactive delete prompt was not added.)
 **Added:** 2026-10-06
 
 **Problem:** `aba uninstall` removes the registry and then deletes its data directory. That directory is the mirror: often hundreds of GB of images. One confirmation today means the images are gone. Putting the same vendor back means downloading them again.
@@ -1118,7 +1118,7 @@ helper (e.g. `require_cluster_stable`) could be extracted for reuse.
 ## #B33: `oc-mirror`: check port 55000 before invoking
 
 **Severity:** LOW
-**Status:** Planned
+**Status:** Partially Done (a busy port 55000 is named before `oc-mirror`, and a retry kills that process. There is no 30-second wait before the first run.)
 **Added:** 2026-07-10
 
 **Problem:** `oc-mirror` v2 starts an ephemeral local registry on port 55000
@@ -2473,7 +2473,7 @@ Do NOT mix with other changes.
 ## #B62: Feature: Unified `aba status` command
 
 **Severity:** MEDIUM — UX improvement, central diagnostic/preflight tool
-**Status:** Planned
+**Status:** Partially Done (`aba status` and `aba -d <cluster> status` exist. No `status mirror`, `status upgrade`, or `status day2`.)
 **Added:** 2026-09-10
 
 **Problem:** ABA lacks a single command to show the state of the mirror,
@@ -2524,7 +2524,7 @@ day2 CS version check) into a unified `scripts/aba-status.sh` dispatcher.
 ## #B63: Agent-config / install-config: remove "ownership invitation" comment, add dynamic user-managed notice
 
 **Severity:** LOW — UX improvement, consistency with ISC behavior
-**Status:** Planned
+**Status:** Partially Done (the ownership-invitation line is gone from the agent-config and install-config templates. The dynamic user-managed notice and the sentinel were not added.)
 **Added:** 2026-09-24
 
 **Problem:** All agent-config and install-config templates contain a static
@@ -4014,4 +4014,161 @@ A short script walks `bmc_host_list`, logs in, reads the first System id, calls 
 The 2.0 file is a different build from the stable-4.22 client tarball (`2.0.0-202610201601` vs `4.22.0-202611031655`). Cached `oc-mirror.tar.gz` and `oc-mirror.rhel9.tar.gz` do not satisfy the new targets. `download-all` still fetches both RHEL flavors for this arch only.
 
 **Workaround:** Stay on the `stable-4.22` client tarballs.
+
+---
+
+## #B114: Find installed VMs from state.sh, not from cluster.conf and agent-config.yaml
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-13
+
+**Problem:** After a cluster is installed, `aba start`, `aba stop`, `aba ls`, `aba create`, and `aba delete` still need `install-config.yaml` and `agent-config.yaml` in the cluster directory to name the VMs. `cluster.conf` is still required to enter those commands at all. Those files are the inputs that were consumed to build the VMs. Editing them, regenerating them, or removing them makes ABA look up the wrong guests, or report that there is nothing to delete while the VMs are still running. #B85 suggested falling back to `cluster.conf` for delete. That is still the next-install input, not the record of what was installed.
+
+**Root cause:** `vmw-exists.sh`, `kvm-exists.sh`, `vmw-delete.sh`, and `kvm-delete.sh` call `cluster-config.sh` unless `CLUSTER_NAME` is already set. `cluster-config.sh` reads `install-config.yaml` for the cluster name and `agent-config.yaml` for `hosts[].hostname` (`CP_NAMES`, `WORKER_NAMES`). `vm_name` then builds the guest name from those. `_ensure_vm_platform_ready` in `scripts/aba.sh` already takes the installed platform from `state.sh`, then still warns if `agent-config.yaml` is missing. Commands such as `startup` and `delete` also refuse to run when `cluster.conf` is absent, unless a backup copy can be restored.
+
+`externalize_cluster_state` already writes `cluster_name`, `base_domain`, `cluster_type`, `platform`, `cp_names`, and `worker_names` into `~/.aba/clusters/<name>.<domain>/state.sh`. The name fields stay empty. The writer uses lowercase `cp_names` and `worker_names`, and nothing sets those. `monitor-install.sh` has the real lists in `CP_NAMES` and `WORKER_NAMES` at the moment it calls `externalize_cluster_state`. Hostnames cannot be rebuilt from `cluster_name` and replica counts alone, because `master_prefix` and `worker_prefix` in `cluster.conf` are editable. SNO is the exception: the single guest name is the cluster name.
+
+**Proposed fix:** When the cluster is installed, VM lookup reads `state.sh`. At externalize time, store the hostnames that were actually installed (`CP_NAMES` and `WORKER_NAMES`, or the hostnames in the `agent-config.yaml` just consumed). Backfill older state dirs from `backup/agent-config.yaml`, which is already copied there. `vm_exists_any`, start, stop, ls, and delete use `cluster_name`, `cp_names`, `worker_names`, and `cluster_type` from that file. `cluster.conf` stays the input for the next install. A later edit must not change which guests an installed cluster's power and delete commands target. `vmware.conf` and `kvm.conf` stay as they are: they are how ABA reaches the hypervisor, not which guests belong to the cluster. Once `clusterstate` points at `state.sh`, `startup` and `delete` should not need `cluster.conf` in the working directory. #B85's `cluster.conf` fallback is the wrong source for an installed cluster.
+
+Once that record exists, removing `agent-config.yaml` and `install-config.yaml` from the cluster directory is plausible. They have been consumed: the installer already used them, and `externalize_cluster_state` already copies both into `~/.aba/clusters/<name>.<domain>/backup/`. Day-2 power, list, and delete do not need the working copies. The next install regenerates both from `cluster.conf`. Leaving the consumed files in place under their Make input names is what lets a later edit or a timestamp change steer VM lookup and rebuild the ISO from a file that no longer matches the running guests. If an outright delete is too sharp, rename them so they are no longer `agent-config.yaml` and `install-config.yaml` (the backup names already kept under `backup/` are enough). `cluster.conf` stays. It is the editable input, not a consumed output.
+
+**Workaround:** Keep the generated `install-config.yaml` and `agent-config.yaml` that match the running VMs. If they were removed, regenerate them with the same name and prefixes, then retry. Last resort is `govc` or `virsh` with the guest names.
+
+---
+
+## #B115: Move progress-plan wording into the script that owns the work
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-11-13
+
+**Problem:** Most `PLAN` lines are written in `scripts/progress-plan.sh`. Save and Day-2 already own theirs: `reg-save.sh plan` and `day2.sh plan` print the lines and exit before the script sources anything, and `progress-plan.sh` sends them. The other workflows should follow that, so the script that runs the work owns the wording.
+
+**Root cause:** The dialog waits about 10 seconds for the first `PLAN`, then falls back to the old full output. Make therefore calls `progress-plan.sh` before the slow prerequisites (registry extract, ISO build, VM boot). The wording and that early send ended up in the same file. The send has to stay early. The words do not.
+
+**Proposed fix:** Keep `progress-plan.sh` as the sender, at the same Makefile target or entry-point call, with the same lines in the same order. Move a list only when it is one contiguous block. Put a `plan` section at the top of the owning script, before `source`, and exit. `bash script plan` must print only `PLAN` lines.
+
+- `reg-sync.sh`, `reg-load.sh`, `reg-uninstall.sh`, `reg-stop.sh`, `reg-start.sh`
+- `day2-config-ntp.sh`, `day2-config-osus.sh`, `day2-config-virt.sh`
+- `cluster-graceful-shutdown.sh`, `cluster-startup.sh`
+
+Leave these assembled in `progress-plan.sh`:
+
+- Install exits early when `.available` exists, and sends `START|reg_prep` between the first row and the rest. The dialog starts drawing on the first row, so that order stays.
+- Bundle and upgrade insert Save or Day-2 in the middle of their own rows. Those inserted lists already live in `reg-save.sh` and `day2.sh`.
+- Cluster install is the Make chain. No one script generates the config, builds the ISO, boots the nodes, and monitors. `monitor-install.sh` owns only the last row. Turn the `PLAN` line now inside that script into a `plan` section, and have both the install plan and `aba mon` ask for it.
+
+Prove the dialog sees the same events: capture `progress-plan.sh` output for each workflow before and after. `test/func/test-progress-events.sh` checks the text, the count, and the order. A `plan` guard below the first `source` is the hazard: `progress-plan.sh` forwards every stdout line, and `cluster-upgrade.sh` and `cluster-graceful-shutdown.sh` treat arguments as the real command.
+
+**Workaround:** None. The dialog already shows these steps.
+
+---
+
+## #B116: OKD: same day2-virt command, separate virt image set
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-17
+**Updated:** 2026-11-17
+
+**Problem:** `aba day2-virt` is rejected when `distribution=okd`. An OKD cluster that installs `community-kubevirt-hyperconverged` can publish that operator with `aba day2`, but nothing retargets its guest-disk imports at the mirror. On a disconnected cluster those imports still point at `quay.io` and fail. The current virt image set also lists `registry.redhat.io` RHEL guest images, and mirroring those needs an entitled Red Hat pull secret. A release-only OKD install does not have one.
+
+**Root cause:** `scripts/day2-config-virt.sh` requires the `HyperConverged` object `kubevirt-hyperconverged` in `openshift-cnv` and rewrites that object's boot sources. The rows are three `quay.io/containerdisks` images (`centos-stream:10`, `centos-stream:9`, `fedora:latest`) plus `registry.redhat.io` RHEL 9, 10, and 11 image streams. `templates/image-set-virt` is only the guest disks (RHEL 9, RHEL 10, and the three container disks). The Red Hat operators are a different file, `templates/operator-set-virt`. `dist_stop_unsupported` rejects `day2-virt` for OKD before the script runs. `upgrade`, `upgrade-mon`, and `day2-osus` stay rejected.
+
+**Proposed fix:** Keep the command `aba day2-virt` for OpenShift and OKD. Stop passing `day2-virt` to `dist_stop_unsupported`. Keep one script. Do not test the distribution inside it. The distribution file supplies the operator name to tell the user to install, the `HyperConverged` namespace and name, and the boot-source rows. The script already treats an `imagestream` row differently from a `url` row.
+
+OpenShift answers stay what the script has today: operator `kubevirt-hyperconverged`, object `kubevirt-hyperconverged` in `openshift-cnv`, the three container disks, and the RHEL image streams. OKD answers: operator `community-kubevirt-hyperconverged`, and only the three container-disk rows. No `registry.redhat.io` rows, so the RHEL image-stream half does not run. A RHEL guest disk can boot on the community operator, but OKD does not mirror those disks because of the pull secret.
+
+Keep two image-set files, because the disk lists differ:
+
+- `templates/image-set-virt-ocp` keeps the current `templates/image-set-virt` contents, including the two RHEL disks.
+- `templates/image-set-virt-okd` lists only the three `quay.io/containerdisks` images.
+
+The command stays `aba image set add virt`. Do not add `virt-ocp` or `virt-okd` as names the user types. `distribution` in `aba.conf` already says which file `virt` is. Missing or `ocp` uses the OpenShift file. `okd` uses the OKD file. `scripts/image-sets.sh` names a set from the filename suffix and globs `templates/image-set-*`, so those two files must not appear as their own sets. The distribution file selects the file for `virt`.
+
+`aba day2` still only publishes the catalog. `aba day2-virt` still does not install the operator. `templates/operator-set-virt` stays the Red Hat operator list. OKD selects `community-kubevirt-hyperconverged` with `--ops`. On a connected cluster the script already exits and leaves the public imports alone. That stays true for both.
+
+Before writing the OKD answers, confirm the community operator's `HyperConverged` name and namespace. If they are not `openshift-cnv` / `kubevirt-hyperconverged`, the current script would patch the wrong object.
+
+**Workaround:** On a connected OKD cluster, install `community-kubevirt-hyperconverged` and let it import the container disks from `quay.io`. A fully disconnected cluster has no workaround until `aba day2-virt` accepts OKD.
+
+---
+
+## #B117: OKD: install the community virt operator after day2
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-18
+**Updated:** 2026-11-18
+
+**Problem:** The OKD air-gap path stops once `community-kubevirt-hyperconverged` is listed in the catalog. `aba day2` applies the mirrored CatalogSource. The OKD end-to-end suite then checks `oc get packagemanifests` for that name. A package manifest means OperatorHub can offer the operator. It does not mean the operator is installed. Nothing creates the namespace, OperatorGroup, or Subscription, and nothing waits for the CSV to reach Succeeded.
+
+**Root cause:** `scripts/day2.sh` installs CatalogSources and the related mirror resources. It does not create a Subscription. The ACM suite is the existing pattern for the missing step: day2 first, then `oc apply` of a subscription, then a poll until the CSV is Succeeded. The OKD suite has only the catalog half of that. #B116 still assumes the operator is already installed before `aba day2-virt` retargets guest-disk imports. This item is that install. It does not create the HyperConverged operand.
+
+**Proposed fix:** After day2 on the OKD air-gap cluster, install `community-kubevirt-hyperconverged` from the CatalogSource day2 applied. Read the channel and the suggested install namespace from the package manifest before writing the objects. Apply the namespace, OperatorGroup, and Subscription, then wait until the CSV is Succeeded. Extend the OKD suite to assert that CSV, after the existing package-manifest check. Leave `aba day2` as catalog publication. Leave the HyperConverged object and the boot-source rows to #B116.
+
+**Workaround:** After `aba day2`, install `community-kubevirt-hyperconverged` from OperatorHub, or apply a Subscription to the community CatalogSource by hand.
+
+---
+
+## #B118: Reject a `reg_path` that ends with `/`
+
+**Severity:** LOW
+**Status:** Done
+**Added:** 2026-11-19
+**Updated:** 2026-11-20
+
+**Problem:** `aba -d mirror sync` on a bundle host failed inside oc-mirror before any image was copied: `parse reference "bundle.example.com:8449/ocp4/": invalid reference format`. The registry was up. The destination string is not a valid image reference because it ends with `/`.
+
+**Root cause:** `scripts/reg-sync.sh` builds `docker://$reg_host:$reg_port$reg_path` and adds nothing after `reg_path`. On that host `mirror.conf` had `reg_path=/ocp4/`. `_valid_abs_path` treats a trailing slash as a directory, so `verify-mirror-conf` accepts it and oc-mirror is the first thing that rejects it. The same string is passed by `scripts/reg-load.sh`.
+
+**Proposed fix:** One check, `_valid_reg_path`, rejects a final `/`. `verify-mirror-conf` and `--reg-path` abort through `_reg_path_abort_if_slash`. The TUI image-path field uses `_valid_reg_path` and asks again. Do not strip the slash. Leave a path that does not end with `/` unchanged.
+
+**Workaround:** Edit `reg_path` in `mirror.conf` and remove the final `/`, then run sync again.
+
+---
+
+## #B119: Ask to power on bare-metal nodes via the BMC at aba startup
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-20
+
+**Problem:** `aba startup` on a bare-metal cluster asks the operator to turn the servers on by hand, then waits for the API. It does that even when `bmc.conf` lists BMC hosts that ABA can already reach. After #B110, `aba stop` and `aba kill` can power those servers off. Startup cannot power them back on.
+
+**Root cause:** `scripts/cluster-startup.sh` has one bare-metal branch. When the API is down it calls `ask -y --always` with the manual "power the servers on yourself" text. The virtual branch calls `aba start`. Nothing in startup looks at `bmc.conf`. The boot helper `bmc_power_reset` is the wrong call here: a machine that is already `On` gets `ForceRestart`.
+
+**Proposed fix:** Three cases, only when startup finds the API down. If the API is already up, do not ask and do not send a Reset.
+
+- BMC: `platform=bm` and `bmc.conf` has at least one `bmc_host_*` entry. Ask "Power on bare-metal nodes via BMC?" with Yes as the default (`ask -y`). Yes powers each listed host on, then the existing API wait runs. The action posts `ResetType On` only when `PowerState` is `Off`. `On` and `PoweringOn` are left alone, then wait until `PowerState` is `On` (same 120s / 2s poll as boot). Do not call `bmc_power_reset`. Do not insert media or set a boot override. No exits non-zero and sends nothing. `aba -y` skips the prompt and must not power the servers on.
+- Bare metal without a BMC: no `bmc_host_*` entries. Keep the current manual prompt and the current wait. No code change on this path.
+- Virtual (`vmw` or `kvm`): keep `aba start`. No BMC question.
+
+One question only. A No to the BMC question does not also show the manual prompt. The progress dialog shows the same question text as the CLI.
+
+**Workaround:** Power the servers on in the BMC UI, then run `aba startup` and answer Yes to the manual prompt.
+
+---
+
+## #B120: Bare-metal power-off bugs to fix before merging the BMC stop/kill change
+
+**Severity:** HIGH
+**Status:** Planned
+**Added:** 2026-11-20
+
+**Problem:** Pull request 53 ([#53](https://github.com/sjbylo/aba/pull/53), #B110) makes `aba stop` and `aba kill` power off every host in `bmc.conf`. One bug is worth fixing before that merges. If you answer no to the power-off prompt, `scripts/bm-poweroff.sh` exits 0. The servers stay on, and the command looks successful. They keep answering on the node IPs and VIPs. A following install that runs preflight cannot start: `preflight-check.sh` counts each answering address as an IP conflict and aborts. The exit 0 hides that the addresses were not freed. A retry in the same directory can still continue, because `.preflight-done` is already stamped and that check does not run again. `aba --verify conf` also skips it.
+
+**Root cause:** The prompt is `ask "Power off ..." || exit 0`. A no from `ask` is a failure of that command, and the script turns that failure into exit 0. Delete already exits 1 when the operator declines. This prompt does the opposite.
+
+**Proposed fix:** Fix the exit code before merge. A no sends no Reset and exits non-zero. The same rule is already written into #B119 for the startup power-on question.
+
+Two smaller faults in the same change, same script and `bmc_power_off`:
+
+- A 401 during the power-off wait logs in again and calls `bmc_power_off` a second time. The comment says that sends no second Reset. That is true only when the machine is already `Off` or `PoweringOff`. If the session died while `PowerState` was still `On`, the retry posts the Reset again. The test covers the already-off case only.
+- One failed power-state read ends the 120 second wait. A 401 is retried once by the script. Any other error, after Redfish's own three tries, fails that node even if time is left. The same poll is used for power-on. A BMC often drops the connection while it is shutting down, so a stop can fail and then suggest `aba kill` for a machine that is already going down.
+
+`aba stop --wait` does nothing on bare metal. The wait is always that 120 second poll, and the help text still shows `--wait`. Leave that out of the pre-merge fix unless the help line is cheap to correct.
+
+**Workaround:** Until the exit code is fixed, do not answer no and then trust the exit code. Answer no only when nothing will run next, or skip the prompt with the servers already off.
 

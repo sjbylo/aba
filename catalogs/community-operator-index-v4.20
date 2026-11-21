@@ -179,6 +179,7 @@ jumpstarter-operator Jumpstarter Operator alpha
 jupyter-notebook-validator-operator Jupyter Notebook Validator Operator stable
 k8boss-operator K8Boss alpha
 k8gb k8gb alpha
+k8s-overcommit K8s Overcommit Operator stable
 kairos-operator Kairos Operator candidate-v2
 kaoto-operator Kaoto Operator alpha
 keda [DEPRECATED] KEDA alpha
@@ -191,12 +192,13 @@ kogito-operator Kogito 1.x
 koku-metrics-operator Koku Metrics Operator beta
 kollect Kollect stable
 konflux-operator Konflux stable-v0.2
-konveyor-operator Konveyor Operator alpha
+konveyor-operator Konveyor Operator konveyor-0.11
 korrel8r Korrel8r stable
 krkn-operator-acm Krkn Operator ACM stable-acm
 krkn-operator Krkn Operator stable-ocp-1.1
 kruize-operator Kruize Operator alpha
 kuadrant-operator Kuadrant Operator stable
+kubebrowser KubeBrowser Operator fast
 kube-green kube-green alpha
 kubeheal-operator KubeHeal AIOps Self-Healing Platform alpha
 kubernaut-operator Kubernaut Operator candidate-v1

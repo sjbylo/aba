@@ -2,6 +2,7 @@
 # Output the oc cluster login command
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-cluster-conf)
 

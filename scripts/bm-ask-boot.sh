@@ -9,7 +9,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Cluster dirs symlink aba.conf → ../aba.conf
 source <(normalize-aba-conf)

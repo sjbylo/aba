@@ -15,6 +15,7 @@
 set -eo pipefail
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
@@ -209,7 +210,7 @@ shell)
 		aba_info "  Config:         $([ "$_aba_conf_exists" = "true" ] && echo "configured" || echo "not configured")"
 
 		if [ "$_aba_conf_exists" = "true" ]; then
-			aba_info "  OCP version:    ${_ocp_version:-not set}"
+			aba_info "  $(dist_display) version:    ${_ocp_version:-not set}"
 			aba_info "  Channel:        ${_ocp_channel:-not set}"
 			aba_info "  Pull secret:    $([ "$_pull_secret_ok" = "true" ] && echo "OK" || echo "missing")"
 		fi
@@ -254,7 +255,7 @@ shell)
 		_milestone="ABA v${_aba_version} installed"
 		_next_steps+=("Run 'aba' (or 'abatui') to configure")
 	else
-		_milestone="Configured for OCP ${_ocp_version:-?} (${_ocp_channel:-?})"
+		_milestone="Configured for $(dist_display) ${_ocp_version:-?} (${_ocp_channel:-?})"
 
 		if [ "$_pull_secret_ok" != "true" ]; then
 			_problems+=("Pull secret missing or empty")
@@ -264,9 +265,9 @@ shell)
 
 	if [ "$_aba_conf_exists" = "true" ] && [ "$_pull_secret_ok" = "true" ]; then
 		if [ -n "${_ocp_version:-}" ]; then
-			_milestone="OCP $_ocp_version configured, pull secret ready"
+			_milestone="$(dist_display) $_ocp_version configured, pull secret ready"
 		else
-			_milestone="pull secret ready, OCP version not set"
+			_milestone="pull secret ready, $(dist_display) version not set"
 		fi
 	fi
 

@@ -6,6 +6,7 @@
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
+trap 'tui_mirror_restore_service || true' EXIT
 
 echo "=== TUI Mirror Workflow Test ==="
 echo "  Host: $_TUI_HOST"
@@ -45,16 +46,24 @@ tui_back_to "Actions"
 echo ""
 echo "--- 2. Install Mirror ---"
 
-_mirr_avail=$(tui_mirror_available)
-
-if [[ "$_mirr_avail" == "yes" ]]; then
-	echo "  Mirror already installed — skipping install step"
-	echo "  ✓ PASS: Mirror was already installed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
-	# Verify the config menu UI (first time only)
-	tui_select_item "Install Mirror"
-	sleep 2
+# An installed registry shows Reinstall. Yes removes the service and keeps
+# the data dir, then the same install form is on screen.
+tui_select_item "Install Mirror"
+sleep 2
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "already installed\|Reinstall"; then
+	echo "  Uninstalling mirror so the install form can be tested (data dir kept)"
+	_TUI_MIRROR_SERVICE_DOWN=yes
+	tui_confirm_yes
+	if ! tui_wait_mirror_install_choice "mirr-uninstall"; then
+		echo "  ✗ FAIL: mirror uninstall did not reach the install form"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_mirror_restore_service || true
+		tui_summary
+		exit 1
+	fi
+	tui_pass "Install form opened after uninstall" "$(tui_capture)"
+fi
 	tui_screenshot "mirr-02-install-choice"
 
 	tui_assert_contains "locally\|Local\|this host" "Local install option"
@@ -70,8 +79,7 @@ else
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_back_to "Actions" 5
 	else
-		echo "  ✓ PASS: Mirror config menu appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Mirror config menu appeared" "$_scr"
 
 		tui_assert_contains "Hostname" "Hostname field"
 		tui_assert_contains "Port" "Port field"
@@ -90,14 +98,12 @@ else
 		tui_screenshot "mirr-02c-installing"
 
 		if tui_run_operation "mirr-install" _nav_mirror_install 3 600; then
-			echo "  ✓ PASS: Mirror install completed"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Mirror install completed"
 			tui_screenshot "mirr-02d-result"
 			tui_dismiss_result
 		elif [[ "$(tui_mirror_available)" == "yes" ]]; then
 			# UI Stopped/timeout after a successful background install
-			echo "  ✓ PASS: Mirror install UI ended early but .available exists"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Mirror install UI ended early but .available exists"
 			tui_screenshot "mirr-02d-result-available"
 			tui_dismiss_result 2>/dev/null || true
 		else
@@ -105,7 +111,7 @@ else
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		fi
 	fi
-fi
+tui_mirror_restore_service || true
 
 # ============================================================================
 # 3. Verify mirror is installed
@@ -116,13 +122,12 @@ _mirror_available=$(tui_mirror_available)
 echo "  mirror/.available: $_mirror_available"
 
 if [[ "$_mirror_available" == "yes" ]]; then
-	echo "  ✓ PASS: Mirror is available (.available marker exists)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Mirror is available (.available marker exists)"
 else
 	echo "  ✗ FAIL: Mirror not available"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	echo "  Skipping sync test (mirror not available)"
-	tui_stop 2>/dev/null
+	tui_leave_on_menu 2>/dev/null || true
 	tui_summary
 	exit 1
 fi
@@ -163,11 +168,9 @@ tui_wait_for "Continue\|OCP" 30
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Sync\|OCP\|Continue"; then
-	echo "  ✓ PASS: Sync confirmation dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Sync confirmation dialog appeared" "$_scr"
 	if echo "$_scr" | grep -qi "4\.[0-9]"; then
-		echo "  ✓ PASS: Sync shows OCP version"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Sync shows OCP version" "$_scr"
 	fi
 fi
 
@@ -177,8 +180,7 @@ sleep 5
 tui_screenshot "mirr-04b-syncing"
 
 if tui_wait_for_progress "mirr-sync" 2700; then
-	echo "  ✓ PASS: Sync completed successfully"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Sync completed successfully"
 	tui_screenshot "mirr-04c-result"
 	tui_dismiss_result
 else
@@ -188,8 +190,7 @@ else
 	sleep 3
 
 	if tui_run_operation "mirr-sync" _nav_sync 2 2700; then
-		echo "  ✓ PASS: Sync completed on retry"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Sync completed on retry"
 		tui_screenshot "mirr-04c-result"
 		tui_dismiss_result
 	else
@@ -205,8 +206,7 @@ echo ""
 echo "--- 4b. Verify sync on server ---"
 _sync_state=$($_TUI_SSH "grep -s 'last_action=' ~/.aba/mirror/*/state.sh 2>/dev/null | head -1 | cut -d= -f2" 2>/dev/null || echo "")
 if [[ "$_sync_state" == "sync" || "$_sync_state" == "load" ]]; then
-	echo "  ✓ PASS: Mirror state confirms sync (last_action=$_sync_state)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Mirror state confirms sync (last_action=$_sync_state)"
 elif [[ -n "$_sync_state" ]]; then
 	echo "  ✗ FAIL: Mirror last_action=$_sync_state (expected sync or load)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))

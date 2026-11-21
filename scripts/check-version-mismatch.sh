@@ -9,7 +9,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 if [ ! -s data/imageset-config.yaml ]; then
 	# Nothing to check
@@ -34,6 +34,12 @@ aba_ocp_channel=$ocp_channel-$aba_ocp_ver_major
 f=data/imageset-config.yaml
 dir=$(dirname "$f")
 [ "$dir/.created" -nt "$f" ] && exit 0
+
+# A digest pin has no channel range. Nothing here can be out of date with ocp_channel.
+_pinned=$(yaml2json < "$f" | jq -r '.mirror.platform.release // empty')
+if [ -n "$_pinned" ] && [ "$_pinned" != "null" ]; then
+	exit 0
+fi
 
 om_ocp_min_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].minVersion)
 om_ocp_max_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].maxVersion)

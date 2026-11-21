@@ -203,8 +203,11 @@ source scripts/include_all.sh
 
 # Reset ~/.aba state on manual install only
 # When -q flag is used (automatic update check from 'aba' command), preserve user state
+# Kill live run_once jobs first. A bare rm leaves the setsid child running, and
+# the next start locks a new file, so two jobs share one .downloading path.
 if [ ! "$quiet" ]; then
 	if [ -d ~/.aba/runner ] || [ -d ~/.aba/cache ]; then
+		RUN_ONCE_DIR="$HOME/.aba/runner" run_once -G
 		rm -rf ~/.aba/runner ~/.aba/cache
 		_step "Cache cleared"
 	fi

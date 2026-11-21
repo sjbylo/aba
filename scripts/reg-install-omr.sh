@@ -6,19 +6,9 @@
 
 source scripts/reg-common.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
-reg_load_config
-aba_progress "DONE|reg_config"
-aba_progress "START|reg_env"
-
-reg_detect_existing
-
-reg_check_fqdn
-reg_setup_data_dir "$_OMR_VENDOR"
-reg_generate_password
-
-reg_verify_localhost
+reg_install_begin "$_OMR_VENDOR"
 
 aba_progress "DONE|reg_env"
 
@@ -90,7 +80,13 @@ reg_open_firewall
 aba_progress "DONE|reg_firewall"
 aba_progress "START|reg_postcfg"
 
-reg_post_install "$reg_root/ssl.cert" "$_OMR_VENDOR"
+# OMR v3 writes the CA to rootCA.pem and the server leaf to ssl.cert.
+# Trust the CA. An older image only wrote ssl.cert, and that file was the CA.
+_omr_ca="$reg_root/ssl.cert"
+if [ -s "$reg_root/rootCA.pem" ] && openssl x509 -in "$reg_root/rootCA.pem" -noout -text 2>/dev/null | grep -q 'CA:TRUE'; then
+	_omr_ca="$reg_root/rootCA.pem"
+fi
+reg_post_install "$_omr_ca" "$_OMR_VENDOR"
 
 aba_progress "DONE|reg_postcfg"
 aba_progress "START|reg_verify"

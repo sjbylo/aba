@@ -118,6 +118,14 @@ trap 'exit 0' HUP TERM INT
 # shellcheck disable=SC1091
 source scripts/include_all.sh
 
+# OKD has no TUI. A missing distribution stays OpenShift.
+if ! dist_tui_allowed; then
+	echo "The TUI does not run for OKD. Use aba." >&2
+	rm -f "$_ABA_TUI_PID_FILE"
+	trap - EXIT
+	exit 1
+fi
+
 # Suppress config drift warnings during startup splash screen.
 # tui-lib.sh runs normalize-mirror-conf at source time (top-level code, line ~333)
 # which triggers _state_override_mirror -> aba_warn. Must be set BEFORE sourcing.
@@ -879,7 +887,7 @@ environments.
 Setup wizard:
   1. Base domain     — Auto-detected; verify on first run
   2. Pull secret     — Red Hat registry credentials
-  3. Version         — OCP channel and version
+  3. Version         — $(dist_display) channel and version
   4. Platform        — Bare-metal, VMware, or KVM
   5. Operators       — Pick operators for the mirror
   6. Mirror registry — Set up a mirror registry

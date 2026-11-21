@@ -22,7 +22,9 @@ Options:
     -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'
     -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|install|mon>
                                           # See steps (targets) with "aba --dir mycluster help"
-    -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0)
+    -i, --starting-ip <ip|ip-list>        # IP address for the first cluster node (rendezvous/node0), or a
+                                          # comma list with one IP per node, masters first. A bare last octet
+                                          # keeps the previous prefix (e.g. 10.0.0.10,11,12,10.0.1.60)
     -A, --api-vip <ip>                    # IP address for cluster's API
     -G, --ingress-vip <ip>                # IP address for cluster application ingress
     -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20

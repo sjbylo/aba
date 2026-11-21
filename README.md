@@ -39,8 +39,20 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 - **Day-2** — ongoing content updates, cluster upgrades (OSUS), OperatorHub, NTP, shutdown/startup
 
 <div align="center">
-<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="300">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="300">
+<img src="https://github.com/sjbylo/aba/releases/download/readme-media/aba-mirror-sync.gif" alt="ABA TUI mirror sync" title="ABA TUI mirror sync">
 <br><sub>The ABA TUI — a guided wizard for the complete OpenShift installation workflow (<code>abatui</code>)</sub>
+<table>
+<tr>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-mirror.png" alt="Mirror sync" width="280"></a><br><sub>Mirror sync</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-version.png" alt="Version" width="280"></a><br><sub>Version</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-operators.png" alt="Operators" width="280"></a><br><sub>Operators</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-cluster.png" alt="Cluster install" width="280"></a><br><sub>Cluster install</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-day2.png" alt="Day-2" width="280"></a><br><sub>Day-2</sub></td>
+<td align="center"><a href="docs/tui.md#mirror-sync"><img src="images/tui-thumb-load.png" alt="Disconnected load" width="280"></a><br><sub>Disconnected load</sub></td>
+</tr>
+</table>
 </div>
 
 > **Download ready-made ABA install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
@@ -48,6 +60,8 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 # Quick Start
 
 > **Prerequisites:** RHEL 8/9/10, sudo access (passwordless recommended) or root, Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
+
+> **Installing OKD?** A release-only install needs no Red Hat pull secret. Run `aba --distribution okd`. The TUI does not run for OKD. See [OKD](#okd).
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"
@@ -110,6 +124,35 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Troubleshooting](#troubleshooting)
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 - [License](#license)
+
+[Back to top](#quick-start)
+
+# OKD
+
+ABA can install OKD. A fresh cluster is supported. `aba day2`, `aba day2-ntp`, `aba shutdown`, and `aba startup` still work.
+
+```bash
+aba --distribution okd --channel stable --version latest
+```
+
+That stores `distribution=okd` in `aba.conf`. `aba --distribution ocp` switches back. Channels are `stable` and `candidate`. `--version` takes `latest`, `previous`, `older`, `X.Y`, or a full `X.Y.Z-okd-scos.N`. On `candidate`, a pre-release is `X.Y.Z-okd-scos.ec.N`.
+
+`oc` and `openshift-install` come from the [OKD GitHub release](https://github.com/okd-project/okd/releases). OKD does not publish `oc-mirror`, so ABA uses the OpenShift build from `mirror.openshift.com`. Release images come from `quay.io/okd`. The update graph is `updates.okd.io`.
+
+A release-only install needs no Red Hat pull secret. The community catalog index on `registry.access.redhat.com` is anonymous. Choosing an operator needs a real pull secret: ABA rejects the placeholder once `ops` is set. Connected install (direct or through a proxy) and mirror save and load work on x86_64. Bare metal, VMware, and KVM are included. VMware VMs are created with secure boot off.
+
+`aba -d mirror sync` checks the release signature against the OpenShift CI signature store. `save` and `load` pass `--remove-signatures`, because `quay.io/okd/scos-content` has no cosign tags. The key ABA ships is `templates/okd-release-signing-key.asc`, and it expires on 2027-03-31. If `OCP_SIGNATURE_URL` does not end with `/`, ABA warns. `oc-mirror` appends the release digest to that URL as written.
+
+```bash
+aba --distribution okd --ops cert-manager community-kubevirt-hyperconverged
+aba -d mirror sync
+aba -d mycluster install
+aba -d mycluster day2
+```
+
+Pass either operator name, or both. `aba -d mirror sync` runs oc-mirror and pushes those images into the mirror. Install the cluster from that mirror, then run `aba day2`. For an air-gapped host, use `aba -d mirror save` and then `aba -d mirror load` instead of sync. `aba day2` publishes the community catalog. It does not install the operator. In the console, open Operators, then OperatorHub, and install it there.
+
+These stop: `upgrade`, `upgrade-mon`, `--upgrade-to`, `day2-virt`, and `day2-osus`. `fast` and `eus` are not OKD channels. Other CPU architectures are not supported. The TUI exits when `distribution=okd`. Use `aba`.
 
 [Back to top](#quick-start)
 
@@ -256,9 +299,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.6.tar.gz
-tar xzf v1.4.6.tar.gz
-cd aba-1.4.6
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.7.tar.gz
+tar xzf v1.4.7.tar.gz
+cd aba-1.4.7
 ./install
 aba
 ```
@@ -266,7 +309,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.4.6 https://github.com/sjbylo/aba.git
+git clone --branch v1.4.7 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -525,11 +568,13 @@ To create a cluster configuration and install OpenShift:
 aba cluster \
     --name mycluster \
     --type compact \
-    [--starting-ip <ip>] \
+    [--starting-ip <ip|ip-list>] \
     [--api-vip <ip>] \
     [--ingress-vip <ip>]
 aba -d mycluster install
 ```
+
+`--starting-ip` takes the first node IP (the other nodes get the next addresses), or a comma list with one IP per node, masters first. In a list, a bare last octet keeps the prefix of the previous full address: `10.0.0.10,11,12,10.0.1.60,61,62`.
 
 For VMware/KVM, this creates VMs and completes the installation automatically.
 For bare metal, set MACs (`macs.conf` / BMC) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
@@ -740,7 +785,7 @@ In a connected environment, cluster nodes pull images directly from the Internet
 
 ```
 cd aba
-aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
+aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip|ip-list>]
 ```
 
 2. Edit `mycluster/cluster.conf` and set the connection type:
@@ -866,21 +911,24 @@ Example output on successful install:
 
 ```
 [ABA] Cluster installed successfully!
-[ABA]   Name:     mycluster.example.com
-[ABA]   Version:  4.21.20
-[ABA]   Type:     sno (1 node(s))
-[ABA]   Platform: KVM
-[ABA]   API:      https://api.mycluster.example.com:6443
 
-[ABA] Next steps:
-[ABA]   aba terminal       — open interactive cluster shell
-[ABA]   . <(aba shell)     — access cluster (kubeconfig)
-[ABA]   . <(aba login)     — log in as kubeadmin
-[ABA]   aba day2           — configure OperatorHub with mirror registry
-[ABA]   aba day2-osus      — configure OpenShift Update Service
-[ABA]   aba day2-ntp       — configure NTP
-[ABA]   aba info           — view this information again
-[ABA]   aba help           — more options
+[ABA] mycluster.example.com    4.21.20    KVM    sno, 1 master
+[ABA] Console     https://console-openshift-console.apps.mycluster.example.com
+[ABA] User        kubeadmin
+[ABA] Password    xxxxx-xxxxx-xxxxx-xxxxx
+[ABA] API         https://api.mycluster.example.com:6443
+[ABA] Kubeconfig  /home/user/aba/mycluster/iso-agent-based/auth/kubeconfig
+
+[ABA] Optionally, set these values in /etc/hosts to access the cluster.
+192.168.1.10 api.mycluster.example.com
+192.168.1.10 console-openshift-console.apps.mycluster.example.com
+192.168.1.10 oauth-openshift.apps.mycluster.example.com
+
+[ABA] Terminal    aba terminal
+[ABA] Shell       . <(aba shell)
+[ABA] Login       . <(aba login)
+[ABA] Later       aba day2, aba day2-osus, aba day2-ntp
+[ABA] Help        /home/user/aba/README.md, Day-2 Operations
 ```
 
 If OpenShift fails to install or is not progressing, see the [Troubleshooting](Troubleshooting.md) guide.

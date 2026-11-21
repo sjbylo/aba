@@ -24,6 +24,7 @@ usb_system_disk_refused() {
 
 # Tests source this file to call usb_system_disk_refused. Do not touch a device.
 [ "${BASH_SOURCE[0]}" != "$0" ] && return 0
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-cluster-conf)
 

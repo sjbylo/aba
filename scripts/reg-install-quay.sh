@@ -4,19 +4,9 @@
 
 source scripts/reg-common.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
-reg_load_config
-aba_progress "DONE|reg_config"
-aba_progress "START|reg_env"
-
-reg_detect_existing
-
-reg_check_fqdn
-reg_setup_data_dir quay
-reg_generate_password
-
-reg_verify_localhost
+reg_install_begin quay
 reg_check_quay_resources
 
 # Quay requires a default route to exist, even on air-gapped hosts where no

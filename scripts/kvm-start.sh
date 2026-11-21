@@ -4,7 +4,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Running: $0 $*" >&2
+aba_debug "Starting: $0 $* in $PWD"
 
 . <(process_args "$@")
 . <(echo $* | tr " " "\n")

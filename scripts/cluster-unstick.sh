@@ -8,6 +8,7 @@
 # IDEMPOTENT:   Yes (no-op if all pods are healthy or still starting)
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 ensure_oc
 

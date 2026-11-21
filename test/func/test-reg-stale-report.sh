@@ -63,6 +63,9 @@ EOF
 chmod +x "$STUB_DIR/fake-ssh"
 
 export PATH="$STUB_DIR:/bin:/usr/bin"
+mkdir -p "$WORKDIR/home"
+# Quadlet probes expand ~. The bastion home has a real quay.container.
+export HOME="$WORKDIR/home"
 
 reg_root="$WORKDIR/reg-root-absent"
 reg_port=59999

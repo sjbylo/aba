@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
  
 
@@ -104,14 +104,21 @@ mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 
 # Set the rendezvous_ip to the first master's ip
 num_nodes=$(( num_masters + num_workers ))
-if ! echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-	aba_abort "Starting IP address value: starting_ip [$starting_ip] is missing or invalid. Should be an IP address from within your machine CIDR ($machine_network/$prefix_length)."
+if [[ "$starting_ip" == *,* ]]; then
+	# A starting_ip list names each node IP, masters first
+	arr_ips=$(expand_starting_ips "$starting_ip" "$num_nodes") || exit 1
+	export arr_ips
+	export rendezvous_ip=${arr_ips%% *}
+else
+	if ! echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+		aba_abort "Starting IP address value: starting_ip [$starting_ip] is missing or invalid. Should be an IP address from within your machine CIDR ($machine_network/$prefix_length)."
+	fi
+
+	export rendezvous_ip=$starting_ip
+
+	# Generate list of ip addresses from the CIDR and starting ip address
+	export arr_ips=$(generate_ip_array "$machine_network/$prefix_length" "$starting_ip" "$num_nodes")
 fi
-
-export rendezvous_ip=$starting_ip
-
-# Generate list of ip addresses from the CIDR and starting ip address
-export arr_ips=$(generate_ip_array "$machine_network/$prefix_length" "$starting_ip" "$num_nodes")
 
 # Create ports array
 export arr_ports=$(echo $ports | tr "," " " | tr -s "[:space:]")

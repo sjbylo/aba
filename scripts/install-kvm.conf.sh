@@ -4,7 +4,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Verify that KVM objects referenced in kvm.conf actually exist on the hypervisor.
 # Called after virsh version succeeds (libvirt connection is valid).

@@ -53,19 +53,20 @@
 set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_SUITE_DIR/../lib/framework.sh"
-source "$_SUITE_DIR/../lib/config-helpers.sh"
-source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
-source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../../lib/framework.sh"
+source "$_SUITE_DIR/../../lib/config-helpers.sh"
+source "$_SUITE_DIR/../../lib/remote.sh"
+source "$_SUITE_DIR/../../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../../lib/setup.sh"
 # Phase 9: redfish helpers (provides redfish_powerstate_on and direct-Redfish probes)
-source "$_SUITE_DIR/../lib/redfish-helpers.sh"
+source "$_SUITE_DIR/../../lib/redfish-helpers.sh"
 
 # --- Configuration ------------------------------------------------------------
 
 CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 CLUSTER="$(pool_cluster_name bmc-mac-discovery)"
-CLUSTER_DIR="$HOME/$CLUSTER"
+# aba cluster -n, run from ~/aba, creates this directory.
+CLUSTER_DIR="$HOME/aba/$CLUSTER"
 
 # --- Suite --------------------------------------------------------------------
 
@@ -86,8 +87,8 @@ suite_begin "bmc-mac-discovery"
 # ============================================================================
 test_begin "Setup: install ABA on con${POOL_NUM}"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+# Keep the existing ~/aba tree. File endurance: do not rm -rf or git clone.
+e2e_install_aba
 
 e2e_run "Configure aba.conf (baremetal platform, pool base domain)" \
 	"cd ~/aba && aba --noask --platform bm --base-domain $(pool_domain)"

@@ -49,19 +49,16 @@ tui_screenshot "pd-01-upgrade"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Prepare Upgrade\|upgrade.*version\|target.*version\|Base version"; then
-	echo "  ✓ PASS: Prepare Upgrade picker appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Prepare Upgrade picker appeared" "$_scr"
 
 	# Check version picker elements
 	tui_assert_contains "Base version\|aba.conf" "Shows base version reference"
 
 	# Check for version entries or "no upgrade" message
 	if echo "$_scr" | grep -qi "No upgrade\|No.*versions"; then
-		echo "  ✓ PASS: No upgrade versions message (expected if at latest)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "No upgrade versions message (expected if at latest)" "$_scr"
 	elif echo "$_scr" | grep -qi "Z-stream\|Next minor\|Minor\|latest"; then
-		echo "  ✓ PASS: Upgrade version entries displayed"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Upgrade version entries displayed" "$_scr"
 		# List discovered versions
 		echo "  Upgrade versions found:"
 		echo "$_scr" | grep -iE "Z-stream|Next|Minor|latest|4\.[0-9]" | sed 's/^/    /' | head -5
@@ -103,8 +100,7 @@ tui_screenshot "pd-02-channel"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "channel\|stable\|fast\|candidate"; then
-	echo "  ✓ PASS: Channel selection appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Channel selection appeared" "$_scr"
 
 	# Check channel options
 	tui_assert_contains "stable" "stable channel option"
@@ -133,8 +129,7 @@ if echo "$_scr" | grep -qi "channel\|stable\|fast\|candidate"; then
 		tui_keys Escape; sleep 1
 	else
 		tui_screenshot "pd-02c-version"
-		echo "  ✓ PASS: Version selection page appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Version selection page appeared"
 		tui_assert_contains "Latest\|latest" "Latest version option"
 		tui_keys Escape; sleep 1
 	fi
@@ -163,8 +158,7 @@ tui_screenshot "pd-03-settings"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
-	echo "  ✓ PASS: Settings menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Settings menu appeared" "$_scr"
 
 	# Check initial state
 	tui_assert_contains "Registry Type" "Registry Type setting visible"
@@ -179,11 +173,9 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 	_scr=$(tui_capture)
 	_toggled_reg=$(echo "$_scr" | grep -oi "Quay\|Docker\|OMR\|Auto" | head -1)
 	if [[ -n "$_toggled_reg" && "$_toggled_reg" != "$_initial_reg" ]]; then
-		echo "  ✓ PASS: Registry type toggled: ${_initial_reg} → ${_toggled_reg}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Registry type toggled: ${_initial_reg} → ${_toggled_reg}"
 	elif [[ -n "$_toggled_reg" ]]; then
-		echo "  ✓ PASS: Registry type displayed after toggle: ${_toggled_reg}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Registry type displayed after toggle: ${_toggled_reg}"
 	else
 		echo "  ✗ FAIL: Could not detect registry type after toggle"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -209,11 +201,9 @@ if echo "$_scr" | grep -qi "Settings\|Registry Type\|Retry"; then
 	tui_keys Enter; sleep 1
 	_toggled_retry=$(tui_capture | grep -oE "Retry.*[0-9OFF]+" | head -1)
 	if [[ -n "$_toggled_retry" && "$_toggled_retry" != "$_initial_retry" ]]; then
-		echo "  ✓ PASS: Retry count toggled: ${_initial_retry} → ${_toggled_retry}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Retry count toggled: ${_initial_retry} → ${_toggled_retry}"
 	elif [[ -n "$_toggled_retry" ]]; then
-		echo "  ✓ PASS: Retry count displayed after toggle: ${_toggled_retry}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Retry count displayed after toggle: ${_toggled_retry}"
 	fi
 
 	# Toggle back to restore (cycle: OFF→1→2→5→OFF, max 4 presses)
@@ -251,27 +241,23 @@ tui_screenshot "pd-04-bundle"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Bundle\|output path\|OCP.*stable\|Enter.*path"; then
-	echo "  ✓ PASS: Bundle dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Bundle dialog appeared" "$_scr"
 
 	# Check bundle summary info
 	if echo "$_scr" | grep -qi "OCP\|version\|4\."; then
-		echo "  ✓ PASS: Bundle shows OCP version summary"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Bundle shows OCP version summary" "$_scr"
 	fi
 
 	# Check for "View Config" help button
 	_btns=$(tui_buttons)
 	if echo "$_btns" | grep -qi "View Config\|Config"; then
-		echo "  ✓ PASS: View Config button present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "View Config button present"
 	fi
 
 	# Cancel out
 	tui_keys Escape; sleep 1
 elif echo "$_scr" | grep -qi "No Internet\|no internet\|not available"; then
-	echo "  ✓ PASS: Bundle correctly blocked — no internet"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Bundle correctly blocked — no internet" "$_scr"
 	tui_keys Enter; sleep 1
 else
 	echo "  ✗ FAIL: Bundle dialog unclear"
@@ -291,12 +277,10 @@ tui_screenshot "pd-05-save"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Save\|OCP\|Operator\|Confirm\|excl_platform\|images"; then
-	echo "  ✓ PASS: Save confirmation appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Save confirmation appeared" "$_scr"
 	tui_keys Escape; sleep 1
 elif echo "$_scr" | grep -qi "No Internet\|no internet"; then
-	echo "  ✓ PASS: Save correctly blocked — no internet"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Save correctly blocked — no internet" "$_scr"
 	tui_keys Enter; sleep 1
 else
 	echo "  ✗ FAIL: Save dialog unclear"
@@ -316,12 +300,10 @@ tui_screenshot "pd-06-sync"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Sync\|OCP\|mirror-to-mirror\|Confirm\|images"; then
-	echo "  ✓ PASS: Sync confirmation appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Sync confirmation appeared" "$_scr"
 	tui_keys Escape; sleep 1
 elif echo "$_scr" | grep -qi "No Internet\|no internet"; then
-	echo "  ✓ PASS: Sync correctly blocked — no internet"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Sync correctly blocked — no internet" "$_scr"
 	tui_keys Enter; sleep 1
 else
 	echo "  ✗ FAIL: Sync dialog unclear"
@@ -347,14 +329,12 @@ sleep 1
 _scr=$(tui_capture)
 _after=$(echo "$_scr" | grep -o "Release Images: [a-z]*" | head -1)
 if [[ -n "$_after" && "$_after" != "$_before" ]]; then
-	echo "  ✓ PASS: Release Images toggled: ${_before} → ${_after}"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Release Images toggled: ${_before} → ${_after}"
 	# Toggle back
 	tui_select_item "Release Images"
 	sleep 1
 elif [[ -n "$_after" ]]; then
-	echo "  ✓ PASS: Release Images toggle state: ${_after}"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Release Images toggle state: ${_after}"
 	# Ensure we toggle back if changed
 	if [[ "$_after" == *"excluded"* ]]; then
 		tui_select_item "Release Images"
@@ -368,14 +348,12 @@ tui_select_item "Operator Images"
 sleep 1
 _after=$(tui_capture | grep -o "Operator Images: [a-z]*" | head -1)
 if [[ -n "$_after" && "$_after" != "$_before" ]]; then
-	echo "  ✓ PASS: Operator Images toggled: ${_before} → ${_after}"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Operator Images toggled: ${_before} → ${_after}"
 	# Always toggle back to restore original state
 	tui_select_item "Operator Images"
 	sleep 1
 elif [[ -n "$_after" ]]; then
-	echo "  ✓ PASS: Operator Images toggle state: ${_after}"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Operator Images toggle state: ${_after}"
 fi
 
 # ============================================================================

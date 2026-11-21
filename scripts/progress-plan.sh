@@ -23,6 +23,7 @@
 #   1-2 = seconds, 5 = tens of seconds, 10-20 = minutes, 50+ = many minutes
 
 source "$(dirname "$0")/include_all.sh"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Submit a child's plan. The child prints PLAN lines and does not write
 # the FIFO, so the parent decides when they are sent.
@@ -45,6 +46,11 @@ case "$1" in
 		# When .available exists, the registry is already installed — nothing to show.
 		# This prevents Skipped items cluttering the dialog for a cached sync.
 		[ -f .available ] && exit 0
+		# In progress immediately. Make still has to extract or download the
+		# registry files before reg-install.sh starts, and that work has no
+		# step of its own. One row covers every vendor.
+		aba_progress "PLAN|reg_prep|Preparation|5"
+		aba_progress "START|reg_prep"
 		aba_progress "PLAN|rpms_ext|Install required packages|5"
 		aba_progress "PLAN|reg_config|Validate configuration|2"
 		aba_progress "PLAN|reg_env|Check environment|2"
@@ -182,7 +188,7 @@ case "$1" in
 			_emit_child_plan day2.sh
 		fi
 		aba_progress "PLAN|ug_trigger|Trigger upgrade|5"
-		aba_progress "PLAN|ug_progress|Wait for upgrade|70"
+		aba_progress "PLAN|ug_progress|Check upgrade progressing|70"
 		;;
 
 	*)

@@ -23,13 +23,13 @@ done
 
 # Makefile: one chain, new stamps, no legacy
 mf=templates/Makefile.cluster
-if grep -q 'TARGET_DEPENDENCIES = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .install-complete' "$mf"; then
+if grep -q 'TARGET_DEPENDENCIES = check ../aba.conf iso .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .agent-wait-done .install-complete' "$mf"; then
 	_pass "unified TARGET_DEPENDENCIES"
 else
 	_fail "unified TARGET_DEPENDENCIES"
 fi
 
-for bad in '.bm-message' '.bm-nextstep' '.autopoweroff' '.autoupload' '.autorefresh' '.auto-agent-up:'; do
+for bad in '.bm-message' '.bm-nextstep' '.autopoweroff' '.autoupload' '.autorefresh'; do
 	if grep -qF "$bad" "$mf"; then
 		_fail "Makefile must not contain $bad"
 	else
@@ -69,10 +69,15 @@ if ! grep -q 'wait-agent-up.sh' scripts/monitor-install.sh; then
 else
 	_fail "monitor-install must not call wait-agent-up (breaks aba mon)"
 fi
-if awk '/^\.install-complete:/{p=1} p&&/wait-agent-up/{found=1} p&&/^[^[:space:]#]/{if(!/^\.install-complete:/) exit} END{exit !found}' templates/Makefile.cluster; then
-	_pass ".install-complete calls wait-agent-up (first install only)"
+if awk '/^\.agent-wait-done:/{p=1} p&&/wait-agent-up/{found=1} p&&/^[^[:space:]#]/{if(!/^\.agent-wait-done:/) exit} END{exit !found}' templates/Makefile.cluster; then
+	_pass ".agent-wait-done calls wait-agent-up once per boot"
 else
-	_fail ".install-complete must call wait-agent-up"
+	_fail ".agent-wait-done must call wait-agent-up"
+fi
+if awk '/^\.install-complete:/{p=1} p&&/wait-agent-up/{found=1} p&&/^[^[:space:]#]/{if(!/^\.install-complete:/) exit} END{exit found}' templates/Makefile.cluster; then
+	_pass ".install-complete does not call wait-agent-up"
+else
+	_fail ".install-complete must not call wait-agent-up"
 fi
 
 # TUI BM no longer forces --step iso only

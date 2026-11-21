@@ -4,7 +4,7 @@
 # Designed for extensibility: platform-specific vSphere and BMC checks can source and extend.
 
 source scripts/include_all.sh
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 aba_progress "START|ci_preflight"
 
@@ -164,13 +164,22 @@ preflight_check_ip_conflicts() {
 		[ "$ingress_vip" ] && cluster_ips+=("$ingress_vip")
 	fi
 
-	# Collect node IPs: sequential from starting_ip
-	local current_int
-	current_int=$(ip_to_int "$starting_ip")
-	for ((i = 0; i < num_nodes; i++)); do
-		cluster_ips+=("$(int_to_ip $current_int)")
-		current_int=$((current_int + 1))
-	done
+	# Collect node IPs: sequential from starting_ip, or each IP of a starting_ip list
+	if [[ "$starting_ip" == *,* ]]; then
+		local _node_list
+		local -a _node_arr
+		# verify-cluster-conf has already rejected a bad list
+		_node_list=$(expand_starting_ips "$starting_ip" "$num_nodes") || return
+		read -ra _node_arr <<< "$_node_list"
+		cluster_ips+=("${_node_arr[@]}")
+	else
+		local current_int
+		current_int=$(ip_to_int "$starting_ip")
+		for ((i = 0; i < num_nodes; i++)); do
+			cluster_ips+=("$(int_to_ip $current_int)")
+			current_int=$((current_int + 1))
+		done
+	fi
 
 	# Get bastion's own IPs to skip them
 	local bastion_ips

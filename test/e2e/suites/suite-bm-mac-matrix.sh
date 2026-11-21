@@ -21,6 +21,8 @@
 # What it tests (vSphere, then the VM is deleted):
 #   - platform=bm SNO, compact, and standard: ISO via `aba -y iso`,
 #     then tools/bm-sim-boot.sh, curl the rendezvous :8090, destroy the VMs
+#     with tools/bm-sim-delete.sh. A .bm-sim marker makes the exit-trap
+#     cleanup do that too; aba delete does not, while platform=bm.
 #   - platform=vmw SNO: `aba iso`, `aba upload`, `aba create --start`
 #     (no monitor), agent answers, `aba delete` removes the VM
 #
@@ -165,13 +167,17 @@ _bm_dns_del() {
 # Drop sim VMs for one cluster name. Safe when none exist.
 # tools/bm-sim-delete.sh uses the cluster dir when it is still there, and
 # ~/aba/vmware.conf when the dir was already removed.
+# Returns the sim-delete status. DNS cleanup is best-effort and does not
+# hide a failed VM delete. Callers must not rm the cluster dir on failure:
+# the .bm-sim marker has to stay so the exit trap can retry.
 _bm_destroy_vms() {
-	local name=$1 domain=${2:-}
-	tools/bm-sim-delete.sh "$name" || true
+	local name=$1 domain=${2:-} rc=0
+	tools/bm-sim-delete.sh "$name" || rc=$?
 	if [ -n "$domain" ]; then
 		scripts/infra-dns.sh remove-cluster "$name" "$domain" || true
 	fi
 	_bm_dns_del "$name" || true
+	return "$rc"
 }
 
 _bm_wait_agent() {
@@ -200,7 +206,7 @@ _bm_ensure_govc() {
 }
 
 _bm_agent_boot() {
-	local dir=$1 kind=$2 rc=0
+	local dir=$1 kind=$2 rc=0 drc=0
 	_bm_ensure_govc
 	aba --platform bm
 	# Not `work || rc=$?`: bash turns set -e off for the whole left-hand side
@@ -208,8 +214,13 @@ _bm_agent_boot() {
 	set +e
 	( set -e; _bm_agent_boot_work "$dir" "$kind" )
 	rc=$?
+	_bm_destroy_vms "$dir" "$(pool_domain)"
+	drc=$?
 	set -e
-	_bm_destroy_vms "$dir" "$(pool_domain)" || true
+	if [ "$drc" -ne 0 ]; then
+		echo "[bm-matrix] bm-sim-delete failed for $dir; leaving the dir registered" >&2
+		return 1
+	fi
 	if [ "$rc" -eq 0 ]; then
 		rm -rf "$dir"
 		e2e_remove_from_cluster_cleanup "$PWD/$dir"
@@ -272,6 +283,9 @@ _bm_agent_boot_work() {
 	fi
 	ls "$dir"/iso-agent-based/agent.*.iso >/dev/null
 	_bm_destroy_vms "$dir" "$(pool_domain)" || true
+	# Touched before boot so an abort mid-boot still has the marker.
+	# Cluster cleanup runs bm-sim-delete while this file is here.
+	touch "$dir/.bm-sim"
 	tools/bm-sim-boot.sh "$dir"
 	_bm_wait_agent "$start"
 }
@@ -658,26 +672,20 @@ test_end
 # ============================================================================
 test_begin "Cleanup: restore platform"
 
-e2e_run "Destroy leftover BM SNO VMs" \
-	"_bm_destroy_vms $BM_SNO \$(pool_domain)"
-e2e_run "Destroy leftover BM compact VMs" \
-	"_bm_destroy_vms $BM_CPT \$(pool_domain)"
-e2e_run "Destroy leftover BM standard VMs" \
-	"_bm_destroy_vms $BM_STD \$(pool_domain)"
-e2e_run "Destroy leftover VMware SNO VMs" \
-	"_bm_destroy_vms $VMW_SNO \$(pool_domain)"
+# Sim-delete must succeed before the dir is removed. A skipped or failed
+# delete leaves the dir and the cleanup entry so the exit trap can retry
+# bm-sim-delete. These rms are the suite's cluster dirs, not ~/aba.
+e2e_run "Destroy leftover BM SNO sim VMs, then drop the dir" \
+	"_bm_destroy_vms $BM_SNO \$(pool_domain) && rm -rf $BM_SNO && e2e_remove_from_cluster_cleanup \"$PWD/$BM_SNO\""
+e2e_run "Destroy leftover BM compact sim VMs, then drop the dir" \
+	"_bm_destroy_vms $BM_CPT \$(pool_domain) && rm -rf $BM_CPT && e2e_remove_from_cluster_cleanup \"$PWD/$BM_CPT\""
+e2e_run "Destroy leftover BM standard sim VMs, then drop the dir" \
+	"_bm_destroy_vms $BM_STD \$(pool_domain) && rm -rf $BM_STD && e2e_remove_from_cluster_cleanup \"$PWD/$BM_STD\""
+e2e_run "Destroy leftover VMware SNO VMs, then drop the dir" \
+	"_bm_destroy_vms $VMW_SNO \$(pool_domain) && rm -rf $VMW_SNO && e2e_remove_from_cluster_cleanup \"$PWD/$VMW_SNO\""
 
-e2e_run "Remove policy cluster dir" "rm -rf $MAC_DIR"
-e2e_run "Remove BM SNO dir" "rm -rf $BM_SNO"
-e2e_run "Remove BM compact dir" "rm -rf $BM_CPT"
-e2e_run "Remove BM standard dir" "rm -rf $BM_STD"
-e2e_run "Remove VMware SNO dir" "rm -rf $VMW_SNO"
-
-e2e_remove_from_cluster_cleanup "$PWD/$MAC_DIR"
-e2e_remove_from_cluster_cleanup "$PWD/$BM_SNO"
-e2e_remove_from_cluster_cleanup "$PWD/$BM_CPT"
-e2e_remove_from_cluster_cleanup "$PWD/$BM_STD"
-e2e_remove_from_cluster_cleanup "$PWD/$VMW_SNO"
+e2e_run "Remove policy cluster dir" \
+	"rm -rf $MAC_DIR && e2e_remove_from_cluster_cleanup \"$PWD/$MAC_DIR\""
 
 e2e_run "Restore platform=vmw" "aba --platform vmw"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"

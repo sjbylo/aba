@@ -116,6 +116,119 @@ else
 		"Check /etc/chrony.conf for server/pool directives."
 fi
 
+# Warning only. This command still publishes the bastion address.
+# Stratum 3 or worse is the same depth as the cluster's local stratum 3,
+# so nodes will not prefer this host over that local clock.
+# The second line names the source this host has selected. It does not
+# follow that source's own upstream, and it does not change ntp_servers.
+_ntp_warn_if_weak_stratum() {
+	local stratum=$1 upstream=$2
+	case "$stratum" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	if [ "$stratum" -ge 3 ] && [ "$stratum" -le 15 ]; then
+		if [ -n "$upstream" ]; then
+			aba_warn "This host is NTP stratum $stratum. Prefer a stratum 1 or 2 server so cluster nodes can keep local stratum 3." \
+				"Consider $upstream if the OpenShift nodes can reach it."
+		else
+			aba_warn "This host is NTP stratum $stratum. Prefer a stratum 1 or 2 server so cluster nodes can keep local stratum 3."
+		fi
+	fi
+}
+
+# Stratum 0 is what chronyd reports until it selects a source. That happens
+# a few seconds after the restart above, so a single immediate read stays quiet.
+_ntp_current_stratum() {
+	chronyc tracking 2>/dev/null | awk '/^Stratum[[:space:]]*:/ {print $3; exit}' || true
+}
+
+_ntp_wait_stratum() {
+	local stratum="" tries=0
+	while [ "$tries" -lt 15 ]; do
+		stratum=$(_ntp_current_stratum)
+		case "$stratum" in
+			''|*[!0-9]*|0)
+				sleep 1
+				tries=$(( tries + 1 ))
+				;;
+			*)
+				printf '%s\n' "$stratum"
+				return 0
+				;;
+		esac
+	done
+	printf '%s\n' "$stratum"
+}
+
+# server/pool/peer names from one chrony file. Comments and options are ignored.
+_ntp_servers_in() {
+	[ -f "$1" ] || return 0
+	awk '$1 == "server" || $1 == "pool" || $1 == "peer" { print $2 }' "$1"
+}
+
+# Names from chrony.conf plus one level of sourcedir/confdir.
+# No names means this host is not an NTP client. Callers then skip the
+# stratum check: the cluster can still take time from this bastion.
+_ntp_configured_servers() {
+	local conf=${1:-/etc/chrony.conf}
+	local line kind dir f
+	[ -f "$conf" ] || return 0
+	_ntp_servers_in "$conf"
+	while IFS= read -r line || [ -n "$line" ]; do
+		set -- $line
+		kind=$1
+		dir=$2
+		case "$kind" in
+			sourcedir|confdir) ;;
+			*) continue ;;
+		esac
+		[ -n "$dir" ] && [ -d "$dir" ] || continue
+		for f in "$dir"/*; do
+			[ -f "$f" ] || continue
+			_ntp_servers_in "$f"
+		done
+	done < "$conf"
+}
+
+# The address in parentheses is the source chrony selected, not that source's upstream.
+_ntp_selected_from_tracking() {
+	awk -F'[()]' '/^Reference ID[[:space:]]*:/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }'
+}
+
+_ntp_selected_source() {
+	chronyc tracking 2>/dev/null | _ntp_selected_from_tracking || true
+}
+
+# Prefer the selected source. Otherwise the first configured name that is not this host.
+_ntp_suggest_upstream() {
+	local bastion=$1 selected=$2 s
+	shift 2
+	# Dots in an address must stay literal, so this is a string compare.
+	if [ -n "$selected" ] && [ "$selected" != "$bastion" ] \
+		&& [ "$selected" != "0.0.0.0" ] && [ "$selected" != "127.0.0.1" ] && [ "$selected" != "::1" ]; then
+		printf '%s\n' "$selected"
+		return 0
+	fi
+	for s in "$@"; do
+		[ -n "$s" ] && [ "$s" != "$bastion" ] || continue
+		case "$s" in
+			0.0.0.0|127.0.0.1|::1) continue ;;
+		esac
+		printf '%s\n' "$s"
+		return 0
+	done
+	return 0
+}
+
+# No configured server: do not read the stratum and do not warn.
+_ntp_have=$(_ntp_configured_servers)
+if [ -n "$_ntp_have" ]; then
+	_ntp_stratum=$(_ntp_wait_stratum)
+	_ntp_selected=$(_ntp_selected_source)
+	_ntp_upstream=$(_ntp_suggest_upstream "$bastion_ip" "$_ntp_selected" $_ntp_have)
+	_ntp_warn_if_weak_stratum "$_ntp_stratum" "$_ntp_upstream"
+fi
+
 # --- Auto-set ntp_servers in aba.conf ---
 if [ -f "$ABA_ROOT/aba.conf" ]; then
 	replace-value-conf -n ntp_servers -v "$bastion_ip" -f "$ABA_ROOT/aba.conf"

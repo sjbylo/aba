@@ -5,6 +5,10 @@
 # Requires: SSH access to the test host, tmux on the test host.
 #
 # All functions operate on a remote tmux session via SSH.
+#
+# TUI_CAPTURE_INTERVAL: parallel screen capture period. 0.5, 0.5s, 1, 1s, 2s.
+# Default 0.5. 0 or off disables it. Identical frames are not written.
+# TUI_WIDTH / TUI_HEIGHT: tmux pane size. Default 160x45.
 
 _TUI_HOST="${TUI_TEST_HOST:-conno.example.com}"
 _TUI_SESSION="${TUI_TEST_SESSION:-tui-test}"
@@ -12,8 +16,18 @@ _TUI_SSH_CFG="$HOME/.aba/ssh.conf"
 _TUI_SSH="ssh -F $_TUI_SSH_CFG $_TUI_HOST"
 _TUI_PASS=0
 _TUI_FAIL=0
-_TUI_WIDTH=160
-_TUI_HEIGHT=45
+_TUI_WIDTH="${TUI_WIDTH:-160}"
+_TUI_HEIGHT="${TUI_HEIGHT:-45}"
+
+# Drop the internet NIC on the disconnected bastion. SSH stays on the
+# management NIC (internet.sh uses SSH_CONNECTION). Call at the start of a
+# disco test and from its EXIT trap. Do not leave the link up afterwards.
+tui_disco_internet_down() {
+	local _host="${1:-disco.example.com}"
+	echo "  Internet down on $_host"
+	ssh -F "$_TUI_SSH_CFG" "$_host" '~/bin/internet.sh down' 2>&1 || \
+		ssh -F "$_TUI_SSH_CFG" "$_host" 'internet.sh down' 2>&1 || true
+}
 
 # ---------------------------------------------------------------------------
 # Throwaway-cluster lab defaults
@@ -171,15 +185,13 @@ tui_apply_lab_network() {
 	# Assert critical fields
 	pane=$(tui_capture)
 	if echo "$pane" | grep -qiE "DNS servers:[[:space:]]*${TUI_LAB_DNS}"; then
-		echo "  ✓ PASS: DNS servers set to ${TUI_LAB_DNS}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "DNS servers set to ${TUI_LAB_DNS}" "$pane"
 	else
 		echo "  ✗ FAIL: DNS servers not ${TUI_LAB_DNS} (got: $(echo "$pane" | grep -oiE 'DNS servers:[^│]*' | head -1))"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$pane" | grep -qE "Starting IP:[[:space:]]*${_lab_starting_ip}"; then
-		echo "  ✓ PASS: Starting IP set to ${_lab_starting_ip}"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Starting IP set to ${_lab_starting_ip}" "$pane"
 	else
 		echo "  ✗ FAIL: Starting IP not ${_lab_starting_ip}"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -234,6 +246,122 @@ if [[ "${_TUI_LOCK_HELD:-}" != "1" ]]; then
 	echo "PID=$$ test=$_TUI_TEST_NAME started=$(date +%Y%m%d-%H%M%S)" >&9
 	unset _tui_lock_holder
 fi
+
+# Parallel capture. The test keeps driving the TUI; this loop only records
+# the pane. A dialog that flashes between two labeled screenshots is still
+# on disk, and a pane that sits still does not grow a file per tick.
+# test-tui-all sources this file too. Its children each have their own run
+# dir, which is the directory the summary prints, so the parent does not
+# also capture.
+_tui_capture_interval_secs() {
+	local raw="${TUI_CAPTURE_INTERVAL:-0.5}"
+	raw="${raw%[sS]}"
+	case "$raw" in
+		""|off|OFF|no|NO) printf '%s\n' 0 ;;
+		*[!0-9.]*|*.*.*|.) printf '%s\n' 0.5 ;;
+		*) printf '%s\n' "$raw" ;;
+	esac
+}
+
+_tui_capture_stop() {
+	if [[ -n "${_TUI_CAPTURE_PID:-}" ]]; then
+		kill "$_TUI_CAPTURE_PID" 2>/dev/null || true
+		wait "$_TUI_CAPTURE_PID" 2>/dev/null || true
+		_TUI_CAPTURE_PID=""
+	fi
+}
+
+# A cleared pane is only spaces and newlines. It is not a dialog.
+_tui_pane_blank() {
+	! grep -q '[^[:space:]]' "$1"
+}
+
+# ANSI copy of a plain snapshot, for a README or a GIF. The plain file stays
+# what tests grep. A failed or blank color grab is dropped.
+_tui_save_color_copy() {
+	local plain="$1"
+	local host="${2:-$_TUI_HOST}"
+	local session="${3:-$_TUI_SESSION}"
+	local cfg="${4:-$_TUI_SSH_CFG}"
+	local dest
+	dest="$(dirname "$plain")/color/$(basename "$plain")"
+	mkdir -p "$(dirname "$dest")"
+	if ssh -F "$cfg" -o ConnectTimeout=5 "$host" \
+		"tmux capture-pane -t $session -e -p" >"$dest" 2>/dev/null \
+		&& ! _tui_pane_blank "$dest"; then
+		return 0
+	fi
+	rm -f "$dest"
+	return 0
+}
+
+_tui_capture_loop() {
+	local parent="$1" interval="$2" dir="$3" host="$4" session="$5" cfg="$6"
+	local born now n=0 prev="" tmp=""
+	# A kill mid-capture must not leave the temp pane file behind.
+	# TERM is caught so the trap runs; exit so the loop does not resume.
+	trap '[[ -n "$tmp" ]] && rm -f "$tmp" "$tmp.norm"; exit 0' EXIT TERM INT
+	# lstart catches PID reuse: a new process with this pid is not our test.
+	born=$(ps -o lstart= -p "$parent" 2>/dev/null) || return 0
+	while true; do
+		now=$(ps -o lstart= -p "$parent" 2>/dev/null || true)
+		[[ -n "$now" && "$now" == "$born" ]] || break
+		tmp=$(mktemp "${dir}/.frame.XXXXXX" 2>/dev/null) || { sleep "$interval"; continue; }
+		# No retry sleep here. A missing tmux session is just "nothing to keep".
+		if ! ssh -F "$cfg" -o ConnectTimeout=5 "$host" \
+			"tmux capture-pane -t $session -p" >"$tmp" 2>/dev/null \
+			|| ! [[ -s "$tmp" ]]; then
+			rm -f "$tmp"
+			tmp=""
+			sleep "$interval"
+			continue
+		fi
+		# Pane padding is trailing spaces, not a dialog change.
+		sed 's/[[:space:]]*$//' "$tmp" > "$tmp.norm" && mv "$tmp.norm" "$tmp"
+		if _tui_pane_blank "$tmp"; then
+			rm -f "$tmp"
+			tmp=""
+			sleep "$interval"
+			continue
+		fi
+		if [[ -n "$prev" ]] && cmp -s "$prev" "$tmp"; then
+			rm -f "$tmp"
+			tmp=""
+		else
+			n=$(( n + 1 ))
+			prev="${dir}/frame-$(printf '%04d' "$n")-$(date +%H%M%S).txt"
+			mv "$tmp" "$prev"
+			tmp=""
+			_tui_save_color_copy "$prev" "$host" "$session" "$cfg"
+		fi
+		sleep "$interval"
+	done
+}
+
+_tui_capture_start() {
+	local interval
+	interval=$(_tui_capture_interval_secs)
+	_TUI_CAPTURE_EVERY="$interval"
+	# The suite runner's summary dir is not where a child failure is investigated.
+	if [[ "$_TUI_TEST_NAME" == "test-tui-all" ]]; then
+		return 0
+	fi
+	case "$interval" in
+		0|0.0)
+			echo "  Screen capture off (TUI_CAPTURE_INTERVAL=${TUI_CAPTURE_INTERVAL})"
+			return 0
+			;;
+	esac
+	# Re-source (disco switches host) must follow the new host and run dir.
+	_tui_capture_stop
+	# 9>&- so this loop does not inherit the flock. The parent exits
+	# before the loop notices, and the next test would otherwise see the lock.
+	_tui_capture_loop "$$" "$interval" "$_TUI_RUN_DIR" "$_TUI_HOST" "$_TUI_SESSION" "$_TUI_SSH_CFG" 9>&- &
+	_TUI_CAPTURE_PID=$!
+	echo "  Screen capture every ${interval}s → $_TUI_RUN_DIR/ (identical and blank frames dropped)"
+}
+
+_tui_capture_start
 
 # --- Pre-test disk cleanup ---
 # Removes expendable artifacts to prevent "disk full" during tests.
@@ -299,9 +427,55 @@ tui_session_alive() {
 	_tui_ssh_retry "tmux has-session -t $_TUI_SESSION 2>/dev/null"
 }
 
-# Capture the current tmux pane content
+# Capture the current tmux pane as plain text. Tests grep this.
 tui_capture() {
 	_tui_ssh_retry "tmux capture-pane -t $_TUI_SESSION -p"
+}
+
+# File the pane a PASS was judged on. Never sends keys, never retries, and
+# a failed write does not change the pass/fail count. $2, when set, is the
+# exact text the assertion grepped, so the file is that frame.
+_tui_write_pass_frame() {
+	local _desc="$1"
+	local _have=0
+	local _text=""
+	local _n _slug _file
+	if [[ $# -ge 2 ]]; then
+		_have=1
+		_text="$2"
+	fi
+	[[ -n "${_TUI_RUN_DIR:-}" ]] || return 0
+	_TUI_PASS_FRAME=$(( ${_TUI_PASS_FRAME:-0} + 1 ))
+	_n=$(printf '%04d' "$_TUI_PASS_FRAME")
+	_slug=$(printf '%s' "$_desc" | tr -c 'A-Za-z0-9' '-' | tr -s '-' | cut -c1-48)
+	_slug="${_slug#-}"
+	_slug="${_slug%-}"
+	[[ -n "$_slug" ]] || _slug="pass"
+	_file="${_TUI_RUN_DIR}/pass-${_n}-${_slug}.txt"
+	if [[ "$_have" -eq 1 ]]; then
+		printf '%s' "$_text" >"$_file" 2>/dev/null || return 0
+	elif ! $_TUI_SSH "tmux capture-pane -t $_TUI_SESSION -p" >"$_file" 2>/dev/null; then
+		printf '%s\n' "(no tmux pane at this pass)" >"$_file" 2>/dev/null || return 0
+	fi
+	echo "  [pass-frame: $_file]"
+	return 0
+}
+
+# Same line the tests already print, plus the frame from that moment.
+# Pass the grepped pane as $2 when the test already holds it.
+tui_pass() {
+	local _desc="$1"
+	echo "  ✓ PASS: $_desc"
+	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	if [[ $# -ge 2 && -n "$2" ]]; then
+		_tui_write_pass_frame "$_desc" "$2" || true
+	elif [[ -n "${_TUI_JUDGED_PANE:-}" ]]; then
+		_tui_write_pass_frame "$_desc" "$_TUI_JUDGED_PANE" || true
+	else
+		_tui_write_pass_frame "$_desc" || true
+	fi
+	unset _TUI_JUDGED_PANE
+	return 0
 }
 
 # Send keys to the tmux session
@@ -322,7 +496,9 @@ tui_wait_for() {
 			tui_screenshot "GONE-$(date +%H%M%S)"
 			return 1
 		fi
-		if tui_capture | grep -qi "$pattern"; then
+		# Keep this pane. tui_assert_appears files it; a later capture can be a different screen.
+		_TUI_WAIT_PANE=$(tui_capture) || _TUI_WAIT_PANE=""
+		if printf '%s\n' "$_TUI_WAIT_PANE" | grep -qi "$pattern"; then
 			return 0
 		fi
 		sleep 0.5
@@ -352,7 +528,7 @@ tui_dismiss_result() {
 	if echo "$_scr" | grep -qi "Yes.*No\|apply now.*later"; then
 		return 1
 	fi
-	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded\|Success"; then
+	if echo "$_scr" | grep -qi "Press.*ENTER\|ENTER to return\|Press R to retry\|steps completed\|Succeeded\|Success\|Stopped before all steps\|──.*Stopped.*──\|Install.*Stopped\|Sync.*Stopped\|Load.*Stopped"; then
 		tui_keys Enter
 		sleep 2
 		return 0
@@ -513,7 +689,11 @@ tui_select_item() {
 # Get the dialog title from screen capture.
 # Titles appear as: ┌──── Some Title ────┐
 tui_dialog_title() {
-	tui_capture | sed -n 's/.*┌[─ ]*\(.*[^ ─]\)[─ ]*┐.*/\1/p' | head -1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+	local pane
+	# Stash the pane the title came from. The pass frame must be that screen.
+	pane=$(tui_capture) || pane=""
+	_TUI_TITLE_PANE=$pane
+	printf '%s\n' "$pane" | sed -n 's/.*┌[─ ]*\(.*[^ ─]\)[─ ]*┐.*/\1/p' | head -1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
 # Assert the dialog title matches a pattern (case-insensitive).
@@ -524,8 +704,7 @@ tui_assert_title() {
 	local title
 	title=$(tui_dialog_title)
 	if echo "$title" | grep -qi "$pattern"; then
-		echo "  ✓ PASS: $desc (title: '$title')"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$desc (title: '$title')" "${_TUI_TITLE_PANE:-}"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (expected title matching '$pattern', got '$title')"
@@ -536,6 +715,20 @@ tui_assert_title() {
 
 # Navigate back to a known screen (by title/pattern), pressing Escape as needed.
 # Usage: tui_back_to "Actions" [max_attempts]
+# Cluster Ready defaults to "Yes, apply now". Enter starts day2 and the
+# next assertion then sees a progress gauge instead of the menu it wanted.
+tui_decline_cluster_ready() {
+	local _scr
+	_scr=$(tui_capture) || return 1
+	if ! echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+		return 1
+	fi
+	echo "  Declining post-install OperatorHub prompt" >&2
+	tui_press_button "No, later" 2>/dev/null || tui_press_button "No" 2>/dev/null || tui_keys Escape
+	sleep 1
+	return 0
+}
+
 tui_back_to() {
 	local pattern="$1"
 	local max="${2:-5}"
@@ -545,6 +738,7 @@ tui_back_to() {
 			echo "  WARNING: tmux session gone while navigating back to '$pattern'" >&2
 			return 1
 		fi
+		tui_decline_cluster_ready || true
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "$pattern"; then
 			return 0
@@ -630,6 +824,11 @@ tui_is_disco() {
 	[[ "$_TUI_DETECTED_MODE" == "DISCO" ]]
 }
 
+# Air-gap host. Disco tests take the NIC down and expect Fully Disconnected.
+_tui_host_is_disco() {
+	[[ "${_TUI_HOST:-}" == *disco* ]]
+}
+
 # Check if internet is available in the TUI (not DISCO).
 # Usage: if tui_has_internet; then ... fi
 tui_has_internet() {
@@ -681,9 +880,23 @@ tui_dismiss_startup() {
 			return 1
 		fi
 
-		# "Bundle on connected host" — select Fully Disconnected (default)
+		# Bundle + internet. Yes is Fully Disconnected. Air-gap tests run on
+		# disco with the NIC down, so they never see this dialog. On a connected
+		# host, Connected mode is the menu the rest of the suite drives, and it
+		# removes the leftover .bundle flag.
 		if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
-			tui_keys Enter
+			tui_screenshot "startup-bundle-choice"
+			if _tui_host_is_disco; then
+				echo "  Bundle on disco — staying Fully Disconnected" >&2
+				tui_keys Enter
+			else
+				echo "  Bundle on a connected host — choosing Connected mode" >&2
+				if ! tui_press_button "Connected mode"; then
+					tui_keys Tab
+					sleep 0.2
+					tui_keys Enter
+				fi
+			fi
 			sleep 1
 			continue
 		fi
@@ -744,12 +957,17 @@ tui_require_internet() {
 # Deploy ALL ABA core + TUI code to the test host.
 # Uses git ls-files to build a tarball of tracked (+ untracked-not-ignored)
 # files, matching the same approach as the e2e deploy framework.
-# Copies: scripts/, templates/, tools/, others/, tui/, Makefile, aba, abatui,
-#         install, mirror/Makefile — everything needed for a working ABA.
+# Copies: scripts/, templates/, tools/, others/, tui/, rpms/, Makefile, aba,
+#         abatui, install, mirror/Makefile, cli/Makefile.
+# rpms/ must travel with the deploy. aba bundle's find starts at rpms/, and
+# an overlay deploy must not leave that directory missing on conno.
 # Usage: tui_deploy_code
 tui_deploy_code() {
 	# Top-level docs required by 'aba bundle' / backup.sh tar (CHANGELOG, LICENSE, …).
+	# cli/Makefile is required for mirror install (out-download-all). Without it
+	# make -C cli fails with "No such file or directory" and the suite cascades.
 	local _paths=(scripts/ templates/ tools/ others/ tui/ Makefile aba abatui install mirror/Makefile
+		cli/Makefile rpms/
 		CHANGELOG.md LICENSE Troubleshooting.md README.md VERSION AGENTS.md)
 	local _tar _hash _old_hash
 	_tar=$(mktemp /tmp/tui-deploy.XXXXXX.tar.gz)
@@ -765,7 +983,9 @@ tui_deploy_code() {
 
 	# Upload and extract on remote host (overlay, never wipe)
 	scp -q -F "$_TUI_SSH_CFG" "$_tar" "$_TUI_HOST:/tmp/tui-deploy.tar.gz" 2>/dev/null
-	$_TUI_SSH "tar xzf /tmp/tui-deploy.tar.gz -C ~/aba && rm -f /tmp/tui-deploy.tar.gz" 2>/dev/null
+	$_TUI_SSH "mkdir -p ~/aba/cli && tar xzf /tmp/tui-deploy.tar.gz -C ~/aba && rm -f /tmp/tui-deploy.tar.gz &&
+		# cli/Makefile expects scripts/ sibling symlink (created by make -C cli init)
+		[ -e ~/aba/cli/scripts ] || ln -sfn ../scripts ~/aba/cli/scripts" 2>/dev/null
 
 	rm -f "$_tar"
 	echo "  Code deployed ($(git ls-files --cached --others --exclude-standard -- "${_paths[@]}" | wc -l) files)"
@@ -932,6 +1152,19 @@ tui_ensure_install_prereqs() {
 			sudo systemctl restart dnsmasq 2>/dev/null || true
 			echo "MIRRORDNS:$_cur->$_mir_ip"
 		fi
+		# --- cli/Makefile (mirror install / out-download-all) ---
+		if [ ! -f cli/Makefile ]; then
+			echo "MISSING_CLI_MAKEFILE"
+		else
+			mkdir -p cli
+			[ -e cli/scripts ] || ln -sfn ../scripts cli/scripts
+		fi
+		# --- Disco/lab: ens224 DHCP can install a blackhole "default dev ens224"
+		# that outranks the ens192 default-via-gw and kills internet checks.
+		if ip route 2>/dev/null | grep -q "^default dev ens224"; then
+			sudo ip route del default dev ens224 2>/dev/null || true
+			echo "ROUTE:dropped-ens224-blackhole-default"
+		fi
 	' 2>/dev/null) || true
 	if [[ -n "$_out" ]]; then
 		echo "  Ensured install prereqs: $_out"
@@ -939,8 +1172,9 @@ tui_ensure_install_prereqs() {
 }
 
 # Ensure dnsmasq maps bastion.example.com to the lab-reachable Quay IP.
-# ABA add-mirror uses _pick_install_iface (default-route/mgmt NIC) which writes
-# 192.168.2.33 — unreachable from cluster VMs when GW 10.0.0.1 is down.
+# Product add-mirror should prefer the lab NIC via _pick_install_iface (next_hop /
+# machine_network); this harness guard still re-asserts after sync/day2 in case
+# an older build or stale aba.conf (e.g. machine_network=/24) rewrites mgmt IP.
 tui_ensure_bastion_mirror_dns() {
 	local _cur _want="$TUI_LAB_MIRROR_IP" _dns="$TUI_LAB_DNS"
 	_cur=$($_TUI_SSH "dig +time=1 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
@@ -959,6 +1193,33 @@ tui_ensure_bastion_mirror_dns() {
 	return 1
 }
 
+# Fail fast when cluster nodes would resolve the mirror to an unreachable IP.
+# Dig via TUI_LAB_DNS (what install sets on nodes) and probe :8443 on that A-record.
+# Usage: tui_assert_mirror_dns_reachable || return 1
+tui_assert_mirror_dns_reachable() {
+	local _dns="$TUI_LAB_DNS" _want="$TUI_LAB_MIRROR_IP" _got _code
+	_got=$($_TUI_SSH "dig +time=2 +tries=1 +short bastion.example.com @${_dns} 2>/dev/null | head -1" 2>/dev/null | tr -d '[:space:]')
+	if [[ -z "$_got" ]]; then
+		echo "  ✗ FAIL: bastion.example.com has no A record via $_dns" >&2
+		return 1
+	fi
+	if [[ "$_got" != "$_want" ]]; then
+		echo "  ✗ FAIL: bastion.example.com → $_got via $_dns (want lab Quay $_want)" >&2
+		return 1
+	fi
+	_code=$($_TUI_SSH "curl -sk --connect-timeout 3 -o /dev/null -w '%{http_code}' https://${_got}:8443/v2/ 2>/dev/null || echo fail" 2>/dev/null | tr -d '[:space:]')
+	case "$_code" in
+		200|401|403) ;;
+		*)
+			echo "  ✗ FAIL: Quay at ${_got}:8443 not reachable (HTTP ${_code:-none})" >&2
+			return 1
+			;;
+	esac
+	echo "  ✓ PASS: Mirror DNS bastion.example.com → $_got:8443 (HTTP $_code)"
+	_tui_write_pass_frame "Mirror DNS bastion.example.com → $_got:8443 (HTTP $_code)" || true
+	return 0
+}
+
 # Mirror is installed when mirror/.available exists on the test host.
 tui_mirror_available() {
 	$_TUI_SSH "test -f ~/aba/mirror/.available && echo yes || echo no" 2>/dev/null
@@ -967,6 +1228,58 @@ tui_mirror_available() {
 # True when mirror/.available exists AND port 8443 is listening on the host.
 tui_mirror_listening() {
 	$_TUI_SSH "ss -ltn 2>/dev/null | grep -q ':8443' || netstat -ltn 2>/dev/null | grep -q ':8443'" 2>/dev/null
+}
+
+# After Yes on Reinstall, wait until the local/remote install menu is up.
+# Uninstall keeps the data directory. 150 * 2s.
+# Usage: tui_wait_mirror_install_choice [screenshot-tag]
+tui_wait_mirror_install_choice() {
+	local _tag="${1:-mirror-uninstall}" i _scr
+	for (( i=0; i<150; i++ )); do
+		_scr=$(tui_capture) || return 1
+		if echo "$_scr" | grep -qi "Install locally\|remote host"; then
+			return 0
+		fi
+		if echo "$_scr" | grep -qiE "Error.*─|─.*FAILED|A step failed"; then
+			tui_screenshot "${_tag}-error"
+			return 1
+		fi
+		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|── Success ──"; then
+			tui_keys Enter
+			sleep 1
+			continue
+		fi
+		# The first paint is 0% with every step N/A and Quit already drawn.
+		# q there aborts the uninstall before Remove registry starts.
+		if echo "$_scr" | grep -qi "Stopped before all steps"; then
+			tui_keys Enter
+			sleep 1
+			tui_screenshot "${_tag}-stopped"
+			return 1
+		fi
+		sleep 2
+	done
+	tui_screenshot "${_tag}-timeout"
+	return 1
+}
+
+# Put the registry service back. The data directory is not deleted.
+# Set _TUI_MIRROR_SERVICE_DOWN=yes before the uninstall. A no-op when
+# that flag is unset or the service is already listening.
+tui_mirror_restore_service() {
+	[ "${_TUI_MIRROR_SERVICE_DOWN:-no}" = yes ] || return 0
+	if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+		_TUI_MIRROR_SERVICE_DOWN=no
+		return 0
+	fi
+	echo "  Installing mirror service again (data dir kept)"
+	$_TUI_SSH "cd ~/aba/mirror && ABA_DO_NOT_UPDATE=1 aba install --yes" >/tmp/tui-mirror-restore.log 2>&1 || true
+	if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
+		_TUI_MIRROR_SERVICE_DOWN=no
+		return 0
+	fi
+	echo "  ✗ Mirror service was not restored (see /tmp/tui-mirror-restore.log)"
+	return 1
 }
 
 # After a host wipe (or first run), cluster/mirror UI tests need a local registry.
@@ -989,6 +1302,17 @@ tui_ensure_mirror_installed() {
 	else
 		echo "  Mirror not installed — installing local registry via CLI (prereq)..."
 	fi
+	# Wipe leftovers a host wipe can leave behind (podman secrets, quay-install)
+	# that block `aba install` with "Stale registry state detected".
+	$_TUI_SSH 'cd ~/aba || exit 0
+		podman secret ls -q 2>/dev/null | while read -r s; do podman secret rm "$s" 2>/dev/null || true; done
+		rm -rf ~/quay-install ~/docker-reg ~/.aba/mirror
+		mkdir -p ~/.aba mirror
+		# Ensure cli/Makefile present for out-download-all during install
+		mkdir -p cli
+		[ -f cli/Makefile ] || true
+		[ -e cli/scripts ] || ln -sfn ../scripts cli/scripts
+	' 2>/dev/null || true
 	if $_TUI_SSH "cd ~/aba && aba mirror --name mirror >/dev/null 2>&1; cd ~/aba/mirror && aba install --yes" 2>&1 | tee /tmp/tui-mirror-install-$$.log | tail -30; then
 		if [[ "$(tui_mirror_available)" == "yes" ]] && tui_mirror_listening; then
 			echo "  ✓ Mirror installed (listening on :8443)"
@@ -1105,21 +1429,31 @@ tui_start_to_menu() {
 			echo "  Reusing TUI session (already on main menu)"
 			trap 'tui_leave_on_menu 2>/dev/null' EXIT
 			tui_detect_mode
-			return 0
-		fi
-		echo "  Reusing TUI session — navigating to main menu"
-		if tui_leave_on_menu && tui_on_main_menu; then
+		elif tui_leave_on_menu && tui_on_main_menu; then
+			echo "  Reusing TUI session — navigating to main menu"
 			trap 'tui_leave_on_menu 2>/dev/null' EXIT
 			tui_detect_mode
-			return 0
+		else
+			echo "  Existing session unusable — relaunching TUI"
+			tui_stop
+			tui_start "$cmd"
+			tui_dismiss_startup 60 || { tui_stop; return 1; }
+			tui_detect_mode
 		fi
-		echo "  Existing session unusable — relaunching TUI"
-		tui_stop
+	else
+		tui_start "$cmd"
+		tui_dismiss_startup 60 || { tui_stop; return 1; }
+		tui_detect_mode
 	fi
-
-	tui_start "$cmd"
-	tui_dismiss_startup 60 || { tui_stop; return 1; }
-	tui_detect_mode
+	# A reused session, or a relaunch that still landed on the air-gap menu,
+	# hides Rerun Wizard and Install Mirror. One restart applies the choice above.
+	if [[ "$_TUI_DETECTED_MODE" == "DISCO" ]] && ! _tui_host_is_disco; then
+		echo "  Connected host is Fully Disconnected — relaunching into Connected mode"
+		tui_stop
+		tui_start "$cmd"
+		tui_dismiss_startup 60 || { tui_stop; return 1; }
+		tui_detect_mode
+	fi
 	return 0
 }
 
@@ -1144,6 +1478,10 @@ tui_pick_cluster() {
 	local _scr _i
 	for _i in $(seq 1 60); do
 		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+			tui_decline_cluster_ready || true
+			continue
+		fi
 		# Splash while TUI probes leftover cluster dirs (e.g. after BM tests)
 		if echo "$_scr" | grep -qi "Detecting installation status"; then
 			sleep 2
@@ -1196,7 +1534,9 @@ tui_clear_failed_tasks() {
 # Prefer tui_start_to_menu — it reuses a live session when possible.
 tui_start() {
 	local cmd="${1:-cd ~/aba && abatui}"
-	$_TUI_SSH "tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
+	# Detach viewers first — an attached client racing kill/new-session
+	# caused Smoke to land on Confirm Exit / "tmux session gone".
+	$_TUI_SSH "tmux detach-client -s $_TUI_SESSION 2>/dev/null; tmux kill-session -t $_TUI_SESSION 2>/dev/null; true"
 	# Only kill stale processes if they exist
 	if $_TUI_SSH "pgrep -f abatui" >/dev/null 2>&1; then
 		$_TUI_SSH "pkill -9 -f abatui; pkill -9 -f 'dialog --'; true" 2>/dev/null
@@ -1223,14 +1563,12 @@ tui_stop() {
 # (e.g. a test exercised Exit), PASS with a note — the next start will relaunch.
 tui_cleanup() {
 	if ! tui_session_alive 2>/dev/null; then
-		echo "  ✓ PASS: Cleanup complete (no TUI session — next test will launch)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cleanup complete (no TUI session — next test will launch)"
 		return 0
 	fi
 
 	if tui_leave_on_menu && tui_on_main_menu; then
-		echo "  ✓ PASS: TUI left on main menu"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "TUI left on main menu"
 		return 0
 	fi
 
@@ -1247,9 +1585,10 @@ tui_cleanup() {
 tui_assert_contains() {
 	local pattern="$1"
 	local desc="$2"
-	if tui_capture | grep -qi "$pattern"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	local pane
+	pane=$(tui_capture) || pane=""
+	if printf '%s\n' "$pane" | grep -qi "$pattern"; then
+		tui_pass "$desc" "$pane"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (expected: $pattern)"
@@ -1263,9 +1602,10 @@ tui_assert_contains() {
 tui_assert_not_contains() {
 	local pattern="$1"
 	local desc="$2"
-	if ! tui_capture | grep -qi "$pattern"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+	local pane
+	pane=$(tui_capture) || pane=""
+	if ! printf '%s\n' "$pane" | grep -qi "$pattern"; then
+		tui_pass "$desc" "$pane"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (unexpected: $pattern)"
@@ -1281,8 +1621,7 @@ tui_assert_appears() {
 	local desc="$2"
 	local timeout="${3:-10}"
 	if tui_wait_for "$pattern" "$timeout"; then
-		echo "  ✓ PASS: $desc"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$desc" "${_TUI_WAIT_PANE:-}"
 		return 0
 	else
 		echo "  ✗ FAIL: $desc (never appeared: $pattern)"
@@ -1301,8 +1640,14 @@ tui_screenshot() {
 	local file="$_TUI_RUN_DIR/${label}.txt"
 	local link="/tmp/tui-test-${label}.txt"
 	tui_capture > "$file"
+	# A blank pane is a redraw gap. Do not keep it or point the symlink at it.
+	if _tui_pane_blank "$file"; then
+		rm -f "$file"
+		return 0
+	fi
 	ln -sf "$file" "$link"
 	echo "  [screenshot: $file]"
+	_tui_save_color_copy "$file"
 }
 
 # Delete a test cluster. ALWAYS prefer the TUI; fall back to
@@ -1423,6 +1768,32 @@ tui_delete_cluster() {
 	return 0
 }
 
+# Delete every throwaway lab cluster (see tui_lab_cluster_ips) except keepers.
+# Use after a test (or suite stage) no longer needs those VMs/dirs — do not wait
+# for Lifecycle if BM/race left compact|standard|sno4 sitting around.
+# Usage: tui_sweep_throwaway_clusters [keep_name ...]
+#   tui_sweep_throwaway_clusters sno          # free BM leftovers, keep sno
+#   tui_sweep_throwaway_clusters              # delete all throwaways
+tui_sweep_throwaway_clusters() {
+	local _keep=" $* " _name _has
+	echo "  Sweeping throwaway clusters (keep:${_keep:- none})..."
+	# sno4 is 10.0.1.204, which okd-vmw holds. Do not sweep that name.
+	for _name in sno sno2 sno3 compact compact2 standard ocp; do
+		case "$_keep" in
+			*" $_name "*) continue ;;
+		esac
+		_has=$($_TUI_SSH "test -d ~/aba/$_name -o -f ~/aba/$_name/.install-complete && echo yes || echo no" 2>/dev/null || echo no)
+		# Also clear orphan VMs when the dir is already gone
+		if [[ "$_has" != "yes" ]]; then
+			tui_destroy_orphan_vms "$_name" 2>/dev/null || true
+			continue
+		fi
+		echo "  Sweep: deleting '$_name' (no longer needed)"
+		tui_delete_cluster "$_name" || true
+	done
+	return 0
+}
+
 # --- ISC (ImageSetConfiguration) verification helpers ---
 
 # Read the ISC YAML from the remote host.  Caller captures output.
@@ -1462,8 +1833,7 @@ tui_assert_isc_contains() {
 	tui_wait_isc_file 30
 	_isc=$(tui_read_isc)
 	if echo "$_isc" | grep -qiE "$_pat"; then
-		echo "  ✓ PASS: ISC contains $_label"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC contains $_label"
 	else
 		echo "  ✗ FAIL: ISC missing $_label (pattern: $_pat)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -1482,8 +1852,7 @@ tui_assert_isc_not_contains() {
 		echo "  ✗ FAIL: ISC still contains $_label (should have been removed)"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
-		echo "  ✓ PASS: ISC no longer contains $_label"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "ISC no longer contains $_label"
 	fi
 }
 
@@ -1496,6 +1865,21 @@ tui_summary() {
 	echo "  PASS: $_TUI_PASS"
 	echo "  FAIL: $_TUI_FAIL"
 	echo "  Screenshots: $_TUI_RUN_DIR/"
+	echo "  Pass frames: $_TUI_RUN_DIR/pass-*.txt (one file per PASS)"
+	if [[ -d "$_TUI_RUN_DIR/color" ]]; then
+		echo "  Color copies: $_TUI_RUN_DIR/color/"
+	fi
+	case "${_TUI_CAPTURE_EVERY:-0}" in
+		0|0.0|"") ;;
+		*)
+	if [[ "$_TUI_TEST_NAME" != "test-tui-all" ]]; then
+		local _frames
+		_frames=$(find "$_TUI_RUN_DIR" -maxdepth 1 -name 'frame-*.txt' 2>/dev/null | wc -l)
+		_frames="${_frames//[[:space:]]/}"
+		echo "  Screen changes: ${_frames:-0} (every ${_TUI_CAPTURE_EVERY}s, identical and blank frames dropped)"
+	fi
+		;;
+	esac
 	echo "========================================"
 	[ "$_TUI_FAIL" -eq 0 ]
 }
@@ -1533,13 +1917,30 @@ _tui_capture_output() {
 	local label="${1:-output}"
 	local _scr
 	_scr=$(tui_capture)
-	if echo "$_scr" | grep -qi "View Output\|Output"; then
-		tui_press_button "View Output" 2>/dev/null || tui_press_button "Output" 2>/dev/null || return 0
+	# Live Output closes with Space. q here is delivered to the progress
+	# gauge and aborts an install that is still In Progress.
+	if echo "$_scr" | grep -q "ABA Live Output"; then
+		tui_keys Space
+		sleep 1
+		return 0
+	fi
+	if echo "$_scr" | grep -qi "In Progress"; then
+		return 0
+	fi
+	if echo "$_scr" | grep -qi "View Output"; then
+		tui_press_button "View Output" 2>/dev/null || return 0
 		sleep 2
 		tui_screenshot "${label}-output"
-		# Return from output view (Q to quit less/viewer, or Escape)
-		tui_keys q 2>/dev/null; sleep 1
-		tui_keys Escape 2>/dev/null; sleep 1
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "ABA Live Output"; then
+			tui_keys Space
+		elif echo "$_scr" | grep -q "Press Q to quit\|(END)"; then
+			# less ignores Escape. q is what returns to the error dialog.
+			tui_keys q
+		else
+			tui_keys Escape
+		fi
+		sleep 1
 	fi
 }
 
@@ -1555,6 +1956,8 @@ tui_wait_for_progress() {
 
 	_start=$(date +%s)
 	_last_ss=0
+	# A new wait must not hand the previous success screen to a later pass.
+	unset _TUI_JUDGED_PANE
 
 	while true; do
 		_elapsed=$(( $(date +%s) - _start ))
@@ -1570,6 +1973,10 @@ tui_wait_for_progress() {
 		fi
 
 		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+			tui_decline_cluster_ready || true
+			continue
+		fi
 
 		# Bail immediately if we accidentally exited the TUI
 		if echo "$_scr" | grep -qi "Exit ABA TUI\|Confirm Exit"; then
@@ -1622,6 +2029,26 @@ tui_wait_for_progress() {
 			continue
 		fi
 
+		# Mirror Payload is a menu. It does not match the main-menu headers
+		# (── Mirror ── and the rest), so "anything else is progress" used to
+		# sit here for the whole timeout and log "running" while no sync started.
+		# A real sync dialog has In Progress / Overall Progress and is not this menu.
+		if echo "$_scr" | grep -q "Mirror Payload" && echo "$_scr" | grep -q "Prepare Upgrade" \
+			&& ! echo "$_scr" | grep -qi "In Progress\|Overall Progress\|Executing\|Syncing"; then
+			if [[ $_saw_progress -eq 1 ]] && (( _elapsed >= 10 )); then
+				echo "  Progress '$label' returned to Mirror Payload without verified success (${_elapsed}s)"
+				tui_screenshot "${label}-payload-menu-without-success"
+				return 1
+			fi
+			if (( _elapsed >= 45 )); then
+				echo "  ERROR: '$label' stuck on Mirror Payload menu after ${_elapsed}s — not a running sync"
+				tui_screenshot "${label}-stuck-payload-menu"
+				return 1
+			fi
+			sleep 2
+			continue
+		fi
+
 		# Phase 1: wait for the screen to leave the menu (progress/dialog appears)
 		# Use specific execution keywords — avoid generic words like "Upgrade"
 		# that appear in menus and buttons.
@@ -1665,6 +2092,8 @@ tui_wait_for_progress() {
 		# Success: completed dialog (progress or confirm_and_execute)
 		if echo "$_scr" | grep -qi "All steps completed\|steps completed successfully\|─── Success ───\|── Success ──\|installed successfully"; then
 			echo "  Progress '$label' completed successfully (${_elapsed}s)"
+			# The next pass files this pane. Dismiss keys below would show a later screen.
+			_TUI_JUDGED_PANE=$_scr
 			_tui_capture_output "$label"
 			# Dismiss OK/success dialog — but NOT post-install yesno dialogs
 			# ("Configure OperatorHub" has Yes/No, not OK)
@@ -1694,6 +2123,15 @@ tui_wait_for_progress() {
 					sleep 5
 					continue
 				fi
+				# Early steps already say Succeeded while Monitor is still
+				# running. A capture that misses "In Progress" must not q-quit
+				# a gauge that is under 100%.
+				local _pct
+				_pct=$(echo "$_scr" | grep -oE '[0-9]+%' | tail -1 | tr -d '%')
+				if [[ -n "$_pct" && "$_pct" -lt 100 ]]; then
+					sleep 5
+					continue
+				fi
 				if echo "$_scr" | grep -q "N/A" && ! echo "$_scr" | grep -qi "Failed"; then
 					sleep 5
 					continue
@@ -1705,6 +2143,12 @@ tui_wait_for_progress() {
 				fi
 				local _has_fail=0
 				echo "$_scr" | grep -qi "Failed" && _has_fail=1
+				# q leaves this dialog. Keep the pane the result was judged on.
+				if [[ $_has_fail -eq 0 ]]; then
+					_TUI_JUDGED_PANE=$_scr
+				else
+					unset _TUI_JUDGED_PANE
+				fi
 				tui_keys q; sleep 1
 				if [[ $_has_fail -eq 1 ]]; then
 					echo "  Progress '$label' completed with step failures (${_elapsed}s)"

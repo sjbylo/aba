@@ -12,13 +12,26 @@ echo ""
 tui_deploy_code
 echo ""
 
+# Splash is drawn once, when abatui starts. A session already on the main
+# menu is that same process — killing it only to see the splash again is
+# what forces the next test to launch from scratch (~20s).
+_smoke_reuse=0
+if tui_session_alive; then
+	if tui_on_main_menu || { tui_leave_on_menu && tui_on_main_menu; }; then
+		echo "  Reusing TUI session — splash already passed in this process"
+		trap 'tui_leave_on_menu 2>/dev/null' EXIT
+		_smoke_reuse=1
+	fi
+fi
+
 # ============================================================================
 # 1. Splash screen
 # ============================================================================
+if [[ "$_smoke_reuse" -eq 0 ]]; then
 echo "--- 1. Splash screen ---"
 tui_start
 tui_assert_appears "OpenShift Installer" "Splash screen appeared" 15 || {
-	tui_screenshot "splash-fail"; tui_stop; tui_summary; exit 1
+	tui_screenshot "splash-fail"; tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 }
 tui_assert_title "OpenShift Installer\|ABA" "Splash screen title"
 tui_assert_contains "ABA v" "Version string present"
@@ -50,7 +63,13 @@ tui_keys Enter; sleep 1
 # ============================================================================
 echo ""
 echo "--- 3. Main menu ---"
-tui_keys Enter
+# Enter leaves the splash. On a reused session it would open the highlighted item.
+[[ "$_smoke_reuse" -eq 0 ]] && tui_keys Enter
+else
+echo "--- 1-2. Splash skipped (session already on the main menu) ---"
+echo ""
+echo "--- 3. Main menu ---"
+fi
 tui_assert_appears "Actions" "Main menu appeared" 10
 tui_assert_title "Partially Disconnected\|Fully Disconnected\|Fully Connected" "Main menu title"
 tui_screenshot "03-main-menu"
@@ -102,7 +121,14 @@ tui_keys Enter; sleep 1
 # ============================================================================
 echo ""
 echo "--- 5. Settings submenu ---"
-tui_back_to "Actions" 3
+# Esc from the main menu opens Confirm Exit; recover before Configure.
+tui_back_to "Actions" 8 || true
+_scr=$(tui_capture)
+if echo "$_scr" | grep -qi "Confirm Exit\|Exit ABA"; then
+	echo "  (dismissing Confirm Exit before Settings)"
+	tui_press_button "Continue" 2>/dev/null || { tui_keys Tab; sleep 0.2; tui_keys Enter; }
+	sleep 1
+fi
 tui_select_item "Configure"
 tui_assert_appears "Settings" "Settings dialog appeared" 5
 tui_assert_title "Settings" "Settings dialog title"
@@ -115,8 +141,7 @@ sleep 2
 tui_screenshot "05b-settings-help"
 tui_capture > /tmp/_tui_settings_help.txt
 if grep -qiE "toggle|setting" /tmp/_tui_settings_help.txt; then
-	echo "  ✓ PASS: Settings help appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Settings help appeared"
 else
 	echo "  ✗ FAIL: Settings help content unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -161,13 +186,11 @@ sleep 2
 tui_screenshot "07-day2"
 tui_capture > /tmp/_tui_day2_check.txt
 if grep -qiE "No clusters configured" /tmp/_tui_day2_check.txt; then
-	echo "  ✓ PASS: Day-2 shows 'No clusters configured' (expected — no cluster installed)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 shows 'No clusters configured' (expected — no cluster installed)"
 	tui_keys Enter; sleep 1
 	tui_back_to "Actions"
 elif grep -qiE "Day-2|Cluster Management" /tmp/_tui_day2_check.txt; then
-	echo "  ✓ PASS: Day-2 menu reached"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 menu reached"
 
 	echo "  Day-2 menu items:"
 	tui_menu_items | while IFS=$'\t' read -r key label; do

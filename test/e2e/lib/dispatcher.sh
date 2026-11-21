@@ -199,6 +199,8 @@ _auto_deploy_dev_branch() {
 	local _any_stale=""
 	local _p _p_meta _p_last
 	for _p in $CLI_POOL_LIST; do
+		# A stopped pool is powered off. Do not treat it as stale or SSH to it.
+		_e2e_pool_in_service "$_p" || continue
 		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
 		_p_last=""
 		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
@@ -254,6 +256,7 @@ _auto_deploy_dev_branch() {
 	# Deploy to every pool that is behind HEAD
 	local _p _p_meta _p_last _p_target _deployed_any=""
 	for _p in $CLI_POOL_LIST; do
+		_e2e_pool_in_service "$_p" || continue
 		_p_meta="${_AUTO_DEPLOY_META_PREFIX}-${_p}"
 		_p_last=""
 		[ -f "$_p_meta" ] && _p_last=$(cat "$_p_meta" 2>/dev/null)
@@ -512,6 +515,9 @@ _check_hung() {
 _find_free_pool() {
 	local _now=${SECONDS:-0}
 	for _p in $CLI_POOL_LIST; do
+		# Re-read every search. stop can shrink the set while this process is alive,
+		# and a relaunch still carries the original -p list.
+		_e2e_pool_in_service "$_p" || continue
 		if [ -z "${_busy_pools[$_p]:-}" ]; then
 			# Skip unreachable pools (state unknown -- could be running a suite)
 			if [ -n "${_unreachable_pools[$_p]:-}" ]; then
@@ -590,6 +596,11 @@ _record_result() {
 
 	if [ "$rc" -eq 0 ]; then
 		_print_box "1;42;97" "✔  PASS  ${suite}  pool ${pool_num}"
+		# Attribute this PASS to the current code-update stamp (may notify when
+		# every suite has passed since the last deploy / auto-deploy).
+		if declare -F _e2e_cov_record_pass >/dev/null 2>&1; then
+			_e2e_cov_record_pass "$suite" || true
+		fi
 	elif [ "$rc" -eq 3 ]; then
 		_print_box "1;43;30" "⊘  SKIP  ${suite}  pool ${pool_num}"
 	else
@@ -633,6 +644,7 @@ _detect_running_and_completed() {
 	local -A _running_suites=()
 	local _max_ssh_retries=3
 	for _p in $CLI_POOL_LIST; do
+		_e2e_pool_in_service "$_p" || continue
 		_export_pool_ssh_users "$_p"
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
@@ -691,6 +703,7 @@ _detect_running_and_completed() {
 
 	# Pass 2: detect completed suites (.rc files)
 	for _p in $CLI_POOL_LIST; do
+		_e2e_pool_in_service "$_p" || continue
 		_export_pool_ssh_users "$_p"
 		local rc_files=""
 		rc_files=$(_ssh_con "$_p" "ls ${_RC_PREFIX}-*.rc") || rc_files=""
@@ -727,6 +740,8 @@ _is_running_on_external_pool() {
 _recheck_unreachable_pools() {
 	[ ${#_unreachable_pools[@]} -eq 0 ] && return
 	for _p in "${!_unreachable_pools[@]}"; do
+		# Powering the VM back on is not enough. start puts the pool in service again.
+		_e2e_pool_in_service "$_p" || continue
 		_export_pool_ssh_users "$_p"
 		if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 			local sess_exists=""
@@ -1313,13 +1328,27 @@ _dispatch_loop() {
 				for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
 					[ "${_work_queue[$_qi]}" = "$_inj_suite" ] && _already_queued=1 && break
 				done
-				[ -n "$_already_queued" ] && { printf "  [%s] SKIPPED: %s (queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
+				# Already pending: pull it out and put it next. Skipping left
+				# reschedule as a no-op when the suite was already queued.
+				if [ -n "$_already_queued" ]; then
+					_wq_kept=()
+					_inj_qi=0
+					while [ "$_inj_qi" -lt "${#_work_queue[@]}" ]; do
+						if [ "$_inj_qi" -ge "$_queue_idx" ] && [ "${_work_queue[$_inj_qi]}" = "$_inj_suite" ]; then
+							_inj_qi=$(( _inj_qi + 1 ))
+							continue
+						fi
+						_wq_kept+=("${_work_queue[$_inj_qi]}")
+						_inj_qi=$(( _inj_qi + 1 ))
+					done
+					_work_queue=("${_wq_kept[@]}")
+				fi
 				# Front of the not-yet-dispatched queue. run.sh prepends the
 				# inject file for this reason; appending left the suite behind
 				# whatever was already pending.
 				_wq_new=()
 				_inj_qi=0
-				while [ "$_inj_qi" -lt "$_queue_idx" ]; do
+				while [ "$_inj_qi" -lt "$_queue_idx" ] && [ "$_inj_qi" -lt "${#_work_queue[@]}" ]; do
 					_wq_new+=("${_work_queue[$_inj_qi]}")
 					_inj_qi=$(( _inj_qi + 1 ))
 				done
@@ -1329,9 +1358,17 @@ _dispatch_loop() {
 					_inj_qi=$(( _inj_qi + 1 ))
 				done
 				_work_queue=("${_wq_new[@]}")
-				suites_to_run+=("$_inj_suite")
+				_in_suites=""
+				for _es in "${suites_to_run[@]}"; do
+					[ "$_es" = "$_inj_suite" ] && _in_suites=1 && break
+				done
+				[ -z "$_in_suites" ] && suites_to_run+=("$_inj_suite")
 				_inj_count=$(( _inj_count + 1 ))
-				printf "  [%s] INJECTED: %s (front of queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				if [ -n "$_already_queued" ]; then
+					printf "  [%s] MOVED: %s (front of queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				else
+					printf "  [%s] INJECTED: %s (front of queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				fi
 			done < "${E2E_INJECT_QUEUE}.processing"
 			rm -f "${E2E_INJECT_QUEUE}.processing"
 			if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then

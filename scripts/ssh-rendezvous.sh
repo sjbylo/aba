@@ -20,7 +20,7 @@ trap - ERR
 [ -f aba.conf ] && [ ! -L aba.conf ] && aba_abort "Only run this command in a 'cluster directory'.  See: aba cluster --help"
 [ ! -f cluster.conf ] && aba_abort "This directory ($PWD) is not yet initialized as a cluster directory!  See: aba cluster --help"
 
-aba_debug "Starting: $0 $* from $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-cluster-conf) 
 

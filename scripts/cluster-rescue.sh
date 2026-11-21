@@ -4,7 +4,7 @@ source scripts/include_all.sh
 
 # Prep execution on one node. Copy script to node and execute it there.
 if [ ! "$1" = "--exec" ]; then
-	aba_debug "Starting: $0 $*"
+	aba_debug "Starting: $0 $* in $PWD"
 
 	source <(normalize-cluster-conf) 
 

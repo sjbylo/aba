@@ -12,6 +12,69 @@
 
 cd "$(dirname "$0")/../.."
 
+# These tests are OpenShift. A checkout aba.conf may say okd, or omit the
+# key, and ocp_version may be an OKD string. Write distribution=ocp for the
+# run. An OKD version fails OpenShift verification and is not on the
+# OpenShift CDN, so replace it with the published stable version for that
+# major.minor. Put the original file back on exit.
+_ABA_CONF="$PWD/aba.conf"
+_ABA_CONF_BAK=
+_aba_ocp_version_ok() {
+	[[ "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]
+}
+_restore_aba_conf() {
+	if [ -n "${_ABA_CONF_BAK:-}" ] && [ -f "$_ABA_CONF_BAK" ]; then
+		cp -a "$_ABA_CONF_BAK" "$_ABA_CONF"
+		rm -f "$_ABA_CONF_BAK"
+	fi
+}
+trap _restore_aba_conf EXIT
+if [ -f "$_ABA_CONF" ]; then
+	_dist=$(grep '^distribution=' "$_ABA_CONF" | tail -1 | cut -d= -f2 | awk '{print $1}')
+	_ver=$(grep '^ocp_version=' "$_ABA_CONF" | tail -1 | cut -d= -f2 | awk '{print $1}')
+	_fix_dist=0
+	_fix_ver=0
+	[ "$_dist" = "ocp" ] || _fix_dist=1
+	_aba_ocp_version_ok "$_ver" || _fix_ver=1
+	if [ "$_fix_dist" = 1 ] || [ "$_fix_ver" = 1 ]; then
+		_ABA_CONF_BAK=$(mktemp)
+		cp -a "$_ABA_CONF" "$_ABA_CONF_BAK"
+		if [ "$_fix_dist" = 1 ]; then
+			if grep -q '^distribution=' "$_ABA_CONF"; then
+				sed -i 's/^distribution=.*/distribution=ocp/' "$_ABA_CONF"
+			else
+				printf 'distribution=ocp\n' >> "$_ABA_CONF"
+			fi
+		fi
+		if [ "$_fix_ver" = 1 ]; then
+			_mm=$(printf '%s\n' "$_ver" | cut -d. -f1,2)
+			case "$_mm" in
+				[0-9]*.[0-9]*) ;;
+				*) _mm=4.21 ;;
+			esac
+			_rel=$(mktemp)
+			if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$_rel" \
+				"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-${_mm}/release.txt"; then
+				rm -f "$_rel"
+				echo "Error: could not read the OpenShift stable-${_mm} release" >&2
+				exit 1
+			fi
+			_stable=$(awk '/^Name:/ { print $2; exit }' "$_rel")
+			rm -f "$_rel"
+			if ! _aba_ocp_version_ok "$_stable"; then
+				echo "Error: could not resolve an OpenShift version from stable-${_mm}" >&2
+				exit 1
+			fi
+			if grep -q '^ocp_version=' "$_ABA_CONF"; then
+				sed -i -E "s/^(ocp_version=)[^[:space:]]*/\\1${_stable}/" "$_ABA_CONF"
+			else
+				printf 'ocp_version=%s\n' "$_stable" >> "$_ABA_CONF"
+			fi
+			echo "Func suite: ocp_version ${_ver:-<unset>} is not an OpenShift version; using ${_stable} for this run"
+		fi
+	fi
+fi
+
 mode="${1:---all}"
 
 # Acquire lock to prevent multiple test runs
@@ -68,6 +131,7 @@ unit_tests=(
 	test/func/test-try-cmd.sh
 	test/func/test-replace-value-conf.sh
 	test/func/test-password-handling.sh
+	test/func/test-check-pull-secret.sh
 
 	# run_once subsystem
 	test/func/test-run-once-task-consistency.sh
@@ -80,15 +144,22 @@ unit_tests=(
 	test/func/test-run-once-validation-reread-race.sh
 	test/func/test-run-once-waiting-message.sh
 	test/func/test-run-once-wait-start-race.sh
+	test/func/test-run-once-concurrency-history.sh
+	test/func/test-install-runner-wipe-orphan-race.sh
+	test/func/test-e2e-code-coverage.sh
 	test/func/test-self-heal-validation.sh
 
 	# Config / normalize
 	test/func/test-normalize-conf-pipeline.sh
 	test/func/test-normalize-ipv4.sh
+	test/func/test-starting-ip-list.sh
+	test/func/test-pick-install-iface.sh
 	test/func/test-input-validation-all.sh
+	test/func/test-distribution-helpers.sh
 	test/func/test-ocp-major-render.sh
 	test/func/test-config-value-downstream.sh
 	test/func/test-cluster-flag-forwarding.sh
+	test/func/test-cluster-cwd-guard.sh
 	test/func/test-resource-pool-resolution.sh
 
 	# Cluster / VM
@@ -102,6 +173,8 @@ unit_tests=(
 	test/func/test-write-usb-override.sh
 	test/func/test-auth-backup.sh
 	test/func/test-install-stamp.sh
+	test/func/test-console-hosts.sh
+	test/func/test-cluster-info-card.sh
 	test/func/test-install-guard-stale-vms.sh
 	test/func/test-cluster-clean-gate.sh
 	test/func/test-oc-mirror-url.sh
@@ -110,6 +183,8 @@ unit_tests=(
 	test/func/test-image-digest.sh
 	test/func/test-reg-port.sh
 	test/func/test-day2-ntp-order.sh
+	test/func/test-day2-ntp-stratum.sh
+	test/func/test-setup-ntp-stratum-warn.sh
 	test/func/test-catalog-source-naming.sh
 	test/func/test-catalog-container-sweep.sh
 	test/func/test-agent-wait-skip.sh
@@ -129,6 +204,7 @@ unit_tests=(
 	test/func/test-mirror-payload-warnings.sh
 	test/func/test-mirror-status-shell-keys.sh
 	test/func/test-mirror-status-derived-flags.sh
+	test/func/test-mirror-self-link-removed.sh
 	test/func/test-reg-stale-report.sh
 	test/func/test-reg-generate-password.sh
 	test/func/test-reg-check-v2-auth.sh
@@ -150,10 +226,12 @@ unit_tests=(
 	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
 	test/func/test-estimate-isc-size.sh
+	test/func/test-mirror-eta.sh
 	test/func/test-mirror-disk-space.sh
 	test/func/test-additional-image-sizes.sh
 
 	# Status / CLI
+	test/func/test-cli-help-contract.sh
 	test/func/test-status-shell-keys.sh
 
 	# Progress events
@@ -167,6 +245,9 @@ unit_tests=(
 # INTEGRATION TESTS — may download files, use podman, take minutes; still safe
 # ─────────────────────────────────────────────────────────────────────────────
 integration_tests=(
+	# Flag effects. Sandbox repo, so bastion aba.conf is not written.
+	test/func/test-cli-flag-effects.sh
+
 	# CLI download pipeline
 	test/func/test-cli-download-urls.sh
 	test/func/test-arch-binaries.sh

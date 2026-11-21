@@ -9,6 +9,7 @@
 #   lib/cli.sh       -- Argument parsing (_parse_args, _parse_pools, ...)
 #   lib/deploy.sh    -- Harness sync (sync_harness, sync_source, deploy_pool)
 #   lib/commands.sh  -- One-shot commands (stop, start, status, verify, ...)
+#   lib/code-coverage.sh -- "all suites passed since last code update" notify
 #   lib/tmux-ui.sh   -- Dashboard / live / attach
 #   lib/constants.sh -- Shared constants
 #   lib/dispatcher.sh -- Work-queue dispatcher
@@ -32,6 +33,7 @@ source "$_RUN_DIR/lib/cleanup.sh"
 source "$_RUN_DIR/lib/cli.sh"
 source "$_RUN_DIR/lib/deploy.sh"
 source "$_RUN_DIR/lib/commands.sh"
+source "$_RUN_DIR/lib/code-coverage.sh"
 source "$_RUN_DIR/lib/tmux-ui.sh"
 source "$_RUN_DIR/lib/dispatcher.sh"
 source "$_RUN_DIR/lib/infra.sh"
@@ -220,7 +222,7 @@ case "$CLI_COMMAND" in
 		fi
 
 		echo $$ > "$E2E_DAEMON_PID"
-		trap 'rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META"' EXIT
+		trap 'rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META" "$E2E_ACTIVE_POOLS"' EXIT
 		trap '' PIPE  # Ignore SIGPIPE so piping daemon output can't crash it
 
 		# Write metadata so `status` can show daemon config
@@ -230,6 +232,9 @@ case "$CLI_COMMAND" in
 		started=$(date '+%Y-%m-%d %H:%M:%S')
 		args=${_daemon_args[*]}
 		META_EOF
+		# Fresh daemon declares its own set. A later stop shrinks this file;
+		# dispatcher restarts keep reading it and must not put retired pools back.
+		_e2e_write_active_pools "$CLI_POOL_LIST"
 
 		_daemon_log "Daemon started (PID=$$, max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
 		_daemon_log "Args: ${_daemon_args[*]}"
@@ -329,7 +334,8 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 					echo "  WARNING: Daemon (PID $_daemon_pid) manages pools: $_running_pools"
 					echo "           Your -p includes pools not in the daemon:${_new_only}"
 					echo "           Those pools will NOT receive dispatched suites."
-					echo "           To manage all pools, stop the daemon and restart with the correct -p range."
+					echo "           A pool you stopped comes back with: ./run.sh start -p N"
+					echo "           A pool this daemon was not started with needs a new daemon."
 					echo ""
 				fi
 			fi
@@ -419,7 +425,8 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 		echo "    ./run.sh reschedule -s suite-name"
 		echo ""
 		echo "  Stop:"
-		echo "    ./run.sh stop                    # stop all pools + daemon"
+		echo "    ./run.sh stop -p 3,4             # stop those pools and shut down their VMs"
+		echo "    ./run.sh stop                    # stop every pool and the daemon"
 		echo ""
 		echo "  Logs: $_DAEMON_LOG"
 		echo ""
@@ -637,6 +644,17 @@ declare -A _result_pool=()
 declare -A _bad_pools_map=()
 declare -A _unreachable_pools=()
 
+# A dispatcher restart still receives --fresh from the daemon. Touch
+# /tmp/e2e-no-force-clean before replacing the dispatcher so this start
+# does not kill suites that are already running.
+if [ -f /tmp/e2e-no-force-clean ]; then
+	rm -f /tmp/e2e-no-force-clean
+	if [ -n "${CLI_FORCE:-}" ]; then
+		echo "  Dispatcher restart: keeping running suites (--fresh clean skipped)"
+		CLI_FORCE=
+	fi
+fi
+
 # Apply --fresh / --force scoping
 if [ -n "${CLI_FORCE:-}" ]; then
 	_pool_count=0
@@ -665,6 +683,7 @@ for s in "${!_completed[@]}"; do
 done
 
 # Consume pre-existing inject queue
+_pre_injected=()
 if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
 	_pre_injected=()
 	while IFS= read -r _pi; do
@@ -698,7 +717,50 @@ if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
 	fi
 fi
 
+# History sort runs inside _build_work_queue. Clear a priority suite's
+# completed mark first, then put those names at the front afterwards.
+if [ ${#_pre_injected[@]} -gt 0 ]; then
+	for _pi in "${_pre_injected[@]}"; do
+		_running=""
+		for _bp in "${!_busy_pools[@]}"; do
+			[ "${_busy_pools[$_bp]}" = "$_pi" ] && _running=1 && break
+		done
+		if [ -z "$_running" ]; then
+			unset '_completed[$_pi]'
+			unset '_results[$_pi]'
+		fi
+	done
+fi
+
 _build_work_queue
+
+if [ ${#_pre_injected[@]} -gt 0 ] && [ ${#_work_queue[@]} -gt 0 ]; then
+	_pri_ordered=()
+	_pri_rest=()
+	for _pi in "${_pre_injected[@]}"; do
+		for _es in "${_work_queue[@]}"; do
+			if [ "$_es" = "$_pi" ]; then
+				_pri_ordered+=("$_pi")
+				break
+			fi
+		done
+	done
+	for _es in "${_work_queue[@]}"; do
+		_pri=""
+		for _pi in "${_pre_injected[@]}"; do
+			[ "$_es" = "$_pi" ] && _pri=1 && break
+		done
+		[ -z "$_pri" ] && _pri_rest+=("$_es")
+	done
+	if [ ${#_pri_ordered[@]} -gt 0 ]; then
+		if [ ${#_pri_rest[@]} -gt 0 ]; then
+			_work_queue=("${_pri_ordered[@]}" "${_pri_rest[@]}")
+		else
+			_work_queue=("${_pri_ordered[@]}")
+		fi
+		echo "  Priority queue: ${_pri_ordered[*]}"
+	fi
+fi
 
 _num_completed=${#_completed[@]}
 _num_running=${#_busy_pools[@]}

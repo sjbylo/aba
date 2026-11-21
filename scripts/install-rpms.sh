@@ -7,7 +7,7 @@ cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # Note, rpms required for "internal" bastion
 # rpms required for "external" bastion (or laptop) are fewer.
