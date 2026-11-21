@@ -824,6 +824,11 @@ tui_is_disco() {
 	[[ "$_TUI_DETECTED_MODE" == "DISCO" ]]
 }
 
+# Air-gap host. Disco tests take the NIC down and expect Fully Disconnected.
+_tui_host_is_disco() {
+	[[ "${_TUI_HOST:-}" == *disco* ]]
+}
+
 # Check if internet is available in the TUI (not DISCO).
 # Usage: if tui_has_internet; then ... fi
 tui_has_internet() {
@@ -875,9 +880,22 @@ tui_dismiss_startup() {
 			return 1
 		fi
 
-		# "Bundle on connected host" — select Fully Disconnected (default)
+		# Bundle + internet. Yes is Fully Disconnected. Air-gap tests run on
+		# disco with the NIC down, so they never see this dialog. On a connected
+		# host, Connected mode is the menu the rest of the suite drives, and it
+		# removes the leftover .bundle flag.
 		if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
-			tui_keys Enter
+			if _tui_host_is_disco; then
+				echo "  Bundle on disco — staying Fully Disconnected" >&2
+				tui_keys Enter
+			else
+				echo "  Bundle on a connected host — choosing Connected mode" >&2
+				if ! tui_press_button "Connected mode"; then
+					tui_keys Tab
+					sleep 0.2
+					tui_keys Enter
+				fi
+			fi
 			sleep 1
 			continue
 		fi
@@ -1410,21 +1428,31 @@ tui_start_to_menu() {
 			echo "  Reusing TUI session (already on main menu)"
 			trap 'tui_leave_on_menu 2>/dev/null' EXIT
 			tui_detect_mode
-			return 0
-		fi
-		echo "  Reusing TUI session — navigating to main menu"
-		if tui_leave_on_menu && tui_on_main_menu; then
+		elif tui_leave_on_menu && tui_on_main_menu; then
+			echo "  Reusing TUI session — navigating to main menu"
 			trap 'tui_leave_on_menu 2>/dev/null' EXIT
 			tui_detect_mode
-			return 0
+		else
+			echo "  Existing session unusable — relaunching TUI"
+			tui_stop
+			tui_start "$cmd"
+			tui_dismiss_startup 60 || { tui_stop; return 1; }
+			tui_detect_mode
 		fi
-		echo "  Existing session unusable — relaunching TUI"
-		tui_stop
+	else
+		tui_start "$cmd"
+		tui_dismiss_startup 60 || { tui_stop; return 1; }
+		tui_detect_mode
 	fi
-
-	tui_start "$cmd"
-	tui_dismiss_startup 60 || { tui_stop; return 1; }
-	tui_detect_mode
+	# A reused session, or a relaunch that still landed on the air-gap menu,
+	# hides Rerun Wizard and Install Mirror. One restart applies the choice above.
+	if [[ "$_TUI_DETECTED_MODE" == "DISCO" ]] && ! _tui_host_is_disco; then
+		echo "  Connected host is Fully Disconnected — relaunching into Connected mode"
+		tui_stop
+		tui_start "$cmd"
+		tui_dismiss_startup 60 || { tui_stop; return 1; }
+		tui_detect_mode
+	fi
 	return 0
 }
 

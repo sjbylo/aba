@@ -131,6 +131,7 @@ unit_tests=(
 	test/func/test-try-cmd.sh
 	test/func/test-replace-value-conf.sh
 	test/func/test-password-handling.sh
+	test/func/test-check-pull-secret.sh
 
 	# run_once subsystem
 	test/func/test-run-once-task-consistency.sh
