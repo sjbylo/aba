@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.6...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.7...HEAD)
+
+---
+
+## [1.4.7](https://github.com/sjbylo/aba/releases/tag/v1.4.7) - 2026-11-21
+
+OKD installation is now supported, from the command line and various fixes and improvements
+
 
 ### Added
 
