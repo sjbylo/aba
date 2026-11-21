@@ -18,7 +18,7 @@ bamoe-businessautomation-operator IBM Business Automation 8.x-stable
 bamoe-kogito-operator IBM BAMOE Kogito Operator 8.x
 bgp-cloud-connector BGP cloud connector stable
 businessautomation-operator Business Automation stable
-cephcsi-operator CephCSI operator stable-4.22
+cephcsi-operator CephCSI operator stable-5.0
 cincinnati-operator OpenShift Update Service v1
 cli-manager CLI Manager tech-preview
 cluster-kube-descheduler-operator Kube Descheduler Operator stable
@@ -58,7 +58,7 @@ logic-operator-rhel8 OpenShift Serverless Logic Operator (Alpha) alpha
 loki-operator Loki Operator stable-6.7
 lvms-operator LVM Storage stable-5.0
 machine-deletion-remediation Machine Deletion Remediation operator stable
-mcg-operator NooBaa Operator stable-4.22
+mcg-operator NooBaa Operator stable-5.0
 metallb-operator MetalLB Operator stable
 model-validation-operator Model Validation Operator tech-preview
 mta-operator Migration Toolkit for Applications Operator stable-v8.3
@@ -74,18 +74,18 @@ node-maintenance-operator Node Maintenance Operator stable
 node-observability-operator Node Observability Operator alpha
 numaresources-operator NUMA Resources Operator stable
 o-cloud-manager o-cloud manager stable
-ocs-client-operator OpenShift Data Foundation Client stable-4.22
-ocs-operator OpenShift Container Storage stable-4.22
-ocs-tls-profiles OCS TLS Profiles stable-4.22
-odf-csi-addons-operator CSI Addons stable-4.22
-odf-dependencies Data Foundation Dependencies stable-4.22
-odf-external-snapshotter-operator Snapshot Controller stable-4.22
-odf-multicluster-orchestrator DF Multicluster Orchestrator stable-4.22
-odf-operator OpenShift Data Foundation stable-4.22
-odf-prometheus-operator Prometheus Operator stable-4.22
-odr-cluster-operator Openshift DR Cluster Operator stable-4.22
-odr-hub-operator Openshift DR Hub Operator stable-4.22
-odr-volsync-plugin-operator OpenShift DR VolSync Plugin Operator stable-4.22
+ocs-client-operator OpenShift Data Foundation Client stable-5.0
+ocs-operator OpenShift Container Storage stable-5.0
+ocs-tls-profiles OCS TLS Profiles stable-5.0
+odf-csi-addons-operator CSI Addons stable-5.0
+odf-dependencies Data Foundation Dependencies stable-5.0
+odf-external-snapshotter-operator Snapshot Controller stable-5.0
+odf-multicluster-orchestrator DF Multicluster Orchestrator stable-5.0
+odf-operator OpenShift Data Foundation stable-5.0
+odf-prometheus-operator Prometheus Operator stable-5.0
+odr-cluster-operator Openshift DR Cluster Operator stable-5.0
+odr-hub-operator Openshift DR Hub Operator stable-5.0
+odr-volsync-plugin-operator OpenShift DR VolSync Plugin Operator stable-5.0
 openshift-cert-manager-operator cert-manager Operator for Red Hat OpenShift stable-v1
 openshift-custom-metrics-autoscaler-operator Custom Metrics Autoscaler stable
 openshift-external-secrets-operator External Secrets Operator for Red Hat OpenShift stable-v1
@@ -99,7 +99,7 @@ policy-controller-operator Policy Controller Operator stable
 ptp-operator PTP Operator stable
 quay-bridge-operator Red Hat Quay Bridge Operator stable-3.18
 quay-operator Red Hat Quay stable-3.18
-recipe Recipe stable-4.22
+recipe Recipe stable-5.0
 red-hat-hawtio-operator HawtIO Operator v2
 redhat-oadp-operator OADP Operator stable
 rhacs-operator Advanced Cluster Security for Kubernetes stable
@@ -109,7 +109,7 @@ rhpam-kogito-operator RHPAM Kogito Operator 7.x
 rh-service-binding-operator Service Binding Operator stable
 rhsso-operator Red Hat Single Sign-On Operator stable
 rhtas-operator Red Hat Trusted Artifact Signer stable
-rook-ceph-operator Rook-Ceph stable-4.22
+rook-ceph-operator Rook-Ceph stable-5.0
 run-once-duration-override-operator Run Once Duration Override Operator stable
 sandboxed-containers-operator OpenShift sandboxed containers Operator stable
 secrets-store-csi-driver-operator Secrets Store CSI Driver Operator stable
