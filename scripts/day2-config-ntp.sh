@@ -2,6 +2,7 @@
 # Run this script for day 2 config of NTP
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 
 
@@ -36,6 +37,85 @@ aba_debug "Running: $exec_cmd"
 $exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
+
+# BEGIN ntp-stratum-helpers
+# Chrony "local stratum 3 orphan" ignores a source at stratum 3 or worse.
+# Read the configured server's own stratum (not its upstream address). Raise
+# the local stratum only when that source would be ignored. A failed read
+# leaves the line at 3.
+_ntp_server_stratum() {
+	local host=$1 out
+	command -v python3 >/dev/null 2>&1 || return 1
+	if ! out=$(python3 - "$host" 2>/dev/null <<'PY'
+import socket, sys
+host = sys.argv[1]
+socket.setdefaulttimeout(2)
+try:
+    infos = socket.getaddrinfo(host, 123, type=socket.SOCK_DGRAM)
+except OSError:
+    sys.exit(1)
+pkt = bytes([0x1b]) + bytes(47)
+for fam, typ, proto, _canon, addr in infos:
+    s = socket.socket(fam, typ, proto)
+    try:
+        s.sendto(pkt, addr)
+        data = s.recv(64)
+    except OSError:
+        continue
+    finally:
+        s.close()
+    if len(data) >= 2 and 1 <= data[1] <= 15:
+        print(data[1])
+        sys.exit(0)
+sys.exit(1)
+PY
+	); then
+		return 1
+	fi
+	case "$out" in
+		[1-9]|1[0-5])
+			printf '%s\n' "$out"
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+_ntp_choose_local_stratum() {
+	local svr stratum best=0 best_host=""
+	_ntp_local_stratum=3
+	for svr in $ntp_servers; do
+		if stratum=$(_ntp_server_stratum "$svr"); then
+			aba_debug "NTP $svr stratum $stratum"
+			if [ "$best" -eq 0 ] || [ "$stratum" -lt "$best" ]; then
+				best=$stratum
+				best_host=$svr
+			fi
+		else
+			aba_debug "NTP $svr stratum unreadable"
+		fi
+	done
+	if [ "$best" -eq 0 ]; then
+		aba_warn "Could not read the NTP stratum from: $ntp_servers. Keeping local stratum 3."
+		return 0
+	fi
+	if [ "$best" -lt 3 ]; then
+		aba_info "$best_host is stratum $best. Keeping local stratum 3."
+		return 0
+	fi
+	if [ "$best" -ge 15 ]; then
+		aba_warn "$best_host is stratum $best. A local stratum above that is not valid. Keeping local stratum 3."
+		return 0
+	fi
+	_ntp_local_stratum=$(( best + 1 ))
+	aba_warn "$best_host is stratum $best. With local stratum 3 orphan, chrony will not select it. Setting local stratum to $_ntp_local_stratum so the nodes sync to this server. A stratum 1 or 2 server would keep local stratum at 3."
+}
+# END ntp-stratum-helpers
+
+_ntp_local_stratum=3
+_ntp_choose_local_stratum
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -83,7 +163,7 @@ $(for svr in $ntp_servers; do echo "          server $svr iburst"; done)
           # Allow NTP client access from the local network.
           allow all
           # Serve time even if not synchronized to a time source.
-          local stratum 3 orphan
+          local stratum $_ntp_local_stratum orphan
 END
 
 #[ ! -s .99-worker-chrony-conf-override.bu ] && cat > .99-worker-chrony-conf-override.bu <<END
@@ -127,7 +207,7 @@ $(for svr in $ntp_servers; do echo "          server $svr iburst"; done)
           # Allow NTP client access from the local network.
           allow all
           # Serve time even if not synchronized to a time source.
-          local stratum 3 orphan
+          local stratum $_ntp_local_stratum orphan
 END
 
 make -s ~/bin/butane

@@ -54,14 +54,12 @@ while IFS=$'\t' read -r _key _label <&3; do
 
 	# Success if we're on a different screen than main menu
 	if [[ "$_new_title" != "$_main_title" ]] && [[ -n "$_new_title" ]]; then
-		echo "  ✓ PASS: Entered submenu '$_new_title' (from: $_label)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Entered submenu '$_new_title' (from: $_label)"
 	elif echo "$_screen" | grep -qiE "error|not found|cannot"; then
 		echo "  ✗ FAIL: Error entering '$_label'"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
-		echo "  ✓ PASS: Item '$_label' handled (key=$_key)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Item '$_label' handled (key=$_key)" "$_screen"
 	fi
 
 	tui_back_to "Actions" 5
@@ -91,8 +89,7 @@ _btns=$(tui_buttons)
 _btn_count=$(echo "$_btns" | wc -l)
 echo "  Found $_btn_count buttons: $(echo "$_btns" | tr '\n' ', ')"
 if [[ $_btn_count -ge 2 ]]; then
-	echo "  ✓ PASS: At least 2 buttons present"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "At least 2 buttons present"
 else
 	echo "  ✗ FAIL: Expected at least 2 buttons"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -112,13 +109,11 @@ if $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null"; then
 fi
 
 if ! $_TUI_SSH "tmux has-session -t $_TUI_SESSION 2>/dev/null" 2>/dev/null; then
-	echo "  ✓ PASS: TUI exited cleanly (tmux session ended)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "TUI exited cleanly (tmux session ended)"
 else
 	tui_capture > /tmp/_tui_exit_check.txt
 	if grep -qE '^\$|bash|steve@' /tmp/_tui_exit_check.txt; then
-		echo "  ✓ PASS: TUI exited (back to shell prompt)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "TUI exited (back to shell prompt)"
 	else
 		echo "  ✗ FAIL: TUI did not exit after multiple Escapes"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))

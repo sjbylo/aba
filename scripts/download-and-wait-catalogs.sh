@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)
@@ -24,5 +25,5 @@ download_all_catalogs "$ocp_ver_short"
 # Wait for all to complete
 wait_for_all_catalogs "$ocp_ver_short"
 
-aba_success "All operator catalogs ready for OCP $ocp_ver_short"
+aba_success "All operator catalogs ready for $(dist_display) $ocp_ver_short"
 

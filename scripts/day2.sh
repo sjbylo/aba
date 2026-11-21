@@ -27,7 +27,7 @@ fi
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 umask 077
 
@@ -554,7 +554,7 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		fi
 		_cs_file_image=$(awk '/image:/{print $2; exit}' "$f")
 		_cs_minor[$f]=$(catalog_image_minor "$_cs_file_image" "$regcreds_dir/pull-secret-mirror.json" "$regcreds_dir/rootCA.pem")
-		[ "${_cs_minor[$f]}" ] || aba_warn "Cannot read the OCP version of catalog image $_cs_file_image (is the mirror registry reachable?)" \
+		[ "${_cs_minor[$f]}" ] || aba_warn "Cannot read the $(dist_display) version of catalog image $_cs_file_image (is the mirror registry reachable?)" \
 			"Its CatalogSource gets a name derived from the file name: $f"
 		_cs_family_minors[$cs_name]+=" ${_cs_minor[$f]}"
 	done

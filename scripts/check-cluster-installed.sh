@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 [ -f .install-complete ] && \
 	aba_abort "This cluster has already been deployed successfully!" \

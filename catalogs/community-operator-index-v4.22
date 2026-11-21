@@ -72,6 +72,7 @@ ack-sqs-controller AWS Controllers for Kubernetes - Amazon SQS alpha
 ack-ssm-controller AWS Controllers for Kubernetes - Amazon SSM alpha
 ack-wafv2-controller AWS Controllers for Kubernetes - Amazon WAFV2 alpha
 aerospike-kubernetes-operator Aerospike Kubernetes Operator stable
+agent-router-operator The Agent Router (Community) alpha
 ahv-to-ove-operator AHV to OVE Migration Operator alpha
 airflow-helm-operator Airflow Helm Operator alpha
 alibaba-cloud-csi-operator Alibaba Cloud CSI Operator stable
@@ -134,6 +135,7 @@ edp-keycloak-operator EDP Keycloak Operator stable
 eginnovations-operator eG Innovations Universal Agent Operator beta
 egressip-ipam-operator Egressip Ipam Operator alpha
 ember-csi-community-operator Ember CSI Operator beta
+envoy-gateway-operator Envoy Gateway (Community) alpha
 etcd etcd singlenamespace-alpha
 eventing-kogito Kogito Knative Eventing Source alpha
 external-secrets-operator External Secrets Operator alpha
@@ -176,6 +178,7 @@ jumpstarter-operator Jumpstarter Operator alpha
 jupyter-notebook-validator-operator Jupyter Notebook Validator Operator stable
 k8boss-operator K8Boss alpha
 k8gb k8gb alpha
+k8s-overcommit K8s Overcommit Operator stable
 kairos-operator Kairos Operator candidate-v2
 kaoto-operator Kaoto Operator alpha
 keda [DEPRECATED] KEDA alpha
@@ -188,11 +191,12 @@ kogito-operator Kogito 1.x
 koku-metrics-operator Koku Metrics Operator beta
 kollect Kollect stable
 konflux-operator Konflux stable-v0.2
-konveyor-operator Konveyor Operator alpha
+konveyor-operator Konveyor Operator konveyor-0.11
 korrel8r Korrel8r stable
 krkn-operator-acm Krkn Operator ACM stable-acm
 krkn-operator Krkn Operator stable-ocp-1.1
 kuadrant-operator Kuadrant Operator stable
+kubebrowser KubeBrowser Operator fast
 kube-green kube-green alpha
 kubeheal-operator KubeHeal AIOps Self-Healing Platform alpha
 kubernaut-operator Kubernaut Operator candidate-v1

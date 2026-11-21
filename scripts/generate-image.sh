@@ -16,7 +16,7 @@ backup_auth_dir() {
 
 ensure_openshift_install
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 aba_progress "START|ci_iso" || true
 

@@ -8,7 +8,7 @@
 [ ! -f scripts/include_all.sh ] && echo "Error: Cluster directory $PWD not yet initialized! See: aba cluster --help" >&2 && exit 1
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $* from $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
@@ -548,21 +548,27 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$upgrade_cmd --allow-not-recommended"
 	fi
 
-	# Execute upgrade (retry once if the cluster needs time to settle)
+	# Execute upgrade (retry twice if the cluster needs time to settle after day2).
+	# Always retry on any failure — do not parse oc output (reasons vary).
 	aba_progress "START|ug_trigger"
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
-	_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
-	if [ $_upgrade_rc -ne 0 ]; then
-		echo "$_upgrade_out" >&2
-		aba_info "Cluster not ready for upgrade, waiting 30s and retrying..."
-		sleep 30
+	_upgrade_rc=1
+	_upgrade_try=1
+	while [ "$_upgrade_try" -le 3 ]; do
 		_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
-		if [ $_upgrade_rc -ne 0 ]; then
-			echo "$_upgrade_out"
-			aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
-				"Check: oc adm upgrade"
+		[ "$_upgrade_rc" -eq 0 ] && break
+		echo "$_upgrade_out" >&2
+		if [ "$_upgrade_try" -lt 3 ]; then
+			aba_info "Cluster not ready for upgrade, waiting 30s and retrying ($_upgrade_try/2)..."
+			sleep 30
 		fi
+		_upgrade_try=$(( _upgrade_try + 1 ))
+	done
+	if [ "$_upgrade_rc" -ne 0 ]; then
+		echo "$_upgrade_out"
+		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
+			"Check: oc adm upgrade"
 	fi
 	echo "$_upgrade_out"
 

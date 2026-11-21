@@ -4,7 +4,7 @@
 source scripts/include_all.sh
 
 #[ "$1" = "1" -o "$1" = "true" ] && export DEBUG_ABA=1 && shift
-aba_debug "Running: $0 $* at $(date) in dir: $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 . <(process_args "$@")
 
@@ -20,7 +20,8 @@ elif [ $_exists_rc -eq 0 ]; then
 	scripts/vmw-delete.sh || true
 fi
 
-rm -f .install-complete .vms-ready
+# New VMs have not been through the agent probe yet.
+rm -f .install-complete .vms-ready .agent-wait-done
 
 scripts/vmw-create.sh --start --nomaccheck  # Do not re-check the mac addresses since we are re-creating the exact same VMs
 

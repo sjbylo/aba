@@ -594,6 +594,8 @@ normalize-aba-conf() {
 
 	# Default verify_conf to "all" if not set or empty in config
 	grep -q '^verify_conf=\S' aba.conf 2>/dev/null || echo "export verify_conf=all"
+	# A file with no distribution= line is OpenShift.
+	grep -q '^distribution=\S' aba.conf 2>/dev/null || echo "export distribution=ocp"
 }
 
 warn_if_cluster_unstable() {
@@ -725,11 +727,16 @@ verify-aba-conf() {
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
 
-	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo "$ocp_channel" | grep -q -E "^(fast|stable|candidate|eus)$" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	dist_version_is_valid "$ocp_version" "$ocp_channel" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	dist_channel_is_valid "$ocp_channel" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo "$platform"    | grep -q -E "^(bm|vmw|kvm)$" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	case "${distribution:-ocp}" in
+		ocp|okd) ;;
+		*) echo_red "Error: distribution incorrectly set in aba.conf: [$distribution]" >&2; ret=1 ;;
+	esac
+	local _tp
+	_tp="$(dist_target_problem "$platform")" || { echo_red "Error: $_tp" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -838,6 +845,9 @@ verify-mirror-conf() {
 	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is deprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
 
 	[ "$data_dir" ] && { _valid_abs_path "$data_dir" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
+
+	# Same rule as the TUI and --reg-path. Do not copy the test.
+	_reg_path_abort_if_slash "$reg_path"
 
 	[ "$reg_path" ] && { _valid_abs_path "$reg_path" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
 
@@ -1242,6 +1252,59 @@ _validate_network_consistency() {
 	return $_ret
 }
 
+# The _validate_network_consistency checks for a starting_ip list.  A list may
+# leave gaps, so each check tests the listed node IPs, not a first-to-last range.
+# Args: the node IPs (expand_starting_ips output), all inside machine_network.
+# Returns 0 if consistent, 1 on error (all errors printed to stderr).
+_validate_node_ip_list() {
+	local _ret=0 _i=0 _ip _host _gw _vip_name _vip_val
+	local _host_mask=$(( (1 << (32 - prefix_length)) - 1 ))
+
+	# 1. No node IP may be the network or broadcast address
+	for _ip in "$@"; do
+		_host=$(( $(ip_to_int "$_ip") & _host_mask ))
+		if (( _host == 0 )); then
+			echo_red "Error: node IP $_ip in starting_ip is the network address of $machine_network/$prefix_length" >&2
+			_ret=1
+		elif (( _host == _host_mask )); then
+			echo_red "Error: node IP $_ip in starting_ip is the broadcast address of $machine_network/$prefix_length" >&2
+			_ret=1
+		fi
+	done
+
+	# 2. Gateway must be within the machine_network CIDR
+	if [ -n "${next_hop_address:-}" ] && validate_ip "$next_hop_address" 2>/dev/null; then
+		if ! ip_in_cidr "$next_hop_address" "$machine_network" "$prefix_length"; then
+			echo_red "Error: next_hop_address ($next_hop_address) is outside the machine_network ($machine_network/$prefix_length)" >&2
+			_ret=1
+		fi
+	fi
+
+	# 3. The gateway must not be a node IP.  Node IPs are canonical, so compare
+	# the canonical gateway: 10.0.0.001 is node IP 10.0.0.1.
+	_gw=$(normalize_ipv4 "${next_hop_address:-}") || _gw=""
+	for _ip in "$@"; do
+		_i=$(( _i + 1 ))
+		if [ "$_ip" = "$_gw" ]; then
+			echo_red "Error: node IP $_ip (node $_i of $#) collides with next_hop_address (gateway)" >&2
+			_ret=1
+		fi
+	done
+
+	# 4. VIPs must not be node IPs.  A VIP between two listed node IPs is fine.
+	if (( num_masters > 1 )); then
+		for _vip_name in api_vip ingress_vip; do
+			_vip_val=$(normalize_ipv4 "${!_vip_name:-}") || continue
+			if [[ " $* " == *" $_vip_val "* ]]; then
+				echo_red "Error: $_vip_name (${!_vip_name}) is a node IP in starting_ip" >&2
+				_ret=1
+			fi
+		done
+	fi
+
+	return $_ret
+}
+
 # Canonicalize a non-negative integer: strip leading zeros (08 → 8, 00 → 0).
 # Empty input prints empty and returns 0 (caller decides if empty is allowed).
 # Returns 1 if non-empty and not digits-only.
@@ -1281,6 +1344,72 @@ _valid_ipv4() {
 	normalize_ipv4 "$1" >/dev/null
 }
 
+# starting_ip may also be a comma list with one IP address per node, masters
+# first, so nodes can skip used addresses or sit on another prefix.  A bare
+# octet keeps the prefix of the last full address: 10.0.0.10,11,12,10.0.1.60,61
+
+# Canonicalize a starting_ip list: drop spaces around items and leading zeros.
+# Syntax only, because the CLI and TUI do not know the node count yet.  Spaces
+# and leading zeros are dropped to store one canonical form.
+# Prints the list.  Returns 1 if invalid.
+normalize_starting_ip() {
+	local spec item n out=""
+	local -a items
+	# sed works per line, so a second line would be dropped silently
+	[[ "$1" == *$'\n'* ]] && return 1
+	spec=$(sed -E 's/[[:space:]]*,[[:space:]]*/,/g; s/^[[:space:]]+//; s/[[:space:]]+$//' <<< "$1")
+	# read -ra drops a trailing empty item, so reject empty items before the split
+	[[ "$spec" =~ (^|,)(,|$) ]] && return 1
+	IFS=',' read -ra items <<< "$spec"
+	# A bare octet needs a prefix, so the first item must be a full address
+	normalize_ipv4 "${items[0]}" >/dev/null || return 1
+	for item in "${items[@]}"; do
+		if [[ "$item" =~ ^[0-9]{1,3}$ ]] && (( 10#$item <= 255 )); then
+			n=$(( 10#$item ))
+		else
+			n=$(normalize_ipv4 "$item") || return 1
+		fi
+		out+="${out:+,}$n"
+	done
+	printf '%s\n' "$out"
+}
+
+# Expand a starting_ip list into one IP address per node, masters first.
+# Args: LIST  COUNT (num_masters + num_workers)
+# Prints the addresses space separated.  Errors go to stderr, returns 1.
+expand_starting_ips() {
+	local spec="" item prefix=""
+	local -a items ips=()
+	local -A seen=()
+
+	if ! spec=$(normalize_starting_ip "$1"); then
+		echo_red "Error: starting_ip is invalid: [$1]. Expected one IPv4 per node, the first in full, bare octets 0-255 (e.g. 10.0.0.10,11,12)." >&2
+		return 1
+	fi
+	IFS=',' read -ra items <<< "$spec"
+	for item in "${items[@]}"; do
+		if [[ "$item" == *.* ]]; then
+			prefix=${item%.*}
+			ips+=("$item")
+		else
+			ips+=("$prefix.$item")
+		fi
+	done
+
+	if (( ${#ips[@]} != $2 )); then
+		echo_red "Error: starting_ip lists ${#ips[@]} address(es) but the cluster has $2 node(s) (num_masters + num_workers): [$1]" >&2
+		return 1
+	fi
+	for item in "${ips[@]}"; do
+		if [ -n "${seen[$item]:-}" ]; then
+			echo_red "Error: starting_ip lists $item more than once: [$1]" >&2
+			return 1
+		fi
+		seen[$item]=1
+	done
+	echo "${ips[*]}"
+}
+
 # Validate a Unix username (SSH user, registry user, etc.)
 # Rules: start with letter or underscore, then alphanumeric/dots/hyphens/underscores
 # Returns 0 if valid, 1 if invalid.
@@ -1293,6 +1422,21 @@ _valid_username() {
 # Returns 0 if valid, 1 if invalid.
 _valid_abs_path() {
 	[[ "$1" =~ ^(/|~(/|$))([A-Za-z0-9._-]+/)*([A-Za-z0-9._-]+)?$ ]]
+}
+
+# reg_path is pasted into an image reference. A final slash is not a
+# reference, so oc-mirror rejects it. Empty is allowed. Returns 0 when
+# the value may be stored.
+_valid_reg_path() {
+	[[ "${1:-}" != */ ]]
+}
+
+# Abort with the one message for a bad reg_path. Callers that can ask
+# again (the TUI) use _valid_reg_path and do not abort.
+_reg_path_abort_if_slash() {
+	_valid_reg_path "$1" && return 0
+	aba_abort "reg_path [$1] must not end with /." \
+		"Remove the final slash in mirror.conf."
 }
 
 # Validate a fully qualified domain name (at least 2 labels, dot-separated).
@@ -1663,7 +1807,14 @@ macs_report() {
 		fi
 	fi
 
-	if [ -n "$vs_agent" ]; then
+	# A complete set needs no count. The N/N × ports formula is the shortage.
+	if [ "$ready_word" = "READY" ]; then
+		if [ -n "$vs_agent" ]; then
+			printf 'macs.conf: present, READY — %s\n' "$vs_agent"
+		else
+			printf 'macs.conf: present, READY\n'
+		fi
+	elif [ -n "$vs_agent" ]; then
 		printf 'macs.conf: present, %s (%s/%s) — %s\n' \
 			"$ready_word" "$mac_count" "$mac_expected" "$vs_agent"
 	else
@@ -1863,7 +2014,7 @@ externalize_cluster_state() {
 
 	# Backup marker/flag files
 	local _flag
-	for _flag in .install-complete .init .preflight-done .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .bootstrap-complete; do
+	for _flag in .install-complete .init .preflight-done .vms-stopped .iso-uploaded .vms-ready .bm-bmc-boot-done .agent-wait-done .bootstrap-complete; do
 		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
 	done
 
@@ -1900,51 +2051,199 @@ aba_cmd() {
 	fi
 }
 
-# Display post-install summary and next steps.
-# Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
-# and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
-show_cluster_summary() {
-	local _regcreds="${regcreds_dir:-}"
-	local _cn="${CLUSTER_NAME:-${cluster_name:-?}}"
-	local _bd="${BASE_DOMAIN:-${base_domain:-?}}"
-	local _masters="${CP_REPLICAS:-${num_masters:-0}}"
-	local _workers="${WORKER_REPLICAS:-${num_workers:-0}}"
+# /etc/hosts lines for the console. A hosts file cannot express *.apps, so the
+# console name and the login redirect are listed on their own.
+# api_vip and ingress_vip are the addresses DNS publishes. Use them whenever
+# they are set, including when cluster.conf still says one master. A single
+# node with those fields empty uses the node address for every name. The three
+# lines have no [ABA] prefix so they paste into /etc/hosts.
+# Args: cluster name, base domain, master count, worker count.
+_show_console_hosts() {
+	[ ! "${INFO_ABA:-}" ] && return 0
+	local _cn=$1 _bd=$2 _api_ip="" _apps_ip="" _node_ip=""
 
-	local _type
-	_type=$(cluster_type "$_masters" "$_workers")
+	if [ -n "${api_vip:-}" ] && [ -n "${ingress_vip:-}" ]; then
+		_api_ip=$api_vip
+		_apps_ip=$ingress_vip
+	elif is_sno "$3" "$4"; then
+		[ -n "${starting_ip:-}" ] || return 0
+		_node_ip=$(expand_starting_ips "$starting_ip" 1 2>/dev/null) || return 0
+		_node_ip=${_node_ip%% *}
+		[ -n "$_node_ip" ] || return 0
+		_api_ip=$_node_ip
+		_apps_ip=$_node_ip
+	else
+		return 0
+	fi
 
-	local _nodes=$(( _masters + _workers ))
+	aba_info "Optionally, set these values in /etc/hosts to access the cluster."
+	echo "$_api_ip api.${_cn}.${_bd}"
+	echo "$_apps_ip console-openshift-console.apps.${_cn}.${_bd}"
+	echo "$_apps_ip oauth-openshift.apps.${_cn}.${_bd}"
+}
 
-	# Platform label
-	local _plat="${platform:-unknown}"
+# One field from clusterstate/state.sh. Empty when the file or the field is missing.
+# state.sh is written at install time and is the record of what was installed.
+_card_state_file() {
+	if [ -s clusterstate/state.sh ]; then
+		printf '%s\n' clusterstate/state.sh
+		return 0
+	fi
+	local _sd
+	_sd=$(cluster_state_dir 2>/dev/null) || return 1
+	[ -s "$_sd/state.sh" ] || return 1
+	printf '%s\n' "$_sd/state.sh"
+}
+
+_card_state_val() {
+	local line val
+	[ -s "$1" ] || return 1
+	line=$(grep -m1 "^${2}=" "$1" 2>/dev/null) || return 1
+	val=${line#*=}
+	val=${val#\"}; val=${val%\"}
+	val=${val#\'}; val=${val%\'}
+	printf '%s\n' "$val"
+}
+
+# One aligned card row. The password row is not this: aba_info copies its
+# text into the trace file, and that copy must not contain the password.
+_card_row() {
+	aba_info "$(printf '%-12s%s' "$1" "$2")"
+}
+
+# Access card for a finished cluster. Same text after install and from aba info.
+# Identity fields come from clusterstate/state.sh when it has them, then from
+# the cluster directory. The password and the hosts lines are always shown.
+# The password line on screen is clear; the trace file stores ***.
+show_cluster_card() {
+	local _state="" _sv=""
+	local _cn="" _bd="" _type="" _plat="" _start="" _workers_named="" _masters_named=""
+	local _masters _workers _role _kc _pw _pw_row
+
+	_state=$(_card_state_file 2>/dev/null) || _state=""
+	if [ -n "$_state" ]; then
+		_sv=$(_card_state_val "$_state" cluster_name) || _sv=""
+		[ -n "$_sv" ] && _cn=$_sv
+		_sv=$(_card_state_val "$_state" base_domain) || _sv=""
+		[ -n "$_sv" ] && _bd=$_sv
+		_sv=$(_card_state_val "$_state" cluster_type) || _sv=""
+		[ -n "$_sv" ] && _type=$_sv
+		_sv=$(_card_state_val "$_state" platform) || _sv=""
+		[ -n "$_sv" ] && _plat=$_sv
+		_sv=$(_card_state_val "$_state" starting_ip) || _sv=""
+		[ -n "$_sv" ] && _start=$_sv
+		_sv=$(_card_state_val "$_state" cp_names) || _sv=""
+		[ -n "$_sv" ] && _masters_named=$_sv
+		_sv=$(_card_state_val "$_state" worker_names) || _sv=""
+		[ -n "$_sv" ] && _workers_named=$_sv
+	fi
+
+	[ -n "$_cn" ] || _cn="${CLUSTER_NAME:-${cluster_name:-?}}"
+	[ -n "$_bd" ] || _bd="${BASE_DOMAIN:-${base_domain:-?}}"
+	[ -n "$_plat" ] || _plat="${platform:-unknown}"
+	[ -n "$_start" ] || _start="${starting_ip:-}"
+
+	# A recorded type beats cluster.conf counts. Those counts can be rewritten
+	# after install and then describe a different cluster than the one running.
+	case "$_type" in
+		sno)
+			_masters=1
+			_workers=0
+			;;
+		compact)
+			_masters=3
+			_workers=0
+			;;
+		standard)
+			_masters=3
+			_workers=${WORKER_REPLICAS:-${num_workers:-0}}
+			if [ -n "$_masters_named" ]; then
+				_masters=$(printf '%s' "$_masters_named" | wc -w | tr -d ' ')
+			fi
+			if [ -n "$_workers_named" ]; then
+				_workers=$(printf '%s' "$_workers_named" | wc -w | tr -d ' ')
+			fi
+			;;
+		*)
+			_masters=${CP_REPLICAS:-${num_masters:-0}}
+			_workers=${WORKER_REPLICAS:-${num_workers:-0}}
+			_type=$(cluster_type "$_masters" "$_workers")
+			;;
+	esac
+
+	if [ "$_masters" -eq 1 ]; then
+		_role="1 master"
+	else
+		_role="$_masters masters"
+	fi
+	if [ "$_workers" -eq 1 ]; then
+		_role="$_role, 1 worker"
+	elif [ "$_workers" -gt 0 ]; then
+		_role="$_role, $_workers workers"
+	fi
+
 	case "$_plat" in
 		kvm) _plat="KVM" ;;
 		vmw) _plat="VMware" ;;
 		bm)  _plat="bare-metal" ;;
 	esac
 
+	_kc=$(cluster_kubeconfig 2>/dev/null) || _kc=""
+	_pw=""
+	if [ -f iso-agent-based/auth/kubeadmin-password ]; then
+		_pw=$(cat iso-agent-based/auth/kubeadmin-password)
+	else
+		local _sd=""
+		_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
+		if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
+			_pw=$(cat "$_sd/kubeadmin-password")
+		fi
+	fi
+
+	[ "${INFO_ABA:-}" ] && echo
+	aba_info "$_cn.$_bd    ${ocp_version:-?}    $_plat    $_type, $_role"
+	_card_row "Console" "https://console-openshift-console.apps.$_cn.$_bd"
+	_card_row "User" "kubeadmin"
+	if [ -n "$_pw" ]; then
+		if [ "${INFO_ABA:-}" ]; then
+			_pw_row=$(printf '%-12s%s' "Password" "$_pw")
+			echo_white "[ABA] $_pw_row"
+			if [ -n "${ABA_TRACE_FILE:-}" ]; then
+				echo "[ABA] $(printf '%-12s%s' "Password" "***")" >> "$ABA_TRACE_FILE"
+			fi
+		fi
+	else
+		_card_row "Password" "(not available)"
+	fi
+	_card_row "API" "https://api.$_cn.$_bd:6443"
+	if [ -n "$_kc" ]; then
+		_card_row "Kubeconfig" "$_kc"
+	else
+		_card_row "Kubeconfig" "(not available)"
+	fi
+	[ "${INFO_ABA:-}" ] && echo
+	starting_ip="$_start" _show_console_hosts "$_cn" "$_bd" "$_masters" "$_workers"
+	[ "${INFO_ABA:-}" ] && echo
+	_card_row "Terminal" "$(aba_cmd terminal)"
+	_card_row "Shell" ". <($(aba_cmd shell))"
+	_card_row "Login" ". <($(aba_cmd login))"
+	_card_row "Later" "$(aba_cmd day2), $(aba_cmd day2-osus), $(aba_cmd day2-ntp)"
+	if [ -n "${ABA_ROOT:-}" ]; then
+		_card_row "Help" "$ABA_ROOT/README.md, Day-2 Operations"
+	else
+		_card_row "Help" "README.md, Day-2 Operations"
+	fi
+}
+
+# Install just finished. aba info calls show_cluster_card and skips this line.
+show_cluster_summary() {
 	echo
 	if [ "${installed_from:-}" = "imported" ]; then
 		aba_success "Cluster imported successfully!"
 	else
 		aba_success "Cluster installed successfully!"
 	fi
-	aba_info "  Name:     $_cn.$_bd"
-	aba_info "  Version:  ${ocp_version:-?}"
-	aba_info "  Type:     $_type ($_nodes node(s))"
-	aba_info "  Platform: $_plat"
-	aba_info "  API:      https://api.$_cn.$_bd:6443"
-	echo
-	aba_info "Next steps:"
-	aba_info "  $(aba_cmd terminal)       — open interactive cluster shell"
-	aba_info "  . <($(aba_cmd shell))     — access cluster (kubeconfig)"
-	aba_info "  . <($(aba_cmd login))     — log in as kubeadmin"
-	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then
-		aba_info "  $(aba_cmd day2)           — configure OperatorHub with mirror registry"
-		aba_info "  $(aba_cmd day2-osus)      — configure OpenShift Update Service"
-	fi
-	aba_info "  $(aba_cmd day2-ntp)       — configure NTP"
-	aba_info "  $(aba_cmd info)           — view this information again"
+	show_cluster_card
 }
 
 # Emit export lines for cluster status fields from state.sh.
@@ -2028,8 +2327,13 @@ _state_override_mirror() {
 # Recreate a deleted cluster directory from externalized state backup.
 # Returns 0 if successfully recreated, 1 if no backup exists.
 # backup/ holds everything needed: configs, markers, macs.conf.
+# The third argument is the directory to fill. The default is a new
+# child named $_name. Pass "." when already inside aba/<name>.
 _recreate_cluster_dir() {
-	local _name="$1" _domain="$2"
+	local _name="$1" _domain="$2" _dest="$3"
+	# local clears every name in the statement before the values are set,
+	# so ${_dest:-$_name} in that same line would see an empty _name.
+	[ -n "$_dest" ] || _dest="$_name"
 	local _state_dir="$HOME/.aba/clusters/$_name.$_domain"
 	local _backup="$_state_dir/backup"
 
@@ -2038,12 +2342,12 @@ _recreate_cluster_dir() {
 
 	aba_info "Recreating cluster directory '$_name' from state backup"
 
-	mkdir -p "$_name"
-	cp -pa "$_backup/." "$_name/"
-	ln -fs ../templates/Makefile.cluster "$_name/Makefile"
-	rm -f "$_name/.init"
-	make -s -C "$_name" init 2>/dev/null || true
-	ln -sfn "$_state_dir" "$_name/clusterstate"
+	mkdir -p "$_dest"
+	cp -pa "$_backup/." "$_dest/"
+	ln -fs ../templates/Makefile.cluster "$_dest/Makefile"
+	rm -f "$_dest/.init"
+	make -s -C "$_dest" init 2>/dev/null || true
+	ln -sfn "$_state_dir" "$_dest/clusterstate"
 
 	return 0
 }
@@ -2105,10 +2409,25 @@ verify-cluster-conf() {
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
 	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: prefix_length is invalid in cluster.conf [$prefix_length]" >&2; ret=1; }
 
+	# Node IPs from a starting_ip list (comma); empty for one starting IP
+	local node_ips=""
 	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
 	else
-		validate_ip "$starting_ip" || { echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Try using --starting-ip option." >&2; ret=1; }
+		if [[ "$starting_ip" == *,* ]]; then
+			# The list length needs valid node counts.  Invalid counts are
+			# reported below, so skip the list checks without a message.
+			if ! normalize_starting_ip "$starting_ip" >/dev/null; then
+				echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Expected one IPv4 per node, the first in full, bare octets 0-255 (e.g. 10.0.0.10,11,12). Try using --starting-ip option." >&2
+				ret=1
+			elif [[ "$num_masters" =~ ^[1-9][0-9]*$ && "$num_workers" =~ ^(0|[1-9][0-9]*)$ ]]; then
+				node_ips=$(expand_starting_ips "$starting_ip" $(( num_masters + num_workers ))) || ret=1
+			else
+				ret=1
+			fi
+		else
+			validate_ip "$starting_ip" || { echo_red "Error: starting_ip is invalid in cluster.conf: [$starting_ip]. Try using --starting-ip option." >&2; ret=1; }
+		fi
 
 		# Validate starting_ip falls within machine_network CIDR
 		if [[ $ret -eq 0 ]] && echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
@@ -2116,21 +2435,32 @@ verify-cluster-conf() {
 			local cidr_last=$(cidr_last_ip "$machine_network" "$prefix_length")
 			local cidr_range="Valid range: $cidr_first_ip - $cidr_last"
 
-			if ! ip_in_cidr "$starting_ip" "$machine_network" "$prefix_length"; then
-				echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
-				ret=1
-			fi
-
-			# Validate all nodes fit within the CIDR
-			local total_nodes=$(( num_masters + num_workers ))
-			if (( total_nodes > 0 )); then
-				local start_int=$(ip_to_int "$starting_ip")
-				local last_node_int=$(( start_int + total_nodes - 1 ))
-				local last_node_ip=$(int_to_ip $last_node_int)
-				if ! ip_in_cidr "$last_node_ip" "$machine_network" "$prefix_length"; then
-					echo_red "Error: not all $total_nodes nodes fit in machine_network ($machine_network/$prefix_length)." \
-						"Last node IP would be $last_node_ip. $cidr_range" >&2
+			if [ -n "$node_ips" ]; then
+				# A list can name any address: check each node IP
+				local _ip
+				for _ip in $node_ips; do
+					if ! ip_in_cidr "$_ip" "$machine_network" "$prefix_length"; then
+						echo_red "Error: node IP $_ip in starting_ip is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
+						ret=1
+					fi
+				done
+			else
+				if ! ip_in_cidr "$starting_ip" "$machine_network" "$prefix_length"; then
+					echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
 					ret=1
+				fi
+
+				# Validate all nodes fit within the CIDR
+				local total_nodes=$(( num_masters + num_workers ))
+				if (( total_nodes > 0 )); then
+					local start_int=$(ip_to_int "$starting_ip")
+					local last_node_int=$(( start_int + total_nodes - 1 ))
+					local last_node_ip=$(int_to_ip $last_node_int)
+					if ! ip_in_cidr "$last_node_ip" "$machine_network" "$prefix_length"; then
+						echo_red "Error: not all $total_nodes nodes fit in machine_network ($machine_network/$prefix_length)." \
+							"Last node IP would be $last_node_ip. $cidr_range" >&2
+						ret=1
+					fi
 				fi
 			fi
 
@@ -2208,6 +2538,10 @@ verify-cluster-conf() {
 	if [[ $ret -eq 0 ]] && validate_ip "$starting_ip" 2>/dev/null && \
 	   echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' 2>/dev/null; then
 		_validate_network_consistency || ret=1
+	fi
+	if [[ $ret -eq 0 ]] && [ -n "$node_ips" ]; then
+		# Unquoted on purpose: one argument per node IP
+		_validate_node_ip_list $node_ips || ret=1
 	fi
 
 	return $ret
@@ -3115,7 +3449,7 @@ _ver_minor() {
 # If mirror reports prerelease (e.g. 4.21.0-rc.1), returns previous minor (e.g. 4.20)
 # Note: CDN is the floating download anchor only; channel tips come from Cincinnati.
 ############################################
-fetch_latest_minor_version() {
+_ocp_fetch_latest_minor_version() {
 	local channel="${1:-stable}"
 	local major
 	major="$(ocp_major_of "${ocp_version:-}")"
@@ -3153,8 +3487,10 @@ _fetch_graph_cached() {
 	[[ -n "$minor" ]] || return 0
 
 	chann_minor="${channel}-${minor}"
-	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
-	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
+	# The channel name is shared (stable-4.21). The distribution keeps the
+	# OpenShift graph from being reused as an OKD graph.
+	cache_file="${ABA_CACHE_DIR}/graph_$(dist_of)_${chann_minor}_${ARCH}.json"
+	url="$(dist_graph_api)?channel=${chann_minor}&arch=${ARCH}"
 
 	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
 	cat "$cache_file"
@@ -3166,7 +3502,7 @@ _fetch_graph_cached() {
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
 ############################################
-fetch_all_versions() {
+_ocp_fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
 
@@ -3188,7 +3524,7 @@ _version_has_cross_minor_edge() {
 	minor="$(_ver_minor "$version")"
 	[[ -n "$minor" ]] || return 1
 
-	cache_file="${ABA_CACHE_DIR}/graph_candidate-${minor}_${ARCH}.json"
+	cache_file="${ABA_CACHE_DIR}/graph_$(dist_of)_candidate-${minor}_${ARCH}.json"
 	[[ -s "$cache_file" ]] || return 1
 
 	while IFS= read -r src; do
@@ -3301,7 +3637,7 @@ _candidate_offer() {
 # stable-5.0 has 5.0.0), prefer that GA tip. Previous then becomes
 # the CDN tip via fetch_previous_version.
 ############################################
-fetch_latest_version() {
+_ocp_fetch_latest_version() {
 	local channel="${1:-stable}"
 	local minor v prev offer newer
 
@@ -3339,7 +3675,7 @@ fetch_latest_version() {
 #	$2 = minor (e.g. 4.20) [optional]
 # If requested minor has no GA, fall back to previous minor.
 ############################################
-fetch_latest_z_version() {
+_ocp_fetch_latest_z_version() {
 	local channel="${1:-stable}"
 	local minor="$2"
 	local v prev
@@ -3366,7 +3702,7 @@ fetch_latest_z_version() {
 # At X.0 (CDN already on next major), Previous is previous-major CDN tip.
 # On candidate: line 2 of _candidate_offer (the one before latest). Empty if none.
 ############################################
-fetch_previous_version() {
+_ocp_fetch_previous_version() {
 	local channel="${1:-stable}"
 	local minor prev v offer newer cdn_tip
 
@@ -3400,7 +3736,7 @@ fetch_previous_version() {
 # Crosses majors at X.0 via _channel_prev_minor.
 # On candidate: line 3 of _candidate_offer. Empty if the walk found fewer than 3.
 ############################################
-fetch_older_version() {
+_ocp_fetch_older_version() {
 	local channel="${1:-stable}"
 	local minor prev older v offer newer cdn_tip
 
@@ -3825,7 +4161,7 @@ resolve_cluster_channel() {
 #	$2 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
 # Returns: 0 if version found, 1 if not
 ############################################
-verify_release_version_exists() {
+_ocp_verify_release() {
 	local ver="${1:-}"
 	local channel="${2:-${ocp_channel:-stable}}"
 
@@ -3917,6 +4253,15 @@ _sed_escape_replacement() {
 	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/[&|]/\\&/g'
 }
 
+# True for keys whose values must not be written to a log line.
+# The file still receives the real value.
+_rvc_secret_key() {
+	case "$1" in
+		reg_pw|GOVC_PASSWORD|bmc_password_*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
 	# -n <string> : name of value to change
@@ -3930,10 +4275,10 @@ replace-value-conf() {
 	# Auto-quotes new values that contain spaces or '#'.
 	# If the caller already pre-quotes (e.g. -v "'password'"), no double-quoting occurs.
 
-	# Redact reg_pw values from debug output
+	# Saved before the loop consumes the arguments. A password value is
+	# replaced below, after the key name is known. vSphere passwords can
+	# contain spaces, so this is a literal replace, not a single token.
 	local _rvc_dbg_args="$*"
-	[[ "$_rvc_dbg_args" == *"reg_pw"* ]] && _rvc_dbg_args=$(echo "$_rvc_dbg_args" | sed -E "s/(-v[[:space:]]+)[^[:space:]]+/\1***/")
-	aba_debug "Calling: replace-value-conf() $_rvc_dbg_args"
 
 	local quiet=
 	local _rvc_case=
@@ -3975,6 +4320,12 @@ replace-value-conf() {
 		esac
 	done
 
+	# Hide the password in the call line now that the key name is known.
+	if _rvc_secret_key "${name:-}" && [ -n "${value:-}" ]; then
+		_rvc_dbg_args="${_rvc_dbg_args//"$value"/***}"
+	fi
+	aba_debug "Calling: replace-value-conf() $_rvc_dbg_args"
+
 	# Apply case transformation if requested
 	if [ -n "$_rvc_case" ] && [ -n "${value:-}" ]; then
 		local _orig_value="$value"
@@ -3983,7 +4334,9 @@ replace-value-conf() {
 			upper) value="${value^^}" ;;
 		esac
 		if [ "$value" != "$_orig_value" ]; then
-			aba_info "Converted $name to ${_rvc_case}case: $value" >&2
+			local _case_show="$value"
+			_rvc_secret_key "${name:-}" && _case_show="***"
+			aba_info "Converted $name to ${_rvc_case}case: $_case_show" >&2
 		fi
 	fi
 
@@ -4014,12 +4367,13 @@ replace-value-conf() {
 
 	# Step through the files by priority...
 	local _first_file=
+	local _log_val="${_write_value:-}"
+	_rvc_secret_key "${name:-}" && _log_val="***"
 	for f in $files
 	do
 		[ ! -s "$f" ] && continue # Try next file
 		[ ! "$_first_file" ] && _first_file="$f"
 
-		local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
 		aba_debug "Replacing config value [$name] with [$_log_val] in file: $f" >&2
 
 		# Idempotency: if the file already has the desired state, skip the write.
@@ -4069,7 +4423,6 @@ replace-value-conf() {
 	done
 
 	# Key not found in any file — append to the first valid file
-	local _log_val="$_write_value"; [[ "$name" == "reg_pw" ]] && _log_val="***"
 	if [ "$_first_file" ] && [ "$value" ]; then
 		echo "${name}=${_write_value}" >> "$_first_file"
 		if [ ! "$quiet" ]; then
@@ -4160,13 +4513,23 @@ aba-track() {
 # Deduce reasonable defaults for OpenShift cluster net config
 # ===========================================================
 
-# Pick the "install interface" for best-guess defaults:
-# 1) ABA_INSTALL_IFACE if set and usable (exists + UP + has IPv4)
-# 2) otherwise first "real" UP interface with IPv4 (exclude container/virtual)
+# Pick the "install interface" for ABA's best-guess network defaults.
+#
+# WHY: Dual-homed bastions often have the default route on a mgmt NIC
+# (e.g. 192.168.2.33) while Quay/cluster traffic must use the lab NIC
+# (e.g. 10.0.0.10). Using the mgmt IP in dnsmasq (add-mirror) makes guest
+# pulls fail with "no route to host". Prefer the iface that reaches the
+# configured cluster gateway / machine_network instead.
+#
+# Callers: get_next_hop, get_machine_network, get_dns_servers,
+#   scripts/infra-dns.sh add-mirror, tools/setup-dns.sh, tools/setup-ntp.sh
+#
+# Order: ABA_INSTALL_IFACE → route to next_hop → IP in machine_network →
+#   default-route iface → first real UP iface.
+# Reuses ip_in_cidr / apply_cidr_split; next_hop via kernel `ip route get`.
 _pick_install_iface() {
-	local ifc=
+	local ifc= _conf= _nh= _mn= _pl= _ip=
 
-	# Helper: is interface "usable" (exists, UP, has IPv4)
 	_is_usable_iface() {
 		local i="$1"
 		ip link show dev "$i" >/dev/null 2>&1 || return 1
@@ -4176,25 +4539,59 @@ _pick_install_iface() {
 	}
 
 	# 1) User override
-	if [[ -n "${ABA_INSTALL_IFACE:-}" ]]; then
-		if _is_usable_iface "$ABA_INSTALL_IFACE"; then
-			echo "$ABA_INSTALL_IFACE"
+	if [[ -n "${ABA_INSTALL_IFACE:-}" ]] && _is_usable_iface "$ABA_INSTALL_IFACE"; then
+		echo "$ABA_INSTALL_IFACE"
+		return 0
+	fi
+
+	# Cluster-net hints: shell vars, else aba.conf (add-mirror only loads mirror.conf)
+	_nh="${next_hop_address:-}"
+	_mn="${machine_network:-}"
+	_pl="${prefix_length:-}"
+	if [[ -z "$_nh" || -z "$_mn" ]]; then
+		for _conf in ${ABA_CONF:+"$ABA_CONF"} aba.conf ../aba.conf ${ABA_ROOT:+"$ABA_ROOT/aba.conf"}; do
+			[[ -n "$_conf" && -f "$_conf" ]] || continue
+			[[ -n "$_nh" ]] || _nh=$(grep -E '^next_hop_address=' "$_conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//;s/[[:space:]]//g')
+			[[ -n "$_mn" ]] || _mn=$(grep -E '^machine_network=' "$_conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/#.*//;s/[[:space:]]//g')
+			[[ -n "$_nh" || -n "$_mn" ]] && break
+		done
+	fi
+	if [[ "$_mn" == */* ]]; then
+		_pl="${_mn#*/}"
+		_mn="${_mn%/*}"
+	fi
+
+	# 2) Iface that reaches the cluster gateway (lab NIC on dual-homed hosts)
+	if [[ -n "$_nh" ]]; then
+		ifc=$(ip route get "$_nh" 2>/dev/null | awk '/dev/ {for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+		if [[ -n "${ifc:-}" ]] && _is_usable_iface "$ifc"; then
+			echo "$ifc"
 			return 0
 		fi
 	fi
 
-	# 2) Default-route interface via kernel route lookup (catches bridges, bonds, etc.)
-	# 'ip route get' does a routing-table lookup (no packets sent) so it works even air-gapped.
+	# 3) Iface with an address inside configured machine_network
+	if [[ -n "$_mn" && -n "$_pl" ]] && echo "$_pl" | grep -qE '^[0-9]+$'; then
+		while read -r ifc; do
+			echo "$ifc" | grep -Eq '^(lo|docker|podman|cni|virbr|br-|veth|tun|tap|zt|wg|flannel|cilium|kube|ovs|vnet|vmnet|dummy|sit|ip6tnl|gre)' && continue
+			_is_usable_iface "$ifc" || continue
+			_ip=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
+			_ip=${_ip%/*}
+			[[ -n "$_ip" ]] && ip_in_cidr "$_ip" "$_mn" "$_pl" || continue
+			echo "$ifc"
+			return 0
+		done < <(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | cut -d@ -f1)
+	fi
+
+	# 4) Default-route iface (single-homed / no cluster net configured yet)
 	ifc=$(ip route get 8.8.8.8 2>/dev/null | awk '/dev/ {for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
 	if [[ -n "${ifc:-}" ]] && _is_usable_iface "$ifc"; then
 		echo "$ifc"
 		return 0
 	fi
 
-	# 3) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
-	# Note: keep this filter conservative; better to return nothing than a wrong veth/bridge.
+	# 5) First "real" UP iface with IPv4
 	while read -r ifc; do
-		# Exclude obvious virtual/container patterns
 		echo "$ifc" | grep -Eq '^(lo|docker|podman|cni|virbr|br-|veth|tun|tap|zt|wg|flannel|cilium|kube|ovs|vnet|vmnet|dummy|sit|ip6tnl|gre)' && continue
 		if _is_usable_iface "$ifc"; then
 			echo "$ifc"
@@ -4408,6 +4805,226 @@ is_valid_dns_label() {
 		echo_red "Invalid DNS label: $name" >&2
 		return 1
 	fi
+}
+
+# Coarse buckets so a guessed duration does not look measured.
+# Under an hour: nearest 5 minutes. Up to 3 hours: nearest 15. After that: nearest 30.
+# Never below 5 minutes. oc-mirror spends that long starting even for a tiny set.
+_aba_round_minutes() {
+	local n=$1
+	local step=5 half rounded
+	if [ "$n" -gt 180 ]; then
+		step=30
+	elif [ "$n" -ge 60 ]; then
+		step=15
+	fi
+	half=$(( step / 2 ))
+	rounded=$(( (n + half) / step * step ))
+	[ "$rounded" -lt 5 ] && rounded=5
+	printf '%s\n' "$rounded"
+}
+
+# Whole GB once the estimate is at least half a GB, otherwise whole MB.
+_aba_rough_size() {
+	local n=$1
+	local gb=$(( 1024 * 1024 * 1024 ))
+	local mb=$(( 1024 * 1024 ))
+	local whole
+	if [ "$n" -ge $(( gb / 2 )) ]; then
+		whole=$(( (n + gb / 2) / gb ))
+		[ "$whole" -lt 1 ] && whole=1
+		printf '%s GB\n' "$whole"
+	else
+		whole=$(( (n + mb / 2) / mb ))
+		[ "$whole" -lt 1 ] && whole=1
+		printf '%s MB\n' "$whole"
+	fi
+}
+
+# Resolved when this file is sourced, while the relative path still works.
+# A later cd must not make the estimator lookup fail.
+_ABA_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || _ABA_SCRIPT_DIR=
+
+# Imageset size in bytes, or empty. ABA_MIRROR_ETA_BYTES skips the estimator
+# so tests do not need a real imageset.
+_aba_mirror_estimate_bytes() {
+	local bytes=${ABA_MIRROR_ETA_BYTES:-} est= line= estimator=
+	local isc="data/imageset-config.yaml"
+	if [ -n "$bytes" ]; then
+		printf '%s\n' "$bytes"
+		return 0
+	fi
+	estimator="${_ABA_SCRIPT_DIR:-}/estimate-isc-size.sh"
+	[ -x "$estimator" ] && [ -s "$isc" ] || return 0
+	est=$("$estimator" --shell --isc "$isc" 2>/dev/null) || return 0
+	line=$(printf '%s\n' "$est" | sed -n 's/^estimate_bytes=//p' | head -1)
+	printf '%s\n' "$line"
+}
+
+_aba_mirror_rate_file() {
+	printf '%s\n' "${ABA_MIRROR_RATE_FILE:-$HOME/.aba/mirror-rate.sh}"
+}
+
+# One stored number from the last successful mirror of that kind.
+# Prints "<mb/s> <op>" or nothing. save and sync share the network number.
+_aba_mirror_rate_read() {
+	local op=$1 file mb from
+	file=$(_aba_mirror_rate_file)
+	[ -f "$file" ] || return 0
+	if [ "$op" = "load" ]; then
+		mb=$(sed -n 's/^local_mb_s=//p' "$file" | head -1)
+		from=$(sed -n 's/^local_op=//p' "$file" | head -1)
+	else
+		mb=$(sed -n 's/^network_mb_s=//p' "$file" | head -1)
+		from=$(sed -n 's/^network_op=//p' "$file" | head -1)
+	fi
+	case "$mb" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	[ "$mb" -gt 0 ] || return 0
+	case "$from" in
+		save|sync|load) ;;
+		*) from=$op ;;
+	esac
+	printf '%s %s\n' "$mb" "$from"
+}
+
+# Start the clock just before oc-mirror. Stop records only on exit 0.
+aba_mirror_time_start() {
+	_ABA_MIRROR_T0=$(date +%s 2>/dev/null) || _ABA_MIRROR_T0=
+	return 0
+}
+
+# Bytes are the imageset estimate, not the bytes that actually moved.
+# A warm cache makes this rate high. That is the simple guess we keep.
+# save and sync update the network rate. load updates its own.
+aba_mirror_time_stop() {
+	local op=${1:-}
+	local t0=${_ABA_MIRROR_T0:-}
+	local t1= elapsed= bytes= mb_s= file=
+	local network_mb_s= network_op= local_mb_s= local_op=
+	_ABA_MIRROR_T0=
+	case "$op" in
+		save|sync|load) ;;
+		*) return 0 ;;
+	esac
+	case "$t0" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	t1=$(date +%s 2>/dev/null) || return 0
+	elapsed=$(( t1 - t0 ))
+	[ "$elapsed" -gt 0 ] || return 0
+	bytes=$(_aba_mirror_estimate_bytes) || return 0
+	case "$bytes" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	[ "$bytes" -gt 0 ] || return 0
+	mb_s=$(( bytes / elapsed / 1024 / 1024 ))
+	[ "$mb_s" -lt 1 ] && mb_s=1
+
+	file=$(_aba_mirror_rate_file)
+	mkdir -p "$(dirname "$file")" 2>/dev/null || return 0
+	if [ -f "$file" ]; then
+		network_mb_s=$(sed -n 's/^network_mb_s=//p' "$file" | head -1)
+		network_op=$(sed -n 's/^network_op=//p' "$file" | head -1)
+		local_mb_s=$(sed -n 's/^local_mb_s=//p' "$file" | head -1)
+		local_op=$(sed -n 's/^local_op=//p' "$file" | head -1)
+	fi
+	case "$network_mb_s" in ''|*[!0-9]*) network_mb_s= ;; esac
+	case "$local_mb_s" in ''|*[!0-9]*) local_mb_s= ;; esac
+	case "$network_op" in save|sync) ;; *) network_op= ;; esac
+	case "$local_op" in load) ;; *) local_op= ;; esac
+	if [ "$op" = "load" ]; then
+		local_mb_s=$mb_s
+		local_op=load
+	else
+		network_mb_s=$mb_s
+		network_op=$op
+	fi
+	cat > "$file" <<EOF
+network_mb_s=${network_mb_s}
+network_op=${network_op}
+local_mb_s=${local_mb_s}
+local_op=${local_op}
+EOF
+	return 0
+}
+
+# Rough mirror duration from the imageset size estimate.
+# Until a mirror has finished, save/sync use 10 MB/s and load uses 40 MB/s.
+# After that, aba_mirror_time_stop replaces the rate with estimate/time.
+# A missing estimate keeps the old fixed sentence. Always returns 0.
+# Usage: aba_mirror_eta save|sync|load [bytes]
+# The byte count is for tests. Callers omit it and the imageset is read.
+aba_mirror_eta() {
+	local op=${1:-}
+	local bytes=${2:-}
+	local fallback="This can take 5 to 20 minutes or more to complete, much longer for large image sets."
+	local rate secs mins size_txt finish msg start_epoch
+	local mb_s=10 rate_note="" learned=""
+
+	case "$op" in
+		save|sync|load) ;;
+		*) aba_info "$fallback"; return 0 ;;
+	esac
+
+	if [ -z "$bytes" ]; then
+		bytes=$(_aba_mirror_estimate_bytes) || bytes=""
+	fi
+
+	case "$bytes" in
+		''|*[!0-9]*) aba_info "$fallback"; return 0 ;;
+	esac
+	if [ "$bytes" -le 0 ]; then
+		aba_info "$fallback"
+		return 0
+	fi
+
+	# 10 MB/s pull, 40 MB/s local copy, unless a finished mirror taught us better.
+	if [ "$op" = "load" ]; then
+		mb_s=40
+	fi
+	learned=$(_aba_mirror_rate_read "$op") || learned=""
+	if [ -n "$learned" ]; then
+		mb_s=${learned%% *}
+		rate_note=" (from the last ${learned#* })"
+	fi
+	rate=$(( mb_s * 1024 * 1024 ))
+	secs=$(( (bytes + rate - 1) / rate ))
+	mins=$(( (secs + 30) / 60 ))
+	[ "$mins" -lt 1 ] && mins=1
+	mins=$(_aba_round_minutes "$mins")
+	size_txt=$(_aba_rough_size "$bytes")
+
+	start_epoch=${ABA_MIRROR_ETA_NOW:-}
+	case "$start_epoch" in
+		''|*[!0-9]*) start_epoch="" ;;
+	esac
+	if [ -n "$start_epoch" ]; then
+		finish=$(date -d "@$(( start_epoch + mins * 60 ))" "+%b %-d %H:%M" 2>/dev/null) || finish=""
+	else
+		finish=$(date -d "+${mins} minutes" "+%b %-d %H:%M" 2>/dev/null) || finish=""
+	fi
+
+	case "$op" in
+		save)
+			msg="About ${mins} minutes for ~${size_txt} at a rate of ${mb_s}MB/s${rate_note}, if the cache is empty."
+			;;
+		sync)
+			msg="About ${mins} minutes for ~${size_txt} at a rate of ${mb_s}MB/s${rate_note}."
+			;;
+		load)
+			msg="About ${mins} minutes to copy ~${size_txt} into the registry at a rate of ${mb_s}MB/s${rate_note}."
+			;;
+	esac
+	if [ -n "$finish" ]; then
+		msg="$msg Rough finish: ${finish}."
+	fi
+	if [ "$op" = "save" ]; then
+		msg="$msg Cached images finish sooner."
+	fi
+	aba_info "$msg"
+	return 0
 }
 
 calculate_and_show_completion() {
@@ -4649,7 +5266,10 @@ run_once() {
 	# but preserves identity files (cmd.sh, cmd, cwd) for TTL re-execution.
 	# Explicit reset also removes identity files -- "forget everything."
 	if [[ "$reset" == true ]]; then
-		_log_history "RESET"
+		# ppid + parent cmdline help RCA who issued -r (double-STARTED after RESET)
+		local _pp_cmd=
+		_pp_cmd=$(tr '\0' ' ' <"/proc/$PPID/cmdline" 2>/dev/null | sed 's/[[:space:]]*$//') || _pp_cmd=
+		_log_history "RESET caller_pid=$$ ppid=$PPID${_pp_cmd:+ pp_cmd=\"$_pp_cmd\"}"
 		aba_debug "run_once: task '$work_id' explicitly reset (killing and clearing state)"
 		_kill_id "$work_id"
 		rm -f "$id_dir"/{cmd.sh,cmd,cwd}
@@ -4680,12 +5300,18 @@ run_once() {
 	_start_task() {
 		local is_fg="$1"
 		local lock_held="${2:-false}"
+		# Caller of run_once (make/TUI/shell). Logged so double-STARTED races
+		# show which processes overlapped on the same work_id.
+		local _caller_pid=$$
 
 		if [[ "$lock_held" != "true" ]]; then
 			# Acquire lock via FD 9; lock remains held while subshell keeps FD open
 			exec 9>>"$lock_file"
 			if ! flock -n 9; then
 				exec 9>&-
+				local _held_job=
+				[[ -f "$pid_file" ]] && _held_job=$(cat "$pid_file" 2>/dev/null || true)
+				_log_history "SKIP_RUNNING caller_pid=$_caller_pid${_held_job:+ held_job_pid=$_held_job}"
 				aba_debug "run_once: task '$work_id' already running (lock held), skipping start"
 				return 0
 			fi
@@ -4707,9 +5333,8 @@ run_once() {
 			command[$_i]="${command[$_i]//$'\t'/ }"     # tabs → spaces
 		done
 
-		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
 		aba_debug "run_once: starting task '$work_id': ${command[*]}"
-		
+
 		# Save command in two formats:
 		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
 		#    Preserves exact array structure including spaces, quotes, special chars
@@ -4717,11 +5342,11 @@ run_once() {
 		declare -p command > "$id_dir/cmd.sh"
 		printf '%s ' "${command[@]}" > "$cmd_file"
 		echo >> "$cmd_file"  # trailing newline
-		
+
 		# Save current working directory for re-execution (self-healing validation)
 		# Commands with relative paths need the same CWD to work correctly
 		pwd > "$id_dir/cwd"
-		
+
 		# Backward compatibility: create symlink for old scripts that reference 'log'
 		ln -sf log.out "$id_dir/log" 2>/dev/null || true
 
@@ -4732,14 +5357,19 @@ run_once() {
 			# exit file even when the command fails (wait returns non-zero).
 			set +e
 			local rc=0
+			local _waiter_pid=$BASHPID
+			local _cmd_line
+			_cmd_line=$(printf '%s ' "${command[@]}")
 
 			if [[ "$is_fg" == "true" ]]; then
 				# Foreground-ish: stream + log
 				# Capture stderr separately, combined to stdout for display
+				# setsid is in a pipeline — job_pid is not a single $!; log waiter.
+				_log_history "STARTED caller_pid=$_caller_pid waiter_pid=$_waiter_pid mode=fg cmd=\"$_cmd_line\""
 				setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
-				_log_history "COMPLETE rc=$rc"
+				_log_history "COMPLETE rc=$rc caller_pid=$_caller_pid waiter_pid=$_waiter_pid mode=fg"
 				exit "$rc"
 			fi
 
@@ -4751,12 +5381,15 @@ run_once() {
 			# the lock. If this subshell is killed, the lock releases immediately
 			# instead of being held by the orphaned child until it finishes.
 			setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
-			echo $! >"$pid_file"
-		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
-			wait $!
+			local _job_pid=$!
+			echo "$_job_pid" >"$pid_file"
+			chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
+			# STARTED after job_pid is known — double-start races show distinct pids
+			_log_history "STARTED caller_pid=$_caller_pid waiter_pid=$_waiter_pid job_pid=$_job_pid cmd=\"$_cmd_line\""
+			wait "$_job_pid"
 			rc=$?
 			echo "$rc" >"$exit_file"
-			_log_history "COMPLETE rc=$rc"
+			_log_history "COMPLETE rc=$rc caller_pid=$_caller_pid waiter_pid=$_waiter_pid job_pid=$_job_pid"
 			exit "$rc"
 		) &
 
@@ -4792,7 +5425,7 @@ run_once() {
 			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
 			# These are interruptions, not legitimate failures, so treat as crash and retry
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
-				_log_history "SIGNAL rc=$exit_code (restarting)"
+				_log_history "SIGNAL rc=$exit_code (restarting) caller_pid=$$"
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
 				# Surgical cleanup: preserve cmd.sh/cmd/cwd so wait can reload the command
 				rm -f "$id_dir"/{pid,lock,exit}
@@ -5066,7 +5699,8 @@ download_all_catalogs() {
 	fi
 	[[ -z "$ttl" ]] && ttl="$(parse_duration "${CATALOG_CACHE_TTL:-12h}")"
 
-	local catalogs=(redhat-operator certified-operator community-operator)
+	local catalogs
+	read -ra catalogs <<< "$(dist_catalogs)"
 	local running=0
 
 	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
@@ -5115,18 +5749,20 @@ wait_for_all_catalogs() {
 	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
 	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
 	CATALOG_ERROR=""
-	local _failed_cat=""
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
-		_failed_cat="redhat-operator"
-	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
-		_failed_cat="certified-operator"
-	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
-		_failed_cat="community-operator"
-	fi
+	local _failed_cat="" catalog catalogs
+	# Wait only for the catalogs this distribution started. OKD ships
+	# community-operator alone; waiting on redhat-operator never returns.
+	read -ra catalogs <<< "$(dist_catalogs)"
+	for catalog in "${catalogs[@]}"; do
+		if ! run_once -S -w -W "$timeout_secs" -m "Waiting for $catalog catalog download to complete" -i "catalog:${version_short}:${catalog}"; then
+			_failed_cat="$catalog"
+			break
+		fi
+	done
 
 	if [[ -n "$_failed_cat" ]]; then
 		CATALOG_ERROR=$(get_task_error "catalog:${version_short}:${_failed_cat}" 2>/dev/null | tail -8 | tail -c 600)
-		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for OCP $version_short" >&2
+		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for $(dist_display) $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
@@ -5134,7 +5770,7 @@ wait_for_all_catalogs() {
 	aba_debug "community-operator catalog ready"
 	
 	# Must use stderr since stdout may be redirected to YAML file
-	aba_success "All catalog downloads completed for OCP $version_short" >&2
+	aba_success "All catalog downloads completed for $(dist_display) $version_short" >&2
 }
 
 # Copy shipped catalog indexes into .index/ if live versions don't exist yet.
@@ -5245,7 +5881,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 	for ocp_ver_major in "$@"; do
 		[ -z "$ocp_ver_major" ] && continue
-		for catalog_name in redhat-operator certified-operator community-operator; do
+		for catalog_name in $(dist_catalogs); do
 			local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
 			[ -s "$digest_file" ] || continue
 			local digest
@@ -5319,6 +5955,15 @@ _oc_mirror_decode_exit() {
 	fi
 }
 
+# oc-mirror v2 binds its cache registry to TCP 55000. lsof is not installed
+# on the bastion, so a leftover listener was invisible and every retry failed
+# in the same second. ss is always present and shows the owning pid.
+_oc_mirror_port_pids() {
+	ss -H -ltnp 'sport = :55000' 2>/dev/null \
+		| sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' \
+		| sort -u
+}
+
 _run_oc_mirror_with_retry() {
 	local action="$1"
 	local try_tot="$2"
@@ -5374,11 +6019,12 @@ _run_oc_mirror_with_retry() {
 	aba_debug "Starting retry loop: try_tot=$try_tot"
 
 	# Pre-check: warn if port 55000 is already occupied (stale oc-mirror local registry)
-	local _precheck_pid
-	_precheck_pid=$(lsof -ti :55000 2>/dev/null) || true
+	local _precheck_pid _precheck_first
+	_precheck_pid=$(_oc_mirror_port_pids | paste -sd' ' -) || true
 	if [ -n "$_precheck_pid" ]; then
 		local _age_sec="" _age_str="unknown"
-		_age_sec=$(ps -o etimes= -p "$_precheck_pid" 2>/dev/null | tr -d ' ') || true
+		_precheck_first=${_precheck_pid%% *}
+		_age_sec=$(ps -o etimes= -p "$_precheck_first" 2>/dev/null | tr -d ' ') || true
 		if [ -n "$_age_sec" ]; then
 			local _m=$(( _age_sec / 60 )) _s=$(( _age_sec % 60 ))
 			_age_str="${_m}m${_s}s"
@@ -5392,7 +6038,11 @@ _run_oc_mirror_with_retry() {
 		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
-		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+		# OKD sync needs the CI signature store. save/load add --remove-signatures.
+		dist_prepare_oc_mirror
+		local _dist_flags
+		_dist_flags="$(dist_oc_mirror_flags "$action")"
+		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-} ${_dist_flags}"
 
 		echo
 		if [ $try -gt 1 ]; then
@@ -5405,11 +6055,13 @@ _run_oc_mirror_with_retry() {
 
 		aba_debug "Running oc-mirror $action"
 		mkdir -p data
+		aba_mirror_time_start
 		( cd data && umask 0022 && eval "$cmd" )
 		local ret=$?
 		aba_debug "oc-mirror $action exit code: $ret"
 
 		if [ $ret -eq 0 ]; then
+			aba_mirror_time_stop "$action" || true
 			aba_debug "$action completed successfully (ret=0)"
 			failed=
 			break
@@ -5435,7 +6087,7 @@ _run_oc_mirror_with_retry() {
 			# Kill orphaned oc-mirror processes and free port 55000 (local registry).
 			# oc-mirror panics can leave the child registry process alive.
 			local _stale_pids
-			_stale_pids=$(lsof -ti :55000 2>/dev/null) || true
+			_stale_pids=$(_oc_mirror_port_pids) || true
 			if [ -n "$_stale_pids" ]; then
 				aba_debug "Killing stale process(es) on port 55000: $_stale_pids"
 				kill $_stale_pids 2>/dev/null || true
@@ -5768,10 +6420,13 @@ if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
 	CMD_INST_BUTANE=(make -sC cli butane)
 
 	# Mirror registry commands (arrays) — one command per vendor file (no races)
-	CMD_DL_QUAY_REG=(make -sC mirror download-quay-tarball)
-	CMD_DL_DOCKER_REG=(make -sC mirror download-docker-image)
-	CMD_DL_OMR_REG=(make -sC mirror download-omr-image)
-	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
+	# Callers run from the repo root or from inside a mirror dir, so pick the dir at run time.
+	# A mirror -> . self-link used to do this, but it makes scp -r, WinSCP and cp -rL loop.
+	_MIRROR_MAKE='d=mirror; grep -qs "^# Mirror Makefile" Makefile && d=.; exec make -sC "$d" "$@"'
+	CMD_DL_QUAY_REG=(bash -c "$_MIRROR_MAKE" _ download-quay-tarball)
+	CMD_DL_DOCKER_REG=(bash -c "$_MIRROR_MAKE" _ download-docker-image)
+	CMD_DL_OMR_REG=(bash -c "$_MIRROR_MAKE" _ download-omr-image)
+	CMD_INST_QUAY_REG=(bash -c "$_MIRROR_MAKE" _ mirror-registry)
 fi
 
 # Download task IDs -- version-dependent (functions, return full ID with version)
@@ -5873,7 +6528,8 @@ ensure_openshift_install() {
 # Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
 	local _vendor="${1:-}"
-	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
+	local _tag
+	_tag="$(dist_mirror_manifest_ref)" || return 1
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
 	local _repo="${reg_path#/}/openshift/release-images"   # strip leading slash from registry path
@@ -6158,7 +6814,7 @@ _merge_images_conf() {
 
 # Start check-image in background (non-blocking)
 aba_mirror_verify_start() {
-	run_once -i "aba:mirror:check-image" -- bash -lc "cd '${ABA_ROOT:-.}' && make -sC mirror check-image"
+	run_once -i "aba:mirror:check-image" -- bash -lc "cd '${ABA_ROOT:-.}' || exit 1; $_MIRROR_MAKE" _ check-image
 }
 
 # Re-trigger after sync/load (invalidate old result, start fresh check)
@@ -6475,50 +7131,30 @@ cli_download_extra_clis() {
 check_internet_connectivity() {
 	local prefix="$1"
 	local quiet="${2:-false}"
-	
-	# Check if we need to run the checks (not cached)
-	local need_check=false
-	if ! run_once -p -i "${prefix}:check:api.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "${prefix}:check:mirror.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "${prefix}:check:registry.redhat.io" >/dev/null 2>&1; then
-		need_check=true
-	fi
-	
-	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
-	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://api.openshift.com/
-	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://mirror.openshift.com/
-	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 8 --max-time 15 https://registry.redhat.io/
-	
-	# Wait: block for the 3 checks started above
+	local site err_msg
+
+	# quiet is accepted so existing callers keep their argument.
+	# The sites come from the loaded distribution file.
+	: "$quiet"
+
+	# Start: one probe per site, in parallel (5-min TTL). Wait: loop below.
+	for site in $(dist_probe_sites); do
+		run_once -t 300 -i "${prefix}:check:${site}" -- curl -sL --head --connect-timeout 8 --max-time 15 "https://${site}/"
+	done
+
 	FAILED_SITES=""
 	ERROR_DETAILS=""
-	
-	if ! run_once -w -q -S -i "${prefix}:check:api.openshift.com"; then
-		FAILED_SITES="api.openshift.com"
-		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		ERROR_DETAILS="  api.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -S -i "${prefix}:check:mirror.openshift.com"; then
-		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
-		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
-		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
-		ERROR_DETAILS="${ERROR_DETAILS}  mirror.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -S -i "${prefix}:check:registry.redhat.io"; then
-		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
-		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
-		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
-		ERROR_DETAILS="${ERROR_DETAILS}  registry.redhat.io: $err_msg"
-	fi
-	
-	# Return status
+	for site in $(dist_probe_sites); do
+		if ! run_once -w -q -S -i "${prefix}:check:${site}"; then
+			[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+			FAILED_SITES="${FAILED_SITES}${site}"
+			err_msg=$(run_once -e -i "${prefix}:check:${site}" | head -1)
+			[[ -z "$err_msg" ]] && err_msg="Connection failed"
+			[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'
+			ERROR_DETAILS="${ERROR_DETAILS}  ${site}: $err_msg"
+		fi
+	done
+
 	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
 }
 
@@ -6532,24 +7168,31 @@ require_internet_and_pull_secret() {
 	local errors=()
 	local has_internet=true
 
-	# Check internet (quick probe, 5s timeout)
-	local _inet_err
-	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ 2>&1 >/dev/null); then
+	# Reachability gate for the registry save/sync pull from. One short curl.
+	# --retry 2 is curl's own retry for a timeout, not the oc-mirror --retry count.
+	# -sS keeps curl's error for the abort. HTTP 401 means the host answered.
+	local _inet_err _probe
+	_probe="$(dist_quick_probe_host)"
+	if ! _inet_err=$(curl -sS -ILk --connect-timeout 5 --max-time 10 --retry 2 \
+		"https://${_probe}/v2/" 2>&1 >/dev/null); then
 		has_internet=false
-		errors+=("No internet access (cannot reach registry.redhat.io)")
-		aba_debug "Internet check failed: $_inet_err"
+		_inet_err="${_inet_err//$'\n'/ }"
+		errors+=("No internet access (cannot reach ${_probe}: ${_inet_err:-curl failed})")
 	fi
 
-	# Check pull secret (global, then fallback)
+	# Check pull secret (global, then fallback). OKD without operators needs none.
+	local _ps_reg
+	_ps_reg="$(dist_pull_secret_registry)"
 	if [ -s "$pull_secret_file" ]; then
-		if ! grep -q registry.redhat.io "$pull_secret_file"; then
-			errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
+		# An empty registry name would make grep match every file.
+		if dist_pull_secret_required && [ -n "$_ps_reg" ] && ! grep -q "$_ps_reg" "$pull_secret_file"; then
+			errors+=("Pull secret at $pull_secret_file does not contain ${_ps_reg} credentials")
 		elif ! jq empty "$pull_secret_file" 2>/dev/null; then
 			errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
 		fi
 	elif [ -n "$fallback_ps" ] && [ -s "$fallback_ps" ]; then
 		aba_debug "Global pull secret not found; using fallback: $fallback_ps"
-	else
+	elif dist_pull_secret_required; then
 		errors+=("Pull secret not found at $pull_secret_file")
 	fi
 
@@ -6576,3 +7219,24 @@ require_internet_and_pull_secret() {
 			"and save it to $pull_secret_file"
 	fi
 }
+
+# Distribution file. Loaded last so ocp_major_of, _is_version_string and
+# ABA_GRAPH_API already exist. readlink follows a symlink of this file, so
+# the companion is found beside the real script rather than beside the link.
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/dist.sh"
+
+# Public names. The loaded distribution file supplies the body. The
+# OpenShift bodies are the _ocp_* functions above. OKD does not use the CDN.
+fetch_latest_minor_version() { dist_fetch_latest_minor_version "$@"; }
+fetch_all_versions() { dist_fetch_all_versions "$@"; }
+fetch_latest_version() { dist_fetch_latest_version "$@"; }
+fetch_latest_z_version() { dist_fetch_latest_z_version "$@"; }
+fetch_previous_version() { dist_fetch_previous_version "$@"; }
+fetch_older_version() { dist_fetch_older_version "$@"; }
+verify_release_version_exists() { dist_verify_release "$@"; }
+
+# aba.sh sets _ABA_DIST_HOLD when aba.conf does not exist yet. It writes
+# the key, then calls dist_load itself. Every other source loads now.
+if [ -z "${_ABA_DIST_HOLD:-}" ]; then
+	dist_load
+fi

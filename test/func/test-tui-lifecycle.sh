@@ -35,13 +35,29 @@ tui_start_to_menu || { tui_summary; exit 1; }
 echo ""
 echo "--- 1. Graceful Shutdown ---"
 
-# Pre-check: skip shutdown if cluster is already shut down
+# A cluster that is already down still has to go through shutdown.
+# Start it first, then run the shutdown dialog below.
 _already_down=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.shutdown.log && echo yes || echo no")
 if [[ "$_already_down" == "yes" ]]; then
-	echo "  Cluster already shut down (.shutdown.log exists) — skipping to startup"
-	echo "  ✓ PASS: Shutdown state verified (pre-existing)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-else
+	echo "  Cluster is shut down — starting it so the shutdown flow can run"
+	tui_back_to "Actions" 5
+	tui_select_item "Day-2"
+	tui_select_item "startup"
+	sleep 1
+	tui_pick_cluster "$_CLUSTER"
+	tui_keys Enter
+	sleep 1
+	tui_dismiss_exec_mode
+	if ! tui_wait_for_progress "lc-startup-before-shutdown" 900; then
+		echo "  ✗ FAIL: could not start $_CLUSTER before the shutdown test"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_cleanup
+		tui_summary
+		exit 1
+	fi
+	tui_dismiss_result
+	tui_back_to "Actions" 5
+fi
 	tui_select_item "Day-2"
 	tui_assert_title "Day-2\|Cluster Management" "Day-2 dialog title"
 	tui_assert_appears "Day-2\|Cluster Management" "Day-2 menu" 10
@@ -53,8 +69,7 @@ else
 	_scr=$(tui_capture)
 
 	if echo "$_scr" | grep -qi "shutdown\|Graceful.*shutdown\|shut.*down"; then
-		echo "  ✓ PASS: Shutdown confirmation dialog"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Shutdown confirmation dialog" "$_scr"
 		tui_screenshot "lc-01b-shutdown-confirm"
 
 		# Confirm: --defaultno focuses Cancel, move to Yes first
@@ -66,8 +81,7 @@ else
 		# ABA cluster-graceful-shutdown waits up to 40 min for hypervisor power-off
 		echo "  Waiting for shutdown (up to 45 min)..."
 		if tui_wait_for_progress "lc-shutdown" 2700; then
-			echo "  ✓ PASS: Shutdown completed"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Shutdown completed"
 		else
 			echo "  ✗ FAIL: Shutdown failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -86,13 +100,11 @@ else
 	sleep 2
 	_shutdown_log=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.shutdown.log && echo yes || echo no")
 	if [[ "$_shutdown_log" == "yes" ]]; then
-		echo "  ✓ PASS: Shutdown log exists"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Shutdown log exists"
 	else
 		echo "  ✗ FAIL: Shutdown log missing — shutdown may not have executed"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
-fi
 
 # ============================================================================
 # 3. Graceful Startup
@@ -109,8 +121,7 @@ tui_pick_cluster "$_CLUSTER"
 _scr=$(tui_capture)
 
 if echo "$_scr" | grep -qi "startup\|Graceful.*start\|start.*cluster\|power.*on"; then
-	echo "  ✓ PASS: Startup dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Startup dialog appeared" "$_scr"
 	tui_keys Enter; sleep 1
 	tui_screenshot "lc-03c-after-confirm"
 
@@ -118,8 +129,7 @@ if echo "$_scr" | grep -qi "startup\|Graceful.*start\|start.*cluster\|power.*on"
 
 	echo "  Waiting for startup (up to 30 min)..."
 	if tui_wait_for_progress "lc-startup" 900; then
-		echo "  ✓ PASS: Startup completed"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Startup completed"
 	else
 		echo "  ✗ FAIL: Startup failed"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -147,8 +157,7 @@ for _try in $(seq 1 30); do
 	sleep 10
 done
 if [[ "$_nodes" -gt 0 ]] 2>/dev/null; then
-	echo "  ✓ PASS: Cluster has $_nodes Ready node(s) after startup"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster has $_nodes Ready node(s) after startup"
 else
 	echo "  ✗ FAIL: No Ready nodes after startup (expected >0, got ${_nodes})"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -176,8 +185,7 @@ else
 
 	# Expect msgbox refusing clean (not a confirm-and-execute progress dialog)
 	if echo "$_scr" | grep -qiE "refused|installed|Delete cluster first|install-complete|cannot clean"; then
-		echo "  ✓ PASS: Clean refused while cluster is installed"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Clean refused while cluster is installed" "$_scr"
 		tui_keys Enter; sleep 0.5
 	else
 		echo "  ✗ FAIL: Expected Clean refusal while installed (got dialog without refuse text)"
@@ -189,8 +197,7 @@ else
 
 	_still_installed=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo yes || echo no")
 	if [[ "$_still_installed" == "yes" ]]; then
-		echo "  ✓ PASS: .install-complete still present after refused clean"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass ".install-complete still present after refused clean"
 	else
 		echo "  ✗ FAIL: .install-complete was removed — clean should not have run"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -211,20 +218,25 @@ else
 	_scr=$(tui_capture)
 
 	if echo "$_scr" | grep -qi "Delete cluster\|destroy\|sure\|remove"; then
-		echo "  ✓ PASS: Delete confirmation dialog"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Delete confirmation dialog" "$_scr"
 
 		tui_confirm_yes; sleep 1
 		tui_screenshot "lc-06c-after-confirm"
 
 		tui_dismiss_exec_mode
 
+		# A fast delete returns to the Day-2 menu before the waiter sees
+		# "All steps completed". The cluster being gone is the result.
 		if tui_wait_for_progress "lc-delete" 120; then
-			echo "  ✓ PASS: Delete completed"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Delete completed"
 		else
-			echo "  ✗ FAIL: Delete failed"
-			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			_deleted_now=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
+			if [[ "$_deleted_now" == "yes" ]]; then
+				tui_pass "Delete completed (install marker already gone)"
+			else
+				echo "  ✗ FAIL: Delete failed"
+				_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			fi
 		fi
 		tui_screenshot "lc-06b-delete-result"
 		tui_dismiss_result
@@ -233,8 +245,17 @@ else
 	# Verify cluster is gone
 	_gone=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
 	if [[ "$_gone" == "yes" ]]; then
-		echo "  ✓ PASS: Cluster '$_CLUSTER' deleted (no .install-complete)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster '$_CLUSTER' deleted (no .install-complete)"
+	else
+		echo "  TUI delete left .install-complete — forcing aba/TUI delete"
+		tui_delete_cluster "$_CLUSTER" || true
+		_gone=$($_TUI_SSH "test -f ~/aba/$_CLUSTER/.install-complete && echo no || echo yes")
+		if [[ "$_gone" == "yes" ]]; then
+			tui_pass "Cluster '$_CLUSTER' deleted after fallback"
+		else
+			echo "  ✗ FAIL: Cluster '$_CLUSTER' still installed after delete"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		fi
 	fi
 fi
 

@@ -53,6 +53,7 @@ Options:
   -d, --dir <path/to/dir>               # Run aba in the specified directory, or cd there and run without -d.
   -h, --help                            # Show this help information
   -S, --pull-secret <path/to/file>      # Location of your pull secret (json) file here
+      --distribution <ocp|okd>          # Install OpenShift (default) or OKD. OKD uses stable and candidate.
   -c, --channel <fast|stable|candidate> # Set the OpenShift installation channel, e.g. fast|f, stable|s, eus or candidate|c
   -v, --version <version>               # Set (x.y.z) or (x.y) OpenShift version, e.g. 4.19.20 or 4.19 or 'latest' or 'l' or 'previous' or 'p'
       --upgrade-to <version>            # Set upgrade version in mirror.conf (use from mirror or cluster dir)

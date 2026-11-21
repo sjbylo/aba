@@ -57,6 +57,32 @@ else
 	pass "verify rejects 99999"
 fi
 
+# A trailing slash is an invalid image reference. Abort. A path without one stays.
+run_path() {
+	local path=$1
+	(
+		cd "$d"
+		verify_conf=all
+		unset ABA_TRACE_FILE reg_root data_dir reg_ssh_key reg_vendor reg_pw
+		reg_host=registry.example.com
+		reg_port=8443
+		reg_path=$path
+		verify-mirror-conf >/dev/null 2>&1
+	)
+}
+
+if run_path /ocp4/openshift4; then
+	pass "verify accepts /ocp4/openshift4"
+else
+	bad "verify rejected /ocp4/openshift4"
+fi
+
+if run_path /ocp4/; then
+	bad "verify accepted /ocp4/"
+else
+	pass "verify rejects /ocp4/"
+fi
+
 if grep -q 'valid_port' scripts/aba.sh && grep -q 'valid_port' scripts/include_all.sh; then
 	pass "CLI and verify both call valid_port"
 else

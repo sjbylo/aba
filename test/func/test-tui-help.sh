@@ -30,8 +30,7 @@ _cross_check_help() {
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			continue
 		fi
-		echo "  ✓ PASS: '$kw' consistent between menu and help"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "'$kw' consistent between menu and help"
 	done
 }
 
@@ -46,8 +45,7 @@ _reverse_check_items_in_help() {
 		_word=$(echo "$_label" | sed 's/(.*)//g; s/\[.*\]//g' | awk '{print $1}')
 		[[ -z "$_word" || ${#_word} -lt 3 ]] && continue
 		if grep -qi "$_word" "$help_file"; then
-			echo "  ✓ PASS: Help covers menu item '$_word' (from: $_label)"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Help covers menu item '$_word' (from: $_label)"
 		else
 			echo "  ✗ FAIL: Help MISSING menu item '$_word' (from: $_label)"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -56,9 +54,25 @@ _reverse_check_items_in_help() {
 }
 
 # ============================================================================
+# Drop help captures from an earlier run so a skipped splash is not graded
+# from a stale file.
+rm -f /tmp/_hc_*_menu.txt /tmp/_hc_*_help.txt
+
+# Splash help needs a fresh process. The suite's smoke test already covers
+# it. Once that process is on the main menu, keep it.
+_help_reuse=0
+if tui_session_alive; then
+	if tui_on_main_menu || { tui_leave_on_menu && tui_on_main_menu; }; then
+		echo "  Reusing TUI session — splash help already passed in this process"
+		trap 'tui_leave_on_menu 2>/dev/null' EXIT
+		_help_reuse=1
+	fi
+fi
+
+if [[ "$_help_reuse" -eq 0 ]]; then
 tui_start
 tui_assert_appears "OpenShift Installer" "TUI launched" 15 || {
-	tui_stop; tui_summary; exit 1
+	tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 }
 
 # ============================================================================
@@ -90,6 +104,10 @@ tui_assert_contains "CLI" "Splash help mentions CLI alternative"
 tui_keys Enter; sleep 1
 tui_keys Enter
 tui_wait_for "Actions" 10
+else
+echo ""
+echo "--- 1. Splash skipped (session already on the main menu) ---"
+fi
 
 # ============================================================================
 # 2. Main Menu: menu vs help
@@ -176,8 +194,7 @@ tui_capture > /tmp/_hc_day2_menu.txt
 tui_screenshot "hc-05-day2-menu"
 
 if grep -qi "No clusters configured" /tmp/_hc_day2_menu.txt; then
-	echo "  ✓ PASS: Day-2 shows 'No clusters configured' (no cluster installed)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Day-2 shows 'No clusters configured' (no cluster installed)"
 	tui_keys Enter; sleep 1
 	tui_back_to "Actions"
 elif grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
@@ -199,8 +216,7 @@ elif grep -qi "Day-2\|Cluster Management" /tmp/_hc_day2_menu.txt; then
 	_d2_items=$(grep -oE '(OperatorHub|NTP|OSUS|Virtualization|Status|Login|SSH|Upgrade|Shutdown|Startup|Clean|Delete)' /tmp/_hc_day2_menu.txt | sort -u)
 	for _item in $_d2_items; do
 		if grep -qi "$_item" /tmp/_hc_day2_help.txt; then
-			echo "  ✓ PASS: Day-2 help covers menu item: $_item"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "Day-2 help covers menu item: $_item"
 		else
 			echo "  ✗ FAIL: Day-2 help MISSING menu item: $_item"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -225,8 +241,7 @@ for _hf in /tmp/_hc_*_help.txt; do
 		echo "  ✗ FAIL: Help '$_hf_label' appears truncated"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
-		echo "  ✓ PASS: Help '$_hf_label' not truncated"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Help '$_hf_label' not truncated"
 	fi
 done
 

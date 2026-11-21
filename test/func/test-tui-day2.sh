@@ -85,8 +85,7 @@ for _sw in $(seq 1 45); do
 done
 tui_screenshot "d2-02b-status-detail"
 if [[ "$_status_ok" -eq 1 ]]; then
-	echo "  ✓ PASS: Cluster status displayed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster status displayed"
 else
 	echo "  ✗ FAIL: Status screen content unclear after wait"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -209,26 +208,35 @@ _day2_run_action() {
 
 	# Detect progress dialog or any running state
 	if [[ "$_saw_progress" -eq 1 ]]; then
-		echo "  ✓ PASS: $action_name progress dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$action_name progress dialog appeared"
 
 		if tui_wait_for_progress "d2-${action_name}" "$timeout"; then
-			echo "  ✓ PASS: $action_name completed"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "$action_name completed"
 
 			# Verify the correct command ran (only after verified success)
 			if [[ -n "$expected_cmd" ]]; then
 				tui_screenshot "d2-${action_name}-output"
 				_scr=$(tui_capture)
 				if echo "$_scr" | grep -qi "$expected_cmd"; then
-					echo "  ✓ PASS: $action_name ran correct command ($expected_cmd)"
-					_TUI_PASS=$(( _TUI_PASS + 1 ))
+					tui_pass "$action_name ran correct command ($expected_cmd)" "$_scr"
 				else
 					echo "  ✗ FAIL: $action_name did not run expected command ($expected_cmd)"
 					_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 				fi
 			fi
 		else
+			# OperatorHub has stopped in ~11s with the gauge already gone.
+			# Dismiss that dialog and run the action once more before failing.
+			if [[ "$action_name" == "operatorhub" && -z "${_op_retried:-}" ]]; then
+				_op_retried=1
+				echo "  OperatorHub stopped early — dismissing and retrying once"
+				tui_screenshot "d2-operatorhub-retry"
+				tui_keys Enter
+				sleep 2
+				tui_back_to "Actions" 4 || true
+				_day2_run_action "$item_label" "$action_name" "$timeout" "$expected_cmd"
+				return $?
+			fi
 			echo "  ✗ FAIL: $action_name failed"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 			tui_screenshot "d2-${action_name}-failed"
@@ -293,16 +301,14 @@ if [[ "$_has_catalogs" -eq 0 ]]; then
 		for _ow in 1 2 3 4 5 6 7 8; do
 			_scr=$(tui_capture)
 			if echo "$_scr" | grep -qi "Continue anyway\|cincinnati\|OSUS Warning\|does not appear to be available"; then
-				echo "  ✓ PASS: OSUS shows catalog/operator warning without catalogs"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
+				tui_pass "OSUS shows catalog/operator warning without catalogs" "$_scr"
 				tui_press_button "Cancel" 2>/dev/null || tui_keys Tab Enter
 				sleep 1
 				_osus_ok=1
 				break
 			fi
 			if echo "$_scr" | grep -qi "No operator catalogs\|redhat-operators\|Error"; then
-				echo "  ✓ PASS: OSUS errors with missing-catalog message"
-				_TUI_PASS=$(( _TUI_PASS + 1 ))
+				tui_pass "OSUS errors with missing-catalog message" "$_scr"
 				tui_press_button "Dismiss" 2>/dev/null || tui_keys Enter
 				sleep 1
 				_osus_ok=1

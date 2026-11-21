@@ -8,6 +8,7 @@
 # If anything fails, exit silently -- the real download handles it later.
 
 source ./scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Pull secret is required for registry.redhat.io access
 if [[ ! -f ~/.pull-secret.json ]]; then

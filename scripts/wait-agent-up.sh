@@ -3,21 +3,21 @@
 # Timing cushion so openshift-install wait-for does not start before the
 # agent is up (avoids noisy early errors after same-session VM/BMC power-on).
 #
-# Called only from the install Make chain (.install-complete), not from
-# 'aba mon' / monitor-install.sh — once install is underway the agent API
-# (8090) is often already gone after bootstrap.
+# Called from the .agent-wait-done Make stamp (and `make agent`), not from
+# 'aba mon' / monitor-install.sh. Make touches .agent-wait-done when this
+# script returns, so a later install does not probe port 8090 again.
+# The stamp is removed when the VMs are recreated.
 #
 # Skip: platform=bm with no BMC nodes (manual boot). Operators often return
 # to the TUI/CLI long after 8090 is gone; waiting up to 5m is useless then.
 # Keep the wait for vmw/kvm and for BM after BMC auto-boot (bmc.conf).
 #
-# Edge case (vmw/kvm / BM+BMC): if the node is already past agent when this
-# runs, we wait the full timeout then fall through to monitor-install.sh.
-# Harmless — monitor picks up the running install. Use 'aba mon' to skip.
+# If this script runs after the node has already left the agent, the probe
+# uses the full timeout and then returns. That return still writes the stamp.
 
 source scripts/include_all.sh
 
-aba_debug "Running: $0 $*" >&2
+aba_debug "Starting: $0 $* in $PWD"
 
 trap - ERR  # We don't want to catch on error. error handling added below.
 

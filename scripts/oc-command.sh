@@ -6,7 +6,7 @@ trap - ERR
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized!  See: aba cluster --help"
 
-aba_debug "Starting: $0 $* from $PWD"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-cluster-conf)
 

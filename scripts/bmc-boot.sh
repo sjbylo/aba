@@ -30,7 +30,7 @@ _BMC_BOOT_VERSION="1.2.0"
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 # -----------------------------------------------------------------------------
 # INT-03 gate 1: bmc.conf absent. Write stamp (manual-mount fallback active) and exit 0.

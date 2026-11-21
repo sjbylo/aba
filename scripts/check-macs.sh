@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh || exit 1

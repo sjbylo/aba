@@ -121,6 +121,14 @@ else
 	log_fail "$RACE_FAILURES/$ITERATIONS iterations had false failures (RACE CONDITION CONFIRMED)"
 fi
 
+# Contract: one cold start from N waiters → exactly one STARTED (others wait/skip)
+_starts=$(grep -c ' STARTED ' "$RUN_ONCE_DIR/$TASK_ID/history" 2>/dev/null || echo 0)
+if [[ "$_starts" -eq 1 ]]; then
+	log_pass "history has exactly 1 STARTED after concurrent -w cold starts"
+else
+	log_fail "expected 1 STARTED after concurrent -w, got $_starts"
+fi
+
 # -------------------------------------------------------------------
 # Test 3: Simulate the exact catalog/oc-mirror scenario
 #          3 "catalog" processes each call ensure-like wrapper

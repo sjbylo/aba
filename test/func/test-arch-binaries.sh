@@ -27,6 +27,9 @@ WORK=$(mktemp -d /tmp/aba-arch-bins.XXXXXX)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/tree/cli" "$WORK/tree/mirror" "$WORK/home" "$WORK/stage"
 ln -s "$PWD/aba.conf" "$WORK/tree/aba.conf"
+# cli/Makefile reads ../scripts while parsing. The Makefile symlink does
+# not create that path, so link the real scripts directory too.
+ln -s "$PWD/scripts" "$WORK/tree/scripts"
 ln -s "$PWD/cli/Makefile" "$WORK/tree/cli/Makefile"
 ln -s "$PWD/mirror/Makefile" "$WORK/tree/mirror/Makefile"
 export HOME="$WORK/home"

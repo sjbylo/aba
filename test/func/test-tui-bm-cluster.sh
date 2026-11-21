@@ -8,12 +8,13 @@
 # DESTRUCTIVE on the TUI host: writes platform=bm while it runs, then restores it.
 # Creates ~/aba/$TUI_BM_CLUSTER and deletes it at the end.
 #
-# Default name is sno4 (throwaway-cluster skill). Override with TUI_BM_CLUSTER.
+# Default name is sno2 (10.0.1.202). sno4 is 10.0.1.204, which okd-vmw holds.
+# Override with TUI_BM_CLUSTER.
 
 cd "$(dirname "$0")/../.."
 source test/func/tui-test-lib.sh
 
-_CLUSTER="${TUI_BM_CLUSTER:-sno4}"
+_CLUSTER="${TUI_BM_CLUSTER:-sno2}"
 _MAC1="00:50:56:0a:b4:01"
 _MAC2="00:50:56:0a:b4:02"
 
@@ -43,8 +44,19 @@ tui_pre_cleanup
 echo ""
 
 tui_start_to_menu || { tui_summary; _restore_platform; exit 1; }
-# tui_start_to_menu installs its own EXIT trap. Keep the platform restore with it.
-trap 'tui_stop 2>/dev/null; _bm_sim_cleanup; _restore_platform' EXIT
+# tui_start_to_menu installs its own EXIT trap. Keep platform restore + BM
+# leftovers cleanup (compact/standard/sno4) even if the test aborts mid-run.
+_bm_exit_cleanup() {
+	_bm_sim_cleanup
+	_restore_platform
+	# Do not leave ISO/dir leftovers consuming lab IPs for later suites.
+	# Leave the TUI process up. The next test reuses it from the main menu.
+	tui_delete_cluster "$_CLUSTER" 2>/dev/null || true
+	tui_delete_cluster compact 2>/dev/null || true
+	tui_delete_cluster standard 2>/dev/null || true
+	tui_leave_on_menu 2>/dev/null || true
+}
+trap '_bm_exit_cleanup' EXIT
 
 # Delete while aba.conf is still the saved platform, so vmw/kvm VMs are
 # destroyed. Bare metal has none. The directory and cluster.conf stay.
@@ -178,8 +190,7 @@ _bm_type_gates() {
 	tui_wait_for "Basics\|Cluster Name\|Name" 10
 	_bm_set_cluster_name "$name"
 	if tui_force_type "$_lab_type"; then
-		echo "  ✓ PASS: $name type is $_lab_type"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name type is $_lab_type"
 	else
 		echo "  ✗ FAIL: $name type is not $_lab_type"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -193,8 +204,7 @@ _bm_type_gates() {
 	tui_apply_lab_network
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -q "API VIP:.*$_lab_api_ip"; then
-		echo "  ✓ PASS: $name API VIP is $_lab_api_ip"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name API VIP is $_lab_api_ip" "$_scr"
 	else
 		echo "  ✗ FAIL: $name API VIP is not $_lab_api_ip"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -212,8 +222,7 @@ _bm_type_gates() {
 	_scr=$(tui_capture)
 	tui_screenshot "bm-${name}-warn"
 	if echo "$_scr" | grep -q "need $need" && echo "$_scr" | grep -q "Save anyway"; then
-		echo "  ✓ PASS: $name asks to save anyway when it needs $need MACs"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name asks to save anyway when it needs $need MACs" "$_scr"
 	else
 		echo "  ✗ FAIL: $name did not ask to save anyway when it needs $need MACs"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -230,6 +239,13 @@ _bm_type_gates() {
 	_saw_ask=0
 	for _wa in $(seq 1 60); do
 		_scr=$(tui_capture)
+		# Live Output is closed with Space. q leaves this view up, and the
+		# log text contains "placeholder", which is not the yes/no dialog.
+		if echo "$_scr" | grep -q "ABA Live Output"; then
+			tui_keys Space
+			sleep 1
+			continue
+		fi
 		if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
 			_saw_ask=1
 			break
@@ -241,22 +257,60 @@ _bm_type_gates() {
 				sleep 1
 				_scr=$(tui_capture)
 				tui_screenshot "bm-${name}-ask-output-${_wa}"
-				if echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
-					_saw_ask=1
-					tui_keys q 2>/dev/null || tui_keys Escape
+				if echo "$_scr" | grep -q "ABA Live Output" \
+					&& echo "$_scr" | grep -qiE "Bare-metal MAC check|placeholder"; then
+					# The ask is in the log. Close the log and wait until the
+					# yes/no is the front dialog. Tab-Enter here hits Quit.
+					tui_keys Space
 					sleep 1
-					break
+					continue
 				fi
-				tui_keys q 2>/dev/null || tui_keys Escape
-				sleep 1
+				if echo "$_scr" | grep -q "ABA Live Output"; then
+					tui_keys Space
+					sleep 1
+				fi
 			fi
 		fi
 		sleep 3
 	done
+	# The yes/no is often only in Live Output on the last peek. Closing that
+	# view ends the loop, so the dialog on the next frame is never seen.
+	if [[ "$_saw_ask" -eq 0 ]]; then
+		for _extra in $(seq 1 20); do
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -q "ABA Live Output"; then
+				tui_keys Space
+				sleep 1
+				continue
+			fi
+			if echo "$_scr" | grep -qi "Bare-metal MAC check"; then
+				_saw_ask=1
+				break
+			fi
+			sleep 2
+		done
+	fi
 	if [[ "$_saw_ask" -eq 1 ]]; then
-		echo "  ✓ PASS: $name fresh placeholders ask"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-		tui_press_button "No" || tui_keys Tab Enter
+		tui_pass "$name fresh placeholders ask"
+		_no_pressed=0
+		for _nb in $(seq 1 20); do
+			_scr=$(tui_capture)
+			if echo "$_scr" | grep -q "ABA Live Output"; then
+				tui_keys Space
+				sleep 1
+				continue
+			fi
+			if tui_press_button "No"; then
+				_no_pressed=1
+				break
+			fi
+			sleep 2
+		done
+		if [[ "$_no_pressed" -eq 0 ]]; then
+			echo "  ✗ FAIL: $name could not press No on the MAC dialog"
+			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+			tui_screenshot "bm-${name}-no-button"
+		fi
 		sleep 2
 	else
 		echo "  ✗ FAIL: $name fresh placeholders did not ask"
@@ -274,8 +328,7 @@ _bm_type_gates() {
 	if tui_wait_for "wizard\|Retry" 60; then
 		_scr=$(tui_capture)
 		if echo "$_scr" | grep -qi "wizard" && echo "$_scr" | grep -qi "Retry"; then
-			echo "  ✓ PASS: $name stop names the wizard and Retry"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+			tui_pass "$name stop names the wizard and Retry" "$_scr"
 		else
 			echo "  ✗ FAIL: $name stop text missing wizard or Retry"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -287,6 +340,39 @@ _bm_type_gates() {
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	tui_back_to "Actions" 8 || true
+}
+
+# Answer "build the agent ISO". Live Output swallows every key except Space,
+# and the (y/n) line in that log is not the TUI button — the header can scroll
+# off while the prompt is still on screen. Space returns to the progress loop,
+# which draws Yes. Enter on the progress dialog hits Output or Quit and leaves
+# the CLI read waiting, so Yes is pressed only when that button is on screen.
+# shot is the labeled screenshot. tries is how many polls (about 3s each).
+_bm_answer_build() {
+	local shot="$1"
+	local tries="${2:-90}"
+	local _wa _scr _shot=0
+	for _wa in $(seq 1 "$tries"); do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -q "ABA Live Output\|press Space to return\|(y/n)"; then
+			tui_keys Space
+			sleep 1
+			continue
+		fi
+		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
+			if [[ "$_shot" -eq 0 ]]; then
+				tui_screenshot "$shot"
+				_shot=1
+			fi
+			if tui_press_button "Yes"; then
+				return 0
+			fi
+			sleep 1
+			continue
+		fi
+		sleep 3
+	done
+	return 1
 }
 
 # The stop dialog is already dismissed. Go back into the wizard, replace the
@@ -317,43 +403,14 @@ _bm_fix_in_wizard() {
 		tui_keys Enter
 		sleep 1
 	else
-		echo "  ✓ PASS: $name accepts $need MACs"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name accepts $need MACs" "$_scr"
 	fi
 	tui_press_button "Next" || tui_keys Tab Enter
 	sleep 2
 	tui_wait_for "Review\|Install" 20 || true
 	tui_press_button "Install" || tui_keys Enter
 	sleep 2
-	# MAC ask runs under Generate configs. Compact often overlays the yesno on
-	# the progress frame; standard has been seen with the prompt only in Output
-	# for minutes while the main view stays at Generate configs [In Progress].
-	_saw_build=0
-	for _wa in $(seq 1 90); do
-		_scr=$(tui_capture)
-		if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-			_saw_build=1
-			break
-		fi
-		if echo "$_scr" | grep -qi "Generate configs.*In Progress\|Overall Progress"; then
-			if (( _wa % 10 == 0 )); then
-				tui_keys Space 2>/dev/null || true
-				sleep 1
-				_scr=$(tui_capture)
-				tui_screenshot "bm-${name}-build-output-${_wa}"
-				if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-					_saw_build=1
-					tui_keys q 2>/dev/null || tui_keys Escape
-					sleep 1
-					break
-				fi
-				tui_keys q 2>/dev/null || tui_keys Escape
-				sleep 1
-			fi
-		fi
-		sleep 3
-	done
-	if [[ "$_saw_build" -ne 1 ]]; then
+	if ! _bm_answer_build "bm-${name}-build-ask"; then
 		echo "  ✗ FAIL: $name did not reach the build ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 		tui_screenshot "bm-${name}-no-build"
@@ -367,11 +424,7 @@ _bm_fix_in_wizard() {
 		tui_back_to "Actions" 8 || true
 		return 0
 	fi
-	_scr=$(tui_capture)
-	tui_screenshot "bm-${name}-build-ask"
-	echo "  ✓ PASS: $name install asks to build after the wizard fix"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
-	tui_press_button "Yes" || tui_keys Enter
+	tui_pass "$name install asks to build after the wizard fix"
 	sleep 2
 
 	_saw=0
@@ -403,8 +456,7 @@ _bm_fix_in_wizard() {
 		sleep 10
 	done
 	if [ "$_saw" -eq 1 ]; then
-		echo "  ✓ PASS: $name built the agent ISO"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name built the agent ISO"
 		# No servers for this cluster. No stops the run; the ISO is the result.
 		tui_press_button "No" 2>/dev/null || tui_keys Tab Enter 2>/dev/null || true
 		sleep 2
@@ -417,15 +469,13 @@ _bm_fix_in_wizard() {
 	fi
 	_n=$($_TUI_SSH "grep -cve '^[[:space:]]*$' ~/aba/$name/macs.conf 2>/dev/null || echo 0")
 	if [ "$_n" = "$need" ]; then
-		echo "  ✓ PASS: $name macs.conf has $need addresses"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name macs.conf has $need addresses"
 	else
 		echo "  ✗ FAIL: $name macs.conf has ${_n:-0} addresses, wanted $need"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if $_TUI_SSH "test -s ~/aba/$name/iso-agent-based/agent.*.iso"; then
-		echo "  ✓ PASS: $name agent ISO file exists"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "$name agent ISO file exists"
 	else
 		echo "  ✗ FAIL: $name agent ISO file is missing"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -460,15 +510,13 @@ if ! tui_cluster_name_is "$_CLUSTER" "$_scr"; then
 	tui_wait_gone "Enter cluster name" 8 || sleep 1
 fi
 if tui_force_type sno; then
-	echo "  ✓ PASS: type is sno"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "type is sno"
 else
 	echo "  ✗ FAIL: type is not sno"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 if _bm_force_platform; then
-	echo "  ✓ PASS: platform is bare metal"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "platform is bare metal"
 else
 	echo "  ✗ FAIL: platform did not become bare metal"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -496,8 +544,7 @@ if tui_capture | grep -qi "VM Resources"; then
 	echo "  ✗ FAIL: bare metal showed the VM Resources page"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 else
-	echo "  ✓ PASS: bare metal skipped VM Resources"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "bare metal skipped VM Resources"
 fi
 
 tui_keys P; sleep 0.4
@@ -511,8 +558,7 @@ _bm_replace_macs "$_MAC1"
 _scr=$(tui_capture)
 tui_screenshot "bm-03-mac-warn"
 if echo "$_scr" | grep -q "too few" && echo "$_scr" | grep -q "Save anyway"; then
-	echo "  ✓ PASS: short MAC list asks to save anyway"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "short MAC list asks to save anyway" "$_scr"
 else
 	echo "  ✗ FAIL: expected Save anyway for 1 MAC on 2 ports"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -521,8 +567,7 @@ tui_keys Enter
 sleep 1
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Interfaces" && echo "$_scr" | grep -qi "1 entered"; then
-	echo "  ✓ PASS: warning did not leave the wizard"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "warning did not leave the wizard" "$_scr"
 else
 	echo "  ✗ FAIL: wizard did not stay on Interfaces after the warning"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -542,8 +587,7 @@ if ! tui_wait_for "Bare-metal MAC check\|placeholder" 180; then
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	tui_screenshot "bm-04-no-ask"
 else
-	echo "  ✓ PASS: fresh placeholders ask"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "fresh placeholders ask"
 	tui_screenshot "bm-04-ask"
 	tui_press_button "No" || tui_keys Tab Enter
 	sleep 2
@@ -553,20 +597,21 @@ if tui_wait_for "wizard\|Retry\|placeholder" 60; then
 	_scr=$(tui_capture)
 	tui_screenshot "bm-04-stop"
 	if echo "$_scr" | grep -qi "wizard" && echo "$_scr" | grep -qi "Retry"; then
-		echo "  ✓ PASS: stop names the wizard and Retry"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "stop names the wizard and Retry" "$_scr"
 	else
 		echo "  ✗ FAIL: stop text missing wizard or Retry"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	tui_press_button "Retry" || true
 	sleep 3
-	if tui_wait_for "placeholder\|wizard" 90; then
+	# Stop dialog uses wizard + Retry; MAC holes show as xx:xx:… (not the word "placeholder").
+	if tui_wait_for "wizard\|Retry\|xx:xx:xx\|placeholder" 90; then
 		_scr=$(tui_capture)
 		tui_screenshot "bm-04-retry"
-		if echo "$_scr" | grep -qi "placeholder" && ! echo "$_scr" | grep -qi "Yes: re-check"; then
-			echo "  ✓ PASS: Retry of the same placeholders stops without asking again"
-			_TUI_PASS=$(( _TUI_PASS + 1 ))
+		if echo "$_scr" | grep -qiE "wizard|placeholder|xx:xx:xx:xx:xx:xx" \
+			&& echo "$_scr" | grep -qi "Retry" \
+			&& ! echo "$_scr" | grep -qi "Yes: re-check"; then
+			tui_pass "Retry of the same placeholders stops without asking again" "$_scr"
 		else
 			echo "  ✗ FAIL: Retry asked again or did not stop"
 			_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -585,17 +630,8 @@ echo "--- 5. Fix the MAC, Retry, then boot ---"
 # The stop dialog is still up. Retry re-runs this install; the wizard is behind it.
 _bm_prepare_boot_conf
 tui_press_button "Retry" || true
-if tui_wait_for "build the agent ISO" 180; then
-	_scr=$(tui_capture)
-	tui_screenshot "bm-05-retry-ask"
-	if echo "$_scr" | grep -q "build the agent ISO" && ! echo "$_scr" | grep -q "Yes: re-check"; then
-		echo "  ✓ PASS: Retry after the MAC was fixed asks to build"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
-	else
-		echo "  ✗ FAIL: Retry after the fix did not ask to build"
-		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	fi
-	tui_press_button "Yes" || tui_keys Enter
+if _bm_answer_build "bm-05-retry-ask" 60; then
+	tui_pass "Retry after the MAC was fixed asks to build"
 	sleep 2
 	_build_yes=1
 else
@@ -627,18 +663,15 @@ while [ "$_i" -lt 90 ]; do
 done
 
 if [ "$_saw_boot" -eq 1 ]; then
-	echo "  ✓ PASS: manual boot ask appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "manual boot ask appeared"
 	if echo "$_scr" | grep -q "ISO file:" && ! echo "$_scr" | grep -q "continue.*ISO file:"; then
-		echo "  ✓ PASS: boot ask keeps the ISO line"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "boot ask keeps the ISO line" "$_scr"
 	else
 		echo "  ✗ FAIL: boot ask folded the ISO line into the paragraph"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	fi
 	if echo "$_scr" | grep -q "of=/dev/sdX"; then
-		echo "  ✓ PASS: dd target is whole on the boot ask"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "dd target is whole on the boot ask" "$_scr"
 	else
 		echo "  ✗ FAIL: of=/dev/sdX was split on the boot ask"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -648,8 +681,7 @@ if [ "$_saw_boot" -eq 1 ]; then
 	$_TUI_SSH "ln -sfn ../vmware.conf ~/aba/$_CLUSTER/vmware.conf"
 	$_TUI_SSH "cd ~/aba && test -x ~/bin/govc || make -sC cli govc" || true
 	if $_TUI_SSH "cd ~/aba && tools/bm-sim-boot.sh $_CLUSTER"; then
-		echo "  ✓ PASS: sim VM powered on"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "sim VM powered on"
 	else
 		echo "  ✗ FAIL: sim boot failed"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -658,8 +690,7 @@ if [ "$_saw_boot" -eq 1 ]; then
 	tui_press_button "Yes" || tui_keys Enter
 	sleep 2
 	if _bm_wait_agent "$_lab_starting_ip"; then
-		echo "  ✓ PASS: agent answered after Yes"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "agent answered after Yes"
 	else
 		echo "  ✗ FAIL: agent did not answer after Yes"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -686,21 +717,24 @@ echo "--- 6. Delete clears state and leaves the directory ---"
 # Restore vmw first so delete destroys a sim VM if one is still on.
 _restore_platform
 tui_delete_cluster "$_CLUSTER" || true
+# Compact/standard were ISO-only — free them now (suite still needs sno).
+tui_delete_cluster compact || true
+tui_delete_cluster standard || true
 if $_TUI_SSH "test -d ~/aba/$_CLUSTER && test -f ~/aba/$_CLUSTER/cluster.conf && test ! -f ~/aba/$_CLUSTER/agent-config.yaml"; then
-	echo "  ✓ PASS: delete kept the directory and cleared generated state"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "delete kept the directory and cleared generated state"
 else
 	echo "  ✗ FAIL: delete did not keep cluster.conf and drop agent-config.yaml"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 _now=$($_TUI_SSH "grep '^platform=' ~/aba/aba.conf | head -1 | cut -d= -f2")
 if [ "$_now" = "$_saved_platform" ]; then
-	echo "  ✓ PASS: platform restored to $_saved_platform"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "platform restored to $_saved_platform"
 else
 	echo "  ✗ FAIL: platform is $_now (wanted $_saved_platform)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 fi
 
+# Normal exit: clear EXIT trap work already done above (avoid double delete).
+trap '_bm_sim_cleanup; _restore_platform' EXIT
 tui_cleanup
 tui_summary

@@ -30,7 +30,6 @@ setup_mirror_dir() {
 	ln -sfn "$_repo/scripts" "$_tmp/mirror/scripts"
 	ln -sfn "$_repo/cli" "$_tmp/mirror/cli"
 	ln -sf ../aba.conf "$_tmp/mirror/aba.conf"
-	ln -sfn . "$_tmp/mirror/mirror"
 	cp -a "$_repo/templates" "$_tmp/templates" 2>/dev/null || true
 	ln -sf "$_tmp/templates" "$_tmp/mirror/templates"
 	> "$_tmp/images.conf"

@@ -160,6 +160,7 @@ jaeger Community Jaeger Operator stable
 jhipster-online-operator JHipster Online Operator alpha
 k8boss-operator K8Boss alpha
 k8gb k8gb alpha
+k8s-overcommit K8s Overcommit Operator stable
 kairos-operator Kairos Operator stable
 keda [DEPRECATED] KEDA alpha
 keepalived-operator Keepalived Operator alpha
@@ -169,7 +170,7 @@ klusterlet Klusterlet stable
 kogito-operator Kogito 1.x
 koku-metrics-operator Koku Metrics Operator beta
 kollect Kollect stable
-konveyor-operator Konveyor Operator alpha
+konveyor-operator Konveyor Operator konveyor-0.11
 korrel8r Korrel8r stable
 kubernetes-imagepuller-operator Kubernetes Image Puller Operator stable
 l5-operator L5 Operator alpha

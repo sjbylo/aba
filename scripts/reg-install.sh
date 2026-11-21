@@ -7,7 +7,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
@@ -21,6 +21,9 @@ case "$vendor" in
 	quay|docker|$_OMR_VENDOR|existing) ;;
 	*) aba_abort "Unknown registry vendor '$vendor'. Valid values: quay, docker, $_OMR_VENDOR, existing" ;;
 esac
+
+# Make's registry prerequisite (tar extract or image download) has finished.
+aba_progress "DONE|reg_prep"
 
 # "existing" = externally managed registry; nothing to install
 if [ "$vendor" = "existing" ]; then

@@ -68,8 +68,7 @@ tui_assert_contains "Clear" "Clear item"
 # Check catalog stats
 tui_capture > /tmp/_tui_op_menu.txt
 if grep -qi "redhat-operator\|certified-operator\|community-operator\|catalog" /tmp/_tui_op_menu.txt; then
-	echo "  ✓ PASS: Catalog statistics displayed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Catalog statistics displayed"
 else
 	echo "  ✗ FAIL: Catalog stats not visible (indexes may still be downloading)"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -119,8 +118,7 @@ tui_screenshot "op-03-sets"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Operator Sets"; then
-	echo "  ✓ PASS: Operator Sets checklist appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Operator Sets checklist appeared" "$_scr"
 
 	echo "  Available operator sets:"
 	# Parse checklist items: [X] or [ ] followed by name
@@ -145,8 +143,7 @@ tui_screenshot "op-04-search-input"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Search\|search\|keyword\|operator name"; then
-	echo "  ✓ PASS: Search input appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Search input appeared" "$_scr"
 
 	tui_keys "web-terminal"
 	sleep 0.5
@@ -156,11 +153,9 @@ if echo "$_scr" | grep -qi "Search\|search\|keyword\|operator name"; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "web-terminal"; then
-		echo "  ✓ PASS: Search found 'web-terminal'"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Search found 'web-terminal'" "$_scr"
 	elif echo "$_scr" | grep -qi "No.*results\|0 matches"; then
-		echo "  ✓ PASS: Search returned 'no results' (index may not be ready)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Search returned 'no results' (index may not be ready)" "$_scr"
 	else
 		echo "  ✗ FAIL: Search results unclear"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -185,11 +180,9 @@ tui_screenshot "op-05-view"
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Operator Selection\|empty\|No operators"; then
 	if echo "$_scr" | grep -qi "empty\|No operators"; then
-		echo "  ✓ PASS: Empty basket message shown"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Empty basket message shown" "$_scr"
 	else
-		echo "  ✓ PASS: Operator selection list displayed"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Operator selection list displayed" "$_scr"
 
 		echo "  Currently selected operators:"
 		tui_capture | sed -n 's/.*\[\(.\)\][[:space:]]*\(.*\)/    [\1] \2/p' | head -10
@@ -213,19 +206,16 @@ tui_screenshot "op-06-clear"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "already empty\|nothing to clear\|no operators selected"; then
-	echo "  ✓ PASS: Clear reports 'already empty'"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Clear reports 'already empty'" "$_scr"
 	# Dismiss the info dialog
 	tui_keys Enter; sleep 1
 elif echo "$_scr" | grep -qi "Remove all\|clear.*selection\|Are you sure"; then
-	echo "  ✓ PASS: Clear confirmation dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Clear confirmation dialog appeared" "$_scr"
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 	sleep 1
 elif echo "$_scr" | grep -qi "Select Operator Sets"; then
 	# The clear msgbox was too quick — we're already back at operator menu
-	echo "  ✓ PASS: Clear executed (returned to operator menu)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Clear executed (returned to operator menu)" "$_scr"
 else
 	echo "  ✗ FAIL: Clear screen unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -264,8 +254,7 @@ tui_screenshot "op-07-addl-images"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Additional Images"; then
-	echo "  ✓ PASS: Additional Images menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Additional Images menu appeared" "$_scr"
 
 	# Check menu items dynamically
 	echo "  Additional Images menu items:"
@@ -298,8 +287,7 @@ if echo "$_scr" | grep -qi "Additional Images"; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "Add Image\|image reference\|container image"; then
-		echo "  ✓ PASS: Add image input appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Add image input appeared" "$_scr"
 		# Don't add — just cancel
 		tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 		sleep 1
@@ -321,8 +309,7 @@ if echo "$_scr" | grep -qi "Additional Images"; then
 
 	_scr=$(tui_capture)
 	if echo "$_scr" | grep -qi "Recommended Image Sets\|image sets to include"; then
-		echo "  ✓ PASS: Recommended Images dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Recommended Images dialog appeared" "$_scr"
 		# Don't change — press Back
 		tui_press_button "Back" 2>/dev/null || tui_keys Escape
 		sleep 1
@@ -355,8 +342,7 @@ tui_assert_contains "Additional Images" "Additional Images toggle present"
 # Check current state (included/excluded)
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "included"; then
-	echo "  ✓ PASS: Toggle states visible (included/excluded)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Toggle states visible (included/excluded)" "$_scr"
 fi
 
 # ============================================================================
@@ -371,8 +357,7 @@ tui_screenshot "op-09-upgrade"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Prepare Upgrade\|upgrade.*version\|target.*version"; then
-	echo "  ✓ PASS: Prepare Upgrade dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Prepare Upgrade dialog appeared" "$_scr"
 else
 	echo "  ✗ FAIL: Prepare Upgrade screen unclear"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -391,8 +376,7 @@ tui_screenshot "op-10-advanced"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Advanced ImageSet\|imageset-config\|View.*imageset\|Edit.*imageset"; then
-	echo "  ✓ PASS: Advanced ISC menu appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Advanced ISC menu appeared" "$_scr"
 
 	echo "  Advanced menu items:"
 	tui_menu_items | while IFS=$'\t' read -r key label; do

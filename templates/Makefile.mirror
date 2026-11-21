@@ -15,6 +15,29 @@ endif
 
 TEMPLATES := ../templates
 SCRIPTS   := ../scripts
+
+# Older versions created a mirror -> . self-link here; scp -r, WinSCP and cp -rL loop on it.
+# Their run_once tasks saved "make -sC mirror ..." with this dir as CWD, and replaying that needs the link.
+# Forget those tasks so they re-run with the new command. Delete the files instead of
+# run-once.sh -r: -r kills the saved PID, which may belong to another process by now.
+# Task ids are global, so also forget old tasks saved in a dir with no mirror entry (deleted
+# or moved aba dir): run_once then replays them in the caller's CWD, which has no link now.
+# Then remove the link. Runs on any target because .init is already stamped in old dirs.
+# A held task lock means run_once is replaying that old command through the link right now,
+# so keep the task and the link until a later make.
+_STALE_SELF_LINK := $(shell d="$${RUN_ONCE_DIR:-$$HOME/.aba/runner}"; busy=; \
+	for t in install download:quay download:docker download:omr; do \
+		s="$$d/mirror:reg:$$t"; \
+		grep -qsF '[1]="-sC" [2]="mirror"' "$$s/cmd.sh" || continue; \
+		c="$$(cat "$$s/cwd" 2>/dev/null)"; \
+		[ "$$c" -ef . ] || [ ! -d "$$c/mirror" ] || continue; \
+		if flock -n "$$s/lock" true 2>/dev/null; then \
+			rm -f "$$s/cmd.sh" "$$s/cmd" "$$s/cwd" "$$s/exit"; \
+		else \
+			busy=1; \
+		fi; \
+	done; \
+	[ -z "$$busy" ] && [ "$$(readlink mirror 2>/dev/null)" = . ] && rm -f mirror)
 ##debug   ?=
 force     ?= no
 bg        ?=
@@ -47,7 +70,7 @@ else ifeq ($(_REG_VENDOR),omr)
 else ifeq ($(arch),aarch64)
   _REGISTRY_PREREQ := docker-reg-image.tgz
 else
-  _REGISTRY_PREREQ := mirror-registry
+  _REGISTRY_PREREQ := mirror-registry execution-environment.tar
 endif
 
 ##########################
@@ -92,7 +115,6 @@ init: .init
 	ln -fs $(SCRIPTS) 
 	ln -fs ../cli
 	ln -fs ../aba.conf
-	ln -fsn . mirror
 	[ -L .index ] || { rm -rf .index 2>/dev/null; ln -fs ../.index; }
 	mkdir -p ~/.aba/mirror/$$(basename $$PWD)
 	ln -sfn ~/.aba/mirror/$$(basename $$PWD) regcreds
@@ -226,7 +248,10 @@ testload: save install load     # Test the save, install, load process on a conn
 rpmsclean:
 	@rm -f .rpms*
 
-mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
+# Both outputs come from the same tarball. Listing both targets so a host that
+# has the binary but lost execution-environment.tar (lean wipe / partial copy)
+# re-extracts instead of skipping and failing Quay install.
+mirror-registry execution-environment.tar: $(MR_TARBALL) ## Extract the mirror-registry binary + EE
 	@$(SCRIPTS)/run-once.sh -w -m "Downloading Quay mirror-registry" -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory $(MR_TARBALL)
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
@@ -439,7 +464,7 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -rf data/working-dir
 	rm -f mirror-registry image-archive.tar execution-environment.tar sqlite3.tar
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install"
-	rm -f templates scripts cli mirror
+	rm -f templates scripts cli
 
 
 # Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.

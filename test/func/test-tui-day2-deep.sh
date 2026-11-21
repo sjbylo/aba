@@ -71,30 +71,39 @@ tui_pick_cluster "$_CLUSTER" || true
 # Status check takes time (API calls)
 sleep 8
 
+# "Cluster Ready!" contains "Ready" and "completed". Enter is "Yes, apply now"
+# and starts OperatorHub, so the OSUS/Virt/Upgrade steps never see the menu.
+if tui_decline_cluster_ready; then
+	tui_back_to "Day-2\|Cluster Management" 8 || true
+	tui_select_item "status" || true
+	sleep 2
+	tui_pick_cluster "$_CLUSTER" || true
+	sleep 8
+fi
+
 tui_screenshot "d2d-02b-status"
 _scr=$(tui_capture)
-if echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|co\|node\|Ready\|Unreachable\|API"; then
-	echo "  ✓ PASS: Cluster status displayed"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+if echo "$_scr" | grep -qi "Cluster Ready\|Yes, apply now"; then
+	tui_decline_cluster_ready || true
+	echo "  ✗ FAIL: Status display was the post-install prompt"
+	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+elif echo "$_scr" | grep -qi "Cluster Operators\|Nodes\|co\|node\|Ready\|Unreachable\|API"; then
+	tui_pass "Cluster status displayed" "$_scr"
 
 	# Check status sections
 	if echo "$_scr" | grep -qi "Cluster Operators\|co"; then
-		echo "  ✓ PASS: Cluster operators section"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Cluster operators section" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "Nodes\|node"; then
-		echo "  ✓ PASS: Nodes section"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Nodes section" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "Upgrade Status\|Upgrade\|adm upgrade"; then
-		echo "  ✓ PASS: Upgrade status section"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Upgrade status section" "$_scr"
 	fi
 
 	tui_keys Enter; sleep 1   # dismiss textbox
 elif echo "$_scr" | grep -qi "Unreachable\|unreachable\|shut.*down"; then
-	echo "  ✓ PASS: Cluster status shows API unreachable (cluster may be shut down)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster status shows API unreachable (cluster may be shut down)" "$_scr"
 	tui_keys Enter; sleep 1
 else
 	echo "  ✗ FAIL: Status display unclear"
@@ -118,18 +127,15 @@ tui_screenshot "d2d-03-osus"
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "cincinnati\|OSUS\|Update Service\|not found\|Warning"; then
 	if echo "$_scr" | grep -qi "cincinnati.*not found\|not found.*cincinnati\|Warning"; then
-		echo "  ✓ PASS: OSUS shows cincinnati-operator warning"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "OSUS shows cincinnati-operator warning" "$_scr"
 	else
-		echo "  ✓ PASS: OSUS dialog appeared"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "OSUS dialog appeared" "$_scr"
 	fi
 	# Cancel — don't actually install OSUS
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 	sleep 1
 elif echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster\|Detecting installation"; then
-	echo "  ✓ PASS: OSUS shows cluster selection first"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "OSUS shows cluster selection first" "$_scr"
 	tui_pick_cluster "$_CLUSTER" || true
 	tui_screenshot "d2d-03b-osus-warn"
 	# Cancel whatever appears next
@@ -154,13 +160,11 @@ tui_screenshot "d2d-04-virt"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "kubevirt\|Virtualization\|Boot Source\|not found\|Warning"; then
-	echo "  ✓ PASS: Virtualization dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Virtualization dialog appeared" "$_scr"
 	tui_press_button "Cancel" 2>/dev/null || tui_keys Escape
 	sleep 1
 elif echo "$_scr" | grep -qi "Select cluster"; then
-	echo "  ✓ PASS: Virt shows cluster selection first"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Virt shows cluster selection first" "$_scr"
 	tui_keys Escape; sleep 1
 else
 	echo "  ✗ FAIL: Virt dialog unclear"
@@ -182,8 +186,7 @@ tui_screenshot "d2d-05a-upgrade-cluster"
 # Handle cluster selection
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
-	echo "  ✓ PASS: Upgrade shows cluster selection"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Upgrade shows cluster selection" "$_scr"
 	tui_keys Enter; sleep 5  # takes time to fetch versions
 fi
 
@@ -210,30 +213,24 @@ tui_screenshot "d2d-05b-upgrade-picker"
 _scr=$(tui_capture)
 
 if [[ "$_upgrade_outcome" == "failed" ]] || echo "$_scr" | grep -qi "Upgrade Check Failed\|Failed to query"; then
-	echo "  ✓ PASS: Upgrade check reported error (cluster may be down)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Upgrade check reported error (cluster may be down)" "$_scr"
 	tui_press_button "OK" 2>/dev/null || tui_keys Enter
 	sleep 1
 elif [[ "$_upgrade_outcome" == "picker" ]] || echo "$_scr" | grep -qi "Upgrade\|target version\|Current\|Z-stream\|Minor\|No.*available\|Manual entry"; then
-	echo "  ✓ PASS: Upgrade version picker appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Upgrade version picker appeared" "$_scr"
 
 	# Check version picker elements
 	if echo "$_scr" | grep -qi "Current.*4\."; then
-		echo "  ✓ PASS: Shows current version"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Shows current version" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "OSUS\|no OSUS"; then
-		echo "  ✓ PASS: Shows OSUS status"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Shows OSUS status" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "Manual entry"; then
-		echo "  ✓ PASS: Manual entry option present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Manual entry option present" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "Force"; then
-		echo "  ✓ PASS: Force toggle present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Force toggle present" "$_scr"
 	fi
 
 	# Check help (only if version picker has Help button)
@@ -257,8 +254,7 @@ elif [[ "$_upgrade_outcome" == "picker" ]] || echo "$_scr" | grep -qi "Upgrade\|
 		sleep 1
 	fi
 elif echo "$_scr" | grep -qi "No.*available\|No.*versions"; then
-	echo "  ✓ PASS: No upgrade versions available (expected)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "No upgrade versions available (expected)" "$_scr"
 	tui_keys Enter; sleep 1
 else
 	echo "  ✗ FAIL: Upgrade screen unclear"
@@ -289,13 +285,11 @@ tui_screenshot "d2d-06-shutdown"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
-	echo "  ✓ PASS: Shutdown shows cluster selection"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Shutdown shows cluster selection" "$_scr"
 	# Cancel — don't select
 	tui_keys Escape; sleep 1
 elif echo "$_scr" | grep -qi "Shutdown\|shutdown\|Confirm\|execution mode"; then
-	echo "  ✓ PASS: Shutdown confirmation appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Shutdown confirmation appeared" "$_scr"
 	tui_keys Escape; sleep 1
 else
 	echo "  ✗ FAIL: Shutdown dialog unclear"
@@ -322,12 +316,10 @@ tui_screenshot "d2d-07-delete"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Select cluster\|Choose.*cluster"; then
-	echo "  ✓ PASS: Delete shows cluster selection"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Delete shows cluster selection" "$_scr"
 	tui_keys Escape; sleep 1
 elif echo "$_scr" | grep -qi "Delete\|delete\|destroy\|Confirm\|Are you sure"; then
-	echo "  ✓ PASS: Delete confirmation appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Delete confirmation appeared" "$_scr"
 	tui_keys Escape; sleep 1
 else
 	echo "  ✗ FAIL: Delete dialog unclear"

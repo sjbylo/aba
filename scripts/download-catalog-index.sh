@@ -82,6 +82,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 # Parse required parameters
 catalog_name="${1:?Usage: $0 <catalog_name> <version_short>}"
@@ -126,12 +127,19 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-# Check connectivity to registry
-aba_debug "Checking connectivity to registry.redhat.io"
+# The distribution names the registry. OpenShift is registry.redhat.io.
+# A catalog this distribution does not ship leaves the URL empty. Curling
+# that used to report "Cannot access " / "Could not resolve host: v2".
+catalog_url="$(dist_catalog_ref "$catalog_name" "$ocp_ver_major" || true)"
+if [ -z "$catalog_url" ]; then
+	aba_abort "No $(dist_display) catalog image for $catalog_name $ocp_ver_major"
+fi
+_cat_host="${catalog_url%%/*}"
+aba_debug "Checking connectivity to $_cat_host"
 _reg_err=""
-if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 2>&1 >/dev/null); then
-	aba_debug "registry.redhat.io check failed: $_reg_err"
-	aba_abort "Cannot access registry.redhat.io - check internet connection"
+if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL "http://${_cat_host}/v2" 2>&1 >/dev/null); then
+	aba_debug "$_cat_host check failed: $_reg_err"
+	aba_abort "Cannot access $_cat_host - check internet connection"
 fi
 
 # Verify prerequisites
@@ -142,7 +150,6 @@ if ! command -v jq >/dev/null 2>&1; then
 	aba_abort "jq is required but not installed"
 fi
 
-catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 remote_ref="docker://${catalog_url}"
 content_layer_file=".index/.${catalog_name}-index-v${ocp_ver_major}.content-layer-digest"
 
@@ -411,7 +418,10 @@ if [ ! -s "$tmp_file" ]; then
 	{
 		echo "=== DIAGNOSTIC: parser produced empty index ==="
 		echo "catalog=$catalog_name version=$ocp_ver_major"
+		echo "pid=$$ ppid=$PPID tmp_file=$tmp_file"
 		echo "configs_dir=$tmp_dir/configs"
+		_fc=$(find "$tmp_dir/configs" -type f 2>/dev/null | wc -l)
+		echo "configs_file_count=$_fc"
 		echo "--- configs top-level dirs (first 10) ---"
 		find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -10
 		echo "--- sample dir contents ---"
@@ -419,10 +429,29 @@ if [ ! -s "$tmp_file" ]; then
 		if [[ -n "$_sample_dir" ]]; then
 			echo "sample: $_sample_dir"
 			ls -la "$_sample_dir" 2>&1
+			# Do not stop at 20 lines — catalogs-wait used to hide catalog.json this way
+			find "$_sample_dir" -type f 2>/dev/null | head -30
 		else
 			echo "(no non-underscore dirs found)"
 		fi
 		echo "--- catalog-extract-functions.sh loaded: $(type -t _extract_catalog_dir 2>/dev/null || echo 'NOT LOADED') ---"
+		# run_once history for this catalog:ver — catches double-STARTED / SKIP_RUNNING
+		_ro_id="catalog:${ocp_ver_major}:${catalog_name}"
+		_ro_dir="${RUN_ONCE_DIR:-$HOME/.aba/runner}/$_ro_id"
+		echo "--- run_once history ($_ro_id) ---"
+		if [[ -f "$_ro_dir/history" ]]; then
+			tail -30 "$_ro_dir/history"
+		else
+			echo "(no history at $_ro_dir/history)"
+		fi
+		echo "--- run_once pid/lock/exit ---"
+		for _f in pid lock exit; do
+			if [[ -e "$_ro_dir/$_f" ]]; then
+				echo "$_f=$(cat "$_ro_dir/$_f" 2>/dev/null | tr '\n' ' ')"
+			else
+				echo "$_f=(missing)"
+			fi
+		done
 		echo "=== END DIAGNOSTIC ==="
 	} >&2
 	aba_abort "Catalog extraction produced empty index for $catalog_name v$ocp_ver_major"

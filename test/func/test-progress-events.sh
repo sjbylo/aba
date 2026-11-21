@@ -91,7 +91,8 @@ test_plan_format() {
 	local tmpfile
 	tmpfile=$(capture_plans "$workflow")
 	local bad_lines
-	bad_lines=$(grep -v '^PLAN|[a-z0-9_]*|.' "$tmpfile" 2>/dev/null | wc -l)
+	# install also emits START|reg_prep so Preparation is in progress immediately
+	bad_lines=$(grep -Ev '^(PLAN\|[a-z0-9_]+\|.+|START\|[a-z0-9_]+)$' "$tmpfile" 2>/dev/null | wc -l)
 
 	if [ "$bad_lines" -eq 0 ]; then
 		pass "$workflow: all PLANs well-formed"
@@ -196,7 +197,7 @@ echo ""
 
 # Workflow: expected PLANs, execution scripts
 echo "--- PLAN counts ---"
-test_plan_count install   8
+test_plan_count install   9
 test_plan_count sync      8
 test_plan_count save      6
 test_plan_count load      5
@@ -219,8 +220,8 @@ done
 echo ""
 
 echo "--- PLAN ID ↔ START/DONE cross-check ---"
-test_plan_id_coverage install 8 \
-	scripts/install-rpms.sh scripts/reg-install.sh \
+test_plan_id_coverage install 9 \
+	scripts/progress-plan.sh scripts/install-rpms.sh scripts/reg-install.sh \
 	scripts/reg-install-docker.sh scripts/reg-install-quay.sh scripts/reg-install-omr.sh \
 	scripts/reg-install-docker-remote.sh scripts/reg-install-quay-remote.sh scripts/reg-install-omr-remote.sh
 
@@ -355,7 +356,7 @@ rm -f "$up_fifo"
 
 up2_fifo=$(mktemp /tmp/test-up2-fifo.XXXXXX)
 _from_tmp "$up2_fifo" cluster-upgrade --with-day2
-up2_expect=$(printf '%s\n' "PLAN|ug_preflight|Preflight checks|2" "$day2_stdout" "PLAN|ug_trigger|Trigger upgrade|5" "PLAN|ug_progress|Wait for upgrade|70")
+up2_expect=$(printf '%s\n' "PLAN|ug_preflight|Preflight checks|2" "$day2_stdout" "PLAN|ug_trigger|Trigger upgrade|5" "PLAN|ug_progress|Check upgrade progressing|70")
 if [ "$(_plan_lines "$up2_fifo")" = "$up2_expect" ]; then
 	pass "upgrade --with-day2 inserts day2.sh plan between its own steps"
 else

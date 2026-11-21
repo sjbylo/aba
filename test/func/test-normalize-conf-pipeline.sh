@@ -10,6 +10,7 @@
 #   - normalize-kvm-conf:    KVM_HOST extraction
 #   - The awk '{print $1}' bug (regression guard)
 #   - suggest_starting_ip() helper (IP math)
+#   - verify-cluster-conf: starting_ip as a list of node IPs
 
 cd "$(dirname "$0")/../.."
 REPO_ROOT="$PWD"
@@ -777,6 +778,76 @@ if ask_is_on; then test_pass "ask_is_on when ask=true"; else test_fail "ask_is_o
 ASK_OVERRIDE=1
 if ask_is_on; then test_fail "ask_is_on with -y" "still on"; else test_pass "ask_is_on off under ASK_OVERRIDE"; fi
 unset ASK_OVERRIDE
+
+# =========================================================================
+echo
+echo "--- verify-cluster-conf: starting_ip list ---"
+# =========================================================================
+
+# _test_verify NAME EXPECT(pass|fail) STARTING_IP MACHINE_NETWORK [EXTRA_LINES] [MSG] [NOT_MSG]
+# EXTRA_LINES are appended to cluster.conf; a repeated key wins (sourced as shell).
+# NOT_MSG must not appear in the output of a failing case.
+_test_verify() {
+	local test_name="$1" expect="$2" sip="$3" net="$4" extra="${5:-}" msg="${6:-}" not_msg="${7:-}"
+	local d="$_tmp/verify-$RANDOM"
+	mkdir -p "$d"
+	cat > "$d/cluster.conf" <<-EOF
+	cluster_name=iplist
+	base_domain=example.com
+	machine_network=$net
+	starting_ip=$sip
+	num_masters=3
+	num_workers=3
+	next_hop_address=10.0.0.1
+	dns_servers=10.0.0.2
+	hostPrefix=23
+	master_prefix=master
+	worker_prefix=worker
+	ports=ens160
+	$extra
+	EOF
+
+	local out rc=0
+	out=$(cd "$d" && eval "$(normalize-cluster-conf 2>/dev/null)" && verify_conf=all verify-cluster-conf 2>&1) || rc=$?
+
+	if [ "$expect" = "pass" ]; then
+		if [ "$rc" -eq 0 ]; then
+			test_pass "$test_name"
+		else
+			test_fail "$test_name" "expected pass, got rc=$rc: $out"
+		fi
+	elif [ "$rc" -ne 0 ] && [[ "$out" == *"$msg"* ]] && { [ -z "$not_msg" ] || [[ "$out" != *"$not_msg"* ]]; }; then
+		test_pass "$test_name"
+	else
+		test_fail "$test_name" "expected fail with [$msg] and without [$not_msg], got rc=$rc: $out"
+	fi
+}
+
+_test_verify "single IP, 6 nodes fit" pass "10.0.0.10" "10.0.0.0/22"
+_test_verify "list across /24 inside /22" pass "10.0.0.10,11,12,10.0.1.60,61,62" "10.0.0.0/22"
+_test_verify "list with invalid syntax" fail "10.0.0.10,x,12,13,14,15" "10.0.0.0/22" "" \
+	"starting_ip is invalid in cluster.conf: [10.0.0.10,x,12,13,14,15]"
+_test_verify "list across /24 outside /24" fail "10.0.0.10,11,12,10.0.1.60,61,62" "10.0.0.0/24" "" \
+	"node IP 10.0.1.60 in starting_ip is outside the machine_network"
+_test_verify "list with 5 items for 6 nodes" fail "10.0.0.10,11,12,10.0.1.60,61" "10.0.0.0/22" "" \
+	"lists 5 address(es) but the cluster has 6 node(s)"
+_test_verify "list with duplicate" fail "10.0.0.10,11,12,10.0.1.60,61,10.0.0.11" "10.0.0.0/22" "" \
+	"more than once"
+_test_verify "list with network address" fail "10.0.0.10,11,0,10.0.0.20,21,22" "10.0.0.0/24" "" \
+	"node IP 10.0.0.0 in starting_ip is the network address"
+_test_verify "list with broadcast address" fail "10.0.0.10,11,12,10.0.3.253,254,255" "10.0.0.0/22" "" \
+	"node IP 10.0.3.255 in starting_ip is the broadcast address"
+_test_verify "list with gateway" fail "10.0.0.10,11,12,10.0.1.60,61,62" "10.0.0.0/22" \
+	"next_hop_address=10.0.1.61" "node IP 10.0.1.61 (node 5 of 6) collides with next_hop_address"
+_test_verify "list: VIPs in a gap are fine" pass "10.0.0.10,11,12,10.0.1.60,61,62" "10.0.0.0/22" \
+	"$(printf 'api_vip=10.0.0.20\ningress_vip=10.0.0.21')"
+_test_verify "list: VIP equals a node IP" fail "10.0.0.10,11,12,10.0.1.60,61,62" "10.0.0.0/22" \
+	"$(printf 'api_vip=10.0.1.61\ningress_vip=10.0.0.21')" "api_vip (10.0.1.61) is a node IP in starting_ip"
+_test_verify "list, invalid num_workers: no false node count error" fail "10.0.0.10,11,12,10.0.1.60,61,62" "10.0.0.0/22" \
+	"num_workers=abc" "num_workers is invalid" "but the cluster has"
+# machine_network with host bits set: the network address comes from the prefix
+_test_verify "list, machine_network 10.0.0.8/24 with .0 listed" fail \
+	"10.0.0.7,0,9,10,11,12" "10.0.0.8/24" "" "node IP 10.0.0.0 in starting_ip is the network address"
 
 # =========================================================================
 echo

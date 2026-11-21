@@ -137,8 +137,7 @@ else
 		echo "  ✗ FAIL: Older shown but fetch_older_version was empty"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
 	else
-		echo "  ✓ PASS: Older absent (matches empty fetch)"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Older absent (matches empty fetch)" "$_scr"
 	fi
 fi
 

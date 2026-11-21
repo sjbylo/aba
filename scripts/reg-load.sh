@@ -26,7 +26,7 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
@@ -262,7 +262,7 @@ aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to re
 aba_progress "DONE|ld_registry"
 aba_progress "START|ld_load"
 
-aba_info "This can take 5 to 20 minutes or more to complete, much longer for large image sets."
+aba_mirror_eta load
 
 # Now using data_dir so reg_root=$data_dir/quay-install
 # Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
@@ -291,7 +291,7 @@ else
 		_loaded_ver=$(grep '^\s*maxVersion:' "$_isc_file" | head -1 | sed 's/.*maxVersion: *//')
 		_loaded_chan=$(grep -E '^\s*- name: (stable|fast|candidate|eus)-[0-9]' "$_isc_file" | head -1 | sed 's/.*- name: *//; s/-[0-9].*//')
 		if [ "$_loaded_ver" ] && ! echo "$_loaded_ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-			aba_abort "Cannot parse a valid OCP version from $_isc_file (got: '$_loaded_ver')." \
+			aba_abort "Cannot parse a valid $(dist_display) version from $_isc_file (got: '$_loaded_ver')." \
 				"Check the imageset-config.yaml and try again."
 		fi
 		aba_debug "Version from ISC parsing: ver=$_loaded_ver chan=$_loaded_chan"
@@ -349,7 +349,7 @@ _loaded_display="${_loaded_ver:-$ocp_version}"
 if [ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ]; then
 	aba_success "Images loaded into $reg_host:$reg_port (upgrade: $ocp_version → $_loaded_ver)"
 else
-	aba_success "Images loaded into $reg_host:$reg_port (OCP $_loaded_display)"
+	aba_success "Images loaded into $reg_host:$reg_port ($(dist_display) $_loaded_display)"
 fi
 
 # Bundle phase complete: unlock ISC so future config changes trigger regeneration.

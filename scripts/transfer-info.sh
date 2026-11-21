@@ -16,6 +16,7 @@ set -eo pipefail
 
 # is_version_greater and _isc_operator_list/_isc_operator_count live here.
 source scripts/include_all.sh
+aba_debug "Starting: $0 $* in $PWD"
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
@@ -125,7 +126,7 @@ else
 	if [[ -n "$_upgrade_to" ]]; then
 		local_ver="$_ocp_version → $_upgrade_to"
 	fi
-	aba_info "OCP: $local_ver ($_ocp_channel)"
+	aba_info "$(dist_display): $local_ver ($_ocp_channel)"
 
 	if [[ $_operator_count -gt 0 ]]; then
 		aba_info "Operators ($_operator_count): $(echo "$_operators" | sed 's/,/, /g')"

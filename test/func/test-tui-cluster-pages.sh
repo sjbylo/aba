@@ -39,8 +39,7 @@ if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped";
 	tui_keys Enter; sleep 1  # dismiss the dialog
 	tui_back_to "Actions" 5 || true
 	if tui_ensure_mirror_installed; then
-		echo "  ✓ PASS: Mirror running after CLI ensure"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Mirror running after CLI ensure"
 	else
 		echo "  ✗ FAIL: Mirror start failed — cluster pages need a running mirror"
 		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
@@ -62,15 +61,43 @@ if echo "$_scr" | grep -qi "Mirror Stopped\|mirror.*stopped\|registry.*stopped";
 	fi
 fi
 
-# Release Image Missing — mirror is installed but empty (no images synced yet)
+# Release Image Missing — the mirror is installed but empty. Sync Now is
+# the Yes button. That opens a second dialog, "Continue?", which is what
+# actually starts the sync. The wizard pages below are the test.
 if echo "$_scr" | grep -qi "Release Image Missing\|no release images\|release.*missing"; then
-	echo "  ✗ FAIL: Release Image Missing — cluster pages require synced images"
-	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	tui_press_button "Back" 2>/dev/null || tui_keys Escape
-	sleep 1
-	tui_cleanup
-	tui_summary
-	exit 1
+	echo "  Mirror has no release images — syncing so the wizard opens"
+	tui_keys Enter
+	if ! tui_wait_for "Continue?" 30; then
+		echo "  ✗ FAIL: sync confirm dialog did not appear"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_cleanup
+		tui_summary
+		exit 1
+	fi
+	tui_press_button "Continue" || tui_keys Enter
+	if ! tui_wait_for_progress "cp-sync" 3600; then
+		echo "  ✗ FAIL: sync did not finish — cluster pages need release images"
+		_TUI_FAIL=$(( _TUI_FAIL + 1 ))
+		tui_cleanup
+		tui_summary
+		exit 1
+	fi
+	tui_dismiss_result 2>/dev/null || true
+	# Done closes the gauge. With no cluster, the TUI then shows
+	# "Mirror Updated" and only opens the wizard after OK.
+	_cp_i=0
+	while [ "$_cp_i" -lt 15 ]; do
+		_scr=$(tui_capture)
+		if echo "$_scr" | grep -qi "Cluster Name\|Base domain\|Cluster – Basics"; then
+			break
+		fi
+		if echo "$_scr" | grep -qi "Mirror Updated\|updated successfully"; then
+			tui_keys Enter
+		fi
+		sleep 2
+		_cp_i=$(( _cp_i + 1 ))
+	done
+	_scr=$(tui_capture)
 fi
 
 if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*required"; then
@@ -93,8 +120,7 @@ if echo "$_scr" | grep -qi "Mirror Required\|No mirror.*installed\|mirror.*requi
 fi
 
 if echo "$_scr" | grep -qi "already installed\|Cluster Already"; then
-	echo "  ✓ PASS: Cluster already installed dialog appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Cluster already installed dialog appeared" "$_scr"
 	# Press "New Cluster" to create a new one
 	tui_press_button "New Cluster" 2>/dev/null || tui_keys Enter
 	sleep 2
@@ -103,8 +129,7 @@ fi
 # Platform config gate (may ask to configure VMware/KVM)
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Platform.*not configured\|vmware.conf\|kvm.conf\|Configure.*Platform"; then
-	echo "  ✓ PASS: Platform config gate appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Platform config gate appeared" "$_scr"
 	# The platform config form may appear — cancel it
 	tui_keys Escape; sleep 1
 	tui_keys Escape; sleep 1
@@ -121,8 +146,7 @@ tui_screenshot "cp-02-basics"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
-	echo "  ✓ PASS: Basics page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Basics page appeared" "$_scr"
 	tui_assert_title "Basics" "Basics page title"
 
 	# Check basics page fields
@@ -132,8 +156,7 @@ if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
 
 	# Check for platform info
 	if echo "$_scr" | grep -qi "vmw\|VMware\|kvm\|Bare Metal"; then
-		echo "  ✓ PASS: Platform info visible"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Platform info visible" "$_scr"
 	fi
 
 	# Discover page items
@@ -145,8 +168,7 @@ if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
 	# Check for Next button
 	_btns=$(tui_buttons)
 	if echo "$_btns" | grep -qi "Next"; then
-		echo "  ✓ PASS: Next button present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Next button present"
 	fi
 
 	# Press Next to go to Page 2
@@ -155,7 +177,7 @@ if echo "$_scr" | grep -qi "Cluster Name\|cluster type\|Domain\|Workers"; then
 else
 	echo "  ✗ FAIL: Basics page not visible"
 	_TUI_FAIL=$(( _TUI_FAIL + 1 ))
-	tui_stop; tui_summary; exit 1
+	tui_leave_on_menu 2>/dev/null || true; tui_summary; exit 1
 fi
 
 # ============================================================================
@@ -167,8 +189,7 @@ tui_screenshot "cp-03-network"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Network\|CIDR\|Subnet\|DNS\|Gateway\|API VIP\|Starting IP"; then
-	echo "  ✓ PASS: Network page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Network page appeared" "$_scr"
 	tui_assert_title "Networking" "Networking page title"
 
 	# Check network page fields
@@ -178,12 +199,10 @@ if echo "$_scr" | grep -qi "Network\|CIDR\|Subnet\|DNS\|Gateway\|API VIP\|Starti
 
 	# Check for VIP fields (only for compact/standard, not SNO)
 	if echo "$_scr" | grep -qi "API VIP\|api_vip"; then
-		echo "  ✓ PASS: API VIP field present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "API VIP field present" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "Ingress VIP\|ingress_vip"; then
-		echo "  ✓ PASS: Ingress VIP field present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Ingress VIP field present" "$_scr"
 	fi
 
 	# Discover page items
@@ -209,8 +228,7 @@ tui_screenshot "cp-04-iface"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Interface\|Port\|MAC\|NIC\|ens\|enp"; then
-	echo "  ✓ PASS: Interfaces page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Interfaces page appeared" "$_scr"
 	tui_assert_title "Interfaces" "Interfaces page title"
 
 	# Check interface fields
@@ -218,8 +236,7 @@ if echo "$_scr" | grep -qi "Interface\|Port\|MAC\|NIC\|ens\|enp"; then
 
 	# Check for MAC address fields
 	if echo "$_scr" | grep -qi "MAC"; then
-		echo "  ✓ PASS: MAC address field present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "MAC address field present" "$_scr"
 	fi
 
 	# Discover page items
@@ -245,8 +262,7 @@ tui_screenshot "cp-05-vm"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "VM Resources\|CPU\|Memory\|Disk\|vCPU\|RAM"; then
-	echo "  ✓ PASS: VM Resources page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "VM Resources page appeared" "$_scr"
 	tui_assert_title "VM Resources" "VM Resources page title"
 
 	# Check VM resource fields
@@ -256,8 +272,7 @@ if echo "$_scr" | grep -qi "VM Resources\|CPU\|Memory\|Disk\|vCPU\|RAM"; then
 
 	# Check for master/worker separation
 	if echo "$_scr" | grep -qi "Master\|master\|Control"; then
-		echo "  ✓ PASS: Master resources section present"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Master resources section present" "$_scr"
 	fi
 
 	# Discover page items
@@ -270,8 +285,7 @@ if echo "$_scr" | grep -qi "VM Resources\|CPU\|Memory\|Disk\|vCPU\|RAM"; then
 	tui_press_button "Next" 2>/dev/null || { tui_keys Tab; sleep 0.3; tui_keys Enter; }
 	sleep 2
 elif echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm"; then
-	echo "  ✓ PASS: VM Resources page skipped (bare metal path)"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "VM Resources page skipped (bare metal path)" "$_scr"
 fi
 
 # ============================================================================
@@ -283,18 +297,15 @@ tui_screenshot "cp-06-review"
 
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm\|cluster.conf"; then
-	echo "  ✓ PASS: Review page appeared"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Review page appeared" "$_scr"
 	tui_assert_title "Install Cluster" "Review page title"
 
 	# Check review contains key config items
 	if echo "$_scr" | grep -qi "cluster_name\|Cluster Name\|Name:"; then
-		echo "  ✓ PASS: Review shows cluster name"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Review shows cluster name" "$_scr"
 	fi
 	if echo "$_scr" | grep -qi "domain\|Domain"; then
-		echo "  ✓ PASS: Review shows domain"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Review shows domain" "$_scr"
 	fi
 
 	# Check for Back and Install buttons
@@ -303,8 +314,7 @@ if echo "$_scr" | grep -qi "Review\|Summary\|Install\|Confirm\|cluster.conf"; th
 
 	# Press Back or Cancel — do NOT press Install
 	if echo "$_btns" | grep -qi "Back"; then
-		echo "  ✓ PASS: Back button available on review"
-		_TUI_PASS=$(( _TUI_PASS + 1 ))
+		tui_pass "Back button available on review"
 		tui_press_button "Back"
 		sleep 1
 	else
@@ -322,8 +332,7 @@ echo ""
 echo "--- 7. Back navigation ---"
 _scr=$(tui_capture)
 if echo "$_scr" | grep -qi "VM Resources\|Interface\|Network\|Basics\|Cluster"; then
-	echo "  ✓ PASS: Back navigation returned to a wizard page"
-	_TUI_PASS=$(( _TUI_PASS + 1 ))
+	tui_pass "Back navigation returned to a wizard page" "$_scr"
 fi
 
 # Cancel out of the wizard entirely — need enough Escapes for all wizard pages

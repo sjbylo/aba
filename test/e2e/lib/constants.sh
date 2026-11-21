@@ -7,6 +7,7 @@ E2E_RC_PREFIX="${E2E_RC_DIR}/e2e-suite"            # RC files: /tmp/e2e-suite-<s
 E2E_DISPATCHER_PID="/tmp/e2e-dispatcher.pid"
 E2E_DAEMON_PID="/tmp/e2e-daemon.pid"                # PID of the daemon (crash-recovery) wrapper
 E2E_DAEMON_META="/tmp/e2e-daemon.meta"              # Daemon metadata (pools, flags, start time)
+E2E_ACTIVE_POOLS="/tmp/e2e-active-pools"            # Pools still allowed to take a new suite (one number per line)
 E2E_DISPATCH_STATE="/tmp/e2e-dispatch-state.txt"
 E2E_INJECT_QUEUE="/tmp/e2e-inject-queue.txt"
 E2E_FORCED_DISPATCH="/tmp/e2e-forced-dispatch.txt"  # one-shot dispatch signals for running dispatcher

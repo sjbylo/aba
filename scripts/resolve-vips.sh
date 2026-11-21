@@ -16,7 +16,7 @@ source scripts/include_all.sh
 # the progress dialog is not stuck at 0% while DNS and YAML generation run.
 aba_progress "START|ci_config"
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
@@ -28,6 +28,24 @@ verify-cluster-conf || exit 1
 cl_domain="$cluster_name.$base_domain"
 cl_api_domain="api.$cl_domain"
 cl_ingress_domain="*.apps.$cl_domain"
+
+# A starting_ip list names each node IP and may leave gaps.  Keep the node IPs
+# space padded for the membership tests below.  One starting IP leaves it empty.
+# Expand before the SNO exit: with verify_conf=off a bad list must stop here,
+# not reach the DNS records.
+_node_ips=""
+if [[ "$starting_ip" == *,* ]]; then
+	_node_ips=" $(expand_starting_ips "$starting_ip" $(( ${num_masters:-3} + ${num_workers:-0} ))) " || exit 1
+fi
+
+# Step from INT by STEP (-1 or 1) past listed node IPs.  Prints the integer.
+_skip_node_ips() {
+	local n=$1
+	while [[ "$_node_ips" == *" $(int_to_ip "$n") "* ]]; do
+		n=$(( n + $2 ))
+	done
+	echo "$n"
+}
 
 # SNO clusters use starting_ip for api+apps — no VIP resolution needed
 SNO=
@@ -95,7 +113,13 @@ else
 		# Auto-allocate VIPs for ABA-managed DNS environments.
 		# Prefer placing VIPs before starting_ip (starting_ip-2, starting_ip-1).
 		# If that wraps out of the subnet, place after the last node (+10 gap).
-		_start_int=$(ip_to_int "$starting_ip")
+		# A list: count from the first listed node IP and step past listed node IPs
+		if [ "$_node_ips" ]; then
+			read -r _first_ip _ <<< "$_node_ips"
+			_start_int=$(ip_to_int "$_first_ip")
+		else
+			_start_int=$(ip_to_int "$starting_ip")
+		fi
 		_node_count=$(( ${num_masters:-3} + ${num_workers:-0} ))
 		_net_int=$(ip_to_int "$machine_network")
 		_subnet_size=$(( 1 << (32 - ${prefix_length:-24}) ))
@@ -104,6 +128,10 @@ else
 		# Try "before starting_ip": api=starting_ip-2, ingress=starting_ip-1
 		_try_api=$(( _start_int - 2 ))
 		_try_ing=$(( _start_int - 1 ))
+		if [ "$_node_ips" ]; then
+			_try_ing=$(_skip_node_ips "$_try_ing" -1)
+			_try_api=$(_skip_node_ips $(( _try_ing - 1 )) -1)
+		fi
 
 		# Candidates only. A VIP that is already a valid IP must stay.
 		_new_api=""
@@ -115,6 +143,10 @@ else
 			# "Before" wraps out of subnet — place after last node (+10 gap)
 			_after_api=$(( _start_int + _node_count + 10 ))
 			_after_ing=$(( _start_int + _node_count + 11 ))
+			if [ "$_node_ips" ]; then
+				_after_api=$(_skip_node_ips "$_after_api" 1)
+				_after_ing=$(_skip_node_ips $(( _after_api + 1 )) 1)
+			fi
 			if [ "$_after_ing" -lt "$_net_end" ]; then
 				_new_api=$(int_to_ip "$_after_api")
 				_new_ing=$(int_to_ip "$_after_ing")
@@ -173,7 +205,17 @@ if [ "$api_vip" ] && [ "$ingress_vip" ]; then
 	# VIPs must not overlap with node IPs (starting_ip is the first node).
 	# Uses ip_to_int() for robust range comparison — handles subnets larger
 	# than /24 and IPs that wrap across octet boundaries.
-	if [ "$starting_ip" ]; then
+	# A list may leave gaps: a VIP collides only if it is a listed node IP.
+	# Node IPs are canonical, so compare the canonical VIP.
+	if [ "$_node_ips" ]; then
+		for _vip_name in api_vip ingress_vip; do
+			_vip_val=$(normalize_ipv4 "${!_vip_name}") || _vip_val=${!_vip_name}
+			if [[ "$_node_ips" == *" $_vip_val "* ]]; then
+				aba_abort "$_vip_name (${!_vip_name}) is a node IP in starting_ip!" \
+					"VIPs must not be node IPs."
+			fi
+		done
+	elif [ "$starting_ip" ]; then
 		_node_start=$(ip_to_int "$starting_ip")
 		_node_count=$(( ${num_masters:-3} + ${num_workers:-0} ))
 		_node_end=$(( _node_start + _node_count - 1 ))

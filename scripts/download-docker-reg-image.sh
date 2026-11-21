@@ -17,7 +17,7 @@ source "$_script_dir/include_all.sh"
 image="${1:?Usage: $0 <image> <output-file>}"
 output="${2:?Usage: $0 <image> <output-file>}"
 
-aba_debug "Starting: $0 $*"
+aba_debug "Starting: $0 $* in $PWD"
 
 if ! try_cmd -n 3 -d 10 -D 10 -m "Pull $image" -- podman pull "$image"; then
 	aba_info "Could not pull $image. It will be pulled later when the mirror registry is installed."

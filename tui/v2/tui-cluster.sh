@@ -1213,7 +1213,14 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local sip_val
 					sip_val=$(<"$_TUI_TMP")
-					if ! sip_val=$(_normalize_ip "$sip_val"); then
+					if [[ "$sip_val" == *,* ]]; then
+						# Syntax only: the list length is checked when cluster.conf is verified
+						if ! sip_val=$(normalize_starting_ip "$sip_val"); then
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Invalid IP address.\n\nExpected one IP per node, the first one in full\n(e.g. 10.0.0.10,11,12,10.0.1.60)" 0 0 || true
+							continue
+						fi
+					elif ! sip_val=$(_normalize_ip "$sip_val"); then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.100)" 0 0 || true
 						continue
@@ -1933,8 +1940,10 @@ cluster_monitor() {
 	fi
 
 	local _cl="$SELECTED_CLUSTER"
-	confirm_and_execute "aba --dir $_cl mon" "$TUI2_TITLE_CLUSTER_MONITOR"
+	# monitor-install declares its own step, so the progress dialog can show it.
+	_exec_with_progress "aba --dir $_cl mon --yes" "$TUI2_TITLE_CLUSTER_MONITOR"
 	local rc=$?
+	[[ $rc -eq 2 ]] && confirm_and_execute "aba --dir $_cl mon" "$TUI2_TITLE_CLUSTER_MONITOR" && rc=$?
 
 	# After successful monitor completion in mirror mode, offer to configure OperatorHub
 	if [[ $rc -eq 0 && "$_TUI_MODE" != "DIRECT" && -f "$ABA_ROOT/$_cl/.install-complete" ]]; then

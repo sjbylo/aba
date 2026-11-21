@@ -272,6 +272,11 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 							"Invalid image path.\n\nMust start with / (e.g. /ocp4/openshift4)." 0 0
 						continue
 					fi
+					if ! _valid_reg_path "$m_path"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid image path.\n\nMust not end with / (e.g. /ocp4/openshift4)." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_path -v "$m_path" -f "$mcf"
 				fi
 				;;
@@ -599,7 +604,7 @@ _mirror_op_confirm() {
 	[[ -n "$_target" && "$_target" != "$_ver" ]] && _ver="${_ver} → ${_target}"
 
 	local _summary=""
-	_summary+="OCP: $_ver ($_chan)\n"
+	_summary+="$(dist_display): $_ver ($_chan)\n"
 	if [[ $_op_count -eq -1 ]]; then
 		_summary+="Operators: (user-edited config)\n"
 	elif [[ $_op_count -gt 0 ]]; then
@@ -1078,7 +1083,7 @@ c — clear a target already set. Shown only when one is set."
 				stable) _ch_default="s" ;; fast) _ch_default="f" ;;
 				candidate) _ch_default="c" ;; eus) _ch_default="e" ;;
 			esac
-			dlg --backtitle "$(ui_backtitle)" --title "Change OCP Channel" \
+			dlg --backtitle "$(ui_backtitle)" --title "Change $(dist_display) channel" \
 				--default-item "$_ch_default" \
 				--ok-label "$TUI2_BTN_SELECT" \
 				--cancel-label "$TUI2_BTN_BACK" \
@@ -1227,10 +1232,12 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 				_mirror_config_review || return 1
 				_tui_install_mirror "Install Mirror" || return 1
 			fi
-			confirm_and_execute \
-				"aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
-				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
+			# Same sync the Mirror menu already runs in the progress dialog.
+			local _cmd="aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)"
+			local _title="Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			_exec_with_progress "$_cmd --yes" "$_title" _invalidate_mirror_cache
 			rc=$?
+			[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" _invalidate_mirror_cache && rc=$?
 			if [[ $rc -eq 0 ]]; then
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
 				--msgbox "\nUpgrade images synced to registry.\n\n\
@@ -1241,10 +1248,12 @@ Next steps:\n\n\
 			;;
 		2)
 			_ensure_platform_for_upgrade
-			confirm_and_execute \
-				"aba --dir mirror --upgrade-to $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
-				"Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			# Same save the Mirror menu already runs in the progress dialog.
+			local _cmd="aba --dir mirror --upgrade-to $_target_ver save$(_tui_oc_mirror_retry_suffix)"
+			local _title="Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			_exec_with_progress "$_cmd --yes" "$_title" _invalidate_mirror_cache
 			rc=$?
+			[[ $rc -eq 2 ]] && confirm_and_execute "$_cmd" "$_title" _invalidate_mirror_cache && rc=$?
 			if [[ $rc -eq 0 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
 					--msgbox "\nUpgrade images saved successfully.\n\n\
@@ -1496,7 +1505,7 @@ mirror_payload_menu() {
 			_upg_label="Prepare Upgrade [→ ${_upg_target}]"
 		fi
 
-		local _payload_summary="OCP ${ocp_version:-?} ${ocp_channel:-}"
+		local _payload_summary="$(dist_display) ${ocp_version:-?} ${ocp_channel:-}"
 		[[ $_op_count -gt 0 ]] && _payload_summary+=" · ${_op_count} $( (( _op_count == 1 )) && echo operator || echo operators)"
 
 		# Count additional images
@@ -1529,7 +1538,7 @@ mirror_payload_menu() {
 		[[ $_img_count -gt 0 ]] && _img_suffix=" (${_img_count})"
 
 		local _payload_items=()
-		_payload_items+=("W" "OCP Version / Channel (${ocp_version:-?} ${ocp_channel:-})")
+		_payload_items+=("W" "$(dist_display) version / channel (${ocp_version:-?} ${ocp_channel:-})")
 		_payload_items+=("O" "Select Operators${_op_suffix}")
 		_payload_items+=("G" "$TUI2_LABEL_IMAGES${_img_suffix}")
 		_payload_items+=("U" "$_upg_label")
@@ -1554,13 +1563,13 @@ mirror_payload_menu() {
 					show_help "Mirror Payload" \
 "Configure what gets mirrored — and transferred in air-gapped environments.
 
-The mirror payload defines which images (OCP release, operators, extras) will
+The mirror payload defines which images ($(dist_display) release, operators, extras) will
 be synced to your mirror registry (connected) or saved to a tar for transfer
 across the air gap (disconnected).
 
 The imageset-config.yaml (ISC) is built automatically from these settings.
 
-• OCP Version / Channel — change the OCP version or update channel
+• $(dist_display) version / channel — change the $(dist_display) version or update channel
 • Select Operators — choose which operators to include
 • Additional Images — add extra container images (UBI, support-tools, etc.)
 • Prepare Upgrade — set an upgrade target version
@@ -1664,7 +1673,7 @@ _mirror_isc_advanced() {
 			2)
 				show_help "$TUI2_TITLE_CONNO_ISC_ADVANCED" \
 "The imageset-config.yaml (ISC) controls which container images
-are mirrored — OCP release images, operators, and additional images.
+are mirrored — $(dist_display) release images, operators, and additional images.
 
 ABA generates and manages this file automatically based on your
 settings in aba.conf and mirror.conf. In most cases you should
@@ -2279,7 +2288,7 @@ _tui_image_set_checklist() {
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Could not detect RHOAI version.\n\nThe rhods-operator was not found in the\nOCP ${_ocp_short} operator catalog." 0 0
-				tui_log "Failed to detect RHOAI version for image set: $_add_name (OCP $_ocp_short)"
+				tui_log "Failed to detect RHOAI version for image set: $_add_name ($(dist_display) $_ocp_short)"
 				_failed=true
 				continue
 			fi
@@ -2448,7 +2457,7 @@ _tui_offer_companion_images() {
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Could not detect RHOAI version.\n\nThe rhods-operator was not found in the\nOCP ${_ocp_short} operator catalog.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
-				tui_log "Failed to detect RHOAI version (OCP $_ocp_short)"
+				tui_log "Failed to detect RHOAI version ($(dist_display) $_ocp_short)"
 				continue
 			fi
 			dlg --backtitle "$(ui_backtitle)" --infobox \
@@ -2773,7 +2782,7 @@ mirror_create_bundle() {
 		_op_count=${#OP_BASKET[@]}
 	fi
 
-	local _summary="OCP: $_ver ($_chan)\n"
+	local _summary="$(dist_display): $_ver ($_chan)\n"
 	if [[ $_op_count -eq -1 ]]; then
 		_summary+="Operators: (user-edited config)\n"
 	elif [[ $_op_count -gt 0 ]]; then

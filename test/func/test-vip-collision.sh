@@ -70,6 +70,7 @@ _test_vip() {
 	local num_workers="${6:-2}"
 	local expect_fail="${7:-1}"  # 1=expect abort, 0=expect pass
 	local expect_msg="${8:-}"
+	local vconf="${9:-conf}"     # off: skip verify-cluster-conf, reach the resolve-vips.sh check
 
 	_total=$(( _total + 1 ))
 
@@ -119,6 +120,12 @@ _test_vip() {
 	# Ensure mirror.conf exists (verify-config sources it)
 	[ -f mirror.conf ] || touch mirror.conf
 
+	# resolve-vips.sh reads aba.conf from the cluster dir, where this harness
+	# has none.  A one-line aba.conf there sets verify_conf for this case only.
+	if [ "$vconf" != "conf" ]; then
+		echo "verify_conf=$vconf" > aba.conf
+	fi
+
 	local output="" rc=0
 	output=$(scripts/resolve-vips.sh 2>&1) || rc=$?
 
@@ -144,8 +151,9 @@ _test_vip() {
 			echo "PASS: $test_name"
 			_pass=$(( _pass + 1 ))
 		else
-			# Check if it failed on VIP collision (our code) vs other (acceptable)
-			if echo "$output" | grep -qE 'cannot be the same address|falls within the node IP range'; then
+			# Check if it failed on VIP collision or a starting_ip list error
+			# (our code) vs other (acceptable)
+			if echo "$output" | grep -qE 'cannot be the same address|falls within the node IP range|is a node IP|starting_ip.*(is invalid|lists)'; then
 				echo "FAIL: $test_name — VIP check wrongly rejected valid config!"
 				echo "  Output: $(echo "$output" | tail -5)"
 				_fail=$(( _fail + 1 ))
@@ -218,6 +226,30 @@ _test_vip "SNO: VIP == starting_ip is fine" \
 # starting_ip=10.0.0.253, 5 nodes → range ends at 10.0.1.1, VIP=10.0.1.3 is safe
 _test_vip "VIP outside wrapped range (253+5, VIP=10.0.1.3)" \
 	10.0.0.253  10.0.1.3  10.0.0.240  3 2  0
+
+# starting_ip list: nodes .100-.102 and .110-.111, the gap between them is free
+_test_vip "list: VIPs in the gap between listed node IPs" \
+	10.0.2.100,101,102,10.0.2.110,111  10.0.2.105  10.0.2.106  3 2  0
+
+_test_vip "list: api_vip == a listed worker IP" \
+	10.0.2.100,101,102,10.0.2.110,111  10.0.2.111  10.0.2.106  3 2  1  "api_vip (10.0.2.111) is a node IP in starting_ip"
+
+_test_vip "list: ingress_vip == a listed master IP" \
+	10.0.2.100,101,102,10.0.2.110,111  10.0.2.105  10.0.2.101  3 2  1  "ingress_vip (10.0.2.101) is a node IP in starting_ip"
+
+_test_vip "list: wrong node count" \
+	10.0.2.100,101,102,10.0.2.110  10.0.2.105  10.0.2.106  3 2  1  "lists 4 address(es) but the cluster has 5 node(s)"
+
+# verify_conf=off skips verify-cluster-conf, so only the check in
+# resolve-vips.sh can catch this (its message ends with "!")
+_test_vip "verify_conf=off: api_vip == a listed worker IP" \
+	10.0.2.100,101,102,10.0.2.110,111  10.0.2.111  10.0.2.106  3 2  1 \
+	"api_vip (10.0.2.111) is a node IP in starting_ip!"  off
+
+# SNO exits early in resolve-vips.sh; a bad list must still stop it first
+_test_vip "verify_conf=off: SNO with a starting_ip list" \
+	10.0.2.100,101  ""  ""  1 0  1 \
+	"lists 2 address(es) but the cluster has 1 node(s)"  off
 
 # -----------------------------------------------------------------------
 # Auto-allocation tests
@@ -371,6 +403,16 @@ _test_auto_alloc "auto-alloc: fallback to after (starting_ip=.2)" \
 # starting_ip=10.0.1.201 on 10.0.0.0/20 → candidates api=10.0.1.199 ing=10.0.1.200
 _test_auto_alloc "auto-alloc: keep set api_vip, fill ingress only" \
 	10.0.1.201  3 2  10.0.0.0 20  1  0  10.0.1.50  10.0.1.200  10.0.1.50
+
+# --- starting_ip list: both rules skip listed node IPs ---
+# Nodes .100-.102 and .98-.99: "before" steps down past .99 and .98: api=.96, ing=.97
+_test_auto_alloc "auto-alloc list: before skips listed node IPs" \
+	10.0.2.100,101,102,10.0.2.98,99  3 2  10.0.0.0 20  1  0  10.0.2.96  10.0.2.97
+
+# Nodes .2-.4 and .17-.18: "before" leaves the subnet, "after" = .2+5+10 = .17
+# steps up past .17 and .18: api=.19, ing=.20
+_test_auto_alloc "auto-alloc list: after skips listed node IPs" \
+	10.0.0.2,3,4,10.0.0.17,18  3 2  10.0.0.0 20  1  0  10.0.0.19  10.0.0.20
 
 # --- No ABA-managed DNS → should abort ---
 _test_auto_alloc "auto-alloc: abort when external DNS (no dnsmasq marker)" \

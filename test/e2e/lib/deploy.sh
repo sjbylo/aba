@@ -95,6 +95,10 @@ _record_source_deploy() {
 		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
 	fi
 	cp -f /tmp/e2e-source-md5sums /tmp/e2e-deploy-md5sums 2>/dev/null || true
+	# Reset "all suites passed since last code update" when the fingerprint changes.
+	if declare -F _e2e_cov_on_deploy >/dev/null 2>&1; then
+		_e2e_cov_on_deploy "$_cksum" "${_note:-dev}"
+	fi
 }
 
 # Compute the source checksum on a remote pool over SSH.
