@@ -885,6 +885,7 @@ tui_dismiss_startup() {
 		# host, Connected mode is the menu the rest of the suite drives, and it
 		# removes the leftover .bundle flag.
 		if echo "$_scr" | grep -qi "Fully Disconnected.*Connected mode\|bundle.*internet"; then
+			tui_screenshot "startup-bundle-choice"
 			if _tui_host_is_disco; then
 				echo "  Bundle on disco — staying Fully Disconnected" >&2
 				tui_keys Enter
