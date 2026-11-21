@@ -1536,15 +1536,37 @@ done
 aba_parse_args "$@"
 
 
-# Guard for VM lifecycle targets: validate platform + hypervisor config
-_ensure_vm_platform_ready() {
+# Set $platform from aba.conf. An installed cluster keeps its platform in
+# state.sh, which wins and sets _from_state=1.
+_resolve_cluster_platform() {
 	source <(cd "$ABA_ROOT" && normalize-aba-conf)
-	# An installed cluster keeps its platform in state.sh.
-	local _from_state= _installed=
+	_from_state=
+	local _installed=
 	if _installed=$(cluster_installed_platform "$PWD"); then
 		platform=$_installed
 		_from_state=1
 	fi
+}
+
+# Bare metal has no VMs: stop and kill power the servers off through the BMC.
+# Arg 1: Redfish ResetType. Exits when the platform is bm, else returns.
+_bm_poweroff_if_bm() {
+	_resolve_cluster_platform
+	[ "$platform" = "bm" ] || return 0
+	# Powering off every node when the user asked for a subset would surprise them.
+	if [ "${opt_workers:-}${opt_masters:-}" ]; then
+		aba_abort "--workers and --masters are not supported on bare metal." \
+			"Run the command without them to power off every node in bmc.conf."
+	fi
+	make -s init
+	$ABA_ROOT/scripts/bm-power.sh "$1" || exit $?
+	exit
+}
+
+# Guard for VM lifecycle targets: validate platform + hypervisor config
+_ensure_vm_platform_ready() {
+	local _from_state=
+	_resolve_cluster_platform
 	case "$platform" in
 		vmw)
 			# Remove dangling symlink so ln can recreate it
@@ -1834,6 +1856,7 @@ if [ "$cur_target" ]; then
 			# Cluster VM stop (requires cluster.conf); otherwise fall through to Makefile
 			if [ -f cluster.conf ]; then
 				eval $BUILD_COMMAND
+				_bm_poweroff_if_bm GracefulShutdown
 				_ensure_vm_platform_ready
 				exec_cmd="make -s init"
 				aba_debug "Running: $exec_cmd (stop)"
@@ -1844,6 +1867,7 @@ if [ "$cur_target" ]; then
 			BUILD_COMMAND="stop $BUILD_COMMAND"
 		;;
 		kill|poweroff)
+			_bm_poweroff_if_bm ForceOff
 			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (kill)"

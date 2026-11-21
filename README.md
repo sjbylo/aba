@@ -1589,7 +1589,7 @@ aba shutdown --wait   # Same, but wait until all VMs are powered off
 aba startup           # Power on VMs, uncordon nodes, approve CSRs, wait for Ready
 ```
 
-- Powers on all cluster VMs (bare-metal: prompts you to power on servers manually)
+- Powers on all cluster VMs (bare-metal: asks to power on the `bmc.conf` nodes through the BMC, else prompts you to power on servers manually)
 - Waits for the cluster API to become reachable
 - Uncordons all nodes and approves any pending CSRs
 - Waits for all nodes to reach `Ready` state and all cluster operators to become available
@@ -1616,8 +1616,8 @@ These commands control VMs directly without performing any OpenShift-level drain
 | Command | Description |
 |---------|-------------|
 | `aba start` | Power on all cluster VMs |
-| `aba stop` | Guest shutdown (VMware Tools / QEMU agent) — no drain |
-| `aba poweroff` / `aba kill` | Immediate power off — no drain, no guest shutdown |
+| `aba stop` | Guest shutdown (VMware Tools / QEMU agent) — no drain. Bare metal: Redfish GracefulShutdown of each `bmc.conf` node |
+| `aba poweroff` / `aba kill` | Immediate power off — no drain, no guest shutdown. Bare metal: Redfish ForceOff of each `bmc.conf` node |
 
 > **Tip:** Prefer `aba shutdown` / `aba startup` for routine maintenance. Use `aba stop`/`aba start` only when you need quick VM-level power cycling without the full graceful workflow.
 

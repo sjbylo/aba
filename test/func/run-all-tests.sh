@@ -271,6 +271,8 @@ integration_tests=(
 	test/func/test-preflight-check-bm.sh
 	test/func/test-bmc-mac-discovery.sh
 	test/func/test-bmc-boot.sh
+	test/func/test-bmc-poweroff.sh
+	test/func/test-bm-startup-bmc.sh
 
 	# Bundle
 	test/func/test-bundle-tar-output.sh
