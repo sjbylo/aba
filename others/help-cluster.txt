@@ -74,7 +74,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   aba [-d <cluster>] login                # Show cluster login credentials
   aba [-d <cluster>] getco                # Show cluster version and operator status
   aba [-d <cluster>] shutdown [--wait]    # Gracefully shut down the cluster (any platform)
-  aba [-d <cluster>] startup              # Gracefully start up the cluster (any platform)
+  aba [-d <cluster>] startup              # Gracefully start up the cluster (any platform; bare metal: asks to power on via bmc.conf)
   aba [-d <cluster>] delete [--force]     # Delete the cluster (removes VMs on vmw/kvm; --force removes dir)
   aba [-d <cluster>] clean                # Remove generated artifacts (keeps cluster.conf)
   aba [-d <cluster>] write-usb            # Write the ISO to a USB drive (raw dd, with confirmation)
@@ -116,10 +116,10 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   VM lifecycle (platform=vmw or kvm only):
   aba [-d <cluster>] ls                   # List all cluster node VMs
   aba [-d <cluster>] shutdown [--wait]    # Gracefully shut down cluster and VMs
-  aba [-d <cluster>] startup              # Start VMs and wait for cluster to be ready
+  aba [-d <cluster>] startup              # Start VMs and wait for cluster to be ready (bare metal: asks to power on via bmc.conf)
   aba [-d <cluster>] start                # Start the VMs only
-  aba [-d <cluster>] stop [--wait]        # Shut down the VMs only
-  aba [-d <cluster>] kill                 # Power off the VMs immediately
+  aba [-d <cluster>] stop [--wait]        # Shut down the VMs only (bare metal: GracefulShutdown via bmc.conf, always waits)
+  aba [-d <cluster>] kill                 # Power off the VMs immediately (bare metal: ForceOff via bmc.conf)
   aba [-d <cluster>] create [--start]     # Create VMs if they don't exist
   aba [-d <cluster>] refresh              # Re-create the VMs and start
   aba [-d <cluster>] delete               # Delete the VMs
