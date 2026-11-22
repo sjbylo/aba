@@ -89,14 +89,11 @@ _bm_startup_stop() {
 if [ "$platform" = "bm" ]; then
 	if ! _cluster_startup_api_up; then
 		if bmc_has_hosts; then
-			# aba -y must not power servers on: it only waits for the API.
-			if [ "${ASK_OVERRIDE:-}" ]; then
-				aba_info "aba -y: not powering on the bare-metal nodes through the BMC."
-			else
-				ask -y "Power on bare-metal nodes via BMC" || _bm_startup_stop
-				scripts/bm-power.sh On || _bm_startup_stop
-			fi
-		# --always: prompt even when ask=false. aba -y still skips.
+			# ask -y: Enter and ask=false power the nodes on.
+			# aba -y sets ASK_OVERRIDE, so ask() answers yes and powers them on too.
+			ask -y "Power on bare-metal nodes via BMC" || _bm_startup_stop
+			scripts/bm-power.sh On || _bm_startup_stop
+		# No BMC hosts: still prompt when ask=false. aba -y answers yes and waits.
 		elif ! ask -y --always "$(_bm_startup_ask)"; then
 			_bm_startup_stop
 		fi

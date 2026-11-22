@@ -76,9 +76,11 @@ _startup n
 	|| _fail "no: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
 
 ASK_OVERRIDE=1 CURL_UP_AFTER=2 _startup ""
-[ -z "$called" ] && ! echo "$out" | grep -q "$BMC_Q" && ! echo "$out" | grep -q "$MANUAL_Q" \
+unset ASK_OVERRIDE CURL_UP_AFTER
+[ "$called" = "On" ] && echo "$out" | grep -q "$BMC_Q" && echo "$out" | grep -q '\[default: -y\]' \
+	&& ! echo "$out" | grep -q "$MANUAL_Q" && ! echo "$out" | grep -q "not powering on" \
 	&& echo "$out" | grep -q "Waiting for cluster API" \
-	&& _pass "aba -y: no question, no power-on, waits for the API" \
+	&& _pass "aba -y: answers yes, powers on, waits for the API" \
 	|| _fail "aba -y: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
 
 CURL_UP_AFTER=1 _startup y
@@ -92,6 +94,15 @@ mv "$CL/bmc.conf.bak" "$CL/bmc.conf"
 [ "$rc" != 0 ] && [ -z "$called" ] && echo "$out" | grep -q "$MANUAL_Q" && ! echo "$out" | grep -q "$BMC_Q" \
 	&& _pass "no bmc.conf hosts: manual prompt, no power-on" \
 	|| _fail "no hosts: rc=$rc called=[$called] out: $(echo "$out" | tail -5)"
+
+# The flag itself, not only ASK_OVERRIDE. oc exits 1 after the power step.
+printf '%s\n' '# Top level Makefile' > "$REPO/Makefile"
+rm -f "$WORK/power.log" "$WORK/api-up" "$WORK/curl.count"
+out=$(cd "$CL" && HOME=$WORK/home ABA_DO_NOT_UPDATE=1 timeout 60 bash "$REPO/scripts/aba.sh" -y startup </dev/null 2>&1) && rc=0 || rc=$?
+called=$(cat "$WORK/power.log" 2>/dev/null)
+[ "$called" = "On" ] && echo "$out" | grep -q '\[default: -y\]' && ! echo "$out" | grep -q "not powering on" \
+	&& _pass "aba -y startup: the flag powers the node on" \
+	|| _fail "aba -y startup: rc=$rc called=[$called] out: $(echo "$out" | tail -8)"
 
 echo
 echo "Results: $pass passed, $fail failed"

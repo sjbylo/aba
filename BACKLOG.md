@@ -4132,8 +4132,9 @@ Before writing the OKD answers, confirm the community operator's `HyperConverged
 ## #B119: Ask to power on bare-metal nodes via the BMC at aba startup
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Done
 **Added:** 2026-11-20
+**Updated:** 2026-11-22
 
 **Problem:** `aba startup` on a bare-metal cluster asks the operator to turn the servers on by hand, then waits for the API. It does that even when `bmc.conf` lists BMC hosts that ABA can already reach. After #B110, `aba stop` and `aba kill` can power those servers off. Startup cannot power them back on.
 
@@ -4141,7 +4142,7 @@ Before writing the OKD answers, confirm the community operator's `HyperConverged
 
 **Proposed fix:** Three cases, only when startup finds the API down. If the API is already up, do not ask and do not send a Reset.
 
-- BMC: `platform=bm` and `bmc.conf` has at least one `bmc_host_*` entry. Ask "Power on bare-metal nodes via BMC?" with Yes as the default (`ask -y`). Yes powers each listed host on, then the existing API wait runs. The action posts `ResetType On` only when `PowerState` is `Off`. `On` and `PoweringOn` are left alone, then wait until `PowerState` is `On` (same 120s / 2s poll as boot). Do not call `bmc_power_reset`. Do not insert media or set a boot override. No exits non-zero and sends nothing. `aba -y` skips the prompt and must not power the servers on.
+- BMC: `platform=bm` and `bmc.conf` has at least one `bmc_host_*` entry. Ask "Power on bare-metal nodes via BMC?" with Yes as the default (`ask -y`). Yes powers each listed host on, then the existing API wait runs. The action posts `ResetType On` only when `PowerState` is `Off`. `On` and `PoweringOn` are left alone, then wait until `PowerState` is `On` (same 120s / 2s poll as boot). Do not call `bmc_power_reset`. Do not insert media or set a boot override. No exits non-zero and sends nothing. `aba -y` answers yes and powers the servers on. `ask=false` uses the Yes default and powers them on without a question.
 - Bare metal without a BMC: no `bmc_host_*` entries. Keep the current manual prompt and the current wait. No code change on this path.
 - Virtual (`vmw` or `kvm`): keep `aba start`. No BMC question.
 
@@ -4154,8 +4155,9 @@ One question only. A No to the BMC question does not also show the manual prompt
 ## #B120: Bare-metal power-off bugs to fix before merging the BMC stop/kill change
 
 **Severity:** HIGH
-**Status:** Planned
+**Status:** Done
 **Added:** 2026-11-20
+**Updated:** 2026-11-22
 
 **Problem:** Pull request 53 ([#53](https://github.com/sjbylo/aba/pull/53), #B110) makes `aba stop` and `aba kill` power off every host in `bmc.conf`. One bug is worth fixing before that merges. If you answer no to the power-off prompt, `scripts/bm-poweroff.sh` exits 0. The servers stay on, and the command looks successful. They keep answering on the node IPs and VIPs. A following install that runs preflight cannot start: `preflight-check.sh` counts each answering address as an IP conflict and aborts. The exit 0 hides that the addresses were not freed. A retry in the same directory can still continue, because `.preflight-done` is already stamped and that check does not run again. `aba --verify conf` also skips it.
 
