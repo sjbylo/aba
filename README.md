@@ -126,6 +126,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Configuration](#configuration)
   - [Troubleshooting](#troubleshooting)
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
+- [Contributors](#contributors)
 - [License](#license)
 
 [Back to top](#quick-start)
@@ -738,6 +739,8 @@ aba -d edge1 deploy-primed             # Deploy the new cluster
 | `aba transfer-primed` | `aba transfer` | Create configs-only tar for day-N updates **(beta)** |
 | `aba -d <cluster> deploy-primed` | `aba -d <cluster> deploy` | One-command deployment pipeline **(beta)** |
 
+Primed bundles started from [pull request #31](https://github.com/sjbylo/aba/pull/31) by [Mateusz Slugocki](https://github.com/mateuszslugocki) (@mateuszslugocki). The merged code follows that work and includes the later review changes.
+
 [Back to top](#quick-start)
 
 # Connected Installation (No Mirror)
@@ -862,6 +865,8 @@ Use `aba write-usb` for guided USB writing, or `dd if=agent.x86_64.iso of=/dev/s
 Most server management interfaces (iLO, iDRAC, BMC) can also mount the ISO as virtual media — no USB required.
 
 > **BMC automation (beta):** ABA can automate ISO mounting and one-shot boot via Redfish VirtualMedia — no manual BMC interaction required. Supports Dell iDRAC, HPE iLO, Fujitsu iRMC, Supermicro, Lenovo, and generic Redfish BMCs. Only Fujitsu iRMC is validated on real hardware; other vendors are code-complete with full test coverage. See [devel/test-redfish-support.md](devel/test-redfish-support.md) for setup and testing details. Please [report results](https://github.com/sjbylo/aba/issues) for your hardware.
+
+Redfish BMC automation started from [pull request #27](https://github.com/sjbylo/aba/pull/27) by [Mateusz Slugocki](https://github.com/mateuszslugocki) (@mateuszslugocki). [Peter](https://github.com/zetti12345) (@zetti12345) tested it on Fujitsu iRMC and contributed the fixes in [pull request #43](https://github.com/sjbylo/aba/pull/43) and [pull request #45](https://github.com/sjbylo/aba/pull/45).
 
 > **USB boot note:** If booting from USB, prepare **one USB drive per server**. The Agent-based Installer waits until all hosts have registered, synced NTP, and passed validation before proceeding — you cannot boot servers sequentially with a single USB drive because removing the drive from one server to boot another will stall the installation.
 
@@ -1130,6 +1135,8 @@ aba -d mycluster day2
 Pass either operator name, or both. `aba -d mirror sync` runs oc-mirror and pushes those images into the mirror. Install the cluster from that mirror, then run `aba day2`. For an air-gapped host, use `aba -d mirror save` and then `aba -d mirror load` instead of sync. `aba day2` publishes the community catalog. It does not install the operator. In the console, open Operators, then OperatorHub, and install it there.
 
 These stop: `upgrade`, `upgrade-mon`, `--upgrade-to`, `day2-virt`, and `day2-osus`. `fast` and `eus` are not OKD channels. Other CPU architectures are not supported. The TUI exits when `distribution=okd`. Use `aba`.
+
+OKD support started from [pull request #50](https://github.com/sjbylo/aba/pull/50) by [Thanh Q Nguyen](https://github.com/trendlabs) (@trendlabs). The merged code follows that work and includes the later review changes.
 
 [Back to top](#quick-start)
 
@@ -2546,6 +2553,37 @@ Have an idea for a feature or found something that could work better? Create a [
 - ~~Make it easier to integrate with vSphere, including storage.~~
 - ~~Disable public OperatorHub and configure the internal registry to serve images.~~
 - ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image-set archive file.~~
+
+[Back to top](#quick-start)
+
+# Contributors
+
+## Pull requests
+
+Code that landed from a pull request.
+
+- **Mateusz Slugocki** ([@mateuszslugocki](https://github.com/mateuszslugocki)) — DNS, NTP, and IP preflight ([#22](https://github.com/sjbylo/aba/pull/22)), vSphere preflight ([#25](https://github.com/sjbylo/aba/pull/25)), custom manifests ([#18](https://github.com/sjbylo/aba/pull/18), [#19](https://github.com/sjbylo/aba/pull/19), [#20](https://github.com/sjbylo/aba/pull/20)), bundle directory names ([#13](https://github.com/sjbylo/aba/pull/13)), an empty registry user and day-2 manifest batches ([#40](https://github.com/sjbylo/aba/pull/40)), the mirror self-link ([#51](https://github.com/sjbylo/aba/pull/51)), a list of node IPs ([#52](https://github.com/sjbylo/aba/pull/52)), and bare-metal power-off on `aba stop` and `aba kill` ([#53](https://github.com/sjbylo/aba/pull/53)). Initial work, with later review changes: Redfish BMC automation ([#27](https://github.com/sjbylo/aba/pull/27)), primed bundles ([#31](https://github.com/sjbylo/aba/pull/31)), and CatalogSources per minor ([#44](https://github.com/sjbylo/aba/pull/44)).
+- **Thanh Q Nguyen** ([@trendlabs](https://github.com/trendlabs)) — the initial OKD work ([#50](https://github.com/sjbylo/aba/pull/50)), with later review changes.
+- **Peter** ([@zetti12345](https://github.com/zetti12345)) — Fujitsu iRMC Redfish testing and fixes ([#43](https://github.com/sjbylo/aba/pull/43), [#45](https://github.com/sjbylo/aba/pull/45)).
+- **Kamil Błaż** ([@KamilBlaz](https://github.com/KamilBlaz)) — `oc-mirror --v1` ([#11](https://github.com/sjbylo/aba/pull/11)), the workflow diagram ([#29](https://github.com/sjbylo/aba/pull/29)), and the VM provider seam ([#30](https://github.com/sjbylo/aba/pull/30)).
+- **Sylvia Goh** ([@sylviyayy](https://github.com/sylviyayy)) — the FAQ and the Day-2 README ([#6](https://github.com/sjbylo/aba/pull/6), [#7](https://github.com/sjbylo/aba/pull/7)).
+
+## Suggestions
+
+Issues and discussions that led to a later change.
+
+- **Anthony Lin** ([@eanylin](https://github.com/eanylin)) — mirror help ([#38](https://github.com/sjbylo/aba/issues/38))
+- **Rachel Ma** ([@rach228](https://github.com/rach228)) — security operators ([#41](https://github.com/sjbylo/aba/issues/41))
+- **[@kahlai](https://github.com/kahlai)** — disk estimates ([#46](https://github.com/sjbylo/aba/issues/46))
+- **[@msalmanmasood](https://github.com/msalmanmasood)** — sudo, KVM ([#36](https://github.com/sjbylo/aba/issues/36), [discussion #37](https://github.com/sjbylo/aba/discussions/37), [discussion #32](https://github.com/sjbylo/aba/discussions/32))
+- **Payman** ([@Paymanmah](https://github.com/Paymanmah)) — bare metal ([discussion #33](https://github.com/sjbylo/aba/discussions/33))
+- **Vinnie** ([@vinniet](https://github.com/vinniet)) — s390x ([discussion #16](https://github.com/sjbylo/aba/discussions/16))
+- **[@pdfruth](https://github.com/pdfruth)** — architectures ([discussion #17](https://github.com/sjbylo/aba/discussions/17))
+- **Peter** ([@zetti12345](https://github.com/zetti12345)) — sigstore ([#21](https://github.com/sjbylo/aba/issues/21))
+- **Stephan** ([@sbrunsch2024](https://github.com/sbrunsch2024)) — sigstore, govc ([#26](https://github.com/sjbylo/aba/issues/26), [#8](https://github.com/sjbylo/aba/issues/8))
+- **JT** ([@jayteaftw](https://github.com/jayteaftw)) — fapolicyd ([#24](https://github.com/sjbylo/aba/issues/24))
+
+Thanks to numerous others too, for reports, questions, and ideas.
 
 [Back to top](#quick-start)
 
