@@ -2519,7 +2519,7 @@ unzip /tmp/ocp-tools/openshift-client-windows-*.zip -d /tmp/oc-windows
 
 # Feature Backlog and Ideas
 
-We need help! Here are some ideas for new features and enhancements.
+Have an idea for a feature or found something that could work better? Create a [GitHub issue](https://github.com/sjbylo/aba/issues/new) and tell us about it.
 
 - ~~Support libvirt (as well as vSphere).~~
 - Generally improve the user experience (UX) of ABA.
