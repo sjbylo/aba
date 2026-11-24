@@ -1371,13 +1371,13 @@ in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 **Context:** The Go-based mirror-registry rewrite (currently `omr` in ABA)
 shipped as mirror-registry 3.0 on 2026-11-11 (RHBA-2026:99105). ABA already
-supports it as a BETA vendor.
+supports it as a BETA vendor. The same image is listed in the Red Hat
+catalog: https://catalog.redhat.com/en/software/containers/openshift/mirror-registry-rhel9/6a6a281d9b745f0cf84bfeac#get-this-image
 
 **When GA ships, ABA needs:**
-- Switch `_OMR_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to `registry.redhat.io/openshift/mirror-registry-rhel9:3.0.0` — #B111
+- `_OMR_IMAGE` now defaults to `registry.redhat.io/openshift/mirror-registry-rhel9:v3.0` — #B111 Done
 - Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
-- Re-test `-init-password-stdin` flag (merged upstream, not in current image)
-- Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
+- `-init-password-stdin` and `-port` are on the `v3.0` image (checked 2026-11-24)
 - Rename vendor display from "omr [BETA]" to GA (internal name can stay)
 - Update bundle workflow for official offline delivery format
 
@@ -3956,19 +3956,20 @@ A short script walks `bmc_host_list`, logs in, reads the first System id, calls 
 
 ---
 
-## #B111: Point OMR at the official mirror-registry image, pinned to 3.0.0
+## #B111: Point OMR at the official mirror-registry image
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Done
 **Added:** 2026-11-12
+**Updated:** 2026-11-24
 
-**Problem:** The `omr` vendor pulls `quay.io/sjbylo/quay-mirror:dev`. That tag is an unofficial build. Red Hat published the same product as a GA image on 2026-11-11 (`registry.redhat.io/openshift/mirror-registry-rhel9`, advisory RHBA-2026:99105). `v3.0` on that repository moves when a newer 3.0 build is published. ABA should follow the release tag `3.0.0`.
+**Problem:** The `omr` vendor pulled `quay.io/sjbylo/quay-mirror:dev`. That tag is an unofficial build. Red Hat published the same product as a GA image on 2026-11-11 (`registry.redhat.io/openshift/mirror-registry-rhel9`, advisory RHBA-2026:99105).
 
 **Root cause:** `_OMR_IMAGE` in `scripts/include_all.sh` and `OMR_IMAGE` in `templates/Makefile.mirror` both default to the quay.io development image. `podman pull` in the Makefile does not pass a pull-secret file, which that public image did not need.
 
-**Proposed fix:** Set both defaults to `registry.redhat.io/openshift/mirror-registry-rhel9:3.0.0`. Keep the existing path: pull, `podman save` to `omr-image.tgz`, copy `/mirror-registry` out of the image, install with `-image-archive`. Pass the existing `registry.redhat.io` pull secret to `podman pull`. Do not change `mirror_registry_url`; `reg_vendor=quay` still uses the Ansible tarball from `mirror.openshift.com`.
+**Implemented:** `_OMR_IMAGE` and `OMR_IMAGE` now default to `registry.redhat.io/openshift/mirror-registry-rhel9:v3.0`. The tag is the one published for this release, not the immovable `3.0.0` digest tag. Pull and save are unchanged: `podman pull`, then `podman save` to `omr-image.tgz`, then copy `/mirror-registry` out of the image. The binary from that image reports `mirror-registry 3.0.0` and still accepts the flags the omr install path already passes (`-data-dir`, `-hostname`, `-port`, `-init-user`, `-init-password-stdin`, `-image-archive`, `-auto-approve`, `-purge`). `podman pull` uses the same registry.redhat.io login already used for catalog images. The image is also published on the Red Hat catalog: https://catalog.redhat.com/en/software/containers/openshift/mirror-registry-rhel9/6a6a281d9b745f0cf84bfeac#get-this-image. `mirror_registry_url` is still the Quay 2.0.13 pin (#B121).
 
-**Workaround:** `podman login registry.redhat.io`, then `OMR_IMAGE=registry.redhat.io/openshift/mirror-registry-rhel9:3.0.0 make -C mirror download-omr-image`, and install with `reg_vendor=omr`.
+**Workaround:** None. The default is the official image.
 
 ---
 
@@ -4013,7 +4014,7 @@ A short script walks `bmc_host_list`, logs in, reads the first System id, calls 
 
 **Root cause:** `cli/Makefile` sets `oc_mirror_pin = stable-4.22`. The pub/cgw directory uses different filenames (`oc-mirror-rhel8-linux-$(ARCH).tar.gz` and `oc-mirror-rhel9-linux-$(ARCH).tar.gz`), and oc-mirror 2.0 rejects a user `registries.d` file that repeats a registry the packaged files already define under another name. Those two are solvable. The blocker is the published binary: it drops attestation manifests out of the cache and then fails packing the tar, and the only shape that makes the tar succeed on that binary rewrites the manifest list. Details, the build of pull request 1657, and the bastion test are in the findings note.
 
-**Proposed fix:** Wait for a published 2.0 tarball that contains the attestation-archive fix. Then set `oc_mirror_pin = 2.0` and `oc_mirror_base_url = https://mirror.openshift.com/pub/cgw/oc-mirror/$(oc_mirror_pin)`. Do not use floating `latest`. Download both RHEL flavors for this CPU arch and install the one that matches the host. Replace an already-installed oc-mirror that is not that build, and reset the download and install records so a finished 4.22 install does not count. Split `registries.d` names that 2.0 rejects. Do not add per-image `platforms` to hide attestations.
+**Proposed fix:** Wait for a published 2.0 tarball that contains the attestation-archive fix. Then set `oc_mirror_pin = 2.0` and `oc_mirror_base_url = https://mirror.openshift.com/pub/cgw/oc-mirror/$(oc_mirror_pin)`. Do not use floating `latest`. Download both RHEL flavors for this CPU arch and install the one that matches the host. Replace an already-installed oc-mirror that is not that build, and reset the download and install records so a finished 4.22 install does not count. `registries.d` is already split: the Red Hat namespaces are files of the same names oc-mirror 2.0 ships, not keys inside `aba-sigstore.yaml`. Do not add per-image `platforms` to hide attestations. Sparse-manifest architecture pinning is #B122 and waits for oc-mirror 2.0.1.
 
 **Workaround:** Stay on the `stable-4.22` client tarballs.
 
@@ -4175,4 +4176,43 @@ Two smaller faults in the same change, same script and `bmc_power_off`:
 `aba stop --wait` does nothing on bare metal. The wait is always that 120 second poll, and the help text still shows `--wait`. Leave that out of the pre-merge fix unless the help line is cheap to correct.
 
 **Workaround:** Until the exit code is fixed, do not answer no and then trust the exit code. Answer no only when nothing will run next, or skip the prompt with the servers already off.
+
+---
+
+## #B121: Revisit the Quay 2.0.13 pin once OMR v3 is the installer we use
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-11-24
+
+**Problem:** `https://mirror.openshift.com/pub/cgw/mirror-registry/latest` now publishes mirror-registry 3.0.0. That binary is the OMR installer. It rejects the Ansible flags the Quay install and uninstall scripts still pass (`-v`, `--quayHostname`, `--quayRoot`, `--quayStorage`, `--sqliteStorage`, `--autoApprove`). ABA pins the Quay download to 2.0.13 so those commands keep working. The pin is a stopgap. It leaves two installer CLIs in the tree, and a cache check that exists only because `latest` moved.
+
+**Root cause:** `templates/Makefile.mirror` sets `mirror_registry_url` to `.../mirror-registry/2.0.13`. `scripts/quay-tarball-pin.sh` deletes a cached tarball when its checksum is not that pin, and only when `mirror.conf` says `reg_vendor=quay`. The Makefile target then clears `mirror:reg:download:quay` and `mirror:reg:install`, because Make and `run_once` both keep a file that is already present. `ensure_quay_registry` and `start_all_registry_downloads` call that target before the Quay download. `docker` and `omr` files are left alone. The OMR path already speaks the 3.0 flags.
+
+**Proposed fix:** After OMR v3 is the installer ABA actually uses (#B39, #B111, and the `auto` choice in #B87), delete this stopgap and simplify the Quay path.
+
+- Drop the 2.0.13 URL pin and `scripts/quay-tarball-pin.sh`.
+- Stop resetting those two `run_once` ids just to replace a stale tarball.
+- Point the Quay install, uninstall, and remote install at the 3.0 CLI, or fold that vendor into `omr`, so one installer remains.
+- Keep a cached 3.0 tarball when it is the release we intend to run. Do not keep a second copy of the old Ansible flags "just in case."
+
+**Workaround:** None. The pin is the current fix. Do not float `mirror_registry_url` back to `latest` until this item is done.
+
+---
+
+## #B122: Pin mirrored images to one architecture (oc-mirror 2.0.1)
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-11-24
+
+**Problem:** oc-mirror 2.0.1 can mirror only the CPU architectures named in the ImageSetConfiguration (sparse manifests). A mirror then stores one architecture for the release, operators, additional images, and Helm charts, instead of every member of a multi-arch index. That cuts disk use and copy time. ABA does not ask for that yet. `templates/imageset-config.yaml.j2` sets `platform.architectures` only for a release digest, and for a channel only when the host is not amd64. Operators and additional images are not pinned. Disk estimates in `catalogs/sizes/` were measured while oc-mirror stored every Linux architecture (`scripts/estimate-isc-size.sh`), so they will be too high once the mirror is pinned.
+
+**Root cause:** The oc-mirror ABA ships is still the `stable-4.22` client (#B113). The 2.0.0 tarball must not be given per-image `platforms` to dodge attestation failures. 2.0.1 is the release that supports this as a real filter. The size files (`catalogs/sizes/*-v4.22-amd64.blobs` and `catalogs/sizes/additional-images`) count blobs from that unfiltered mirror.
+
+**Proposed fix:** After ABA runs oc-mirror 2.0.1 (#B113), write the target architecture into the ImageSetConfiguration so the mirror keeps only that architecture for the release, operators, additional images, and Helm charts. Do not reuse the 2.0.0 per-image `platforms` workaround.
+
+Then re-download the main operators with that pin and replace the size data `estimate-isc-size.sh` reads. The current rows are the multi-arch totals. Until they are measured again, mirror disk estimates stay large. Start with the operators already listed in `catalogs/sizes/` for 4.22 amd64 (redhat, certified, community) and `additional-images`. #B18 (packages that have no row, and 5.x) stays separate.
+
+**Workaround:** None until 2.0.1 is the oc-mirror ABA runs. Estimates keep assuming every architecture.
 

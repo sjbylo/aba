@@ -12,10 +12,10 @@ _ok() { pass=$((pass + 1)); printf '  PASS  %s\n' "$*"; }
 _fail() { fail=$((fail + 1)); printf '  FAIL  %s\n' "$*"; }
 
 script=scripts/quay-tarball-pin.sh
-if grep -qx 'mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/2.0.9' templates/Makefile.mirror; then
-	_ok "Makefile pins Quay mirror-registry to 2.0.9"
+if grep -qx 'mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/2.0.13' templates/Makefile.mirror; then
+	_ok "Makefile pins Quay mirror-registry to 2.0.13"
 else
-	_fail "Makefile does not pin Quay mirror-registry to 2.0.9"
+	_fail "Makefile does not pin Quay mirror-registry to 2.0.13"
 fi
 
 tmp=$(mktemp -d)

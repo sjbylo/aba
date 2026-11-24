@@ -1996,16 +1996,16 @@ Tested on Mac M1 (`arm64`). Caveats: installing *Mirror Registry for Red Hat Ope
 
 ## Sigstore Signature Handling
 
-ABA installs a per-user [registries.d](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) configuration at `~/.config/containers/registries.d/aba-sigstore.yaml` that controls sigstore OCI signature fetching during mirroring.
+ABA installs a per-user [registries.d](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) configuration that controls sigstore OCI signature fetching during mirroring.
 
-By default, sigstore is **enabled** for OpenShift release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), and **disabled** for everything else (to avoid failures from unsigned operator images).
+`aba-sigstore.yaml` disables sigstore by default and enables it for OpenShift release images (`quay.io/openshift-release-dev`). `registry.redhat.io.yaml` and `registry.access.redhat.com.yaml` carry the Red Hat registries. Those are the same filenames the OS and oc-mirror 2.0 already use, so the namespace is defined once when the files are copied into one directory.
 
 > **Note:** Starting with OpenShift 4.21, image signatures are verified for Red Hat images via `ClusterImagePolicy`.
 > ABA ensures Red Hat signatures are mirrored alongside images so verification works in disconnected environments.
 > See [RFE-336](https://redhat.atlassian.net/browse/RFE-336) for background.
 > To disable signature verification, see [How to disable container image signature verification](https://access.redhat.com/solutions/7047477).
 
-To customise, edit `~/.config/containers/registries.d/aba-sigstore.yaml`.
+To customise, edit the files in `~/.config/containers/registries.d/`.
 For full details, see [containers-registries.d(5)](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) and the [Red Hat container signing documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/building_running_and_managing_containers/assembly_signing-container-images_building-running-and-managing-containers).
 
 ## Prompt Control

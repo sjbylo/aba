@@ -2,7 +2,9 @@
 
 ### Fixed
 
-- **Quay installs stay on mirror-registry 2.0.9** — `https://mirror.openshift.com/pub/cgw/mirror-registry/latest` now publishes 3.0.0, the OMR installer, which rejects `--quayHostname`. The Quay download is pinned to 2.0.9. A tarball already saved from `latest` is replaced only when `reg_vendor=quay`. Docker and omr files are left as they are.
+- **Sigstore namespaces are one file each** — `registry.redhat.io` and `registry.access.redhat.com` live in files of those names under `~/.config/containers/registries.d`, the same names the OS and oc-mirror 2.0 use. `aba-sigstore.yaml` keeps the quay.io release rule. The next `aba` start splits an older combined file, so those namespaces are not defined twice.
+- **Quay installs stay on mirror-registry 2.0.13** — `https://mirror.openshift.com/pub/cgw/mirror-registry/latest` now publishes 3.0.0, the OMR installer, which rejects `--quayHostname`. The Quay download is pinned to 2.0.13, the newest 2.x. A tarball from another release is replaced only when `reg_vendor=quay`. Docker and omr files are left as they are.
+- **OMR pulls the official image** — the omr vendor uses `registry.redhat.io/openshift/mirror-registry-rhel9:v3.0` instead of `quay.io/sjbylo/quay-mirror:dev`.
 
 ---
 

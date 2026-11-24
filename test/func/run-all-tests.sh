@@ -207,6 +207,8 @@ unit_tests=(
 	test/func/test-mirror-status-derived-flags.sh
 	test/func/test-mirror-self-link-removed.sh
 	test/func/test-quay-tarball-pin.sh
+	test/func/test-sigstore-registries.sh
+	test/func/test-omr-image.sh
 	test/func/test-reg-stale-report.sh
 	test/func/test-reg-generate-password.sh
 	test/func/test-reg-check-v2-auth.sh

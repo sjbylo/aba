@@ -47,7 +47,7 @@ _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.c
 # Registry vendor name for the new Go-based Quay mirror registry.
 # Single rename point — change here to rename the vendor everywhere.
 _OMR_VENDOR="omr"
-_OMR_IMAGE="${OMR_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
+_OMR_IMAGE="${OMR_IMAGE:-registry.redhat.io/openshift/mirror-registry-rhel9:v3.0}"
 
 # OMR debug flag: pass -log-level debug when ABA is in debug mode (aba -D)
 _OMR_LOG_FLAG=""

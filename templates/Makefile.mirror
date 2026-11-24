@@ -282,8 +282,10 @@ download-omr-image: omr-image.tgz
 download-registries: download-quay-tarball download-docker-image download-omr-image
 
 # Pin the Quay (Ansible) installer. "latest" is mirror-registry 3.0.0, which
-# is the OMR binary and does not accept --quayHostname. Do not float this.
-mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/2.0.9
+# is the OMR binary and does not accept --quayHostname. 2.0.13 is the newest
+# 2.x that still accepts those flags, and it continues a reinstall when the
+# init user is already in the kept database. Do not float this to latest.
+mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/2.0.13
 
 $(MR_TARBALL): ## Download the mirror-registry tarball for $(MR_ARCH)
 	echo [ABA] "Downloading $(mirror_registry_url)/$(MR_TARBALL) ..."
@@ -312,7 +314,7 @@ $(DOCKER_REG_FILE):
 	@$(SCRIPTS)/download-docker-reg-image.sh $(DOCKER_REG_IMAGE) $(DOCKER_REG_FILE)
 
 # omr registry image (Go-based single-binary Quay mirror registry)
-OMR_IMAGE ?= quay.io/sjbylo/quay-mirror:dev
+OMR_IMAGE ?= registry.redhat.io/openshift/mirror-registry-rhel9:v3.0
 OMR_FILE  := omr-image.tgz
 $(OMR_FILE):
 	@echo "[ABA] Pulling $(OMR_IMAGE) and saving to $(OMR_FILE) ..."
