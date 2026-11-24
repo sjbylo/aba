@@ -1,5 +1,9 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.7...HEAD)
 
+### Fixed
+
+- **Quay installs stay on mirror-registry 2.0.9** — `https://mirror.openshift.com/pub/cgw/mirror-registry/latest` now publishes 3.0.0, the OMR installer, which rejects `--quayHostname`. The Quay download is pinned to 2.0.9. A tarball already saved from `latest` is replaced only when `reg_vendor=quay`. Docker and omr files are left as they are.
+
 ---
 
 ## [1.4.7](https://github.com/sjbylo/aba/releases/tag/v1.4.7) - 2026-11-21

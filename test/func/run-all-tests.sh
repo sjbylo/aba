@@ -206,6 +206,7 @@ unit_tests=(
 	test/func/test-mirror-status-shell-keys.sh
 	test/func/test-mirror-status-derived-flags.sh
 	test/func/test-mirror-self-link-removed.sh
+	test/func/test-quay-tarball-pin.sh
 	test/func/test-reg-stale-report.sh
 	test/func/test-reg-generate-password.sh
 	test/func/test-reg-check-v2-auth.sh

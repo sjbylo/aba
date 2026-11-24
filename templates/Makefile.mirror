@@ -190,6 +190,7 @@ _progress_plan-sync:
 # Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
 save: _progress_plan-save .init .rpmsext                                                 status-preflight data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
 	@echo "[ABA] Downloading registry vendor binaries (Quay tarball, Docker image, OMR image) ..."
+	@$(MAKE) quay-tarball-pin
 	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory download-quay-tarball
 	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:docker" -- $(MAKE) --no-print-directory download-docker-image
 	@$(SCRIPTS)/run-once.sh -i "mirror:reg:download:omr" -- $(MAKE) --no-print-directory download-omr-image
@@ -252,21 +253,37 @@ rpmsclean:
 # has the binary but lost execution-environment.tar (lean wipe / partial copy)
 # re-extracts instead of skipping and failing Quay install.
 mirror-registry execution-environment.tar: $(MR_TARBALL) ## Extract the mirror-registry binary + EE
+	@$(MAKE) quay-tarball-pin
 	@$(SCRIPTS)/run-once.sh -w -m "Downloading Quay mirror-registry" -i "mirror:reg:download:quay" -- $(MAKE) --no-print-directory $(MR_TARBALL)
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
 
 # Per-vendor download targets (each has its own run-once ID — one ID per file, no races)
 # Use literal filenames (not variables) because DOCKER_REG_FILE/OMR_FILE are defined later
-.PHONY: download-quay-tarball download-docker-image download-omr-image
-download-quay-tarball: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL))
+.PHONY: download-quay-tarball download-docker-image download-omr-image quay-tarball-pin
+# A file saved from mirror-registry/latest may be 3.0.0. Replace it only when
+# this mirror's vendor is quay, then forget the quay download record so the
+# next fetch runs. omr and docker are not touched.
+quay-tarball-pin:
+	@out=$$($(SCRIPTS)/quay-tarball-pin.sh $(MR_TARBALL) $(mirror_registry_url)/sha256sum.txt); \
+	if [ "$$out" = replaced ]; then \
+		$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download:quay"; \
+		$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install"; \
+	fi
+download-quay-tarball:
+ifneq ($(arch),aarch64)
+	@$(MAKE) quay-tarball-pin
+	@$(MAKE) $(MR_TARBALL)
+endif
 download-docker-image: docker-reg-image.tgz
 download-omr-image: omr-image.tgz
 
 .PHONY: download-registries
 download-registries: download-quay-tarball download-docker-image download-omr-image
 
-mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
+# Pin the Quay (Ansible) installer. "latest" is mirror-registry 3.0.0, which
+# is the OMR binary and does not accept --quayHostname. Do not float this.
+mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/2.0.9
 
 $(MR_TARBALL): ## Download the mirror-registry tarball for $(MR_ARCH)
 	echo [ABA] "Downloading $(mirror_registry_url)/$(MR_TARBALL) ..."

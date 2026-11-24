@@ -7036,10 +7036,18 @@ ensure_butane() {
 	run_once -w -m "Installing butane" -i "$TASK_INST_BUTANE"
 }
 
+# A cached mirror-registry 3.0.0 tarball must be removed before run_once
+# treats the quay download as finished. The Make target no-ops unless
+# reg_vendor=quay.
+_quay_refresh_pinned_tarball() {
+	bash -c "$_MIRROR_MAKE" _ quay-tarball-pin
+}
+
 # Ensure mirror-registry (Quay) is installed (extracted)
 # Wait: aba.sh starts $TASK_INST_QUAY_REG and $TASK_DL_QUAY_REG in background
 ensure_quay_registry() {
 	aba_debug "ensure_quay_registry: installing mirror-registry"
+	_quay_refresh_pinned_tarball
 	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	run_once -q -w -i "$TASK_DL_QUAY_REG"
 
@@ -7050,6 +7058,7 @@ ensure_quay_registry() {
 # Start all registry vendor downloads in background (non-blocking)
 # Used by: aba.sh pre-fetch, tui-direct.sh early download
 start_all_registry_downloads() {
+	_quay_refresh_pinned_tarball
 	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	run_once -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}"
 	run_once -i "$TASK_DL_OMR_REG" -- "${CMD_DL_OMR_REG[@]}"
