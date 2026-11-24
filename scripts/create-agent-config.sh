@@ -233,19 +233,19 @@ _bm_json="{"
 _dh_first=true
 _bm_first=true
 _hint_errors=0
+_hostnames=
 
 for (( i=1; i<=num_nodes; i++ )); do
 	if [ "$i" -le "$num_masters" ]; then
 		_role=master
-		_hostname="${master_prefix}${i}"
-		# SNO: single node uses cluster_name as hostname
-		if [ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ]; then
-			_hostname="$cluster_name"
-		fi
 	else
 		_role=worker
-		_wi=$(( i - num_masters ))
-		_hostname="${worker_prefix}${_wi}"
+	fi
+	_hostname=$(cluster_host_name "$i")
+	if [ -n "$_hostnames" ]; then
+		_hostnames="$_hostnames $_hostname"
+	else
+		_hostnames=$_hostname
 	fi
 
 	# Disk hint: full 3-level precedence (node > role > global)
@@ -288,7 +288,10 @@ if [ "$_bm_json" != "{}" ] && [ "$num_ports" -le 1 ]; then
 	aba_abort "bond_mode is set but ports= has only one interface. Bond mode requires multiple ports."
 fi
 
-# Export as json_ prefixed vars for scripts/j2
+# Export as json_ prefixed vars for scripts/j2.
+# arr_hostnames is the same list cluster_host_name built above. The templates
+# print it. They do not apply the SNO rule themselves.
+export arr_hostnames="$_hostnames"
 export json_disk_hints="$_dh_json"
 export json_bond_modes="$_bm_json"
 

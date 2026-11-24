@@ -19,6 +19,7 @@ out=$(
 	arr_ports="ens1f0 ens1f1" \
 	arr_ips="10.0.1.203 10.0.1.204 10.0.1.205" \
 	arr_macs="00:50:56:01:00:01 00:50:56:01:00:02 00:50:56:01:00:03 00:50:56:01:00:04 00:50:56:01:00:05 00:50:56:01:00:06" \
+	arr_hostnames="master1 master2 master3" \
 	scripts/j2 templates/agent-config-vlan-bond.yaml.j2
 )
 

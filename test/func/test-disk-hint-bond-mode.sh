@@ -239,6 +239,7 @@ out=$(
 	arr_ports="ens160" \
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12 10.0.1.13 10.0.1.14" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03 00:50:56:01:04 00:50:56:01:05" \
+	arr_hostnames="master1 master2 master3 worker1 worker2" \
 	json_disk_hints='{}' \
 	json_bond_modes='{}' \
 	scripts/j2 templates/agent-config.yaml.j2
@@ -263,6 +264,7 @@ out=$(
 	arr_ports="ens160" \
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03" \
+	arr_hostnames="master1 master2 master3" \
 	json_disk_hints='{"master1": {"deviceName": "/dev/sda"}, "master2": {"deviceName": "/dev/sda"}, "master3": {"deviceName": "/dev/sda"}}' \
 	json_bond_modes='{}' \
 	scripts/j2 templates/agent-config.yaml.j2
@@ -289,6 +291,7 @@ out=$(
 	arr_ports="ens160" \
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12 10.0.1.13 10.0.1.14" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03 00:50:56:01:04 00:50:56:01:05" \
+	arr_hostnames="master1 master2 master3 worker1 worker2" \
 	json_disk_hints='{"master1": {"deviceName": "/dev/sda"}, "worker2": {"minSizeGigabytes": 200}}' \
 	json_bond_modes='{}' \
 	scripts/j2 templates/agent-config.yaml.j2
@@ -324,6 +327,7 @@ out=$(
 	arr_ports="ens160" \
 	arr_ips="10.0.1.10" \
 	arr_macs="00:50:56:01:01" \
+	arr_hostnames="mysno" \
 	json_disk_hints='{"mysno": {"deviceName": "/dev/nvme0n1"}}' \
 	json_bond_modes='{}' \
 	scripts/j2 templates/agent-config.yaml.j2
@@ -355,6 +359,7 @@ out=$(
 	arr_ports="ens1f0 ens2f0" \
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03 00:50:56:01:04 00:50:56:01:05 00:50:56:01:06" \
+	arr_hostnames="master1 master2 master3" \
 	json_disk_hints='{}' \
 	json_bond_modes='{}' \
 	scripts/j2 templates/agent-config-bond.yaml.j2
@@ -381,6 +386,7 @@ out=$(
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03 00:50:56:01:04 00:50:56:01:05 00:50:56:01:06" \
 	json_disk_hints='{}' \
+	arr_hostnames="master1 master2 master3" \
 	json_bond_modes='{"master1": "802.3ad", "master2": "802.3ad", "master3": "802.3ad"}' \
 	scripts/j2 templates/agent-config-bond.yaml.j2
 )
@@ -406,6 +412,7 @@ out=$(
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03 00:50:56:01:04 00:50:56:01:05 00:50:56:01:06" \
 	json_disk_hints='{}' \
+	arr_hostnames="master1 master2 master3" \
 	json_bond_modes='{"master1": "802.3ad"}' \
 	scripts/j2 templates/agent-config-bond.yaml.j2
 )
@@ -437,6 +444,7 @@ out=$(
 	arr_ports="ens1f0 ens2f0" \
 	arr_ips="10.0.1.10 10.0.1.11 10.0.1.12" \
 	arr_macs="00:50:56:01:01 00:50:56:01:02 00:50:56:01:03 00:50:56:01:04 00:50:56:01:05 00:50:56:01:06" \
+	arr_hostnames="master1 master2 master3" \
 	json_disk_hints='{"master1": {"deviceName": "/dev/sda"}, "master2": {"model": "Samsung", "minSizeGigabytes": 500}}' \
 	json_bond_modes='{"master1": "balance-xor", "master2": "balance-xor", "master3": "balance-xor"}' \
 	scripts/j2 templates/agent-config-vlan-bond.yaml.j2
@@ -474,6 +482,7 @@ out=$(
 	arr_ports="ens160" \
 	arr_ips="10.0.1.10" \
 	arr_macs="00:50:56:01:01" \
+	arr_hostnames="vlantest" \
 	json_disk_hints='{"vlantest": {"wwn": "0x5000c500deadbeef"}}' \
 	json_bond_modes='{}' \
 	scripts/j2 templates/agent-config-vlan.yaml.j2

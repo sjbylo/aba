@@ -30,6 +30,10 @@ setup_mocks() {
 	cat > "$MOCK_DIR/virsh" <<-'EOF'
 	#!/bin/bash
 	# Minimal virsh mock. Recognises: dominfo <name>, domstate <name>.
+	if [ -n "${MOCK_VIRSH_DOWN:-}" ]; then
+		echo "virsh: cannot connect" >&2
+		exit 1
+	fi
 	cmd=
 	name=
 	for a in "$@"; do
@@ -236,6 +240,53 @@ done
   echo "$out" | grep -q "ocp1-master1" && echo "$out" | grep -q "ocp1-worker1" ) \
 	&& ok "driver vm_ls: lists every cluster VM" \
 	|| bad "driver vm_ls: lists every cluster VM"
+
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  export CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
+  export MOCK_VMS=""
+  out=$(vm_ls)
+  [ "$out" = "No resources" ] ) \
+	&& ok "driver vm_ls: No resources when every domain is absent" \
+	|| bad "driver vm_ls: No resources when every domain is absent"
+
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  export CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
+  export MOCK_VIRSH_DOWN=1
+  vm_ls >/dev/null ) \
+	&& bad "driver vm_ls: unreachable hypervisor is not an empty list" \
+	|| ok "driver vm_ls: unreachable hypervisor is not an empty list"
+
+# Names after aba delete: YAML is gone, cluster.conf still has the counts.
+( tmp=$(mktemp -d)
+  cd "$tmp" || exit 1
+  printf '%s\n' 'cluster_name=e2e-sno2' 'num_masters=1' 'num_workers=0' 'master_prefix=master' 'worker_prefix=worker' > cluster.conf
+  eval "$(vm_names_from_cluster_conf)"
+  [ "$CLUSTER_NAME" = e2e-sno2 ] && [ "$CP_NAMES" = e2e-sno2 ] && [ -z "${WORKER_NAMES}" ] && [ "$num_masters" = 1 ]
+  rm -rf "$tmp" ) \
+	&& ok "vm_names_from_cluster_conf: SNO hostname is the cluster name" \
+	|| bad "vm_names_from_cluster_conf: SNO hostname is the cluster name"
+
+( tmp=$(mktemp -d)
+  cd "$tmp" || exit 1
+  printf '%s\n' 'cluster_name=std' 'num_masters=3' 'num_workers=2' 'master_prefix=ctrl' 'worker_prefix=compute' > cluster.conf
+  eval "$(vm_names_from_cluster_conf)"
+  [ "$CP_NAMES" = "ctrl1 ctrl2 ctrl3" ] && [ "$WORKER_NAMES" = "compute1 compute2" ]
+  rm -rf "$tmp" ) \
+	&& ok "vm_names_from_cluster_conf: uses prefixes from cluster.conf" \
+	|| bad "vm_names_from_cluster_conf: uses prefixes from cluster.conf"
+
+( tmp=$(mktemp -d)
+  cd "$tmp" || exit 1
+  printf '%s\n' 'cluster_name=std' 'num_workers=0' > cluster.conf
+  if vm_names_from_cluster_conf >/dev/null; then
+    rm -rf "$tmp"
+    exit 1
+  fi
+  rm -rf "$tmp" ) \
+	&& ok "vm_names_from_cluster_conf: missing num_masters fails" \
+	|| bad "vm_names_from_cluster_conf: missing num_masters fails"
 
 # ---------------------------------------------------------------------------
 # Driver: power verbs act on every cluster VM through the adapter primitives.

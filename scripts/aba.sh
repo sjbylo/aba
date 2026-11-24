@@ -1845,7 +1845,9 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (ls)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
+			# vm_ls prints "No resources" only after the hypervisor says the
+			# domains are absent. A failed query must not look like success.
+			$ABA_ROOT/scripts/${HV}-ls.sh
 			exit
 		;;
 		start)

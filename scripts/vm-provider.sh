@@ -78,8 +78,16 @@ vm_on_any() {
 }
 
 # Print a "Name CPU Memory State" table for the cluster's VMs (skips absent VMs).
+# "No resources" means the hypervisor answered and every domain is absent.
+# A dead hypervisor is exit 2, not an empty list.
 vm_ls() {
-	local name vm info output= header="Name CPU Memory State"
+	local name vm info output= header="Name CPU Memory State" _rc=0
+	# A name that is not a cluster VM. Exit 2 means the hypervisor could not be asked.
+	vmp_exists "__aba_ls_probe__" || _rc=$?
+	if [ "$_rc" -gt 1 ]; then
+		echo "Cannot reach the hypervisor — not reporting VMs as absent" >&2
+		return 2
+	fi
 	for name in $(_vm_hosts all); do
 		vm=$(_vm_full_name "$name")
 		info=$(vmp_info "$vm") || continue

@@ -4,7 +4,9 @@
 # =============================================================================
 # Purpose: End-to-end test of KVM platform support. Installs SNO, compact,
 #          and standard, and on each one runs stop, start, kill, shutdown,
-#          and startup.
+#          and startup. Each cluster is deleted, and its VMs checked gone,
+#          as soon as that cluster's lifecycle finishes, so the next cluster
+#          does not share its disks.
 #
 # Prerequisite:
 #   - Internet-connected bastion (conN) with aba installed.
@@ -253,6 +255,13 @@ e2e_run "Force power off VMs" "aba --dir $SNO kill"
 e2e_run "Verify VMs are shut off after kill" \
     "aba --dir $SNO ls | grep -i 'shut-off'"
 
+# Kill is the last use of the SNO. Remove it before compact is created.
+e2e_run "Delete $SNO cluster" "aba -y --dir $SNO delete"
+e2e_run "Verify $SNO VMs are gone" \
+	"aba --dir $SNO ls | grep 'No resources'"
+e2e_run "Remove $SNO cluster directory" "aba -y --dir $SNO delete --force"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
+
 test_end
 
 # ============================================================================
@@ -269,7 +278,12 @@ e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
 	"cd $COMPACT && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 e2e_wait_cluster_ready $COMPACT local 4200
 e2e_cluster_vm_lifecycle "$COMPACT" running shut-off 3
+# Stop, start, kill, shutdown, and startup are done. Free the disks
+# before standard is created.
 e2e_run "Delete compact cluster" "aba -y --dir $COMPACT delete"
+e2e_run "Verify $COMPACT VMs are gone" \
+	"aba --dir $COMPACT ls | grep 'No resources'"
+e2e_run "Remove $COMPACT cluster directory" "aba -y --dir $COMPACT delete --force"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
 test_end
@@ -286,6 +300,9 @@ e2e_poll 1800 30 "Wait for standard bootstrap-complete" \
 e2e_wait_cluster_ready $STANDARD local 4800
 e2e_cluster_vm_lifecycle "$STANDARD" running shut-off 5
 e2e_run "Delete standard cluster" "aba -y --dir $STANDARD delete"
+e2e_run "Verify $STANDARD VMs are gone" \
+	"aba --dir $STANDARD ls | grep 'No resources'"
+e2e_run "Remove $STANDARD cluster directory" "aba -y --dir $STANDARD delete --force"
 e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 
 test_end
@@ -295,7 +312,7 @@ test_end
 # ============================================================================
 test_begin "Cleanup: delete clusters and unregister mirror"
 
-e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
+e2e_run "Delete SNO cluster if the kill step left it" \
     "_e2e_delete_leftover_cluster $SNO"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 e2e_run "Delete compact cluster if leftover" \

@@ -414,6 +414,101 @@ vm_name() {
 	[ "${CP_REPLICAS:-${num_masters:-0}}" = "1" ] && [ "${WORKER_REPLICAS:-${num_workers:-0}}" = "0" ] && echo "$host" || echo "${cluster}-${host}"
 }
 
+# Hostname of node i (1-based, masters first).
+# Caller has already loaded cluster.conf. SNO's only node is the cluster name.
+# Every other node is <master_prefix>N or <worker_prefix>N. Agent-config
+# templates print the list from cluster_host_names; they do not rebuild it.
+cluster_host_name() {
+	local i=$1
+	if [ "$i" -le "$num_masters" ]; then
+		if [ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ]; then
+			printf '%s\n' "$cluster_name"
+			return 0
+		fi
+		printf '%s\n' "${master_prefix}${i}"
+		return 0
+	fi
+	printf '%s\n' "${worker_prefix}$(( i - num_masters ))"
+}
+
+# Every node hostname, masters first, one per line.
+# One line per name so a cluster with no workers does not end on a blank
+# line. A blank line would be dropped by $(...).
+cluster_host_names() {
+	local i=1 total=$(( num_masters + num_workers ))
+	while [ "$i" -le "$total" ]; do
+		cluster_host_name "$i"
+		i=$(( i + 1 ))
+	done
+}
+
+# Print export lines for the VM identity in cluster.conf.
+# aba delete removes install-config.yaml and agent-config.yaml. cluster.conf
+# still has the counts and prefixes, so aba ls can ask the hypervisor about
+# the same names create-agent-config.sh wrote.
+vm_names_from_cluster_conf() {
+	local cluster_name num_masters num_workers master_prefix worker_prefix
+	local cp_names worker_names i host
+
+	[ -s cluster.conf ] || { echo "cluster.conf is missing" >&2; return 1; }
+	# shellcheck disable=SC1090
+	source <(normalize-cluster-conf)
+	[ -n "${cluster_name:-}" ] || { echo "cluster_name is missing from cluster.conf" >&2; return 1; }
+	# An empty count is 0 in arithmetic, which would list no VMs.
+	case "${num_masters:-}" in
+		''|*[!0-9]*) echo "num_masters must be set in cluster.conf" >&2; return 1 ;;
+	esac
+	case "${num_workers:-}" in
+		''|*[!0-9]*) echo "num_workers must be set in cluster.conf" >&2; return 1 ;;
+	esac
+
+	cp_names=
+	worker_names=
+	i=1
+	while IFS= read -r host; do
+		if [ "$i" -le "$num_masters" ]; then
+			if [ -n "$cp_names" ]; then
+				cp_names="$cp_names $host"
+			else
+				cp_names=$host
+			fi
+		else
+			if [ -n "$worker_names" ]; then
+				worker_names="$worker_names $host"
+			else
+				worker_names=$host
+			fi
+		fi
+		i=$(( i + 1 ))
+	done < <(cluster_host_names)
+
+	printf 'export CLUSTER_NAME=%q\n' "$cluster_name"
+	printf 'export CP_REPLICAS=%q\n' "$num_masters"
+	printf 'export WORKER_REPLICAS=%q\n' "$num_workers"
+	printf 'export num_masters=%q\n' "$num_masters"
+	printf 'export num_workers=%q\n' "$num_workers"
+	printf 'export CP_NAMES=%q\n' "$cp_names"
+	printf 'export WORKER_NAMES=%q\n' "$worker_names"
+}
+
+# Load CLUSTER_NAME / CP_NAMES / WORKER_NAMES for vm_ls.
+# The generated YAML wins. After aba delete only cluster.conf remains.
+vm_load_names() {
+	local _names
+	[ -n "${CLUSTER_NAME:-}" ] && return 0
+	if [ -s install-config.yaml ] && [ -s agent-config.yaml ]; then
+		scripts/cluster-config-check.sh || return 1
+		eval "$(scripts/cluster-config.sh)" || return 1
+		return 0
+	fi
+	if [ -s cluster.conf ]; then
+		_names=$(vm_names_from_cluster_conf) || return 1
+		eval "$_names"
+		return 0
+	fi
+	aba_abort "Cannot list VMs: install-config.yaml, agent-config.yaml, and cluster.conf are missing"
+}
+
 _vm_annotation() {
 	local role=$1
 	local cluster_type
