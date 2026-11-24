@@ -284,6 +284,9 @@ def frames_in(directory):
 
 
 def build(src, dest, width=None):
+	if Path(dest).suffix.lower() != ".gif":
+		print(f"destination must end in .gif: {dest}", file=sys.stderr)
+		return 1
 	files = frames_in(src)
 	if not files:
 		print(f"no color frames in {src}", file=sys.stderr)

@@ -31,6 +31,9 @@ vm_provider_load vmw
 scope=all
 [ "$workers" ] && scope=workers
 [ "$masters" ] && scope=masters
-# || exit 0: vm_stop returns 1 only when user declines the ask prompt.
-# The || suppresses the ERR trap (which would print a spurious "Script error").
-vm_stop "$scope" || exit 0
+# 2: the user declined the prompt. That is not a power failure.
+# Any other non-zero (a VM that did not accept the shutdown) must stay non-zero.
+_rc=0
+vm_stop "$scope" || _rc=$?
+[ "$_rc" -eq 2 ] && exit 0
+exit "$_rc"

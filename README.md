@@ -2570,7 +2570,7 @@ Code that landed from a pull request.
 
 ## Suggestions
 
-Issues and discussions that led to a later change.
+Issues and discussions that led to improvements.
 
 - **Anthony Lin** ([@eanylin](https://github.com/eanylin)) — mirror help ([#38](https://github.com/sjbylo/aba/issues/38))
 - **Rachel Ma** ([@rach228](https://github.com/rach228)) — security operators ([#41](https://github.com/sjbylo/aba/issues/41))

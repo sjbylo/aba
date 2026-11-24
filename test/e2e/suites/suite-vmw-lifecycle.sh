@@ -2,11 +2,9 @@
 # =============================================================================
 # Suite: VMware Lifecycle
 # =============================================================================
-# Purpose: End-to-end test of VMware platform support.  Exercises multi-node
-#          VM provisioning (compact, standard) first for fast feedback, then
-#          installs an SNO cluster and tests every VM lifecycle command ABA
-#          exposes: ls, stop, start, kill, delete, refresh, upload, plus
-#          the cluster-level graceful shutdown/startup.
+# Purpose: End-to-end test of VMware platform support. Installs compact,
+#          standard, and SNO, and on each one runs stop, start, kill,
+#          shutdown, and startup.
 #
 # Prerequisite:
 #   - Internet-connected bastion (conN) with aba installed.
@@ -32,6 +30,7 @@ NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
+STANDARD="$(pool_cluster_name standard)"
 NAMED_MIRROR="e2e-vmw-mirror"
 
 # --- Suite ------------------------------------------------------------------
@@ -43,7 +42,8 @@ plan_tests \
     "Setup: install aba, configure for VMware" \
     "Setup: configure mirror for local registry" \
     "Setup: sync images to registry" \
-    "Compact: multi-node VM creation and agent bootstrap" \
+    "Compact: install cluster and lifecycle" \
+    "Standard: install cluster and lifecycle" \
     "SNO: install cluster on VMware" \
     "VM lifecycle: ls" \
     "VM lifecycle: stop (graceful)" \
@@ -140,10 +140,9 @@ test_end
 # ============================================================================
 # 5. Compact: multi-node VM creation, network check, and bootstrap
 # ============================================================================
-# Validates that 3 master VMs are created with correct resources and network.
-# SSHes into every node to verify network, then waits for bootstrap-complete.
-# Does NOT wait for full install -- proves multi-node VMware provisioning works.
-test_begin "Compact: multi-node VM creation and agent bootstrap"
+# Validates that 3 master VMs are created, the install finishes, and the
+# lifecycle commands run on that cluster before it is deleted.
+test_begin "Compact: install cluster and lifecycle"
 
 e2e_run "Delete any leftover $COMPACT cluster" \
     "_e2e_delete_leftover_cluster $COMPACT"
@@ -181,8 +180,42 @@ e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
     "cd $COMPACT && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 e2e_diag "Compact cluster VMs after bootstrap" "aba --dir $COMPACT ls"
 
+e2e_wait_cluster_ready $COMPACT local 4200
+e2e_cluster_vm_lifecycle "$COMPACT" poweredOn poweredOff 3 1
+
 e2e_run "Delete compact cluster" "aba -y --dir $COMPACT delete"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
+
+test_end
+
+# ============================================================================
+# 5b. Standard: full install, then the same lifecycle, then delete
+# ============================================================================
+test_begin "Standard: install cluster and lifecycle"
+
+e2e_run "Delete any leftover $STANDARD cluster" \
+	"_e2e_delete_leftover_cluster $STANDARD"
+e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
+
+e2e_run "Create standard cluster.conf (2 workers, named mirror)" \
+	"aba cluster -n $STANDARD -t standard --starting-ip $(pool_starting_ip standard) \
+	 --num-workers 2 --mirror-name $NAMED_MIRROR --step cluster.conf"
+e2e_run "Set mac_prefix for $STANDARD (VMware range, randomized)" \
+	"sed -i 's#mac_prefix=.*#mac_prefix=00:50:56:2x:xx:#g' $STANDARD/cluster.conf"
+e2e_run "Generate ISO for standard cluster" "aba --dir $STANDARD iso"
+e2e_run "Upload ISO to VMware datastore" "aba --dir $STANDARD upload"
+e2e_run "Create and start standard VMs" "aba --dir $STANDARD create --start"
+e2e_run "Verify 5 VMs created for standard" \
+	"[ \$(aba --dir $STANDARD ls | grep -c -i poweredOn) -eq 5 ]"
+
+e2e_poll 1800 30 "Wait for standard bootstrap-complete" \
+	"cd $STANDARD && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
+
+e2e_wait_cluster_ready $STANDARD local 4800
+e2e_cluster_vm_lifecycle "$STANDARD" poweredOn poweredOff 5 1
+
+e2e_run "Delete standard cluster" "aba -y --dir $STANDARD delete"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 
 test_end
 
@@ -250,7 +283,10 @@ test_end
 # ============================================================================
 test_begin "VM lifecycle: stop (graceful)"
 
-e2e_run "Graceful stop of VMs" "aba --dir $SNO stop --wait"
+e2e_run "Graceful stop of VMs" \
+	"aba --dir $SNO stop --wait > \$HOME/tmp/e2e-stop.out 2>&1; _rc=\$?; cat \$HOME/tmp/e2e-stop.out; exit \$_rc"
+e2e_run "Stop says the guest shutdown was requested" \
+	"grep -q 'guest shutdown requested' \$HOME/tmp/e2e-stop.out"
 e2e_run "Verify VMs are powered off after stop" \
     "aba --dir $SNO ls | grep -i poweredOff"
 
@@ -274,7 +310,10 @@ test_end
 # ============================================================================
 test_begin "VM lifecycle: kill (force poweroff)"
 
-e2e_run "Force power off VMs" "aba --dir $SNO kill"
+e2e_run "Force power off VMs" \
+	"aba --dir $SNO kill > \$HOME/tmp/e2e-kill.out 2>&1; _rc=\$?; cat \$HOME/tmp/e2e-kill.out; exit \$_rc"
+e2e_run "Kill says the VM was powered off" \
+	"grep -q 'powered off' \$HOME/tmp/e2e-kill.out"
 e2e_run "Verify VMs are powered off after kill" \
     "aba --dir $SNO ls | grep -i poweredOff"
 
@@ -304,7 +343,10 @@ test_begin "Cluster-level: graceful shutdown and startup"
 e2e_poll 300 15 "Wait for cluster API to become reachable" \
     "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
 
-e2e_run "OpenShift graceful shutdown with --wait" "aba --dir $SNO shutdown -y --wait"
+e2e_run "OpenShift graceful shutdown with --wait" \
+	"aba --dir $SNO shutdown -y --wait > \$HOME/tmp/e2e-shutdown.out 2>&1; _rc=\$?; cat \$HOME/tmp/e2e-shutdown.out; exit \$_rc"
+e2e_run "Shutdown reports every node powered off" \
+	"grep -q 'All nodes powered off' \$HOME/tmp/e2e-shutdown.out"
 e2e_poll 120 10 "Verify VMs are powered off after OCP shutdown" \
     "aba --dir $SNO ls | grep -i poweredOff"
 
@@ -355,6 +397,9 @@ e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 e2e_run "Delete compact cluster if leftover" \
     "_e2e_delete_leftover_cluster $COMPACT"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
+e2e_run "Delete standard cluster if leftover" \
+    "_e2e_delete_leftover_cluster $STANDARD"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 
 e2e_run "Unregister named mirror" \
     "aba -d $NAMED_MIRROR unregister"

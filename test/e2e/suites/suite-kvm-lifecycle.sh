@@ -2,10 +2,9 @@
 # =============================================================================
 # Suite: KVM Lifecycle
 # =============================================================================
-# Purpose: End-to-end test of KVM platform support.  Installs an SNO cluster
-#          and tests every VM lifecycle command ABA exposes: ls, stop, start,
-#          kill, delete, refresh, upload, plus the cluster-level graceful
-#          shutdown/startup.
+# Purpose: End-to-end test of KVM platform support. Installs SNO, compact,
+#          and standard, and on each one runs stop, start, kill, shutdown,
+#          and startup.
 #
 # Prerequisite:
 #   - Internet-connected bastion (conN) with aba installed.
@@ -31,6 +30,7 @@ NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
+STANDARD="$(pool_cluster_name standard)"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -47,6 +47,8 @@ plan_tests \
     "VM lifecycle: start" \
     "Cluster-level: graceful shutdown and startup" \
     "VM lifecycle: kill (force poweroff)" \
+    "Compact: install cluster and lifecycle" \
+    "Standard: install cluster and lifecycle" \
     "Cleanup: delete clusters and unregister mirror"
 
 suite_begin "kvm-lifecycle"
@@ -254,13 +256,54 @@ e2e_run "Verify VMs are shut off after kill" \
 test_end
 
 # ============================================================================
-# 12. Cleanup: delete clusters and unregister mirror
+# 12. Compact and standard: finish the install, then the same lifecycle
+# ============================================================================
+test_begin "Compact: install cluster and lifecycle"
+
+e2e_run "Delete any leftover $COMPACT cluster" \
+	"_e2e_delete_leftover_cluster $COMPACT"
+e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
+e2e_run -r 2 10 "Create compact VMs and start install" \
+	"aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --ports enp1s0 --step refresh"
+e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
+	"cd $COMPACT && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
+e2e_wait_cluster_ready $COMPACT local 4200
+e2e_cluster_vm_lifecycle "$COMPACT" running shut-off 3
+e2e_run "Delete compact cluster" "aba -y --dir $COMPACT delete"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
+
+test_end
+
+test_begin "Standard: install cluster and lifecycle"
+
+e2e_run "Delete any leftover $STANDARD cluster" \
+	"_e2e_delete_leftover_cluster $STANDARD"
+e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
+e2e_run -r 2 10 "Create standard VMs and start install" \
+	"aba cluster -n $STANDARD -t standard --starting-ip $(pool_starting_ip standard) --num-workers 2 --ports enp1s0 --step refresh"
+e2e_poll 1800 30 "Wait for standard bootstrap-complete" \
+	"cd $STANDARD && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
+e2e_wait_cluster_ready $STANDARD local 4800
+e2e_cluster_vm_lifecycle "$STANDARD" running shut-off 5
+e2e_run "Delete standard cluster" "aba -y --dir $STANDARD delete"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
+
+test_end
+
+# ============================================================================
+# 13. Cleanup: delete clusters and unregister mirror
 # ============================================================================
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
     "_e2e_delete_leftover_cluster $SNO"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
+e2e_run "Delete compact cluster if leftover" \
+	"_e2e_delete_leftover_cluster $COMPACT"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
+e2e_run "Delete standard cluster if leftover" \
+	"_e2e_delete_leftover_cluster $STANDARD"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

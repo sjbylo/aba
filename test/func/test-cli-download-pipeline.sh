@@ -316,8 +316,30 @@ else
 	test_fail "Default mode too slow (${elapsed}s > 3s)"
 fi
 
-# Wait for background download to finish before next test
-scripts/cli-download-all.sh --wait 2>/dev/null
+# Wait for background download to finish before next test.
+# Success is the runner exit file, not only a tarball that happens to exist.
+wait_rc=0
+scripts/cli-download-all.sh --wait 2>/dev/null || wait_rc=$?
+if [ "$wait_rc" -eq 0 ]; then
+	test_pass "--wait exits 0 after the background start"
+else
+	test_fail "--wait exits $wait_rc after the background start"
+fi
+
+exit_file="$HOME/.aba/runner/cli:download:oc:${OCP_VER}/exit"
+exit_rc=$(cat "$exit_file" 2>/dev/null) || exit_rc=MISSING
+if [ "$exit_rc" = 0 ]; then
+	test_pass "runner exit file is 0 for cli:download:oc:${OCP_VER}"
+else
+	test_fail "runner exit file for cli:download:oc:${OCP_VER} is $exit_rc"
+fi
+
+pid_file="$HOME/.aba/runner/cli:download:oc:${OCP_VER}/pid"
+if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+	test_fail "cli:download:oc:${OCP_VER} still running (pid $(cat "$pid_file"))"
+else
+	test_pass "cli:download:oc:${OCP_VER} is not still running"
+fi
 
 result=$(verify_tarball "cli/$local_tar")
 if [ "$result" = "OK" ]; then

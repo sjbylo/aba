@@ -1177,8 +1177,10 @@ fi
 _stray_patterns='make.*-[sC]|oc-mirror|openshift-install|/scripts/.*\.sh|/aba |dialog --'
 _stray=""
 
-# conN (local) — exclude the runner itself and grep
-_stray_local=$(ps -eo pid,ppid,etime,args --no-headers 2>/dev/null \
+# conN (local) — exclude the runner itself and grep.
+# -ww: the command line is the thing we have to inspect. The default ps width
+# cuts it off, and a cut-off line cannot be diagnosed later.
+_stray_local=$(ps -ww -eo pid,ppid,etime,args --no-headers 2>/dev/null \
 	| grep -E "$_stray_patterns" \
 	| grep -v -e "grep" -e "runner.sh" -e "$$" \
 	|| true)
@@ -1189,7 +1191,7 @@ fi
 # disN (remote)
 if [ -n "${DIS_VM:-}" ]; then
 	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-	_stray_remote=$(_essh "$_dis" "ps -eo pid,ppid,etime,args --no-headers 2>/dev/null \
+	_stray_remote=$(_essh "$_dis" "ps -ww -eo pid,ppid,etime,args --no-headers 2>/dev/null \
 		| grep -E '$_stray_patterns' \
 		| grep -v grep" 2>/dev/null || true)
 	if [ -n "$_stray_remote" ]; then
@@ -1204,7 +1206,17 @@ if [ -n "$_stray" ]; then
 	echo ""
 	echo "  These processes should have exited when the suite finished."
 	echo "  Investigate whether ABA code is leaking orphan processes."
-	_e2e_notify "WARNING: $SUITE -- stray processes after suite"
+	echo "  They are left running. The list is appended to the suite log."
+	# The suite process has exited, so this shell's stdout is not the suite log.
+	# Append the list there. Do not kill the processes: killing them hides the leak.
+	_stray_safe=$(printf '%s\n' "$_stray" | sed -E 's/([Pp]ass(word)?|[Rr]eg_pw|[Tt]oken|[Ss]ecret)=[^[:space:]]*/\1=***/g')
+	{
+		echo ""
+		echo "POST-SUITE WARNING: stray ABA processes (left running)"
+		printf '%s\n' "$_stray_safe"
+		echo ""
+	} >> "${E2E_LOG_DIR}/${SUITE}-latest.log"
+	printf '%s\n' "$_stray_safe" | _e2e_notify_stdin "WARNING: $SUITE -- stray processes after suite"
 fi
 
 echo ""

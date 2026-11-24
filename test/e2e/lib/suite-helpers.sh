@@ -255,3 +255,66 @@ suite_full_setup() {
 	suite_setup_ntp
 	[ -n "$_ops" ] && suite_setup_operator_set "abatest" "$_ops"
 }
+
+# Stop, start, kill, shutdown --wait, and startup on a cluster that is already Ready.
+# on_pat/off_pat match aba ls (poweredOn/poweredOff, or running/shut-off).
+# count is how many VMs that cluster has. msgs=1 checks the vSphere screen lines.
+# location is local or remote (disN, commands run in ~/aba).
+e2e_cluster_vm_lifecycle() {
+	local dir="$1" on_pat="$2" off_pat="$3" count="$4" msgs="${5:-}" loc="${6:-local}"
+	local safe step poll waitready
+	safe=$(printf '%s' "$dir" | tr -c 'A-Za-z0-9' _)
+	if [ "$loc" = "remote" ]; then
+		step() { e2e_run_remote "$1" "cd ~/aba && $2"; }
+		poll() { e2e_poll_remote "$1" "$2" "$3" "cd ~/aba && $4"; }
+		waitready() { e2e_wait_cluster_ready "$dir" remote "${1:-3300}"; }
+	else
+		step() { e2e_run "$1" "$2"; }
+		poll() { e2e_poll "$1" "$2" "$3" "$4"; }
+		waitready() { e2e_wait_cluster_ready "$dir" local "${1:-3300}"; }
+	fi
+	step "$dir: $count VMs are up" \
+		"[ \$(aba --dir $dir ls | grep -c -i '$on_pat') -eq $count ]"
+	if [ -n "$msgs" ]; then
+		step "$dir: stop" \
+			"mkdir -p \$HOME/tmp && aba --dir $dir stop --wait > \$HOME/tmp/e2e-stop-${safe}.out 2>&1; _rc=\$?; cat \$HOME/tmp/e2e-stop-${safe}.out; exit \$_rc"
+		step "$dir: guest shutdown was requested" \
+			"grep -q 'guest shutdown requested' \$HOME/tmp/e2e-stop-${safe}.out"
+	else
+		step "$dir: stop" "aba --dir $dir stop --wait"
+	fi
+	step "$dir: $count VMs are off after stop" \
+		"[ \$(aba --dir $dir ls | grep -c -i '$off_pat') -eq $count ]"
+	step "$dir: start" "aba --dir $dir start"
+	step "$dir: $count VMs are up after start" \
+		"[ \$(aba --dir $dir ls | grep -c -i '$on_pat') -eq $count ]"
+	if [ -n "$msgs" ]; then
+		step "$dir: kill" \
+			"mkdir -p \$HOME/tmp && aba --dir $dir kill > \$HOME/tmp/e2e-kill-${safe}.out 2>&1; _rc=\$?; cat \$HOME/tmp/e2e-kill-${safe}.out; exit \$_rc"
+		step "$dir: kill powered the VMs off" \
+			"grep -q 'powered off' \$HOME/tmp/e2e-kill-${safe}.out"
+	else
+		step "$dir: kill" "aba --dir $dir kill"
+	fi
+	step "$dir: $count VMs are off after kill" \
+		"[ \$(aba --dir $dir ls | grep -c -i '$off_pat') -eq $count ]"
+	step "$dir: start after kill" "aba --dir $dir start"
+	poll 600 15 "$dir: SSH after kill" "aba --dir $dir ssh --cmd hostname"
+	waitready 4200
+	if [ -n "$msgs" ]; then
+		step "$dir: shutdown" \
+			"mkdir -p \$HOME/tmp && aba --dir $dir shutdown -y --wait > \$HOME/tmp/e2e-sd-${safe}.out 2>&1; _rc=\$?; cat \$HOME/tmp/e2e-sd-${safe}.out; exit \$_rc"
+		step "$dir: shutdown reports every node powered off" \
+			"grep -q 'All nodes powered off' \$HOME/tmp/e2e-sd-${safe}.out"
+	else
+		step "$dir: shutdown" "aba --dir $dir shutdown -y --wait"
+	fi
+	step "$dir: $count VMs are off after shutdown" \
+		"[ \$(aba --dir $dir ls | grep -c -i '$off_pat') -eq $count ]"
+	step "$dir: startup" "aba --dir $dir startup"
+	step "$dir: $count VMs are up after startup" \
+		"[ \$(aba --dir $dir ls | grep -c -i '$on_pat') -eq $count ]"
+	poll 600 15 "$dir: nodes Ready after startup" \
+		"aba --dir $dir run --cmd 'oc get nodes --no-headers' | grep -qw Ready && ! aba --dir $dir run --cmd 'oc get nodes --no-headers' | grep -qw NotReady"
+	waitready 3300
+}

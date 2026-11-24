@@ -3860,8 +3860,9 @@ helper currently lives in `tui-lib.sh`). Track here until a focused cleanup PR.
 ## #B108: Non-contiguous node IPs in `starting_ip`
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Done (v1.4.7, [#52](https://github.com/sjbylo/aba/pull/52))
 **Added:** 2026-11-09
+**Updated:** 2026-11-23
 
 **Problem:** `starting_ip` is a single address. ABA then takes the next addresses in order, always `+1`, masters first and workers after them. A 3-master, 3-worker cluster with `starting_ip=10.0.0.10` is forced to use `10.0.0.10` through `10.0.0.15`. There is no way to skip an address already in use, or to place workers on a different prefix from the masters.
 
@@ -3939,8 +3940,9 @@ Skip the summary when the file does not exist yet. Keep MACs in the existing MAC
 ## #B110: Power off bare-metal nodes through the BMC
 
 **Severity:** HIGH
-**Status:** Planned
+**Status:** Done ([#53](https://github.com/sjbylo/aba/pull/53))
 **Added:** 2026-11-12
+**Updated:** 2026-11-23
 
 **Problem:** `aba stop` and `aba kill` abort on a bare-metal cluster. After a failed or partial install the nodes stay on, still answering on the node IPs and VIPs, so the next install's preflight reports `IP conflict`. `aba shutdown` cannot help: it needs a working API. The user has to power each server off in the BMC UI. ([#49](https://github.com/sjbylo/aba/issues/49), @mateuszslugocki)
 
@@ -4002,16 +4004,16 @@ A short script walks `bmc_host_list`, logs in, reads the first System id, calls 
 ## #B113: Pin oc-mirror to the pub/cgw 2.0 release
 
 **Severity:** MEDIUM
-**Status:** Planned
+**Status:** Blocked
 **Added:** 2026-11-12
+**Updated:** 2026-11-24
+**Findings:** `ai/oc-mirror-2.0-findings.md`
 
-**Problem:** `oc-mirror` is still taken from the OpenShift client channel pin `stable-4.22` (`oc-mirror.tar.gz` and `oc-mirror.rhel9.tar.gz`). The binary ABA should ship is the oc-mirror 2.0 release at `https://mirror.openshift.com/pub/cgw/oc-mirror/2.0/`. A move to that URL was tried and reverted: the filename, checksum, and binary all change, and that broke other assumptions. Pick this up again soon.
+**Problem:** `oc-mirror` is still taken from the OpenShift client channel pin `stable-4.22` (`oc-mirror.tar.gz` and `oc-mirror.rhel9.tar.gz`). The binary ABA should ship is the oc-mirror 2.0 release at `https://mirror.openshift.com/pub/cgw/oc-mirror/2.0/`. A move to that URL was implemented and then taken back out. The 21 Oct 2026 tarball (`2.0.0-202610201601`) cannot archive a multi-arch index that contains BuildKit attestation manifests, and filtering those images to one architecture rewrites the index so the load fails. The fix is [oc-mirror pull request 1657](https://github.com/openshift/oc-mirror/pull/1657) (OCPBUGS-136456). It is not in the published tarball.
 
-**Root cause:** `cli/Makefile` sets `oc_mirror_pin = stable-4.22` and builds `oc_mirror_base_url` under `mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(oc_mirror_pin)`. EC versions probe `ocp-dev-preview` and fall back to that pin. `atomic-download` looks the Make target name up in `sha256sum.txt`, so the target filename has to be the name published in the directory.
+**Root cause:** `cli/Makefile` sets `oc_mirror_pin = stable-4.22`. The pub/cgw directory uses different filenames (`oc-mirror-rhel8-linux-$(ARCH).tar.gz` and `oc-mirror-rhel9-linux-$(ARCH).tar.gz`), and oc-mirror 2.0 rejects a user `registries.d` file that repeats a registry the packaged files already define under another name. Those two are solvable. The blocker is the published binary: it drops attestation manifests out of the cache and then fails packing the tar, and the only shape that makes the tar succeed on that binary rewrites the manifest list. Details, the build of pull request 1657, and the bastion test are in the findings note.
 
-**Proposed fix:** Keep a release pin. Set `oc_mirror_pin = 2.0` and `oc_mirror_base_url = https://mirror.openshift.com/pub/cgw/oc-mirror/$(oc_mirror_pin)`. Do not use floating `latest`. A later release is a pin bump to `2.1`. Download both `oc-mirror-rhel8-linux-$(ARCH).tar.gz` and `oc-mirror-rhel9-linux-$(ARCH).tar.gz` for this CPU arch, and install the one that matches the host `rhel_ver`. If `oc-mirror` is already on `PATH`, leave it. Drop the EC dev-preview probe and the "stable-X.Y, consider updating the pin" note. A 2.0 pin has no OpenShift channel to compare. Point `test-oc-mirror-url.sh` and `test-cli-download-urls.sh` at the new names for every arch and for EC, RC, and GA versions.
-
-The 2.0 file is a different build from the stable-4.22 client tarball (`2.0.0-202610201601` vs `4.22.0-202611031655`). Cached `oc-mirror.tar.gz` and `oc-mirror.rhel9.tar.gz` do not satisfy the new targets. `download-all` still fetches both RHEL flavors for this arch only.
+**Proposed fix:** Wait for a published 2.0 tarball that contains the attestation-archive fix. Then set `oc_mirror_pin = 2.0` and `oc_mirror_base_url = https://mirror.openshift.com/pub/cgw/oc-mirror/$(oc_mirror_pin)`. Do not use floating `latest`. Download both RHEL flavors for this CPU arch and install the one that matches the host. Replace an already-installed oc-mirror that is not that build, and reset the download and install records so a finished 4.22 install does not count. Split `registries.d` names that 2.0 rejects. Do not add per-image `platforms` to hide attestations.
 
 **Workaround:** Stay on the `stable-4.22` client tarballs.
 

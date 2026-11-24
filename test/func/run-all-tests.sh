@@ -196,6 +196,7 @@ unit_tests=(
 	test/func/test-make-regen-install-config.sh
 	test/func/test-vm-power-helpers.sh
 	test/func/test-vm-provider.sh
+	test/func/test-cluster-shutdown.sh
 	test/func/test-vmw-kvm-verify.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
@@ -274,6 +275,7 @@ integration_tests=(
 	test/func/test-bmc-boot.sh
 	test/func/test-bmc-poweroff.sh
 	test/func/test-bm-startup-bmc.sh
+	test/func/test-vm-startup.sh
 
 	# Bundle
 	test/func/test-bundle-tar-output.sh
