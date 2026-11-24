@@ -37,6 +37,7 @@ While you drive, frames are written on that host under `/tmp/tui-drive/<stamp>/c
 tools/tui-record.sh gif
 tools/tui-record.sh gif /tmp/tui-drive/20261119-181759 aba-mirror-sync.gif
 tools/tui-record.sh gif /tmp/tui-drive/20261119-181759 aba-mirror-sync.gif 900
+tools/tui-record.sh gif /tmp/tui-drive/20261119-181759 900
 ```
 
 With no directory, `gif` uses the newest `/tmp/tui-drive` or `/tmp/tui-test` run that has color frames.

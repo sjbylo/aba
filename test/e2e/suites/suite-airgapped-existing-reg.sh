@@ -296,9 +296,9 @@ e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror
 test_end
 
 # ============================================================================
-# 9. Compact: bootstrap and delete (Gap 1: coverage for 3-node combo)
-#    Full install takes ~40 min; bootstrap proves images loaded correctly
-#    and the cluster can start (control plane comes up). Saves ~30 min.
+# 9. Compact: finish the install, run lifecycle, then delete.
+#    The nodes keep installing after bootstrap. Wait until the cluster is
+#    Ready, then stop, kill, shutdown, and startup before deleting it.
 # ============================================================================
 test_begin "Compact: install and delete cluster"
 
@@ -327,6 +327,8 @@ e2e_run_remote -r 1 1 "Bootstrap compact cluster (verify=off)" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Restore verify_conf=all" \
     "cd ~/aba && aba --verify all"
+e2e_wait_cluster_ready $COMPACT remote 4200
+e2e_cluster_vm_lifecycle "$COMPACT" poweredOn poweredOff 3 1 remote
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT" remote

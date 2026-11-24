@@ -84,16 +84,56 @@ vmp_power_on() {
 	_govc_retry vm.power -on "$vm"
 }
 
+# Guest shutdown. Already-off is success and is not sent to govc again.
+# "VMware Tools is not running" and "current state (Powered off)" are permanent:
+# retrying them only repeats the same error.
 vmp_power_off() {
-	local vm=$1
+	local vm=$1 err rc=0
+	if ! vmp_is_on "$vm"; then
+		return 0
+	fi
 	aba_debug "Running: govc vm.power -s $vm"
-	_govc_retry vm.power -s "$vm" || true
+	err=$(govc vm.power -s "$vm" 2>&1) || rc=$?
+	if [ "$rc" -eq 0 ]; then
+		# govc's own line was captured above. Say what happened, once.
+		aba_info "$vm: guest shutdown requested"
+		return 0
+	fi
+	if printf '%s\n' "$err" | grep -q "VMware Tools is not running"; then
+		aba_warn "$vm: VMware Tools is not running. Run 'aba kill' to power it off."
+		return 1
+	fi
+	if printf '%s\n' "$err" | grep -q "current state (Powered off)"; then
+		return 0
+	fi
+	printf '%s\n' "$err" >&2
+	if _govc_retry vm.power -s "$vm"; then
+		aba_info "$vm: guest shutdown requested"
+		return 0
+	fi
+	return 1
 }
 
 vmp_kill() {
-	local vm=$1
+	local vm=$1 err rc=0
+	if ! vmp_is_on "$vm"; then
+		return 0
+	fi
 	aba_debug "Running: govc vm.power -off $vm"
-	_govc_retry vm.power -off "$vm" || true
+	err=$(govc vm.power -off "$vm" 2>&1) || rc=$?
+	if [ "$rc" -eq 0 ]; then
+		aba_info "$vm: powered off"
+		return 0
+	fi
+	if printf '%s\n' "$err" | grep -q "current state (Powered off)"; then
+		return 0
+	fi
+	printf '%s\n' "$err" >&2
+	if _govc_retry vm.power -off "$vm"; then
+		aba_info "$vm: powered off"
+		return 0
+	fi
+	return 1
 }
 
 # ---------------------------------------------------------------------------

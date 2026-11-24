@@ -4,6 +4,7 @@
 #   tools/tui-record.sh drive [HOST]
 #   tools/tui-record.sh stop
 #   tools/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]
+#   tools/tui-record.sh gif [RUN_DIR] [WIDTH]
 #   tools/tui-record.sh mirror|cluster|day2 [HOST]
 #
 # drive starts the TUI and records every pane change, including the cursor.
@@ -22,6 +23,7 @@ _usage() {
 	echo "Usage: tools/tui-record.sh drive [HOST]" >&2
 	echo "       tools/tui-record.sh stop" >&2
 	echo "       tools/tui-record.sh gif [RUN_DIR] [OUT.gif] [WIDTH]" >&2
+	echo "       tools/tui-record.sh gif [RUN_DIR] [WIDTH]" >&2
 	echo "       tools/tui-record.sh mirror|cluster|day2 [HOST]" >&2
 	echo "Host defaults to conno. Example: drive disco" >&2
 	exit 2
@@ -127,7 +129,7 @@ _stop() {
 }
 
 _gif() {
-	local src="${1:-}" out="${2:-}" base
+	local src="${1:-}" out="" width="" arg base
 	if [ -z "$src" ]; then
 		src=$(_newest_run) || { echo "No /tmp/tui-test run with color frames." >&2; exit 1; }
 	fi
@@ -135,13 +137,23 @@ _gif() {
 		echo "Not a directory: $src" >&2
 		exit 1
 	fi
+	# A bare number is the pixel width, so `gif RUN_DIR 900` is the README size.
+	# The gif name can come before or after that number.
+	for arg in "${2:-}" "${3:-}"; do
+		[ -n "$arg" ] || continue
+		if [[ "$arg" =~ ^[0-9]+$ ]]; then
+			width=$arg
+		else
+			out=$arg
+		fi
+	done
 	if [ -z "$out" ]; then
 		base=$(basename "$src")
 		[ "$base" = color ] && base=$(basename "$(dirname "$src")")
 		out="${base}.gif"
 	fi
-	if [ -n "${3:-}" ]; then
-		python3 tools/tui-gif.py "$src" "$out" "$3"
+	if [ -n "$width" ]; then
+		python3 tools/tui-gif.py "$src" "$out" "$width"
 	else
 		python3 tools/tui-gif.py "$src" "$out"
 	fi

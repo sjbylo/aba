@@ -60,11 +60,11 @@ vmp_power_on() {
 vmp_power_off() {
 	local vm=$1
 	aba_debug "Running: virsh -c $LIBVIRT_URI shutdown $vm"
-	virsh -c "$LIBVIRT_URI" shutdown "$vm" 2>/dev/null || true
+	virsh -c "$LIBVIRT_URI" shutdown "$vm"
 }
 
 vmp_kill() {
 	local vm=$1
 	aba_debug "Running: virsh -c $LIBVIRT_URI destroy $vm"
-	virsh -c "$LIBVIRT_URI" destroy "$vm" || true
+	virsh -c "$LIBVIRT_URI" destroy "$vm"
 }
