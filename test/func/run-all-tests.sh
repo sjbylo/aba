@@ -194,6 +194,7 @@ unit_tests=(
 	test/func/test-agent-config-summary.sh
 
 	test/func/test-make-regen-install-config.sh
+	test/func/test-ssh-pub-key-only.sh
 	test/func/test-vm-power-helpers.sh
 	test/func/test-vm-provider.sh
 	test/func/test-cluster-shutdown.sh

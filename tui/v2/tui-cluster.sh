@@ -1520,7 +1520,9 @@ ${_conn_help}
 			if [[ $? -eq 0 ]]; then
 				local key_val=$(<"$_TUI_TMP")
 				_tui_reject_squote "$key_val" || continue
-				if [[ -n "$key_val" ]] && ! _valid_abs_path "$key_val"; then
+				# A bundle may set a relative key (ssh-key, next to ssh-key.pub in the
+				# cluster dir). Keep it when OK is pressed on the unchanged value.
+				if [[ -n "$key_val" && "$key_val" != "$cl_ssh_key" ]] && ! _valid_abs_path "$key_val"; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid path.\n\nMust start with / or ~ (e.g. ~/.ssh/id_rsa)." 0 0
 					continue
@@ -2550,16 +2552,26 @@ _day2_ssh() {
 
 	if [[ -z "$_ssh_ip" ]]; then
 		echo "Error: rendezvous IP not found for $cl_display"
+		cd "$ABA_ROOT" || true
 		read -rp "Press ENTER to return to TUI..."
 		_tui_redirect_activate
 		return 1
 	fi
 
-	aba_info "Running: ssh -i $_ssh_key core@$_ssh_ip"
+	# local: cluster_ssh_id_opts sets ssh_id_opts in the caller's scope.
+	# The TUI does not set INFO_ABA, so the notice is printed with echo.
+	local ssh_id_opts=()
+	if ! cluster_ssh_id_opts "$_ssh_key"; then
+		echo "No private SSH key at $_ssh_key: ssh tries ssh-agent and the ~/.ssh default keys."
+		echo "If that fails, set SSH Key on the cluster page to your private key outside the aba dir (e.g. ~/.ssh/<key>)."
+		echo
+	fi
+
+	aba_info "Running: ssh ${ssh_id_opts[*]} core@$_ssh_ip"
 
 	# SSH with session-only KUBECONFIG and oc completion (no changes to core user's env)
 	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
-	ssh -t -F ~/.aba/ssh.conf -i "$_ssh_key" core@"$_ssh_ip" \
+	ssh -t -F ~/.aba/ssh.conf "${ssh_id_opts[@]}" core@"$_ssh_ip" \
 		"bash --rcfile <(echo '
 source /etc/bashrc 2>/dev/null
 _kc=\$(sudo find /etc/kubernetes -name lb-ext.kubeconfig 2>/dev/null | head -1)

@@ -934,6 +934,24 @@ image_source_is_mirror() {
 	[[ "${image_source:-mirror}" != "direct" && "${image_source:-mirror}" != "proxy" ]]
 }
 
+# Set ssh_id_opts to the ssh identity options for cluster key file $1
+# (ssh_key_file in cluster.conf, run from the cluster dir).
+# Returns 1 with ssh_id_opts empty when there is no private key file: ssh then
+# gets no -i and uses ssh-agent and the ~/.ssh default keys, as it did for a
+# missing -i file. That keeps working for a public-key-only ssh_key_file
+# (create-install-config.sh needs no more) and for the ~/.ssh/id_rsa default
+# when the node takes another key. "-i <key>.pub" is not used: OpenSSH then
+# fails when the private key is a default ~/.ssh/id_* file.
+# Never aborts: the TUI calls it too.
+# shellcheck disable=SC2034 # ssh_id_opts is read by the caller
+cluster_ssh_id_opts() {
+	local _key="${1/#\~/$HOME}"	# a default like "~/.ssh/id_rsa" can arrive unexpanded
+
+	ssh_id_opts=()
+	[ -s "$_key" ] || return 1
+	ssh_id_opts=(-i "$_key")
+}
+
 # Print the mirror directory name.  Only meaningful when image_source_is_mirror.
 
 # -----------------------------------------------------------------------------
@@ -2011,6 +2029,23 @@ externalize_cluster_state() {
 	[ -f install-config.yaml ] && cp -p install-config.yaml "$_state_dir/backup/"
 	[ -f agent-config.yaml ] && cp -p agent-config.yaml "$_state_dir/backup/"
 	[ -f macs.conf ] && cp -p macs.conf "$_state_dir/backup/"
+	# A relative ssh_key_file in the cluster dir: without its .pub a recreated
+	# dir would get a new key from create-install-config.sh. Public key only: the
+	# private key never goes into the state dir. An absolute path is the
+	# operator's own key location and stays valid, so it is not copied.
+	# realpath resolves .. and links, so a key that resolves outside the cluster
+	# dir is not copied. The copy keeps the configured name (-s: links not
+	# resolved), as cluster.conf names that.
+	if [[ -n ${ssh_key_file:-} && $ssh_key_file != /* && $ssh_key_file != \~* ]] && [ -s "$ssh_key_file.pub" ]; then
+		local _cdir _pub _rel
+		_cdir=$(realpath "$PWD")
+		_pub=$(realpath -m "$ssh_key_file.pub")
+		_rel=$(realpath -m -s --relative-to="$PWD" "$PWD/$ssh_key_file.pub")
+		if [[ $_pub == "$_cdir"/* && $_rel != ../* ]]; then
+			mkdir -p "$_state_dir/backup/$(dirname "$_rel")"
+			cp -p "$_pub" "$_state_dir/backup/$_rel"
+		fi
+	fi
 
 	# Backup marker/flag files
 	local _flag
