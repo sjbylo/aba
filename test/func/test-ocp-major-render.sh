@@ -3,7 +3,7 @@
 # Regression for: ADR-005 removed ocp_major from normalize output. The
 # image-content-sources template then raised UndefinedError, the assignment
 # kept the empty output, and install-config.yaml was reported as generated
-# with no ImageDigestSources. mirror.conf.j2 silently wrote /ocp/openshift.
+# with no imageDigestSources. mirror.conf.j2 silently wrote /ocp/openshift.
 
 cd "$(dirname "$0")/../.." || exit 1
 

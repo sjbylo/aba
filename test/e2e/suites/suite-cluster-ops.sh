@@ -266,8 +266,8 @@ e2e_run "Generate install-config.yaml (direct mode)" \
 e2e_run "Direct mode: no additionalTrustBundle" \
 	"! grep -q 'additionalTrustBundle' $_REGEN_DIR/install-config.yaml"
 
-e2e_run "Direct mode: no ImageDigestSources" \
-	"! grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
+e2e_run "Direct mode: no imageDigestSources" \
+	"! grep -q '[Ii]mageDigestSources' $_REGEN_DIR/install-config.yaml"
 
 e2e_run "Change image_source to mirror mode (sed)" \
 	"sleep 1 && sed -i 's/^image_source=direct/image_source=mirror/' $_REGEN_DIR/cluster.conf"
@@ -278,8 +278,8 @@ e2e_run "Regenerate install-config.yaml (mirror mode)" \
 e2e_run "Mirror mode: has additionalTrustBundle" \
 	"grep -q 'additionalTrustBundle' $_REGEN_DIR/install-config.yaml"
 
-e2e_run "Mirror mode: has ImageDigestSources" \
-	"grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
+e2e_run "Mirror mode: has imageDigestSources" \
+	"grep -q '^imageDigestSources:' $_REGEN_DIR/install-config.yaml"
 
 e2e_run "Change back to direct (sed)" \
 	"sleep 1 && sed -i 's/^image_source=.*/image_source=direct/' $_REGEN_DIR/cluster.conf"
@@ -290,8 +290,8 @@ e2e_run "Regenerate install-config.yaml (direct again)" \
 e2e_run "Direct mode (round 2): no additionalTrustBundle" \
 	"! grep -q 'additionalTrustBundle' $_REGEN_DIR/install-config.yaml"
 
-e2e_run "Direct mode (round 2): no ImageDigestSources" \
-	"! grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
+e2e_run "Direct mode (round 2): no imageDigestSources" \
+	"! grep -q '[Ii]mageDigestSources' $_REGEN_DIR/install-config.yaml"
 
 e2e_run "Restore aba.conf" "cp aba.conf.regen-bak aba.conf && rm -f aba.conf.regen-bak"
 e2e_run "Clean up regen test dir" "rm -rf $_REGEN_DIR"

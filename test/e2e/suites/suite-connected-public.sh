@@ -94,8 +94,8 @@ test_begin "Direct mode: verify install-config.yaml"
 
 # Direct mode should NOT have mirror/digest sources or proxy config
 assert_file_exists "$SNO/install-config.yaml"
-e2e_run "Verify no ImageDigestSources in direct mode" \
-    "! grep ImageDigestSources $SNO/install-config.yaml"
+e2e_run "Verify no imageDigestSources in direct mode" \
+    "! grep '[Ii]mageDigestSources' $SNO/install-config.yaml"
 e2e_run "Verify no imageContentSources in direct mode" \
     "! grep imageContentSources $SNO/install-config.yaml"
 e2e_run "Verify no additionalTrustBundle in direct mode" \
@@ -155,8 +155,8 @@ e2e_run "Verify httpsProxy in proxy mode" \
     "grep httpsProxy $SNO/install-config.yaml"
 e2e_run "Verify noProxy in proxy mode" \
     "grep noProxy $SNO/install-config.yaml"
-e2e_run "Verify no ImageDigestSources in proxy mode" \
-    "! grep ImageDigestSources $SNO/install-config.yaml"
+e2e_run "Verify no imageDigestSources in proxy mode" \
+    "! grep '[Ii]mageDigestSources' $SNO/install-config.yaml"
 
 test_end
 
