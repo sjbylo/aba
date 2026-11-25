@@ -2157,6 +2157,7 @@ See [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup) for details and 
 
 - *Connected workstation*: `aba/templates/rpms-external.txt`
 - *Disconnected bastion*: `aba/templates/rpms-internal.txt`
+- *Remote mirror host*: `aba/templates/rpms-remote.txt`
 
 ---
 

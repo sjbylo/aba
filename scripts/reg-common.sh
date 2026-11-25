@@ -1534,7 +1534,11 @@ reg_remote_pre_install() {
 	> .remote_host_check.out
 	$_ssh "set -x; ip a" >> .remote_host_check.out 2>&1
 
-	reg_ensure_remote_pkgs "$_ssh" podman jq hostname tar openssl
+	# Not rpms-internal.txt. A remote mirror host does not run make, python,
+	# or nmstate. acl is on this list because mirror-registry's Ansible
+	# runs setfacl on the SSH target. htpasswd stays in the Docker script.
+	# mirror/.init links templates/ here, same as the other RPM lists.
+	reg_ensure_remote_pkgs "$_ssh" $(cat templates/rpms-remote.txt)
 
 	$_ssh "podman images" >> .remote_host_check.out 2>&1 || \
 		aba_abort "podman is not working on remote host '$reg_host'." \
