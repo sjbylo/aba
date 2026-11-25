@@ -190,6 +190,14 @@ fi
 # so an older combined aba-sigstore.yaml is split before the next mirror.
 scripts/ensure-sigstore-registries.sh
 
+# A connected host can dnf. install -q runs on every aba start, so a missing
+# package from the external list is put back before the command runs. A bundle
+# has no repos; a missing RPM there is a bundle bug, not something to fetch.
+_install_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$_install_dir/.bundle" ]; then
+	"$_install_dir/scripts/install-rpms.sh" external
+fi
+
 [ ! "$quiet" ] && _step "Config initialized"
 
 source scripts/include_all.sh

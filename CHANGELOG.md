@@ -1,10 +1,32 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.7...HEAD)
 
+Bare-metal servers can be powered through the BMC, and Quay installs keep working now that mirror-registry 3.0.0 is published as latest.
+
+### Added
+
+- **Bare-metal power through the BMC** — `aba stop` sends Redfish GracefulShutdown and `aba kill` sends ForceOff, for every host in `bmc.conf`. Each call waits until that node reports the wanted PowerState. A 401 logs in once more and does not send a second Reset. The wait is capped at 120 seconds. Declining the power-off prompt leaves the nodes on and exits non-zero. `--workers` and `--masters` are rejected on bare metal. `aba startup` asks before power-on. Yes, Enter, and `aba -y` power the nodes on and then wait for the API. No stops the run. Without `bmc.conf`, startup still asks you to turn the servers on yourself. Power-off contributed by **Mateusz Slugocki** ([@mateuszslugocki](https://github.com/mateuszslugocki)) in [#53](https://github.com/sjbylo/aba/pull/53).
+- **A public SSH key is enough** (Contributed by @mateuszslugocki in [#57](https://github.com/sjbylo/aba/pull/57)) — `ssh_key_file` may name a key whose only file on disk is the `.pub`. That file must be one OpenSSH public key line, and it is copied into `install-config.yaml` as it is. An OpenSSH certificate is rejected. A missing absolute or `~/` path that ends in `.pub` is rejected. `aba ssh`, shutdown, and rescue, when the private key is absent, try ssh-agent and the default keys in `~/.ssh`.
+
+### Changed
+
+- **A removed package is installed again** — On a host that is not an install bundle, every `aba` start installs any missing package from the external list. A bundle is left alone.
+- **`aba shutdown` drains one node at a time** — Nodes with the worker role drain one at a time. A drain that does not finish warns, and shutdown continues. Dedicated workers shut down first, then the other control-plane nodes, then the node that holds the API VIP. A node whose VM is already off is left alone. `oc debug` is skipped on a node that is not Ready.
+- **`aba ls` and agent-config share one hostname list** — The templates print the names `create-agent-config` built, including the SNO name. After `aba delete`, `aba ls` reads those names from `cluster.conf`. `No resources` means the hypervisor answered and every domain is absent. If the hypervisor cannot be reached, `aba ls` exits with an error and does not print that line.
+- **Bare-metal MAC guidance** (Contributed by @mateuszslugocki in [#56](https://github.com/sjbylo/aba/pull/56)) — The README no longer says BMC discovery fills `agent-config.yaml`. Set MACs in `macs.conf` or in that file. `mac_prefix` is for VMware and KVM only. A new bare-metal cluster without `macs.conf` gets placeholder MACs, and `aba install` stops while those placeholders remain.
+- **The OKD section sits with the later workflow** — It is no longer the first body heading. The contents list matches.
+- **The README names who contributed** — A Contributors section lists pull requests and suggestions that shipped.
+- **Feature ideas go to GitHub issues** — The README line that read as a help plea now points at issues.
+- **The TUI thumbnail strip is hidden** — The stills under the mirror-sync animation are commented out. The animation stays.
+- **The README gif helper takes a width alone** — `tools/tui-record.sh gif RUN_DIR 900` is the README size. The output name is optional, and the destination must end in `.gif`.
+
 ### Fixed
 
 - **Sigstore namespaces are one file each** — `registry.redhat.io` and `registry.access.redhat.com` live in files of those names under `~/.config/containers/registries.d`, the same names the OS and oc-mirror 2.0 use. `aba-sigstore.yaml` keeps the quay.io release rule. The next `aba` start splits an older combined file, so those namespaces are not defined twice.
 - **Quay installs stay on mirror-registry 2.0.13** — `https://mirror.openshift.com/pub/cgw/mirror-registry/latest` now publishes 3.0.0, the OMR installer, which rejects `--quayHostname`. The Quay download is pinned to 2.0.13, the newest 2.x. A tarball from another release is replaced only when `reg_vendor=quay`. Docker and omr files are left as they are.
 - **OMR pulls the official image** — the omr vendor uses `registry.redhat.io/openshift/mirror-registry-rhel9:v3.0` instead of `quay.io/sjbylo/quay-mirror:dev`.
+- **A failed VM power-off is a failure** — On VMware and KVM, `aba stop` and `aba kill` no longer treat every provider error as success. Declining that prompt is still success.
+- **`imageDigestSources` is lowercase** (Contributed by @mateuszslugocki in [#55](https://github.com/sjbylo/aba/pull/55)) — `install-config.yaml` used `ImageDigestSources`, which the installer does not read. Mirror sources are written as `imageDigestSources`.
+- **A primed bundle omits the builder's registry login** (Contributed by @mateuszslugocki in [#54](https://github.com/sjbylo/aba/pull/54)) — The cluster `regcreds` symlink points at that user's `~/.aba/mirror`. The tar leaves the link out. The mirror `regcreds` link was already excluded.
 
 ---
 
