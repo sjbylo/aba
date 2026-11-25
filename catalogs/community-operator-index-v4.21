@@ -282,6 +282,7 @@ seldon-operator Seldon Operator stable
 self-node-remediation Self Node Remediation Operator - Community Edition stable
 service-binding-operator Service Binding Operator stable
 shellwarden-operator Denegra Shellwarden for NVIDIA OpenShell alpha
+shiftwise-operator ShiftWise Operator stable
 sigstore-helm-operator sigstore alpha
 silicom-sts-operator Silicom STS Operator alpha
 simplyblock-operator Simplyblock Operator alpha

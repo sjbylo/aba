@@ -279,6 +279,7 @@ sap-hana-express-operator SAP Hana Express Operator stable
 seldon-operator Seldon Operator stable
 self-node-remediation Self Node Remediation Operator - Community Edition stable
 service-binding-operator Service Binding Operator stable
+shiftwise-operator ShiftWise Operator stable
 shipwright-operator Shipwright Operator alpha
 sigstore-helm-operator sigstore alpha
 silicom-sts-operator Silicom STS Operator alpha

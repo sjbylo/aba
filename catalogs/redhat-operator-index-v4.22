@@ -30,7 +30,7 @@ cluster-observability-operator Cluster Observability Operator stable
 clusterresourceoverride ClusterResourceOverride Operator stable
 compliance-operator Compliance Operator stable
 console-plugin-operator External Secrets Management Console tech-preview-v1
-container-security-operator Red Hat Quay Container Security Operator stable-3.18
+container-security-operator Red Hat Quay Container Security Operator stable-5.0
 costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
@@ -104,12 +104,13 @@ openshift-gitops-operator Red Hat OpenShift GitOps latest
 openshift-pipelines-operator-rh Red Hat OpenShift Pipelines latest
 openshift-secondary-scheduler-operator Secondary Scheduler Operator for Red Hat OpenShift stable
 openshift-zero-trust-workload-identity-manager Zero Trust Workload Identity Manager stable-v1
+openstack-operator OpenStack stable-v1.0
 opentelemetry-product Red Hat build of OpenTelemetry stable
 pf-status-relay-operator pf-status-relay-operator stable
 policy-controller-operator Policy Controller Operator stable
 ptp-operator PTP Operator stable
-quay-bridge-operator Red Hat Quay Bridge Operator stable-3.18
-quay-operator Red Hat Quay stable-3.18
+quay-bridge-operator Red Hat Quay Bridge Operator stable-5.0
+quay-operator Red Hat Quay stable-5.0
 recipe Recipe stable-4.22
 red-hat-hawtio-operator HawtIO Operator v2
 redhat-oadp-operator OADP Operator stable

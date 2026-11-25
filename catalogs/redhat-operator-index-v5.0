@@ -26,7 +26,7 @@ cluster-logging Red Hat OpenShift Logging stable-6.7
 cluster-observability-operator Cluster Observability Operator stable
 clusterresourceoverride ClusterResourceOverride Operator stable
 compliance-operator Compliance Operator stable
-container-security-operator Red Hat Quay Container Security Operator stable-3.18
+container-security-operator Red Hat Quay Container Security Operator stable-5.0
 costmanagement-metrics-operator Cost Management Metrics Operator stable
 cryostat-operator Red Hat build of Cryostat stable
 datagrid Data Grid stable
@@ -86,6 +86,7 @@ odf-prometheus-operator Prometheus Operator stable-5.0
 odr-cluster-operator Openshift DR Cluster Operator stable-5.0
 odr-hub-operator Openshift DR Hub Operator stable-5.0
 odr-volsync-plugin-operator OpenShift DR VolSync Plugin Operator stable-5.0
+openperouter-operator OpenPERouter Operator alpha
 openshift-cert-manager-operator cert-manager Operator for Red Hat OpenShift stable-v1
 openshift-custom-metrics-autoscaler-operator Custom Metrics Autoscaler stable
 openshift-external-secrets-operator External Secrets Operator for Red Hat OpenShift stable-v1
@@ -97,8 +98,8 @@ opentelemetry-product Red Hat build of OpenTelemetry stable
 pf-status-relay-operator pf-status-relay-operator stable
 policy-controller-operator Policy Controller Operator stable
 ptp-operator PTP Operator stable
-quay-bridge-operator Red Hat Quay Bridge Operator stable-3.18
-quay-operator Red Hat Quay stable-3.18
+quay-bridge-operator Red Hat Quay Bridge Operator stable-5.0
+quay-operator Red Hat Quay stable-5.0
 recipe Recipe stable-5.0
 red-hat-hawtio-operator HawtIO Operator v2
 redhat-oadp-operator OADP Operator stable
