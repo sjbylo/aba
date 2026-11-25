@@ -78,8 +78,16 @@ vm_on_any() {
 }
 
 # Print a "Name CPU Memory State" table for the cluster's VMs (skips absent VMs).
+# "No resources" means the hypervisor answered and every domain is absent.
+# A dead hypervisor is exit 2, not an empty list.
 vm_ls() {
-	local name vm info output= header="Name CPU Memory State"
+	local name vm info output= header="Name CPU Memory State" _rc=0
+	# A name that is not a cluster VM. Exit 2 means the hypervisor could not be asked.
+	vmp_exists "__aba_ls_probe__" || _rc=$?
+	if [ "$_rc" -gt 1 ]; then
+		echo "Cannot reach the hypervisor — not reporting VMs as absent" >&2
+		return 2
+	fi
 	for name in $(_vm_hosts all); do
 		vm=$(_vm_full_name "$name")
 		info=$(vmp_info "$vm") || continue
@@ -115,40 +123,68 @@ vm_start() {
 	return 0
 }
 
-# Gracefully stop every VM in scope. Honours 'ask'. With wait=1, blocks until
-# all are off. No-op if no VMs are powered on. Scope: all|workers|masters.
+# Gracefully stop every VM in scope that is still on. Honours 'ask'. With
+# wait=1, blocks until all are off. A VM that is already off is left alone.
+# A failure on one VM does not stop the others. Scope: all|workers|masters.
 vm_stop() {
-	local scope=${1:-all} name
+	local scope=${1:-all} name vm failed=
 	# Nothing to stop if no VMs are running
 	vm_on_any || return 0
 	if [ "${ask:-}" ]; then
-		local _names
-		_names=$(_vm_list_names "$scope")
+		local _names=""
+		for name in $(_vm_hosts "$scope"); do
+			vm=$(_vm_full_name "$name")
+			vmp_is_on "$vm" || continue
+			_names="${_names:+$_names
+}$vm"
+		done
+		[ -n "$_names" ] || return 0
 		echo
 		echo "$_names"
-		ask "Stop virtual machine(s): $_names" || return 1
+		# 2: the user declined. The vmw/kvm shims exit 0 for that and keep a real failure.
+		ask "Stop virtual machine(s): $_names" || return 2
 	fi
 	for name in $(_vm_hosts "$scope"); do
-		vmp_power_off "$(_vm_full_name "$name")"
+		vm=$(_vm_full_name "$name")
+		if ! vmp_is_on "$vm"; then
+			continue
+		fi
+		vmp_power_off "$vm" || failed=1
 	done
 	[ "${wait:-}" ] && _vm_wait_all "$scope" off "Waiting for VMs to shut off (Ctrl-C to abort)"
+	[ -n "$failed" ] && return 1
 	return 0
 }
 
-# Immediately power off every cluster VM. Honours 'ask'.
+# Immediately power off every cluster VM that is still on. Honours 'ask'.
 # No-op (return 0) if no VMs exist or none are powered on.
+# A failure on one VM does not stop the others.
 vm_kill() {
-	local name
+	local name vm failed=
 	# Nothing to kill if no VMs are running
 	vm_on_any || return 0
 	if [ "${ask:-}" ]; then
+		local _names=""
+		for name in $(_vm_hosts all); do
+			vm=$(_vm_full_name "$name")
+			vmp_is_on "$vm" || continue
+			_names="${_names:+$_names
+}$vm"
+		done
+		[ -n "$_names" ] || return 0
 		echo
-		_vm_list_names all
-		ask "Immediately power down the above virtual machine(s)" || return 1
+		echo "$_names"
+		# 2: the user declined. The vmw/kvm shims exit 0 for that and keep a real failure.
+		ask "Immediately power down the above virtual machine(s)" || return 2
 	fi
 	for name in $(_vm_hosts all); do
-		vmp_kill "$(_vm_full_name "$name")"
+		vm=$(_vm_full_name "$name")
+		if ! vmp_is_on "$vm"; then
+			continue
+		fi
+		vmp_kill "$vm" || failed=1
 	done
+	[ -n "$failed" ] && return 1
 	return 0
 }
 

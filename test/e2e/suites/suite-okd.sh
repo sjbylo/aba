@@ -34,6 +34,23 @@ DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 SNO="$(pool_cluster_name sno)"
 
+# aba --version writes the version, starts cli-download-all.sh and the
+# catalog downloads, and returns. Both keep running under ~/.aba/runner.
+# Wait, then require each task's exit file to be 0 and the pid to be gone.
+# The catalog wait has to finish too: its run_once waiters are subshells of
+# that aba process, so a suite that only waits for the CLIs still looks like
+# it left aba running.
+okd_wait_cli_downloads() {
+	e2e_run "Wait for CLI downloads started by --version" \
+		"cd ~/aba && scripts/cli-download-all.sh --wait"
+	e2e_run "Runner exit files are 0 and those downloads have exited" \
+		'cd ~/aba && items=$(make --no-print-directory -sC cli out-download-all) || exit 1; [ -n "$items" ] || exit 1; for item in $items; do d="$HOME/.aba/runner/cli:download:${item}"; rc=$(cat "$d/exit" 2>/dev/null) || rc=MISSING; echo "cli:download:$item exit=$rc"; [ "$rc" = 0 ] || exit 1; if [ -f "$d/pid" ] && kill -0 "$(cat "$d/pid")" 2>/dev/null; then echo "still running: cli:download:$item pid $(cat "$d/pid")"; exit 1; fi; done'
+	e2e_run "Wait for catalog downloads started by --version" \
+		"cd ~/aba && scripts/download-and-wait-catalogs.sh"
+	e2e_run "Catalog runner exit files are 0 and those downloads have exited" \
+		'cd ~/aba && source scripts/include_all.sh && source <(normalize-aba-conf) && minor=$(_ver_minor "$ocp_version") && [ -n "$minor" ] || exit 1; for catalog in $(dist_catalogs); do d="$HOME/.aba/runner/catalog:${minor}:${catalog}"; rc=$(cat "$d/exit" 2>/dev/null) || rc=MISSING; echo "catalog:$minor:$catalog exit=$rc"; [ "$rc" = 0 ] || exit 1; if [ -f "$d/pid" ] && kill -0 "$(cat "$d/pid")" 2>/dev/null; then echo "still running: catalog:$minor:$catalog pid $(cat "$d/pid")"; exit 1; fi; done'
+}
+
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
@@ -68,6 +85,7 @@ e2e_run "Select OKD stable and the previous release" \
 	"aba --distribution okd --noask --platform vmw --channel stable --version previous \
 		--base-domain $(pool_domain) --machine-network $(pool_machine_network) \
 		--gateway $(pool_gateway) --dns $(pool_dns_server) --ntp ${NTP_IP}"
+okd_wait_cli_downloads
 
 e2e_run "Verify distribution=okd" "grep '^distribution=okd' aba.conf"
 e2e_run "Verify channel=stable" "grep '^ocp_channel=stable' aba.conf"
@@ -275,6 +293,7 @@ e2e_run_remote "Uninstall the registry" \
 e2e_run "Restore OpenShift defaults" \
 	"aba --distribution ocp --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} \
 		--base-domain $(pool_domain) --machine-network $(pool_machine_network) --gateway $(pool_gateway)"
+okd_wait_cli_downloads
 e2e_run "distribution is OpenShift" "grep -q '^distribution=ocp$' aba.conf"
 
 test_end

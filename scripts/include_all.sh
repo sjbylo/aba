@@ -47,7 +47,7 @@ _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.c
 # Registry vendor name for the new Go-based Quay mirror registry.
 # Single rename point — change here to rename the vendor everywhere.
 _OMR_VENDOR="omr"
-_OMR_IMAGE="${OMR_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
+_OMR_IMAGE="${OMR_IMAGE:-registry.redhat.io/openshift/mirror-registry-rhel9:v3.0}"
 
 # OMR debug flag: pass -log-level debug when ABA is in debug mode (aba -D)
 _OMR_LOG_FLAG=""
@@ -412,6 +412,101 @@ vm_name() {
 	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
 	local cluster=$1 host=$2
 	[ "${CP_REPLICAS:-${num_masters:-0}}" = "1" ] && [ "${WORKER_REPLICAS:-${num_workers:-0}}" = "0" ] && echo "$host" || echo "${cluster}-${host}"
+}
+
+# Hostname of node i (1-based, masters first).
+# Caller has already loaded cluster.conf. SNO's only node is the cluster name.
+# Every other node is <master_prefix>N or <worker_prefix>N. Agent-config
+# templates print the list from cluster_host_names; they do not rebuild it.
+cluster_host_name() {
+	local i=$1
+	if [ "$i" -le "$num_masters" ]; then
+		if [ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ]; then
+			printf '%s\n' "$cluster_name"
+			return 0
+		fi
+		printf '%s\n' "${master_prefix}${i}"
+		return 0
+	fi
+	printf '%s\n' "${worker_prefix}$(( i - num_masters ))"
+}
+
+# Every node hostname, masters first, one per line.
+# One line per name so a cluster with no workers does not end on a blank
+# line. A blank line would be dropped by $(...).
+cluster_host_names() {
+	local i=1 total=$(( num_masters + num_workers ))
+	while [ "$i" -le "$total" ]; do
+		cluster_host_name "$i"
+		i=$(( i + 1 ))
+	done
+}
+
+# Print export lines for the VM identity in cluster.conf.
+# aba delete removes install-config.yaml and agent-config.yaml. cluster.conf
+# still has the counts and prefixes, so aba ls can ask the hypervisor about
+# the same names create-agent-config.sh wrote.
+vm_names_from_cluster_conf() {
+	local cluster_name num_masters num_workers master_prefix worker_prefix
+	local cp_names worker_names i host
+
+	[ -s cluster.conf ] || { echo "cluster.conf is missing" >&2; return 1; }
+	# shellcheck disable=SC1090
+	source <(normalize-cluster-conf)
+	[ -n "${cluster_name:-}" ] || { echo "cluster_name is missing from cluster.conf" >&2; return 1; }
+	# An empty count is 0 in arithmetic, which would list no VMs.
+	case "${num_masters:-}" in
+		''|*[!0-9]*) echo "num_masters must be set in cluster.conf" >&2; return 1 ;;
+	esac
+	case "${num_workers:-}" in
+		''|*[!0-9]*) echo "num_workers must be set in cluster.conf" >&2; return 1 ;;
+	esac
+
+	cp_names=
+	worker_names=
+	i=1
+	while IFS= read -r host; do
+		if [ "$i" -le "$num_masters" ]; then
+			if [ -n "$cp_names" ]; then
+				cp_names="$cp_names $host"
+			else
+				cp_names=$host
+			fi
+		else
+			if [ -n "$worker_names" ]; then
+				worker_names="$worker_names $host"
+			else
+				worker_names=$host
+			fi
+		fi
+		i=$(( i + 1 ))
+	done < <(cluster_host_names)
+
+	printf 'export CLUSTER_NAME=%q\n' "$cluster_name"
+	printf 'export CP_REPLICAS=%q\n' "$num_masters"
+	printf 'export WORKER_REPLICAS=%q\n' "$num_workers"
+	printf 'export num_masters=%q\n' "$num_masters"
+	printf 'export num_workers=%q\n' "$num_workers"
+	printf 'export CP_NAMES=%q\n' "$cp_names"
+	printf 'export WORKER_NAMES=%q\n' "$worker_names"
+}
+
+# Load CLUSTER_NAME / CP_NAMES / WORKER_NAMES for vm_ls.
+# The generated YAML wins. After aba delete only cluster.conf remains.
+vm_load_names() {
+	local _names
+	[ -n "${CLUSTER_NAME:-}" ] && return 0
+	if [ -s install-config.yaml ] && [ -s agent-config.yaml ]; then
+		scripts/cluster-config-check.sh || return 1
+		eval "$(scripts/cluster-config.sh)" || return 1
+		return 0
+	fi
+	if [ -s cluster.conf ]; then
+		_names=$(vm_names_from_cluster_conf) || return 1
+		eval "$_names"
+		return 0
+	fi
+	aba_abort "Cannot list VMs: install-config.yaml, agent-config.yaml, and cluster.conf are missing"
 }
 
 _vm_annotation() {
@@ -932,6 +1027,24 @@ normalize-cluster-conf()
 # True if the cluster uses a mirror registry (not direct/proxy).
 image_source_is_mirror() {
 	[[ "${image_source:-mirror}" != "direct" && "${image_source:-mirror}" != "proxy" ]]
+}
+
+# Set ssh_id_opts to the ssh identity options for cluster key file $1
+# (ssh_key_file in cluster.conf, run from the cluster dir).
+# Returns 1 with ssh_id_opts empty when there is no private key file: ssh then
+# gets no -i and uses ssh-agent and the ~/.ssh default keys, as it did for a
+# missing -i file. That keeps working for a public-key-only ssh_key_file
+# (create-install-config.sh needs no more) and for the ~/.ssh/id_rsa default
+# when the node takes another key. "-i <key>.pub" is not used: OpenSSH then
+# fails when the private key is a default ~/.ssh/id_* file.
+# Never aborts: the TUI calls it too.
+# shellcheck disable=SC2034 # ssh_id_opts is read by the caller
+cluster_ssh_id_opts() {
+	local _key="${1/#\~/$HOME}"	# a default like "~/.ssh/id_rsa" can arrive unexpanded
+
+	ssh_id_opts=()
+	[ -s "$_key" ] || return 1
+	ssh_id_opts=(-i "$_key")
 }
 
 # Print the mirror directory name.  Only meaningful when image_source_is_mirror.
@@ -2011,6 +2124,23 @@ externalize_cluster_state() {
 	[ -f install-config.yaml ] && cp -p install-config.yaml "$_state_dir/backup/"
 	[ -f agent-config.yaml ] && cp -p agent-config.yaml "$_state_dir/backup/"
 	[ -f macs.conf ] && cp -p macs.conf "$_state_dir/backup/"
+	# A relative ssh_key_file in the cluster dir: without its .pub a recreated
+	# dir would get a new key from create-install-config.sh. Public key only: the
+	# private key never goes into the state dir. An absolute path is the
+	# operator's own key location and stays valid, so it is not copied.
+	# realpath resolves .. and links, so a key that resolves outside the cluster
+	# dir is not copied. The copy keeps the configured name (-s: links not
+	# resolved), as cluster.conf names that.
+	if [[ -n ${ssh_key_file:-} && $ssh_key_file != /* && $ssh_key_file != \~* ]] && [ -s "$ssh_key_file.pub" ]; then
+		local _cdir _pub _rel
+		_cdir=$(realpath "$PWD")
+		_pub=$(realpath -m "$ssh_key_file.pub")
+		_rel=$(realpath -m -s --relative-to="$PWD" "$PWD/$ssh_key_file.pub")
+		if [[ $_pub == "$_cdir"/* && $_rel != ../* ]]; then
+			mkdir -p "$_state_dir/backup/$(dirname "$_rel")"
+			cp -p "$_pub" "$_state_dir/backup/$_rel"
+		fi
+	fi
 
 	# Backup marker/flag files
 	local _flag
@@ -7036,10 +7166,18 @@ ensure_butane() {
 	run_once -w -m "Installing butane" -i "$TASK_INST_BUTANE"
 }
 
+# A cached mirror-registry 3.0.0 tarball must be removed before run_once
+# treats the quay download as finished. The Make target no-ops unless
+# reg_vendor=quay.
+_quay_refresh_pinned_tarball() {
+	bash -c "$_MIRROR_MAKE" _ quay-tarball-pin
+}
+
 # Ensure mirror-registry (Quay) is installed (extracted)
 # Wait: aba.sh starts $TASK_INST_QUAY_REG and $TASK_DL_QUAY_REG in background
 ensure_quay_registry() {
 	aba_debug "ensure_quay_registry: installing mirror-registry"
+	_quay_refresh_pinned_tarball
 	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	run_once -q -w -i "$TASK_DL_QUAY_REG"
 
@@ -7050,6 +7188,7 @@ ensure_quay_registry() {
 # Start all registry vendor downloads in background (non-blocking)
 # Used by: aba.sh pre-fetch, tui-direct.sh early download
 start_all_registry_downloads() {
+	_quay_refresh_pinned_tarball
 	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	run_once -i "$TASK_DL_DOCKER_REG" -- "${CMD_DL_DOCKER_REG[@]}"
 	run_once -i "$TASK_DL_OMR_REG" -- "${CMD_DL_OMR_REG[@]}"

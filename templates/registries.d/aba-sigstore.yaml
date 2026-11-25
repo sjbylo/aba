@@ -13,7 +13,15 @@
 # preserved for OCP 4.21+ ClusterImagePolicy verification.
 #
 # The defaults below disable sigstore globally and re-enable it
-# only for registries known to carry valid signatures.
+# only for the OpenShift release registry.
+#
+# registry.redhat.io and registry.access.redhat.com are not in this
+# file. The OS and oc-mirror 2.0 already define those names in
+# registry.redhat.io.yaml and registry.access.redhat.com.yaml.
+# oc-mirror copies every registries.d file into one directory and
+# rejects the same docker namespace in two files. ABA's copies use
+# those same filenames so they replace the packaged file instead of
+# sitting beside it.
 #
 # --- Customisation examples ---
 #
@@ -39,8 +47,3 @@ default-docker:
 docker:
     quay.io/openshift-release-dev:
         use-sigstore-attachments: true
-    registry.redhat.io:
-        use-sigstore-attachments: true
-        lookaside: https://registry.redhat.io/containers/sigstore
-    registry.access.redhat.com:
-        lookaside: https://access.redhat.com/webassets/docker/content/sigstore

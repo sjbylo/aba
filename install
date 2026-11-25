@@ -186,15 +186,16 @@ if [ ! -f ~/.aba/config ]; then
 	fi
 fi
 
-# Deploy per-user registries.d config for sigstore signature handling
-_SIGSTORE_DEST="$HOME/.config/containers/registries.d/aba-sigstore.yaml"
-if [ ! -f "$_SIGSTORE_DEST" ]; then
-	if [ -f templates/aba-sigstore-config.yaml ]; then
-		mkdir -p "$HOME/.config/containers/registries.d"
-		cp templates/aba-sigstore-config.yaml "$_SIGSTORE_DEST"
-	else
-		echo "Warning: templates/aba-sigstore-config.yaml not found" >&2
-	fi
+# One file per sigstore namespace. install -q runs this on every aba start,
+# so an older combined aba-sigstore.yaml is split before the next mirror.
+scripts/ensure-sigstore-registries.sh
+
+# A connected host can dnf. install -q runs on every aba start, so a missing
+# package from the external list is put back before the command runs. A bundle
+# has no repos; a missing RPM there is a bundle bug, not something to fetch.
+_install_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$_install_dir/.bundle" ]; then
+	"$_install_dir/scripts/install-rpms.sh" external
 fi
 
 [ ! "$quiet" ] && _step "Config initialized"

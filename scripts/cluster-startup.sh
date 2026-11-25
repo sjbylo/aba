@@ -74,19 +74,28 @@ No: stop this run. Turn the servers on, then re-run:
     $(aba_cmd startup)"
 }
 
+_bm_startup_stop() {
+	aba_progress "FAIL|su_power"
+	aba_progress "ERROR|Bare-metal servers were not powered on"
+	aba_progress "NEXT|Power on the servers and re-run aba startup"
+	if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
+		aba_info "Stopped. Power on the bare-metal servers, then run aba startup again."
+	else
+		aba_info "Power on the servers, then re-run: $(aba_cmd startup)"
+	fi
+	exit 1
+}
+
 if [ "$platform" = "bm" ]; then
 	if ! _cluster_startup_api_up; then
-		# --always: prompt even when ask=false. aba -y still skips.
-		if ! ask -y --always "$(_bm_startup_ask)"; then
-			aba_progress "FAIL|su_power"
-			aba_progress "ERROR|Bare-metal servers were not powered on"
-			aba_progress "NEXT|Power on the servers and re-run aba startup"
-			if [ -n "${ABA_PROGRESS_FIFO:-}" ]; then
-				aba_info "Stopped. Power on the bare-metal servers, then run aba startup again."
-			else
-				aba_info "Power on the servers, then re-run: $(aba_cmd startup)"
-			fi
-			exit 1
+		if bmc_has_hosts; then
+			# ask -y: Enter and ask=false power the nodes on.
+			# aba -y sets ASK_OVERRIDE, so ask() answers yes and powers them on too.
+			ask -y "Power on bare-metal nodes via BMC" || _bm_startup_stop
+			scripts/bm-power.sh On || _bm_startup_stop
+		# No BMC hosts: still prompt when ask=false. aba -y answers yes and waits.
+		elif ! ask -y --always "$(_bm_startup_ask)"; then
+			_bm_startup_stop
 		fi
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 		_wait_rc=0

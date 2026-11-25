@@ -15,8 +15,7 @@ else
 fi
 
 if [ ! "$CLUSTER_NAME" ]; then
-	scripts/cluster-config-check.sh || exit 1
-	eval "$(scripts/cluster-config.sh)" || exit 1
+	vm_load_names || exit 1
 fi
 
 source scripts/vm-provider.sh

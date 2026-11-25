@@ -30,6 +30,10 @@ setup_mocks() {
 	cat > "$MOCK_DIR/virsh" <<-'EOF'
 	#!/bin/bash
 	# Minimal virsh mock. Recognises: dominfo <name>, domstate <name>.
+	if [ -n "${MOCK_VIRSH_DOWN:-}" ]; then
+		echo "virsh: cannot connect" >&2
+		exit 1
+	fi
 	cmd=
 	name=
 	for a in "$@"; do
@@ -57,7 +61,19 @@ setup_mocks() {
 	name=${!#}
 	exists() { for v in $MOCK_VMS;    do [ "$v" = "$name" ] && return 0; done; return 1; }
 	is_on()  { for v in $MOCK_VMS_ON; do [ "$v" = "$name" ] && return 0; done; return 1; }
-	if [ "$sub" = "vm.power" ]; then echo "power $2 $name"; exit 0; fi
+	if [ "$sub" = "vm.power" ]; then
+		[ -n "${MOCK_GOVC_LOG:-}" ] && echo "vm.power $2 $name" >> "$MOCK_GOVC_LOG"
+		if [ "$2" = "-s" ]; then
+			for v in $MOCK_TOOLS_DEAD; do
+				if [ "$v" = "$name" ]; then
+					echo "govc: VMware Tools is not running" >&2
+					exit 1
+				fi
+			done
+		fi
+		echo "power $2 $name"
+		exit 0
+	fi
 	if ! exists; then echo '{"virtualMachines":null}'; exit 0; fi
 	if is_on; then ps=poweredOn; else ps=poweredOff; fi
 	echo "{\"virtualMachines\":[{\"runtime\":{\"powerState\":\"$ps\"},\"config\":{\"hardware\":{\"numCPU\":8,\"memoryMB\":16384}}}]}"
@@ -225,6 +241,53 @@ done
 	&& ok "driver vm_ls: lists every cluster VM" \
 	|| bad "driver vm_ls: lists every cluster VM"
 
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  export CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
+  export MOCK_VMS=""
+  out=$(vm_ls)
+  [ "$out" = "No resources" ] ) \
+	&& ok "driver vm_ls: No resources when every domain is absent" \
+	|| bad "driver vm_ls: No resources when every domain is absent"
+
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  export CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
+  export MOCK_VIRSH_DOWN=1
+  vm_ls >/dev/null ) \
+	&& bad "driver vm_ls: unreachable hypervisor is not an empty list" \
+	|| ok "driver vm_ls: unreachable hypervisor is not an empty list"
+
+# Names after aba delete: YAML is gone, cluster.conf still has the counts.
+( tmp=$(mktemp -d)
+  cd "$tmp" || exit 1
+  printf '%s\n' 'cluster_name=e2e-sno2' 'num_masters=1' 'num_workers=0' 'master_prefix=master' 'worker_prefix=worker' > cluster.conf
+  eval "$(vm_names_from_cluster_conf)"
+  [ "$CLUSTER_NAME" = e2e-sno2 ] && [ "$CP_NAMES" = e2e-sno2 ] && [ -z "${WORKER_NAMES}" ] && [ "$num_masters" = 1 ]
+  rm -rf "$tmp" ) \
+	&& ok "vm_names_from_cluster_conf: SNO hostname is the cluster name" \
+	|| bad "vm_names_from_cluster_conf: SNO hostname is the cluster name"
+
+( tmp=$(mktemp -d)
+  cd "$tmp" || exit 1
+  printf '%s\n' 'cluster_name=std' 'num_masters=3' 'num_workers=2' 'master_prefix=ctrl' 'worker_prefix=compute' > cluster.conf
+  eval "$(vm_names_from_cluster_conf)"
+  [ "$CP_NAMES" = "ctrl1 ctrl2 ctrl3" ] && [ "$WORKER_NAMES" = "compute1 compute2" ]
+  rm -rf "$tmp" ) \
+	&& ok "vm_names_from_cluster_conf: uses prefixes from cluster.conf" \
+	|| bad "vm_names_from_cluster_conf: uses prefixes from cluster.conf"
+
+( tmp=$(mktemp -d)
+  cd "$tmp" || exit 1
+  printf '%s\n' 'cluster_name=std' 'num_workers=0' > cluster.conf
+  if vm_names_from_cluster_conf >/dev/null; then
+    rm -rf "$tmp"
+    exit 1
+  fi
+  rm -rf "$tmp" ) \
+	&& ok "vm_names_from_cluster_conf: missing num_masters fails" \
+	|| bad "vm_names_from_cluster_conf: missing num_masters fails"
+
 # ---------------------------------------------------------------------------
 # Driver: power verbs act on every cluster VM through the adapter primitives.
 # The mock virsh/govc don't change state, so we assert the driver iterates the
@@ -272,6 +335,51 @@ done
 	&& ok "driver vm_stop: shuts down every cluster VM (ask off)" \
 	|| bad "driver vm_stop: shuts down every cluster VM (ask off)"
 
+# A VM that is already off is not sent to the hypervisor again.
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  export ask= CLUSTER_NAME="ocp1" CP_NAMES="master1 master2" WORKER_NAMES="worker1"
+  export MOCK_VMS="ocp1-master1 ocp1-master2 ocp1-worker1"
+  export MOCK_VMS_ON="ocp1-master2 ocp1-worker1"
+  out=$(vm_stop 2>&1)
+  echo "$out" | grep -q "shutdown ocp1-master2" \
+    && echo "$out" | grep -q "shutdown ocp1-worker1" \
+    && ! echo "$out" | grep -q "shutdown ocp1-master1" ) \
+	&& ok "driver vm_stop: skips a VM that is already off" \
+	|| bad "driver vm_stop: skips a VM that is already off"
+
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  export ask= CLUSTER_NAME="ocp1" CP_NAMES="master1 master2" WORKER_NAMES="worker1"
+  export MOCK_VMS="ocp1-master1 ocp1-master2 ocp1-worker1"
+  export MOCK_VMS_ON="ocp1-master2 ocp1-worker1"
+  out=$(vm_kill 2>&1)
+  echo "$out" | grep -q "destroy ocp1-master2" \
+    && echo "$out" | grep -q "destroy ocp1-worker1" \
+    && ! echo "$out" | grep -q "destroy ocp1-master1" ) \
+	&& ok "driver vm_kill: skips a VM that is already off" \
+	|| bad "driver vm_kill: skips a VM that is already off"
+
+# Tools-not-running is permanent. One govc call, then aba kill, and the other VM is still stopped.
+( source scripts/vm-provider.sh
+  vm_provider_load vmw
+  export ask= CLUSTER_NAME="ocp1" CP_NAMES="master1 master2" WORKER_NAMES=""
+  export MOCK_VMS="ocp1-master1 ocp1-master2" MOCK_VMS_ON="ocp1-master1 ocp1-master2"
+  export MOCK_TOOLS_DEAD="ocp1-master1"
+  log=$(mktemp)
+  export MOCK_GOVC_LOG="$log"
+  rc=0
+  out=$(vm_stop 2>&1) || rc=$?
+  n=$(grep -c 'vm.power -s ocp1-master1' "$log" || true)
+  echo "$out" | grep -q "aba kill" \
+    && echo "$out" | grep -q "ocp1-master1" \
+    && grep -q 'vm.power -s ocp1-master2' "$log" \
+    && [ "$n" = "1" ] \
+    && [ "$rc" -ne 0 ]
+  rm -f "$log" ) \
+	&& ok "driver vm_stop: Tools failure is not retried and names aba kill" \
+	|| bad "driver vm_stop: Tools failure is not retried and names aba kill"
+
 # Host scoping: masters= restricts the verb to control-plane VMs only.
 ( source scripts/vm-provider.sh
   vm_provider_load kvm
@@ -282,6 +390,98 @@ done
   echo "$out" | grep -q "start ocp1-master1" && ! echo "$out" | grep -q "ocp1-worker1" ) \
 	&& ok "driver vm_start masters: scopes to control-plane VMs" \
 	|| bad "driver vm_start masters: scopes to control-plane VMs"
+
+# The vmw/kvm shims must keep a real power failure. A declined prompt is exit 0.
+grep -q '\[ "$_rc" -eq 2 \] && exit 0' scripts/vmw-stop.sh \
+	&& grep -q '\[ "$_rc" -eq 2 \] && exit 0' scripts/vmw-kill.sh \
+	&& grep -q '\[ "$_rc" -eq 2 \] && exit 0' scripts/kvm-stop.sh \
+	&& grep -q '\[ "$_rc" -eq 2 \] && exit 0' scripts/kvm-kill.sh \
+	&& ok "stop/kill shims: declined prompt exits 0, any other status is kept" \
+	|| bad "stop/kill shims: declined prompt exits 0, any other status is kept"
+
+# Run the real vmw-stop.sh. ask=false skips the prompt. Tools failure must
+# stay non-zero, and the other VM is still sent to govc.
+SHIM=$(mktemp -d)
+ln -s "$ABA_ROOT/scripts" "$SHIM/scripts"
+cat > "$SHIM/aba.conf" << 'EOF'
+ask=false
+verify_conf=off
+platform=vmw
+EOF
+cat > "$SHIM/vmware.conf" << 'EOF'
+GOVC_URL=https://vcenter.example.com
+GOVC_USERNAME=user
+GOVC_PASSWORD=test
+GOVC_INSECURE=1
+EOF
+(
+	cd "$SHIM"
+	export CLUSTER_NAME=ocp1 CP_NAMES="master1 master2" WORKER_NAMES=""
+	export MOCK_VMS="ocp1-master1 ocp1-master2" MOCK_VMS_ON="ocp1-master1 ocp1-master2"
+	export MOCK_TOOLS_DEAD="ocp1-master1" INFO_ABA=1
+	log=$(mktemp)
+	export MOCK_GOVC_LOG="$log"
+	rc=0
+	out=$(bash scripts/vmw-stop.sh 2>&1) || rc=$?
+	n=$(grep -c 'vm.power -s ocp1-master1' "$log" || true)
+	echo "$out" | grep -q "aba kill" \
+		&& echo "$out" | grep -q "ocp1-master1" \
+		&& grep -q 'vm.power -s ocp1-master2' "$log" \
+		&& [ "$n" = "1" ] \
+		&& [ "$rc" -ne 0 ]
+	rm -f "$log"
+) && ok "vmw-stop.sh: Tools failure stays non-zero and names aba kill" \
+	|| bad "vmw-stop.sh: Tools failure stays non-zero and names aba kill"
+
+# ask=true and the answer is no. That is not a power failure.
+printf 'ask=true\nverify_conf=off\nplatform=vmw\n' > "$SHIM/aba.conf"
+(
+	cd "$SHIM"
+	export CLUSTER_NAME=ocp1 CP_NAMES="master1 master2" WORKER_NAMES=""
+	export MOCK_VMS="ocp1-master1 ocp1-master2" MOCK_VMS_ON="ocp1-master1 ocp1-master2"
+	export MOCK_TOOLS_DEAD="" INFO_ABA=1
+	log=$(mktemp)
+	export MOCK_GOVC_LOG="$log"
+	rc=0
+	printf 'n\n' | bash scripts/vmw-stop.sh >/dev/null 2>&1 || rc=$?
+	[ "$rc" -eq 0 ] && [ ! -s "$log" ]
+	rm -f "$log"
+) && ok "vmw-stop.sh: declining the prompt exits 0 and does not power off" \
+	|| bad "vmw-stop.sh: declining the prompt exits 0 and does not power off"
+
+printf 'ask=false\nverify_conf=off\nplatform=vmw\n' > "$SHIM/aba.conf"
+(
+	cd "$SHIM"
+	export CLUSTER_NAME=ocp1 CP_NAMES="master1 master2" WORKER_NAMES=""
+	export MOCK_VMS="ocp1-master1 ocp1-master2" MOCK_VMS_ON="ocp1-master1 ocp1-master2"
+	export MOCK_TOOLS_DEAD="" INFO_ABA=1
+	log=$(mktemp)
+	export MOCK_GOVC_LOG="$log"
+	rc=0
+	out=$(bash scripts/vmw-kill.sh 2>&1) || rc=$?
+	echo "$out" | grep -q "ocp1-master1: powered off" \
+		&& echo "$out" | grep -q "ocp1-master2: powered off" \
+		&& grep -q 'vm.power -off ocp1-master1' "$log" \
+		&& grep -q 'vm.power -off ocp1-master2' "$log" \
+		&& [ "$rc" -eq 0 ]
+	rm -f "$log"
+) && ok "vmw-kill.sh: powers off every VM that is on" \
+	|| bad "vmw-kill.sh: powers off every VM that is on"
+
+(
+	cd "$SHIM"
+	export CLUSTER_NAME=ocp1 CP_NAMES="master1" WORKER_NAMES="worker1"
+	export MOCK_VMS="ocp1-master1 ocp1-worker1" MOCK_VMS_ON=""
+	export INFO_ABA=1
+	log=$(mktemp)
+	export MOCK_GOVC_LOG="$log"
+	rc=0
+	bash scripts/vmw-stop.sh >/dev/null 2>&1 || rc=$?
+	[ "$rc" -eq 0 ] && [ ! -s "$log" ]
+	rm -f "$log"
+) && ok "vmw-stop.sh: already off is exit 0 and govc is not called" \
+	|| bad "vmw-stop.sh: already off is exit 0 and govc is not called"
+rm -rf "$SHIM"
 
 echo ""
 echo "passed: $PASS  failed: $FAIL"

@@ -140,6 +140,17 @@ bmc_discover_ids() {
 	fi
 	printf -v "MEDIA_ID_${node}" '%s' "$media_id"
 
+	bmc_discover_system_id "$node" || return 1
+	local sys_var="SYSTEM_ID_${node}"
+	aba_debug "BMC: $node discover ok (manager=$mgr_id media=$media_id system=${!sys_var})"
+	return 0
+}
+
+# bmc_discover_system_id - populate SYSTEM_ID_<node> only. Power-off calls it
+# alone: it needs no VirtualMedia, and some BMCs have no CD slot.
+bmc_discover_system_id() {
+	local node="$1"
+
 	# Systems collection -> first member.
 	_redfish_request "$node" GET "/redfish/v1/Systems"
 	if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
@@ -154,7 +165,6 @@ bmc_discover_ids() {
 	fi
 	sys_id="${sys_link##*/}"
 	printf -v "SYSTEM_ID_${node}" '%s' "$sys_id"
-	aba_debug "BMC: $node discover ok (manager=$mgr_id media=$media_id system=$sys_id)"
 	return 0
 }
 
@@ -373,11 +383,7 @@ bmc_power_reset() {
 	aba_debug "BMC: $node PowerState=$state -> Reset=$reset_type"
 
 	# Step 3: POST Reset.
-	local body_tmp
-	body_tmp=$(mktemp /tmp/bmc_reset_${node}.XXXXXX)
-	jq -n --arg t "$reset_type" '{ResetType:$t}' > "$body_tmp"
-	_redfish_request "$node" POST "$sys_path/Actions/ComputerSystem.Reset" "$body_tmp"
-	rm -f "$body_tmp"
+	_bm_post_reset "$node" "$reset_type"
 
 	if [ "${_REDFISH_LAST_CODE:0:1}" = "2" ] || [ "${_REDFISH_LAST_CODE:0:1}" = "3" ]; then
 		return 0
@@ -393,34 +399,136 @@ bmc_power_reset() {
 	return 1
 }
 
+# _bm_post_reset - POST ComputerSystem.Reset with ResetType arg 2.
+_bm_post_reset() {
+	local node="$1" reset_type="$2"
+	local body_tmp
+	body_tmp=$(mktemp /tmp/bmc_reset_${node}.XXXXXX)
+	jq -n --arg t "$reset_type" '{ResetType:$t}' > "$body_tmp"
+	_redfish_request "$node" POST "/redfish/v1/Systems/$(_bm_system_id "$node")/Actions/ComputerSystem.Reset" "$body_tmp"
+	rm -f "$body_tmp"
+}
+
+# -----------------------------------------------------------------------------
+# bmc_power_off - power the system off (aba stop / aba kill on platform=bm).
+# Arg 2: GracefulShutdown or ForceOff. Already Off -> success, no POST.
+# GracefulShutdown answered with 400 (firmware does not support it) -> ForceOff.
+# Waits for PowerState=Off so the node IPs are free when it returns.
+# Sets _BM_RESET_SENT=1 once a Reset is accepted, so a caller that logs in again
+# after a 401 only waits and sends no second Reset.
+# -----------------------------------------------------------------------------
+
+bmc_power_off() {
+	local node="$1" reset_type="$2"
+	_BM_RESET_SENT=
+
+	_bm_read_power_state "$node" || return 1
+	local state=$_BM_POWER_STATE
+	if [ "$state" = "Off" ]; then
+		aba_debug "BMC: $node PowerState=Off, no Reset needed"
+		return 0
+	fi
+	# A second Reset while the node shuts down can get 409 and report a false failure.
+	if [ "$state" = "PoweringOff" ]; then
+		aba_debug "BMC: $node PowerState=PoweringOff, waiting for Off"
+		_bm_wait_power_state "$node" Off
+		return
+	fi
+
+	_bm_post_reset "$node" "$reset_type"
+	if [ "$reset_type" = "GracefulShutdown" ] && [ "$_REDFISH_LAST_CODE" = "400" ]; then
+		aba_debug "BMC: $node GracefulShutdown rejected (HTTP 400), sending ForceOff"
+		reset_type=ForceOff
+		_bm_post_reset "$node" "$reset_type"
+	fi
+	if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ] && [ "${_REDFISH_LAST_CODE:0:1}" != "3" ]; then
+		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "Reset $reset_type POST HTTP ${_REDFISH_LAST_CODE} (PowerState was $state)")
+		return 1
+	fi
+	_BM_RESET_SENT=1
+	_bm_wait_power_state "$node" Off
+}
+
+# -----------------------------------------------------------------------------
+# bmc_power_on - power the system on (aba startup on platform=bm).
+# Not bmc_power_reset: that sends ForceRestart to a node that is already On.
+# Off -> Reset On. Any other state (On, PoweringOn, ...) -> no POST. Then waits
+# for PowerState=On. No media, no boot override. Sets _BM_RESET_SENT like
+# bmc_power_off, so a caller that logs in again after a 401 sends no second Reset.
+# -----------------------------------------------------------------------------
+
+bmc_power_on() {
+	local node="$1"
+	_BM_RESET_SENT=
+
+	_bm_read_power_state "$node" || return 1
+	if [ "$_BM_POWER_STATE" = "Off" ]; then
+		_bm_post_reset "$node" On
+		if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ] && [ "${_REDFISH_LAST_CODE:0:1}" != "3" ]; then
+			_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "Reset On POST HTTP ${_REDFISH_LAST_CODE} (PowerState was Off)")
+			return 1
+		fi
+		_BM_RESET_SENT=1
+	else
+		aba_debug "BMC: $node PowerState=$_BM_POWER_STATE, no Reset needed"
+	fi
+	bmc_wait_power_on "$node"
+}
+
+# _bm_read_power_state - GET the System and set _BM_POWER_STATE.
+_bm_read_power_state() {
+	local node="$1"
+	_redfish_request "$node" GET "/redfish/v1/Systems/$(_bm_system_id "$node")"
+	if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
+		_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP ${_REDFISH_LAST_CODE} on GET System for PowerState read")
+		return 1
+	fi
+	_BM_POWER_STATE=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
+}
+
 # -----------------------------------------------------------------------------
 # bmc_wait_power_on - poll PowerState=On (D-20 fixed 120s / 2s interval).
+# _bm_wait_power_state - the same poll for a given state (On or Off).
 # -----------------------------------------------------------------------------
 
 bmc_wait_power_on() {
-	local node="$1"
+	_bm_wait_power_state "$1" On
+}
+
+_bm_wait_power_state() {
+	local node="$1" want="$2"
 	local sys
 	sys=$(_bm_system_id "$node")
 	local sys_path="/redfish/v1/Systems/$sys"
 
 	local elapsed=0 interval=2 max=120
-	local state
-	while [ "$elapsed" -lt "$max" ]; do
-		_redfish_request "$node" GET "$sys_path" || return 1
-		if [ "${_REDFISH_LAST_CODE:0:1}" != "2" ]; then
-			_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP ${_REDFISH_LAST_CODE} on PowerState poll")
+	# A poll that hits Redfish retries can take much longer than 2s: cap the real time too.
+	local deadline=$(( SECONDS + max ))
+	local state last_err=
+	while [ "$elapsed" -lt "$max" ] && [ "$SECONDS" -lt "$deadline" ]; do
+		_redfish_request "$node" GET "$sys_path"
+		# 401: return now, the callers log in again and poll once more.
+		if [ "$_REDFISH_LAST_CODE" = "401" ]; then
+			_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "HTTP 401 on PowerState poll")
 			return 1
 		fi
-		state=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
-		if [ "$state" = "On" ]; then
-			aba_debug "BMC: $node PowerState=On (after ${elapsed}s)"
-			return 0
+		if [ "${_REDFISH_LAST_CODE:0:1}" = "2" ]; then
+			state=$(jq -r '.PowerState // "Unknown"' "$_REDFISH_LAST_BODY")
+			if [ "$state" = "$want" ]; then
+				aba_debug "BMC: $node PowerState=$want (after ${elapsed}s)"
+				return 0
+			fi
+			last_err=
+		else
+			# A BMC often drops requests while the server changes power state: keep polling.
+			last_err="HTTP ${_REDFISH_LAST_CODE}"
+			aba_debug "BMC: $node $last_err on PowerState poll, polling again"
 		fi
 		sleep "$interval"
 		elapsed=$(( elapsed + interval ))
 	done
 	_REDFISH_LAST_CODE="0"
-	_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "PowerState never reached On after 120s")
+	_REDFISH_LAST_REASON=$(_redfish_sanitize_reason "PowerState never reached $want after 120s${last_err:+ (last poll: $last_err)}")
 	return 1
 }
 

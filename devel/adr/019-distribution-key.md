@@ -21,7 +21,7 @@ The release in the mirror is a digest. oc-mirror does not leave a
 ABA had no way to say which product it was installing. Adding OKD must not
 change an OpenShift run.
 
-A draft of this decision lived on the OKD pull request as the same number.
+A draft of this decision lived on [pull request #50](https://github.com/sjbylo/aba/pull/50) by [Thanh Q Nguyen](https://github.com/trendlabs) (@trendlabs), as the same number.
 That draft put `dist_*` helpers in `include_all.sh` and branched with
 `if dist_of = okd` at each call site. It also kept the TUI as the way to pick
 OKD, and it refused VMware. That draft was not merged. The code that landed

@@ -959,6 +959,10 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	scp -q "$_ABA_ROOT/test/lib.sh" "$_dis_host:/tmp/.e2e-lib.sh"
 	_essh "$_dis_host" "source /tmp/.e2e-lib.sh && int_down; rm -f /tmp/.e2e-lib.sh"
 
+	_e2e_maybe_reset_registries_d
+	_e2e_maybe_reset_rpms
+	_e2e_maybe_reset_container_auth
+	_e2e_maybe_reset_catalog_indexes
 	_ensure_pool_registry
 else
 	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
@@ -1059,6 +1063,10 @@ while true; do
 			scp -q "$_ABA_ROOT/test/lib.sh" "$_dis_host:/tmp/.e2e-lib.sh"
 			_essh "$_dis_host" "source /tmp/.e2e-lib.sh && int_down; rm -f /tmp/.e2e-lib.sh"
 
+			_e2e_maybe_reset_registries_d
+			_e2e_maybe_reset_rpms
+			_e2e_maybe_reset_container_auth
+			_e2e_maybe_reset_catalog_indexes
 			_ensure_pool_registry
 		fi
 		# Re-apply pool-specific vmware.conf on conN (same as initial path)
@@ -1106,6 +1114,17 @@ else
 fi
 
 # --- Post-suite integrity checks -------------------------------------------
+# A dummy registry login planted at suite start must survive every auth merge.
+if ! _e2e_assert_auth_dummy; then
+	echo ""
+	echo "  *** POST-SUITE INTEGRITY FAILURE: dummy container auth was deleted ***"
+	echo "  e2e-chaos.invalid must remain in the docker and containers auth files."
+	if [ "$_rc" -eq 0 ]; then
+		_e2e_notify "OVERRIDE PASS->FAIL: $SUITE -- dummy container auth deleted"
+		_rc=1
+	fi
+fi
+
 # Detect leftover resources that the suite's cleanup should have removed.
 # If anything is found, STOP so we can investigate the root cause.
 
@@ -1177,8 +1196,10 @@ fi
 _stray_patterns='make.*-[sC]|oc-mirror|openshift-install|/scripts/.*\.sh|/aba |dialog --'
 _stray=""
 
-# conN (local) — exclude the runner itself and grep
-_stray_local=$(ps -eo pid,ppid,etime,args --no-headers 2>/dev/null \
+# conN (local) — exclude the runner itself and grep.
+# -ww: the command line is the thing we have to inspect. The default ps width
+# cuts it off, and a cut-off line cannot be diagnosed later.
+_stray_local=$(ps -ww -eo pid,ppid,etime,args --no-headers 2>/dev/null \
 	| grep -E "$_stray_patterns" \
 	| grep -v -e "grep" -e "runner.sh" -e "$$" \
 	|| true)
@@ -1189,7 +1210,7 @@ fi
 # disN (remote)
 if [ -n "${DIS_VM:-}" ]; then
 	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-	_stray_remote=$(_essh "$_dis" "ps -eo pid,ppid,etime,args --no-headers 2>/dev/null \
+	_stray_remote=$(_essh "$_dis" "ps -ww -eo pid,ppid,etime,args --no-headers 2>/dev/null \
 		| grep -E '$_stray_patterns' \
 		| grep -v grep" 2>/dev/null || true)
 	if [ -n "$_stray_remote" ]; then
@@ -1204,7 +1225,17 @@ if [ -n "$_stray" ]; then
 	echo ""
 	echo "  These processes should have exited when the suite finished."
 	echo "  Investigate whether ABA code is leaking orphan processes."
-	_e2e_notify "WARNING: $SUITE -- stray processes after suite"
+	echo "  They are left running. The list is appended to the suite log."
+	# The suite process has exited, so this shell's stdout is not the suite log.
+	# Append the list there. Do not kill the processes: killing them hides the leak.
+	_stray_safe=$(printf '%s\n' "$_stray" | sed -E 's/([Pp]ass(word)?|[Rr]eg_pw|[Tt]oken|[Ss]ecret)=[^[:space:]]*/\1=***/g')
+	{
+		echo ""
+		echo "POST-SUITE WARNING: stray ABA processes (left running)"
+		printf '%s\n' "$_stray_safe"
+		echo ""
+	} >> "${E2E_LOG_DIR}/${SUITE}-latest.log"
+	printf '%s\n' "$_stray_safe" | _e2e_notify_stdin "WARNING: $SUITE -- stray processes after suite"
 fi
 
 echo ""

@@ -399,14 +399,9 @@ if [[ ! -f "$DONE_MARKER" ]]; then
         _oc_mirror_tmp_installed=1
     fi
 
-    # Deploy registries.d sigstore config (oc-mirror reads it automatically)
-    _SIGSTORE_TMPL="$ABA_ROOT/templates/aba-sigstore-config.yaml"
-    _SIGSTORE_DEST="$HOME/.config/containers/registries.d/aba-sigstore.yaml"
-    if [[ -f "$_SIGSTORE_TMPL" && ! -f "$_SIGSTORE_DEST" ]]; then
-        mkdir -p "$HOME/.config/containers/registries.d"
-        cp "$_SIGSTORE_TMPL" "$_SIGSTORE_DEST"
-        echo "  Deployed registries.d sigstore config"
-    fi
+    # One file per sigstore namespace. Leaves an existing per-registry file alone.
+    "$ABA_ROOT/scripts/ensure-sigstore-registries.sh"
+    echo "  registries.d sigstore config is in place"
 
     # Enable sigstore writes to the pool registry (colon replaced with dash for filename)
     _mirror_safe="${reg_host}:${REG_PORT}"

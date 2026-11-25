@@ -14,16 +14,14 @@ additionalNTPSources:
 hosts:
 {%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 3, 3)] %}
 {%- for hostcnt in range(count) %}
-{%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
-  - hostname: {{ cluster_name }}
-{% else %}
-  - hostname: {{ prefix }}{{ loop.index }}
-{% endif %}
+{%- set _host_index = (hostcnt | int) if role == 'master' else ((num_masters | int) + (hostcnt | int)) %}
+{%- set _hostname = arr_hostnames[_host_index] %}
+  - hostname: {{ _hostname }}
+
     role: {{ role }}
     interfaces:
      - name: {{ arr_ports[0] }}
        macAddress: "{{ arr_macs[hostcnt + mac_offset] }}"
-{%- set _hostname = cluster_name if (role == 'master' and num_workers == '0' and num_masters == '1') else (prefix ~ (loop.index | string)) %}
 {%- if disk_hints is defined and _hostname in disk_hints %}
     rootDeviceHints:
 {%- for _hkey, _hval in disk_hints[_hostname].items() %}

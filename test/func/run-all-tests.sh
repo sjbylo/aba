@@ -194,8 +194,10 @@ unit_tests=(
 	test/func/test-agent-config-summary.sh
 
 	test/func/test-make-regen-install-config.sh
+	test/func/test-ssh-pub-key-only.sh
 	test/func/test-vm-power-helpers.sh
 	test/func/test-vm-provider.sh
+	test/func/test-cluster-shutdown.sh
 	test/func/test-vmw-kvm-verify.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
@@ -205,6 +207,9 @@ unit_tests=(
 	test/func/test-mirror-status-shell-keys.sh
 	test/func/test-mirror-status-derived-flags.sh
 	test/func/test-mirror-self-link-removed.sh
+	test/func/test-quay-tarball-pin.sh
+	test/func/test-sigstore-registries.sh
+	test/func/test-omr-image.sh
 	test/func/test-reg-stale-report.sh
 	test/func/test-reg-generate-password.sh
 	test/func/test-reg-check-v2-auth.sh
@@ -272,6 +277,9 @@ integration_tests=(
 	test/func/test-preflight-check-bm.sh
 	test/func/test-bmc-mac-discovery.sh
 	test/func/test-bmc-boot.sh
+	test/func/test-bmc-poweroff.sh
+	test/func/test-bm-startup-bmc.sh
+	test/func/test-vm-startup.sh
 
 	# Bundle
 	test/func/test-bundle-tar-output.sh

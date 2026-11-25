@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.4.7
+ABA_VERSION=1.4.8
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20261121144716
+ABA_BUILD=20261125091428
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1441,7 +1441,16 @@ for i in imgs:
 		_flag="$1"
 		ssh_key_val=
 		if [[ -n $2 && $2 != -* ]]; then
-			ssh_key_val=$2
+			# A missing <key>.pub would lead to a new key pair, not the named key.
+			# A path without .pub still allows generation. A relative path is
+			# resolved later from the cluster dir, so only / and ~ paths are checked.
+			if [[ $2 == *.pub && ( $2 == /* || $2 == \~* ) ]] && [ ! -f "${2/#\~/$HOME}" ]; then
+				aba_abort "SSH public key file not found: $2" \
+					"Give an existing <key>.pub, or the key path without .pub to create a new key pair."
+			fi
+			# ssh_key_file is the key path without .pub: its users append .pub,
+			# so a given <key>.pub would turn into <key>.pub.pub.
+			ssh_key_val=${2%.pub}
 			shift
 		fi
 		_set_cluster_conf ssh_key_file "$ssh_key_val" "$_flag"
@@ -1536,15 +1545,37 @@ done
 aba_parse_args "$@"
 
 
-# Guard for VM lifecycle targets: validate platform + hypervisor config
-_ensure_vm_platform_ready() {
+# Set $platform from aba.conf. An installed cluster keeps its platform in
+# state.sh, which wins and sets _from_state=1.
+_resolve_cluster_platform() {
 	source <(cd "$ABA_ROOT" && normalize-aba-conf)
-	# An installed cluster keeps its platform in state.sh.
-	local _from_state= _installed=
+	_from_state=
+	local _installed=
 	if _installed=$(cluster_installed_platform "$PWD"); then
 		platform=$_installed
 		_from_state=1
 	fi
+}
+
+# Bare metal has no VMs: stop and kill power the servers off through the BMC.
+# Arg 1: Redfish ResetType. Exits when the platform is bm, else returns.
+_bm_poweroff_if_bm() {
+	_resolve_cluster_platform
+	[ "$platform" = "bm" ] || return 0
+	# Powering off every node when the user asked for a subset would surprise them.
+	if [ "${opt_workers:-}${opt_masters:-}" ]; then
+		aba_abort "--workers and --masters are not supported on bare metal." \
+			"Run the command without them to power off every node in bmc.conf."
+	fi
+	make -s init
+	$ABA_ROOT/scripts/bm-power.sh "$1" || exit $?
+	exit
+}
+
+# Guard for VM lifecycle targets: validate platform + hypervisor config
+_ensure_vm_platform_ready() {
+	local _from_state=
+	_resolve_cluster_platform
 	case "$platform" in
 		vmw)
 			# Remove dangling symlink so ln can recreate it
@@ -1814,7 +1845,9 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (ls)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
+			# vm_ls prints "No resources" only after the hypervisor says the
+			# domains are absent. A failed query must not look like success.
+			$ABA_ROOT/scripts/${HV}-ls.sh
 			exit
 		;;
 		start)
@@ -1834,6 +1867,7 @@ if [ "$cur_target" ]; then
 			# Cluster VM stop (requires cluster.conf); otherwise fall through to Makefile
 			if [ -f cluster.conf ]; then
 				eval $BUILD_COMMAND
+				_bm_poweroff_if_bm GracefulShutdown
 				_ensure_vm_platform_ready
 				exec_cmd="make -s init"
 				aba_debug "Running: $exec_cmd (stop)"
@@ -1844,6 +1878,7 @@ if [ "$cur_target" ]; then
 			BUILD_COMMAND="stop $BUILD_COMMAND"
 		;;
 		kill|poweroff)
+			_bm_poweroff_if_bm ForceOff
 			_ensure_vm_platform_ready
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (kill)"

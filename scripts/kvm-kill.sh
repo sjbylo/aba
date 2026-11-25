@@ -25,6 +25,8 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 source scripts/vm-provider.sh
 vm_provider_load kvm
-# || exit 0: vm_kill returns 1 only when user declines the ask prompt.
-# The || suppresses the ERR trap (which would print a spurious "Script error").
-vm_kill || exit 0
+# 2: the user declined the prompt. That is not a power failure.
+_rc=0
+vm_kill || _rc=$?
+[ "$_rc" -eq 2 ] && exit 0
+exit "$_rc"

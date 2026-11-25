@@ -54,7 +54,7 @@ source <(normalize-mirror-conf)
 
 # ADR-005: ocp_major is not a normalize output. The content-sources template
 # applies | int to it. A failed j2 used to be swallowed by the assignment, so
-# install-config.yaml was written with no ImageDigestSources and still reported success.
+# install-config.yaml was written with no imageDigestSources and still reported success.
 _ocp_render_image_content_sources() {
 	export ocp_major="$(ocp_major_of "${ocp_version:-}")"
 	if [ -z "$ocp_major" ]; then
@@ -247,6 +247,19 @@ elif [ -s "$ssh_key_file" ] && [ ! -s "$ssh_key_file.pub" ]; then
 	# Private key exists but public key missing — regenerate .pub from private key
 	aba_info "Regenerating public key from existing $ssh_key_file ..."
 	ssh-keygen -y -f "$ssh_key_file" > "$ssh_key_file.pub"
+elif [ -e "$ssh_key_file.pub" ]; then
+	# Only the public key is given (its private key lives elsewhere). The installer
+	# needs only the public key, and ssh-keygen would overwrite it (-e: also an
+	# empty file). The file goes into install-config.yaml as is, so it must be one
+	# public key line: ssh-keygen -l alone also accepts a private key.
+	if [ ! -f "$ssh_key_file.pub" ] || [ ! -r "$ssh_key_file.pub" ] \
+		|| [ "$(grep -c '' "$ssh_key_file.pub")" -ne 1 ] \
+		|| ! grep -qE '^(ssh-(rsa|dss|ed25519)|ecdsa-sha2-nistp(256|384|521)|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com) [A-Za-z0-9+/]+={0,3}( .*)?$' "$ssh_key_file.pub" \
+		|| grep -q 'PRIVATE KEY' "$ssh_key_file.pub" \
+		|| ! ssh-keygen -l -f "$ssh_key_file.pub" >/dev/null 2>&1; then
+		aba_abort "Not a readable OpenSSH public key file: $ssh_key_file.pub"
+	fi
+	aba_info "Using existing public ssh key file: $ssh_key_file.pub (no private key)"
 else
 	aba_info "Creating ssh key files: $ssh_key_file ..."
 	ssh-keygen -t rsa -f "$ssh_key_file" -N ''

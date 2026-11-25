@@ -100,6 +100,7 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 # Replaces symlinks with real copies (self-contained tarball) and drops a
 # .primed marker in fully pre-built dirs so Make skips regeneration on disco.
 _cluster_paths=""
+_exclude_cluster_regcreds=""
 _hv_conf_path=""
 _images_conf_path=""
 [ -f "${repo_dir}/images.conf" ] && _images_conf_path="${repo_dir}/images.conf"
@@ -127,6 +128,10 @@ if [ "$with_clusters" ]; then
 
 		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
 		_cluster_paths+=" $_cdir"
+		# The regcreds link points into this user's ~/.aba/mirror, which the bundle
+		# does not carry: it would dangle on the other side. Scripts read
+		# $HOME/.aba/mirror/<name> directly, and .init ships, so nothing re-creates it.
+		_exclude_cluster_regcreds+=" ! ( -path $_cdir/regcreds -type l )"
 
 		# Resolve symlinks to real copies so the tarball is self-contained.
 		# Save the original target so the EXIT trap can restore it exactly
@@ -207,6 +212,7 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/.loaded" 				\
 	$_exclude_mirror_conf						\
 	$_exclude_cluster_mirror_conf					\
+	$_exclude_cluster_regcreds					\
 	! -path "${repo_dir}/mirror/mirror-registry"  			\
 	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
 	! -path "${repo_dir}/mirror/image-archive.tar"  		\

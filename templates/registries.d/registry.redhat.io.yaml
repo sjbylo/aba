@@ -1,0 +1,6 @@
+# Same filename as /etc/containers/registries.d and as the file
+# oc-mirror 2.0 ships. One name, one definition.
+docker:
+    registry.redhat.io:
+        use-sigstore-attachments: true
+        lookaside: https://registry.redhat.io/containers/sigstore

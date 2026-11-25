@@ -26,6 +26,7 @@ dynatrace-operator Dynatrace Operator alpha
 eginnovations-operator eG Innovations Universal Agent Operator beta
 elasticsearch-eck-operator-certified Elasticsearch (ECK) Operator stable
 f5-bigip-ctlr-operator F5 Container Ingress Services stable
+f5-ipam-controller-operator F5 Ipam controller stable
 falcon-operator CrowdStrike Falcon Platform - Operator certified-1.0
 flow-cni-operator nutanix-flow-cni alpha
 fujitsu-enterprise-postgres-operator Fujitsu Enterprise Postgres Operator stable
@@ -95,7 +96,7 @@ t8c-tsc-client-certified Turbonomic Secure Connect Client stable
 tawon-operator Tawon alpha
 template-operator Template Operator release-0.1
 tenant-operator Multi Tenant Operator release-1.11
-tenanttab-operator Denegra TenantTab alpha
+tenanttab-operator Denegra TenantTab stable
 tensormesh-platform Tensormesh Platform stable
 tigera-operator Tigera Operator v1.44 release-v1.44
 trident-operator NetApp Trident stable
