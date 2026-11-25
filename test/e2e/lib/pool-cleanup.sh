@@ -308,9 +308,9 @@ _e2e_maybe_reset_rpms() {
 # Derived container auth. The pull secret and ~/.aba/mirror creds stay.
 # ~/.docker/auth.yaml is not a file aba writes.
 # A dummy registry login is planted after the optional delete. create-containers-auth
-# merges into a file that is already there, so that login must still be present
-# when the suite ends. A missing file is copied from the pull secret and would
-# drop the dummy, which is why the plant happens after the delete.
+# merges into the files of the user who runs aba. That login must still be
+# present when the suite ends. A missing file is copied from the pull secret
+# and would drop the dummy, which is why the plant happens after the delete.
 _E2E_AUTH_DUMMY_HOST=e2e-chaos.invalid
 _E2E_AUTH_DUMMY_AUTH=ZTJlLWNoYW9zOnVudXNlZA==
 _E2E_AUTH_DUMMY_MARKER=/tmp/e2e-auth-dummy
@@ -353,88 +353,31 @@ _e2e_plant_auth_home() {
 }
 
 _e2e_maybe_reset_container_auth() {
-	local _user _dis _rm
-
 	if [ $(( RANDOM % 10 )) -ge 3 ]; then
 		echo "  container auth: kept (not this run's 3/10 reset)"
 	else
 		echo "  container auth: removed (3/10 reset). The next save/sync/load writes it again."
 		_e2e_rm_container_auth
-		if [ "$(id -u)" -ne 0 ]; then
-			sudo bash -c 'rm -f /root/.docker/config.json /root/.containers/auth.json /root/.config/containers/auth.json; if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ "${XDG_RUNTIME_DIR#/}" != "$XDG_RUNTIME_DIR" ]; then rm -f "$XDG_RUNTIME_DIR/containers/auth.json"; fi' \
-				|| echo "  WARNING: could not reset root container auth on conN"
-		fi
-		_dis="${DIS_VM}.${VM_BASE_DOMAIN}"
-		_rm='rm -f ~/.docker/config.json ~/.containers/auth.json ~/.config/containers/auth.json; if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ "${XDG_RUNTIME_DIR#/}" != "$XDG_RUNTIME_DIR" ]; then rm -f "$XDG_RUNTIME_DIR/containers/auth.json"; fi'
-		for _user in root "${VM_DEFAULT_USER:-steve}" "${DIS_SSH_USER:-steve}"; do
-			_essh "${_user}@${_dis}" "$_rm" \
-				|| echo "  WARNING: could not reset container auth for $_user on disN"
-		done
 	fi
 
 	echo "  container auth: planted ${_E2E_AUTH_DUMMY_HOST} (must still be there at suite end)"
-	: > "$_E2E_AUTH_DUMMY_MARKER"
-	_e2e_plant_auth_home || echo "  WARNING: dummy auth plant failed for $USER on conN"
-	if [ "$(id -u)" -ne 0 ]; then
-		sudo env HOME=/root \
-			_E2E_AUTH_DUMMY_HOST="$_E2E_AUTH_DUMMY_HOST" \
-			_E2E_AUTH_DUMMY_AUTH="$_E2E_AUTH_DUMMY_AUTH" \
-			bash -s <<'END_PLANT' || echo "  WARNING: dummy auth plant failed for root on conN"
-_e2e_plant_auth_file() {
-	local dest="$1" dir tmp
-	dir=$(dirname "$dest")
-	mkdir -p "$dir" || return 1
-	if [ ! -s "$dest" ]; then
-		printf '%s\n' "{\"auths\":{\"${_E2E_AUTH_DUMMY_HOST}\":{\"auth\":\"${_E2E_AUTH_DUMMY_AUTH}\"}}}" > "$dest"
-		chmod 600 "$dest"
-		return 0
-	fi
-	tmp=$(mktemp "$dir/.e2e-auth.XXXXXX")
-	if ! jq --arg h "$_E2E_AUTH_DUMMY_HOST" --arg a "$_E2E_AUTH_DUMMY_AUTH" \
-		'.auths //= {} | .auths[$h].auth = $a' "$dest" > "$tmp"; then
-		rm -f "$tmp"
-		echo "  WARNING: could not plant dummy auth in $dest"
+	rm -f "$_E2E_AUTH_DUMMY_MARKER"
+	if ! _e2e_plant_auth_home; then
+		echo "  FATAL: dummy auth plant failed for $USER" >&2
 		return 1
 	fi
-	mv "$tmp" "$dest"
-	chmod 600 "$dest"
-}
-_e2e_plant_auth_file /root/.docker/config.json && \
-	_e2e_plant_auth_file /root/.containers/auth.json
-END_PLANT
-	fi
-	_dis="${DIS_VM}.${VM_BASE_DOMAIN}"
-	for _user in root "${VM_DEFAULT_USER:-steve}" "${DIS_SSH_USER:-steve}"; do
-		_essh "${_user}@${_dis}" \
-			"_E2E_AUTH_DUMMY_HOST='${_E2E_AUTH_DUMMY_HOST}' _E2E_AUTH_DUMMY_AUTH='${_E2E_AUTH_DUMMY_AUTH}' bash -s" <<'END_PLANT' \
-			|| echo "  WARNING: dummy auth plant failed for $_user on disN"
-_e2e_plant_auth_file() {
-	local dest="$1" dir tmp
-	dir=$(dirname "$dest")
-	mkdir -p "$dir" || return 1
-	if [ ! -s "$dest" ]; then
-		printf '%s\n' "{\"auths\":{\"${_E2E_AUTH_DUMMY_HOST}\":{\"auth\":\"${_E2E_AUTH_DUMMY_AUTH}\"}}}" > "$dest"
-		chmod 600 "$dest"
-		return 0
-	fi
-	tmp=$(mktemp "$dir/.e2e-auth.XXXXXX")
-	if ! jq --arg h "$_E2E_AUTH_DUMMY_HOST" --arg a "$_E2E_AUTH_DUMMY_AUTH" \
-		'.auths //= {} | .auths[$h].auth = $a' "$dest" > "$tmp"; then
-		rm -f "$tmp"
-		echo "  WARNING: could not plant dummy auth in $dest"
+	if ! _e2e_auth_dummy_present "$HOME/.docker/config.json" \
+		|| ! _e2e_auth_dummy_present "$HOME/.containers/auth.json"; then
+		echo "  FATAL: dummy auth did not stick for $USER" >&2
 		return 1
 	fi
-	mv "$tmp" "$dest"
-	chmod 600 "$dest"
-}
-_e2e_plant_auth_file "$HOME/.docker/config.json" && \
-	_e2e_plant_auth_file "$HOME/.containers/auth.json"
-END_PLANT
-		echo "${_user}@${_dis}" >> "$_E2E_AUTH_DUMMY_MARKER"
-	done
+	# -s is the assert's "this run planted" check, so the file cannot be empty.
+	printf '%s\n' "$HOME" > "$_E2E_AUTH_DUMMY_MARKER"
 }
 
-# Fail when a planted dummy login was removed. Merge keeps other registries.
+# Fail when a planted dummy login was removed from the user who ran aba.
+# Merge keeps other registries. Root and the remote host are not merged by
+# create-containers-auth unless that user is the one running aba.
 _e2e_auth_dummy_present() {
 	local dest="$1"
 	[ -s "$dest" ] || return 1
@@ -442,31 +385,25 @@ _e2e_auth_dummy_present() {
 		'.auths[$h].auth == $a' "$dest" >/dev/null
 }
 
+_e2e_auth_dummy_log() {
+	local msg="$1" log
+	echo "$msg"
+	log="${E2E_LOG_FILE:-}"
+	if [ -z "$log" ] && [ -n "${E2E_LOG_DIR:-}" ] && [ -n "${SUITE:-}" ]; then
+		log="${E2E_LOG_DIR}/${SUITE}-latest.log"
+	fi
+	[ -n "$log" ] && echo "$msg" >> "$log"
+}
+
 _e2e_assert_auth_dummy() {
-	local _target _miss=0 _f
+	local _miss=0 _f
 	[ -s "$_E2E_AUTH_DUMMY_MARKER" ] || return 0
 
 	for _f in "$HOME/.docker/config.json" "$HOME/.containers/auth.json"; do
 		if ! _e2e_auth_dummy_present "$_f"; then
-			echo "  container auth: dummy missing from $_f"
+			_e2e_auth_dummy_log "  container auth: dummy missing from $_f"
 			_miss=1
 		fi
 	done
-	if [ "$(id -u)" -ne 0 ]; then
-		for _f in /root/.docker/config.json /root/.containers/auth.json; do
-			if ! sudo jq -e --arg h "$_E2E_AUTH_DUMMY_HOST" --arg a "$_E2E_AUTH_DUMMY_AUTH" \
-				'.auths[$h].auth == $a' "$_f" >/dev/null; then
-				echo "  container auth: dummy missing from $_f"
-				_miss=1
-			fi
-		done
-	fi
-	while IFS= read -r _target; do
-		[ -n "$_target" ] || continue
-		if ! _essh "$_target" "$_E2E_AUTH_DUMMY_HOST='$_E2E_AUTH_DUMMY_HOST' _E2E_AUTH_DUMMY_AUTH='$_E2E_AUTH_DUMMY_AUTH'; for f in ~/.docker/config.json ~/.containers/auth.json; do jq -e --arg h \"\$_E2E_AUTH_DUMMY_HOST\" --arg a \"\$_E2E_AUTH_DUMMY_AUTH\" '.auths[\$h].auth == \$a' \"\$f\" >/dev/null || exit 1; done"; then
-			echo "  container auth: dummy missing for $_target"
-			_miss=1
-		fi
-	done < "$_E2E_AUTH_DUMMY_MARKER"
 	[ "$_miss" -eq 0 ]
 }

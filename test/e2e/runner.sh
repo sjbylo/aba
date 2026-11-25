@@ -961,7 +961,10 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 
 	_e2e_maybe_reset_registries_d
 	_e2e_maybe_reset_rpms
-	_e2e_maybe_reset_container_auth
+	if ! _e2e_maybe_reset_container_auth; then
+		echo "1" > "$RC_FILE"
+		exit 1
+	fi
 	_e2e_maybe_reset_catalog_indexes
 	_ensure_pool_registry
 else
@@ -1065,7 +1068,10 @@ while true; do
 
 			_e2e_maybe_reset_registries_d
 			_e2e_maybe_reset_rpms
-			_e2e_maybe_reset_container_auth
+			if ! _e2e_maybe_reset_container_auth; then
+				echo "1" > "$RC_FILE"
+				exit 1
+			fi
 			_e2e_maybe_reset_catalog_indexes
 			_ensure_pool_registry
 		fi
@@ -1114,7 +1120,7 @@ else
 fi
 
 # --- Post-suite integrity checks -------------------------------------------
-# A dummy registry login planted at suite start must survive every auth merge.
+# A dummy registry login planted for the user who runs aba must survive every auth merge.
 if ! _e2e_assert_auth_dummy; then
 	echo ""
 	echo "  *** POST-SUITE INTEGRITY FAILURE: dummy container auth was deleted ***"
