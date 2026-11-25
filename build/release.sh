@@ -253,32 +253,58 @@ if [ -n "$PREV_TAG" ]; then
 	fi
 fi
 
-# Test-merge dev into main to catch conflicts before we start modifying files.
-# Uses --no-commit so nothing is written; aborts immediately after the check.
+# Merge onto the published main without checking out the local main branch.
+# main is often already checked out in another worktree, and that checkout
+# can hold a commit that has not been pushed. Switching to it here fails,
+# and the release must not publish that commit. The merge target is origin/main.
+# mode "check" merges with --no-commit and aborts. mode "push" commits and
+# pushes HEAD to origin main. Conflict paths are printed on failure.
+_release_on_origin_main() {
+    local src="$1" msg="$2" mode="${3:-check}"
+    local wt rc=0
+    wt=$(mktemp -d /tmp/aba-release-main.XXXXXX)
+    git fetch -q origin main
+    if ! git worktree add --detach "$wt" origin/main >/dev/null; then
+        rm -rf "$wt"
+        return 1
+    fi
+    if [ "$mode" = push ]; then
+        if ! git -C "$wt" merge --no-ff "$src" -m "$msg" >/dev/null; then
+            rc=1
+            git -C "$wt" diff --name-only --diff-filter=U
+            git -C "$wt" merge --abort >/dev/null 2>&1 || true
+        else
+            git -C "$wt" push origin HEAD:main
+        fi
+    else
+        if ! git -C "$wt" merge --no-commit --no-ff "$src" >/dev/null; then
+            rc=1
+            git -C "$wt" diff --name-only --diff-filter=U
+            git -C "$wt" merge --abort >/dev/null 2>&1 || true
+        else
+            git -C "$wt" merge --abort >/dev/null 2>&1 || git -C "$wt" reset --hard >/dev/null
+        fi
+    fi
+    git worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt"
+    return "$rc"
+}
+
+# Test-merge dev into origin/main to catch conflicts before we start modifying files.
 if ! $HOTFIX && [ -z "$REF_COMMIT" ]; then
     echo -e "${YELLOW}Checking for merge conflicts with main...${NC}"
-    _current=$(git branch --show-current)
-    # Named stash so we never accidentally pop an unrelated entry.
-    _stash_name="aba-release-preflight"
-    git stash push -q -m "$_stash_name" 2>/dev/null || true
-    if git stash list 2>/dev/null | head -1 | grep -qF "$_stash_name"; then _had_stash=1; else _had_stash=0; fi
-    git checkout main -q 2>/dev/null || git checkout -b main origin/main -q
-    git pull --rebase -q origin main 2>/dev/null || true
-    if git merge --no-commit --no-ff dev >/dev/null 2>&1; then
+    _conflict=""
+    _mrc=0
+    _conflict=$(_release_on_origin_main dev "release preflight" check) || _mrc=$?
+    if [ "$_mrc" -eq 0 ]; then
         echo -e "${GREEN}Merge into main will be clean${NC}\n"
     else
-        CONFLICT_FILES=$(git diff --name-only --diff-filter=U 2>/dev/null)
         echo -e "${RED}Error: Merging dev into main has conflicts:${NC}"
-        echo "$CONFLICT_FILES" | while read -r f; do echo -e "  ${RED}$f${NC}"; done
+        echo "$_conflict" | while read -r f; do
+            [ -n "$f" ] && echo -e "  ${RED}$f${NC}"
+        done
         echo -e "${YELLOW}Fix these on dev first (merge main into dev, resolve, push).${NC}"
-        git merge --abort 2>/dev/null || true
-        git checkout "$_current" -q
-        [ "$_had_stash" = "1" ] && git stash pop -q 2>/dev/null || true
         exit 1
     fi
-    git merge --abort 2>/dev/null || true
-    git checkout "$_current" -q
-    [ "$_had_stash" = "1" ] && git stash pop -q 2>/dev/null || true
 fi
 
 # -----------------------------------------------------------------------------
@@ -636,19 +662,20 @@ if $HOTFIX; then
     fi
 else
     echo -e "${YELLOW}[11/$TOTAL] Merge to main and push${NC}"
-    if confirm "Checkout main, merge, and push?"; then
-        git checkout main 2>/dev/null || git checkout -b main origin/main
-        git pull --rebase origin main
+    if confirm "Merge into origin/main and push?"; then
+        _src=dev
+        _msg="Merge dev into main for release v$NEW_VERSION"
         if [ -n "$REF_COMMIT" ]; then
-            git merge --no-ff "v$NEW_VERSION" -m "Merge release v$NEW_VERSION into main"
-        else
-            git merge --no-ff dev -m "Merge dev into main for release v$NEW_VERSION"
+            _src="v$NEW_VERSION"
+            _msg="Merge release v$NEW_VERSION into main"
         fi
-        git push origin main
-        git checkout dev
+        if ! _release_on_origin_main "$_src" "$_msg" push; then
+            echo -e "${RED}       ✗ Merge into main failed${NC}"
+            exit 1
+        fi
         echo -e "${GREEN}       ✓ main updated and pushed${NC}\n"
     else
-        echo -e "${YELLOW}       ⊘ Skipped (run manually: git checkout main && git merge --no-ff v$NEW_VERSION && git push origin main && git checkout dev)${NC}\n"
+        echo -e "${YELLOW}       ⊘ Skipped (main stays checked out wherever it already is)${NC}\n"
     fi
 fi
 
