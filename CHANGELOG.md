@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.7...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.8...HEAD)
+
+---
+
+## [1.4.8](https://github.com/sjbylo/aba/releases/tag/v1.4.8) - 2026-11-25
+
+Bare-metal servers can be powered through the BMC, and Quay installs keep working now that mirror-registry 3.0.0 is published as latest.
+
 
 Bare-metal servers can be powered through the BMC, and Quay installs keep working now that mirror-registry 3.0.0 is published as latest.
 
