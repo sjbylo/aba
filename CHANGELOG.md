@@ -1,5 +1,10 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.9...HEAD)
 
+### Fixed
+
+- **`aba reset` keeps the catalog index directory** — Catalog downloads write into `.index` and do not create it. Reset deletes the generated files and leaves the directory. A missing directory was reported as an empty index.
+- **A short channel is saved before the catalog download** — `-v` is handled before `-c`. `f`, `s`, `e`, and `c` are expanded, and that channel is written to `aba.conf` before the index download starts.
+
 ---
 
 ## [1.4.9](https://github.com/sjbylo/aba/releases/tag/v1.4.9) - 2026-11-26
