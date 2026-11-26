@@ -6612,6 +6612,25 @@ ensure_sigstore_mirror_config() {
 	aba_debug "Sigstore mirror config: $mirror_file ($mirror_host_port)"
 }
 
+# Uninstall removes the exception written above. The registry is gone, so a
+# later service on that host and port must not inherit sigstore writes.
+# The Red Hat files and aba-sigstore.yaml are not this registry's.
+drop_sigstore_mirror_config() {
+	local mirror_host_port="$1"
+	local sigstore_dir="$HOME/.config/containers/registries.d"
+	local safe_name mirror_file
+
+	case "$mirror_host_port" in
+		*:*) ;;
+		*) return 0 ;;
+	esac
+	safe_name="${mirror_host_port//:/-}"
+	mirror_file="$sigstore_dir/aba-sigstore-mirror-${safe_name}.yaml"
+	[ -f "$mirror_file" ] || return 0
+	rm -f "$mirror_file"
+	aba_debug "Removed sigstore mirror config: $mirror_file"
+}
+
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
 	command -v oc-mirror >/dev/null && return 0

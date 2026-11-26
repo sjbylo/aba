@@ -1444,6 +1444,13 @@ reg_finish_uninstall() {
 	# Remove the local regcreds symlink (now dangling) so reinstall can recreate it
 	[ -L "regcreds" ] && rm -f "regcreds"
 
+	# The install wrote a sigstore write exception for this host and port.
+	# The registry is gone, so the exception goes with it. The next install
+	# writes it again.
+	if [ -n "${reg_host:-}" ] && [ -n "${reg_port:-}" ]; then
+		drop_sigstore_mirror_config "$reg_host:$reg_port"
+	fi
+
 	aba_success "${vendor} registry ${msg}"
 }
 

@@ -142,6 +142,12 @@ else
 	_fail "reg_post_install does not enable sigstore writes"
 fi
 
+if grep -q 'drop_sigstore_mirror_config "$reg_host:$reg_port"' "$ROOT/scripts/reg-common.sh"; then
+	_ok "registry uninstall removes the sigstore write exception"
+else
+	_fail "reg_finish_uninstall does not remove the sigstore file"
+fi
+
 source "$ROOT/scripts/include_all.sh"
 trap - ERR
 mirror_home=$(mktemp -d)
@@ -157,6 +163,25 @@ if [ "$(cat "$mirror_file" 2>/dev/null || true)" = "$(printf 'docker:\n    dis3.
 	_ok "mirror host:port gets use-sigstore-attachments true"
 else
 	_fail "mirror sigstore file was $(cat "$mirror_file" 2>/dev/null || echo missing)"
+fi
+
+printf 'docker:\n    registry.redhat.io:\n        use-sigstore-attachments: true\n' \
+	> "$mirror_home/.config/containers/registries.d/registry.redhat.io.yaml"
+(
+	HOME="$mirror_home"
+	ensure_sigstore_mirror_config "dis3.example.com:5002"
+	drop_sigstore_mirror_config "dis3.example.com:5002"
+	drop_sigstore_mirror_config ""
+	drop_sigstore_mirror_config "dis3.example.com"
+)
+gone="$mirror_home/.config/containers/registries.d/aba-sigstore-mirror-dis3.example.com-5002.yaml"
+if [ ! -e "$gone" ] \
+	&& [ -f "$mirror_file" ] \
+	&& [ -f "$mirror_home/.config/containers/registries.d/aba-sigstore.yaml" ] \
+	&& [ -f "$mirror_home/.config/containers/registries.d/registry.redhat.io.yaml" ]; then
+	_ok "uninstall removes only that host:port sigstore file"
+else
+	_fail "sigstore removal touched another file"
 fi
 rm -rf "$mirror_home"
 

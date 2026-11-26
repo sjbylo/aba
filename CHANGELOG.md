@@ -7,7 +7,7 @@
 ### Fixed
 
 - **RHEL 10 can copy `registry.access.redhat.com` images** — That registry now asks for sigstore attachments, which is what the RHEL 10 policy requires. The lookaside URL stays, so RHEL 9 can still verify the GPG signature. A lookaside-only copy of the file is rewritten. A file that already sets the flag, or that names another registry, stays.
-- **A new registry accepts signed images** — Installing a mirror turns sigstore writes on for that host and port. A signed image copied there no longer stops with "writing sigstore attachments is disabled". Sync and load already did this.
+- **A new registry accepts signed images** — Installing a mirror turns sigstore writes on for that host and port. A signed image copied there no longer stops with "writing sigstore attachments is disabled". Sync and load already did this. Uninstall removes that host and port's file. The Red Hat files and `aba-sigstore.yaml` stay. The next install of the same host and port writes the file again.
 - **A retry continues after a half-written release** — When oc-mirror fails and another attempt will run, a `release-images/<repo>/<tag>` directory with no `index.json` is removed. A tag that already has `index.json` stays. The next attempt downloads the release again.
 - **`aba password` keeps other registry logins** — Creating the mirror pull secret no longer runs `podman logout --all`. The login is written only to the auth file for that registry.
 
