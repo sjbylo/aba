@@ -69,7 +69,13 @@ test_end 0
 # downloads immediately. A fresh aba.conf has no channel yet, so the job
 # reads the file before the -c handler runs. Other suites pass --channel
 # first, which hides this. A cached catalog task would hide it too.
+# Setup already started those downloads. Wait until that run has exited
+# before deleting its task dirs. Deleting a live task dir lets this test
+# start a second writer on the same .index temp file.
 test_begin "Version before channel"
+
+e2e_run "Wait until setup's catalog jobs have exited" \
+    'deadline=$((SECONDS + 600)); while true; do busy=0; shopt -s nullglob; for d in "$HOME"/.aba/runner/catalog:*; do if [ ! -f "$d/exit" ]; then echo "still running: $(basename "$d")"; busy=1; break; fi; pid=$(cat "$d/pid" 2>/dev/null || true); if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "pid $pid still alive: $(basename "$d")"; busy=1; break; fi; done; shopt -u nullglob; if [ "$busy" -eq 0 ]; then break; fi; if [ "$SECONDS" -ge "$deadline" ]; then echo "catalog jobs still running after 10m"; exit 1; fi; sleep 5; done; echo "setup catalog jobs have exited"'
 
 e2e_run "Drop aba.conf and cached catalog tasks" \
     'rm -f aba.conf; mkdir -p "$HOME/.aba/runner"; find "$HOME/.aba/runner" -mindepth 1 -maxdepth 1 -type d -name "catalog:*" -exec rm -rf {} +'
