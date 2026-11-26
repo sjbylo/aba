@@ -28,7 +28,7 @@ for src in "$root/templates/registries.d/"*.yaml; do
 	cp "$src" "$dest/$name"
 done
 
-# The lookaside-only access.redhat.com file is the pre-RHEL-10 template.
+# The lookaside-only access.redhat.com file is the template from before RHEL 10.
 # Rewrite that one so the attachment flag is present. Leave any other edit.
 access="$dest/registry.access.redhat.com.yaml"
 access_src="$root/templates/registries.d/registry.access.redhat.com.yaml"
