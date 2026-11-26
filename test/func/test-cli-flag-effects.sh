@@ -249,6 +249,12 @@ if [ -n "$VER" ]; then
 	if _run "--version $VER" --version "$VER" --help; then
 		_expect "$REPO/aba.conf" ocp_version "$VER"
 	fi
+	# -v is parsed before -c. The letter f must already mean fast, or the
+	# version is looked up on a channel named "f".
+	if _run "-v before -c f" -v "$VER" -c f --help; then
+		_expect "$REPO/aba.conf" ocp_channel fast
+		_expect "$REPO/aba.conf" ocp_version "$VER"
+	fi
 else
 	_fail "aba.conf has no ocp_version to round-trip"
 fi

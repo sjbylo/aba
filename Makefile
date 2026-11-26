@@ -159,6 +159,8 @@ reset: # Clean up *everything*.  Only use if you know what you are doing! Note t
 	rm -f .aba.conf.seen
 	rm -rf ~/.aba/cache ~/.aba/tmp ~/.aba/logs
 	rm -rf ~/.aba/runner || sleep 1 && rm -rf ~/.aba/runner || true
-	rm -rf .index
+	# Catalog downloads write into .index and do not create it.
+	# Clear generated files. Keep the directory and its .gitignore.
+	if [ -d .index ] && [ ! -L .index ]; then find .index -mindepth 1 ! -name .gitignore -delete; fi
 	rm -f aba.conf ~/.aba.conf*
 

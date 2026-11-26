@@ -99,8 +99,8 @@ if [[ -z "${_ABA_SKIP_AUTH:-}" ]]; then
 	scripts/create-containers-auth.sh >/dev/null || exit 1
 fi
 
-# Setup paths - must be run from aba root directory
-mkdir -p .index
+# Setup paths - must be run from aba root directory.
+# .index/ is an empty directory in the repo. Do not create it here.
 index_file=".index/${catalog_name}-index-v${ocp_ver_major}"
 tmp_file=".index/.${catalog_name}-index-v${ocp_ver_major}.downloading"
 

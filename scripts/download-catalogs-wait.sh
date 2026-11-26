@@ -23,7 +23,8 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Build version list (current + target if cross-minor upgrade)
 read -ra _versions_to_wait <<< "$(_catalog_versions_to_mirror)"
 
-# Populate .index/ from shipped catalogs if live versions don't exist yet
+# Populate .index/ from shipped catalogs if live versions don't exist yet.
+# .index/ is an empty directory in the repo. mirror/.index links to it.
 _populate_shipped_indexes
 
 # If all catalog indexes already exist (shipped or previously downloaded),

@@ -157,9 +157,18 @@ while [ $i -le $# ]; do
 
 		--channel|-c)
 			# Extract channel early so --version latest/previous resolves against
-			# the correct channel regardless of flag order (#1225)
+			# the correct channel regardless of flag order (#1225).
+			# -v is parsed before -c, so this value must already be fast/stable/
+			# candidate. The letter the prompt accepts (f, s, c, e) is expanded
+			# here. The later -c handler expands it again for the file write.
 			i=$((i + 1))
 			chan="${!i}"
+			case "$chan" in
+				stable|s) chan=stable ;;
+				fast|f) chan=fast ;;
+				eus|e) chan=eus ;;
+				candidate|c) chan=candidate ;;
+			esac
 			new_args+=("$arg" "$chan")
 			;;
 
@@ -977,7 +986,15 @@ for i in imgs:
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
-	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+		# -v is parsed before -c. The catalog job reads aba.conf as soon as
+		# it starts, so the channel from the early -c scan has to be on disk
+		# first. E2E passes --channel before --version, which hides this.
+		if [ -n "${chan:-}" ]; then
+			replace-value-conf -n ocp_channel -v "$chan" -f $ABA_ROOT/aba.conf
+			ocp_channel=$chan
+		fi
+
+		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 	aba_debug Downloading operator index for version $ver 
 
 	# Start parallel catalog downloads (uses podman extraction, no oc-mirror dependency)

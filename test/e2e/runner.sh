@@ -93,6 +93,14 @@ E2E_IS_RETRY="${1:-}"   # optional: "retry" when run.sh re-dispatched this suite
 LOCK_FILE="${E2E_RC_PREFIX}-${SUITE}.lock"
 RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
 
+# KVM1 is down. A dispatcher that already queued these must not start them.
+# /tmp/e2e-suite-hold.txt on the bastion is the same list for the dispatcher.
+if [ "$SUITE" = "kvm-lifecycle" ] || [ "$SUITE" = "kvm-network" ]; then
+	echo "  HOLD: $SUITE is not running (KVM host is down)."
+	echo "3" > "$RC_FILE"
+	exit 3
+fi
+
 # --- Concurrent run protection -----------------------------------------------
 
 _LOCK_MAX_AGE=86400  # 24 hours

@@ -20,6 +20,8 @@
 # dns_servers is auto-detected from conN's resolv.conf (pointing at local dnsmasq).
 #
 # Usage: suite_configure_aba [--extra-flag value ...]
+# --channel is before --version. cli-validation also runs the reverse
+# order on a fresh aba.conf, because --version starts the catalog jobs.
 suite_configure_aba() {
 	e2e_run "Configure aba.conf" \
 		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $(pool_machine_network) --gateway $(pool_gateway) $*"

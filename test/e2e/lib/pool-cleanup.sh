@@ -251,8 +251,11 @@ _e2e_maybe_reset_catalog_indexes() {
 	fi
 
 	_aba="${_ABA_ROOT:-$HOME/aba}"
-	echo "  catalog indexes: removed ~/aba/.index (3/10 reset, conN only). catalogs/ stays."
-	rm -rf "$_aba/.index"
+	echo "  catalog indexes: cleared ~/aba/.index contents (3/10 reset, conN only). catalogs/ stays."
+	# Keep the directory. It is in the repo, and mirror/.index is a symlink to it.
+	if [ -d "$_aba/.index" ]; then
+		find "$_aba/.index" -mindepth 1 -delete
+	fi
 	shopt -s nullglob
 	for _d in "$HOME/.aba/runner"/catalog:*; do
 		rm -rf "$_d"

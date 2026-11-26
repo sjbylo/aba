@@ -7,6 +7,7 @@
 #
 # What it tests:
 #   - Reset + catalog download (oc-mirror survives aba reset)
+#   - --version before --channel on a fresh aba.conf (catalog jobs)
 #   - Bad --version / --channel arguments
 #   - Bad --dir targets (missing, not a dir)
 #   - Invalid --platform, --vendor, --type
@@ -32,6 +33,7 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba" \
+    "Version before channel" \
     "Reset + catalog download" \
     "Bad version arguments" \
     "Bad channel arguments" \
@@ -61,7 +63,36 @@ suite_verify_aba_conf
 test_end 0
 
 # ============================================================================
-# 2. Reset + catalog download (regression: oc-mirror must survive reset)
+# 2. --version before --channel
+# ============================================================================
+# -v is parsed before -c. It writes ocp_version and starts the catalog
+# downloads immediately. A fresh aba.conf has no channel yet, so the job
+# reads the file before the -c handler runs. Other suites pass --channel
+# first, which hides this. A cached catalog task would hide it too.
+# Setup already started those downloads. Wait until that run has exited
+# before deleting its task dirs. Deleting a live task dir lets this test
+# start a second writer on the same .index temp file.
+test_begin "Version before channel"
+
+e2e_run "Wait until setup's catalog jobs have exited" \
+    'deadline=$((SECONDS + 600)); while true; do busy=0; shopt -s nullglob; for d in "$HOME"/.aba/runner/catalog:*; do if [ ! -f "$d/exit" ]; then echo "still running: $(basename "$d")"; busy=1; break; fi; pid=$(cat "$d/pid" 2>/dev/null || true); if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "pid $pid still alive: $(basename "$d")"; busy=1; break; fi; done; shopt -u nullglob; if [ "$busy" -eq 0 ]; then break; fi; if [ "$SECONDS" -ge "$deadline" ]; then echo "catalog jobs still running after 10m"; exit 1; fi; sleep 5; done; echo "setup catalog jobs have exited"'
+
+e2e_run "Drop aba.conf and cached catalog tasks" \
+    'rm -f aba.conf; mkdir -p "$HOME/.aba/runner"; find "$HOME/.aba/runner" -mindepth 1 -maxdepth 1 -type d -name "catalog:*" -exec rm -rf {} +'
+
+e2e_run "Configure with --version before --channel" \
+    "aba --noask --version $OCP_VERSION --channel $TEST_CHANNEL"
+
+e2e_run "Wait for catalog downloads started by --version" \
+    "scripts/download-and-wait-catalogs.sh"
+
+e2e_run "Catalog jobs succeeded on the first run" \
+    'source scripts/include_all.sh && source <(normalize-aba-conf) && minor=$(_ver_minor "$ocp_version") && [ -n "$minor" ] || exit 1; for catalog in $(dist_catalogs); do d="$HOME/.aba/runner/catalog:${minor}:${catalog}"; rc=$(cat "$d/exit" 2>/dev/null) || rc=MISSING; echo "catalog:$minor:$catalog exit=$rc"; [ "$rc" = 0 ] || { echo "task failed"; cat "$d/history" 2>/dev/null; exit 1; }; if grep -q "ocp_channel incorrectly" "$d/history" "$d"/log.err "$d"/log.err.* 2>/dev/null; then echo "catalog job read aba.conf before ocp_channel was written"; exit 1; fi; if grep -q "COMPLETE rc=1" "$d/history"; then echo "catalog job failed once, then a later run hid it"; cat "$d/history"; exit 1; fi; done; grep -q "^ocp_channel='"$TEST_CHANNEL"'" aba.conf'
+
+test_end 0
+
+# ============================================================================
+# 3. Reset + catalog download (regression: oc-mirror must survive reset)
 # ============================================================================
 test_begin "Reset + catalog download"
 
@@ -86,7 +117,7 @@ e2e_run "Verify catalog task not failed" \
 test_end 0
 
 # ============================================================================
-# 3. Bad version arguments
+# 4. Bad version arguments
 # ============================================================================
 test_begin "Bad version arguments"
 
@@ -99,7 +130,7 @@ e2e_run_must_fail "Missing --version argument" \
 test_end 0
 
 # ============================================================================
-# 4. Bad channel arguments
+# 5. Bad channel arguments
 # ============================================================================
 test_begin "Bad channel arguments"
 
@@ -112,7 +143,7 @@ e2e_run_must_fail "Missing --channel argument" \
 test_end 0
 
 # ============================================================================
-# 5. Bad --dir targets
+# 6. Bad --dir targets
 # ============================================================================
 test_begin "Bad --dir targets"
 
@@ -125,7 +156,7 @@ e2e_run_must_fail "Not a directory (file instead)" \
 test_end 0
 
 # ============================================================================
-# 6. Invalid platform, vendor, type
+# 7. Invalid platform, vendor, type
 # ============================================================================
 test_begin "Invalid platform, vendor, type"
 
@@ -141,7 +172,7 @@ e2e_run_must_fail "Invalid cluster type" \
 test_end 0
 
 # ============================================================================
-# 7. Invalid network arguments
+# 8. Invalid network arguments
 # ============================================================================
 test_begin "Invalid network arguments"
 
@@ -160,7 +191,7 @@ e2e_run_must_fail "Invalid --dns (not an IP)" \
 test_end 0
 
 # ============================================================================
-# 8. Unknown flags
+# 9. Unknown flags
 # ============================================================================
 test_begin "Unknown flags"
 
@@ -170,7 +201,7 @@ e2e_run_must_fail "Unknown flag rejected" \
 test_end 0
 
 # ============================================================================
-# 9. Bundle output collision
+# 10. Bundle output collision
 # ============================================================================
 test_begin "Bundle output collision"
 
@@ -186,7 +217,7 @@ e2e_run -q "Clean up collision test file" \
 test_end 0
 
 # ============================================================================
-# 10. Debug mode on/off
+# 11. Debug mode on/off
 # ============================================================================
 test_begin "Debug mode on/off"
 

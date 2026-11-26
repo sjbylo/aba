@@ -973,10 +973,22 @@ _e2e_order_by_history() {
 
 # --- Build work queue from suites_to_run minus completed/running --------------
 
+# Suites listed in /tmp/e2e-suite-hold.txt, one name per line, are not queued
+# and are not started. Used while a lab host they need is down.
+_e2e_suite_held() {
+	local suite="$1"
+	[ -f /tmp/e2e-suite-hold.txt ] || return 1
+	grep -q -x -F -- "$suite" /tmp/e2e-suite-hold.txt
+}
+
 _build_work_queue() {
 	_work_queue=()
 	local _pending=() suite running _p
 	for suite in "${suites_to_run[@]}"; do
+		if _e2e_suite_held "$suite"; then
+			echo "  HOLD: $suite (kept out of the queue)"
+			continue
+		fi
 		[ -n "${_completed[$suite]:-}" ] && continue
 		running=""
 		for _p in "${!_busy_pools[@]}"; do
@@ -1314,6 +1326,10 @@ _dispatch_loop() {
 			_inj_count=0
 			while IFS= read -r _inj_suite; do
 				[ -z "$_inj_suite" ] && continue
+				if _e2e_suite_held "$_inj_suite"; then
+					printf "  [%s] HOLD: %s (not queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+					continue
+				fi
 				# Skip if already completed with PASS (exit=0)
 				if [ "${_results[$_inj_suite]:-}" = "0" ]; then
 					printf "  [%s] SKIPPED: %s (already passed)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue
@@ -1399,6 +1415,12 @@ _dispatch_loop() {
 		while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 			free=$(_find_free_pool) || break
 			suite="${_work_queue[$_queue_idx]}"
+			if _e2e_suite_held "$suite"; then
+				printf "  [%s] HOLD: %s (not running)\n" "$(date '+%H:%M:%S')" "$suite"
+				_results[$suite]=3
+				_queue_idx=$(( _queue_idx + 1 ))
+				continue
+			fi
 			# Skip suites already completed with PASS
 			if [ "${_results[$suite]:-}" = "0" ]; then
 				printf "  [%s] SKIP: %s (already passed)\n" "$(date '+%H:%M:%S')" "$suite"
@@ -1425,7 +1447,7 @@ _dispatch_loop() {
 		if [ $_queue_idx -ge ${#_work_queue[@]} ]; then
 			for _rs in "${!_results[@]}"; do
 				_rrc="${_results[$_rs]}"
-				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && ! _e2e_suite_held "$_rs" && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
 					_has_retryable=1; break
 				fi
 			done
@@ -1435,7 +1457,7 @@ _dispatch_loop() {
 			_retry_names=""
 			for _rs in "${!_results[@]}"; do
 				_rrc="${_results[$_rs]}"
-				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && ! _e2e_suite_held "$_rs" && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
 					_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
 					_rp="${_result_pool[$_rs]:-}"
 					if [ -n "$_rp" ]; then
@@ -1453,6 +1475,12 @@ _dispatch_loop() {
 				while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 					free=$(_find_free_pool) || break
 					suite="${_work_queue[$_queue_idx]}"
+					if _e2e_suite_held "$suite"; then
+						printf "  [%s] HOLD: %s (not running)\n" "$(date '+%H:%M:%S')" "$suite"
+						_results[$suite]=3
+						_queue_idx=$(( _queue_idx + 1 ))
+						continue
+					fi
 					_dup=""
 					for _dp in "${!_busy_pools[@]}"; do
 						[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
