@@ -222,7 +222,7 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 
 ![Demo](images/aba-bundle-demo.gif)
 
-[Download Demo Video](https://github.com/sjbylo/aba/raw/refs/heads/main/images/aba-bundle-demo-v5-low.mp4)
+[Download Demo Video](https://github.com/sjbylo/aba/releases/download/readme-media/aba-bundle-demo-v5-low.mp4)
 
 [Back to top](#quick-start)
 
