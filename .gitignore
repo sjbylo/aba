@@ -27,7 +27,9 @@ vmware.conf.bk
 kvm.conf
 mirror.conf
 *.ssh.conf
-.index
+# The directory is tracked. Its contents are local catalog data.
+.index/*
+!.index/.gitignore
 .index-test/
 .index-backup/
 images.conf

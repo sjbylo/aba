@@ -230,6 +230,7 @@ unit_tests=(
 	test/func/test-day2-wait-gate-abort.sh
 	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
+	test/func/test-index-symlink.sh
 	test/func/test-estimate-isc-size.sh
 	test/func/test-mirror-eta.sh
 	test/func/test-oc-mirror-incomplete-release.sh

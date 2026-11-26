@@ -5907,7 +5907,7 @@ wait_for_all_catalogs() {
 # Gives the TUI instant operator browsing before background downloads complete.
 _populate_shipped_indexes() {
 	local f target
-	mkdir -p .index
+	# .index/ is an empty directory in the repo. Do not create it here.
 	for f in catalogs/*-operator-index-v*; do
 		[[ -s "$f" ]] || continue
 		target=".index/$(basename "$f")"

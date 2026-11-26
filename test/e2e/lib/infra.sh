@@ -42,6 +42,13 @@ _vms_ready() {
 # Globals: CLI_POOL_LIST, CLI_OS, CLI_RECREATE_GOLDEN, CLI_RECREATE_VMS,
 #          CLI_YES, _RUN_DIR, VC_FOLDER, VM_BASE_DOMAIN, _pool_os_map
 _ensure_pool_infrastructure() {
+	# One-shot. A dispatcher restart must not rebuild VMs that are already in use.
+	if [ -f /tmp/e2e-no-recreate ]; then
+		rm -f /tmp/e2e-no-recreate
+		CLI_RECREATE_GOLDEN=
+		CLI_RECREATE_VMS=
+		echo "  Not recreating the golden or the pool VMs."
+	fi
 	_ensure_govc
 	local _vmconf="$HOME/.vmware.conf"
 	# Save E2E-specific vars that vmware.conf might clobber (vmware.conf has its
