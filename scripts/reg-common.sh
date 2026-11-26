@@ -700,6 +700,13 @@ reg_post_install() {
 		if [ -f "$_flag" ]; then cp -p "$_flag" "$regcreds_dir/backup/"; fi
 	done
 
+	# The global default leaves sigstore writes off. A signed image then fails
+	# the copy with "writing sigstore attachments is disabled". The mirror
+	# host is one we just installed, so writes belong on.
+	if [ -n "${reg_host:-}" ] && [ -n "${reg_port:-}" ]; then
+		ensure_sigstore_mirror_config "$reg_host:$reg_port"
+	fi
+
 	echo
 	local _where="$reg_host:$reg_port"
 	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"

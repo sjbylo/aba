@@ -1,5 +1,16 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.8...HEAD)
 
+### Changed
+
+- **A remote mirror host installs `acl`** — The package list is `templates/rpms-remote.txt`. mirror-registry's Ansible runs `setfacl` on that host. The other packages on the list are the ones a remote mirror already needed: podman, jq, hostname, tar, and openssl.
+
+### Fixed
+
+- **RHEL 10 can copy `registry.access.redhat.com` images** — That registry now asks for sigstore attachments, which is what the RHEL 10 policy requires. The lookaside URL stays, so RHEL 9 can still verify the GPG signature. A lookaside-only copy of the file is rewritten. A file that already sets the flag, or that names another registry, stays.
+- **A new registry accepts signed images** — Installing a mirror turns sigstore writes on for that host and port. A signed image copied there no longer stops with "writing sigstore attachments is disabled". Sync and load already did this.
+- **A retry continues after a half-written release** — When oc-mirror fails and another attempt will run, a `release-images/<repo>/<tag>` directory with no `index.json` is removed. A tag that already has `index.json` stays. The next attempt downloads the release again.
+- **`aba password` keeps other registry logins** — Creating the mirror pull secret no longer runs `podman logout --all`. The login is written only to the auth file for that registry.
+
 ---
 
 ## [1.4.8](https://github.com/sjbylo/aba/releases/tag/v1.4.8) - 2026-11-25

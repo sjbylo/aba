@@ -1,5 +1,10 @@
 # Same filename as /etc/containers/registries.d and as the file
 # oc-mirror 2.0 ships. One name, one definition.
+#
+# This file replaces the OS copy. RHEL 10 accepts only a sigstore
+# attachment for this registry, which is what the OS file turned on.
+# The lookaside stays so RHEL 9 can still verify the GPG signature.
 docker:
     registry.access.redhat.com:
+        use-sigstore-attachments: true
         lookaside: https://access.redhat.com/webassets/docker/content/sigstore
