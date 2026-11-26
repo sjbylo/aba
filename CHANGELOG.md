@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.9...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.4.10...HEAD)
+
+---
+
+## [1.4.10](https://github.com/sjbylo/aba/releases/tag/v1.4.10) - 2026-11-26
+
+Hot fix for index error
+
 
 ### Fixed
 
