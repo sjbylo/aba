@@ -71,7 +71,7 @@ test_begin "Setup: clean slate"
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
+    "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer*"
 
 e2e_install_aba
 

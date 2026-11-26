@@ -128,17 +128,32 @@ _vm_install_packages() {
 			|| echo 'proxy=${_proxy_url}' | sudo tee -a /etc/dnf/dnf.conf >/dev/null" || true
 	fi
 
-	# Re-register if consumer identity is missing and credentials are available
+	# Re-register if consumer identity is missing and credentials are available.
+	# A clone of the template still has the old consumer certs. identity fails
+	# once the portal has deleted that profile, but register then says "already
+	# registered" until the local profile is removed. clean does not touch
+	# rhsm.conf; the proxy is set again in case a future clean does.
 	if [ -n "${SUB_USERNAME:-}" ] && [ -n "${SUB_PASSWORD:-}" ]; then
 		local _su="$SUB_USERNAME" _sp="$SUB_PASSWORD"
-		cat <<-REGEOF | _essh "${user}@${host}" -- sudo bash
+		if ! cat <<-REGEOF | _essh "${user}@${host}" -- sudo bash
 			if ! subscription-manager identity >/dev/null; then
-				echo "  [vm] Not registered -- registering as ${_su} ..."
-				subscription-manager register --username='${_su}' --password='${_sp}' 2>&1 || echo "  WARNING: registration failed"
+				echo "  [vm] Consumer is missing or deleted -- clearing the local profile ..."
+				subscription-manager clean
+				if [ -n "${_proxy_host:-}" ]; then
+					subscription-manager config \
+						--server.proxy_hostname='${_proxy_host}' \
+						--server.proxy_port='${_proxy_port}'
+				fi
+				echo "  [vm] Registering as ${_su} ..."
+				subscription-manager register --username='${_su}' --password='${_sp}'
 			else
 				subscription-manager refresh || true
 			fi
 		REGEOF
+		then
+			echo "  [vm] ERROR: registration failed on $host" >&2
+			return 1
+		fi
 	fi
 
 	cat <<-'PKGEOF' | _essh "${user}@${host}" -- sudo bash

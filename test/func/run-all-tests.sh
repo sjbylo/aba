@@ -232,6 +232,7 @@ unit_tests=(
 	test/func/test-catalog-index-format.sh
 	test/func/test-estimate-isc-size.sh
 	test/func/test-mirror-eta.sh
+	test/func/test-oc-mirror-incomplete-release.sh
 	test/func/test-mirror-disk-space.sh
 	test/func/test-additional-image-sizes.sh
 

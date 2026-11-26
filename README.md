@@ -274,9 +274,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.8.tar.gz
-tar xzf v1.4.8.tar.gz
-cd aba-1.4.8
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.4.9.tar.gz
+tar xzf v1.4.9.tar.gz
+cd aba-1.4.9
 ./install
 aba
 ```
@@ -284,7 +284,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.4.8 https://github.com/sjbylo/aba.git
+git clone --branch v1.4.9 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -2157,6 +2157,7 @@ See [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup) for details and 
 
 - *Connected workstation*: `aba/templates/rpms-external.txt`
 - *Disconnected bastion*: `aba/templates/rpms-internal.txt`
+- *Remote mirror host*: `aba/templates/rpms-remote.txt`
 
 ---
 

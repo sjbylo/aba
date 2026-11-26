@@ -6094,6 +6094,21 @@ _oc_mirror_port_pids() {
 		| sort -u
 }
 
+# An interrupted copy can leave release-images/<repo>/<tag>/ with no index.json.
+# The next oc-mirror stats that file and exits without downloading the blob again.
+# Drop only those tag directories. A tag that already has index.json stays.
+_oc_mirror_drop_incomplete_release() {
+	local _root="data/working-dir/release-images"
+	local _tag
+	[ -d "$_root" ] || return 0
+	while IFS= read -r -d '' _tag; do
+		if [ ! -e "$_tag/index.json" ]; then
+			aba_debug "Removing incomplete release image cache $_tag before retry"
+			rm -rf "$_tag"
+		fi
+	done < <(find "$_root" -mindepth 2 -maxdepth 2 -type d -print0)
+}
+
 _run_oc_mirror_with_retry() {
 	local action="$1"
 	local try_tot="$2"
@@ -6230,6 +6245,9 @@ _run_oc_mirror_with_retry() {
 				aba_debug "Removing stale data/working-dir/.history before retry"
 				rm -rf data/working-dir/.history
 			fi
+			# Same moment as .history: this attempt failed and another will run.
+			# A successful oc-mirror never reaches here.
+			_oc_mirror_drop_incomplete_release
 			aba_warn "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
@@ -6592,6 +6610,25 @@ ensure_sigstore_mirror_config() {
 		"$mirror_host_port" > "$mirror_file"
 
 	aba_debug "Sigstore mirror config: $mirror_file ($mirror_host_port)"
+}
+
+# Uninstall removes the exception written above. The registry is gone, so a
+# later service on that host and port must not inherit sigstore writes.
+# The Red Hat files and aba-sigstore.yaml are not this registry's.
+drop_sigstore_mirror_config() {
+	local mirror_host_port="$1"
+	local sigstore_dir="$HOME/.config/containers/registries.d"
+	local safe_name mirror_file
+
+	case "$mirror_host_port" in
+		*:*) ;;
+		*) return 0 ;;
+	esac
+	safe_name="${mirror_host_port//:/-}"
+	mirror_file="$sigstore_dir/aba-sigstore-mirror-${safe_name}.yaml"
+	[ -f "$mirror_file" ] || return 0
+	rm -f "$mirror_file"
+	aba_debug "Removed sigstore mirror config: $mirror_file"
 }
 
 # Ensure oc-mirror is installed in ~/bin

@@ -9,7 +9,11 @@
 #
 # An older aba-sigstore.yaml that still contains the Red Hat namespaces
 # is rewritten in place. Other keys in that file are left as they are.
-# A sibling file that already exists is not replaced.
+# A sibling file that already exists is not replaced, except a
+# registry.access.redhat.com.yaml that is still the lookaside-only
+# copy. That copy hides the OS sigstore-attachment flag RHEL 10 needs,
+# so it is rewritten from the template. A file that already sets the
+# flag, or that names another registry, stays.
 
 set -euo pipefail
 
@@ -23,6 +27,20 @@ for src in "$root/templates/registries.d/"*.yaml; do
 	[ -f "$dest/$name" ] && continue
 	cp "$src" "$dest/$name"
 done
+
+# The lookaside-only access.redhat.com file is the template from before RHEL 10.
+# Rewrite that one so the attachment flag is present. Leave any other edit.
+access="$dest/registry.access.redhat.com.yaml"
+access_src="$root/templates/registries.d/registry.access.redhat.com.yaml"
+if [ -f "$access" ] && [ -f "$access_src" ] \
+	&& ! grep -q 'use-sigstore-attachments:' "$access" \
+	&& grep -q 'lookaside: https://access.redhat.com/webassets/docker/content/sigstore' "$access"
+then
+	other=$(grep -E '^    [^[:space:]]+:$' "$access" | grep -v '^    registry\.access\.redhat\.com:$' || true)
+	if [ -z "$other" ]; then
+		cp "$access_src" "$access"
+	fi
+fi
 
 aba="$dest/aba-sigstore.yaml"
 [ -f "$aba" ] || exit 0

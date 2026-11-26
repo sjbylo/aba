@@ -700,6 +700,13 @@ reg_post_install() {
 		if [ -f "$_flag" ]; then cp -p "$_flag" "$regcreds_dir/backup/"; fi
 	done
 
+	# The global default leaves sigstore writes off. A signed image then fails
+	# the copy with "writing sigstore attachments is disabled". The mirror
+	# host is one we just installed, so writes belong on.
+	if [ -n "${reg_host:-}" ] && [ -n "${reg_port:-}" ]; then
+		ensure_sigstore_mirror_config "$reg_host:$reg_port"
+	fi
+
 	echo
 	local _where="$reg_host:$reg_port"
 	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"
@@ -1437,6 +1444,13 @@ reg_finish_uninstall() {
 	# Remove the local regcreds symlink (now dangling) so reinstall can recreate it
 	[ -L "regcreds" ] && rm -f "regcreds"
 
+	# The install wrote a sigstore write exception for this host and port.
+	# The registry is gone, so the exception goes with it. The next install
+	# writes it again.
+	if [ -n "${reg_host:-}" ] && [ -n "${reg_port:-}" ]; then
+		drop_sigstore_mirror_config "$reg_host:$reg_port"
+	fi
+
 	aba_success "${vendor} registry ${msg}"
 }
 
@@ -1534,7 +1548,11 @@ reg_remote_pre_install() {
 	> .remote_host_check.out
 	$_ssh "set -x; ip a" >> .remote_host_check.out 2>&1
 
-	reg_ensure_remote_pkgs "$_ssh" podman jq hostname tar openssl
+	# Not rpms-internal.txt. A remote mirror host does not run make, python,
+	# or nmstate. acl is on this list because mirror-registry's Ansible
+	# runs setfacl on the SSH target. htpasswd stays in the Docker script.
+	# mirror/.init links templates/ here, same as the other RPM lists.
+	reg_ensure_remote_pkgs "$_ssh" $(cat templates/rpms-remote.txt)
 
 	$_ssh "podman images" >> .remote_host_check.out 2>&1 || \
 		aba_abort "podman is not working on remote host '$reg_host'." \
