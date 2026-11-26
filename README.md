@@ -220,7 +220,7 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 
 #### Demo: Air-Gapped Bundle Workflow
 
-![Demo](images/aba-bundle-demo.gif)
+![Demo](https://github.com/sjbylo/aba/releases/download/readme-media/aba-bundle-demo.gif)
 
 [Download Demo Video](https://github.com/sjbylo/aba/releases/download/readme-media/aba-bundle-demo-v5-low.mp4)
 
