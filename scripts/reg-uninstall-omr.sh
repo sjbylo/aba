@@ -11,7 +11,7 @@ source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $* in $PWD"
 
-reg_pre_uninstall "$_OMR_VENDOR"
+reg_load_state "$_OMR_VENDOR"
 
 if ask -n --auto-yes "Uninstall $_OMR_VENDOR registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 

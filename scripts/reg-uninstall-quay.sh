@@ -13,7 +13,7 @@ source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $* in $PWD"
 
-reg_pre_uninstall "Quay"
+reg_load_state "Quay"
 
 if ask -n --auto-yes "Uninstall Quay mirror registry on localhost, installed at $reg_host:$reg_port (root: $reg_root)"; then
 
