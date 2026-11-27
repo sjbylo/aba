@@ -202,6 +202,7 @@ test_plan_count sync      8
 test_plan_count save      6
 test_plan_count load      5
 test_plan_count uninstall 2
+test_plan_count upgrade   6
 test_plan_count bundle    9
 test_plan_count day2      8
 test_plan_count day2-ntp  3
@@ -214,7 +215,7 @@ test_plan_count cluster-install  6
 echo ""
 
 echo "--- PLAN format ---"
-for wf in install sync save load uninstall bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade cluster-install; do
+for wf in install sync save load uninstall upgrade bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade cluster-install; do
 	test_plan_format "$wf"
 done
 echo ""
@@ -237,6 +238,9 @@ test_plan_id_coverage load 5 \
 test_plan_id_coverage uninstall 2 \
 	scripts/reg-uninstall.sh scripts/reg-uninstall-docker.sh scripts/reg-uninstall-quay.sh \
 	scripts/reg-uninstall-omr.sh scripts/reg-uninstall-remote.sh
+
+test_plan_id_coverage upgrade 6 \
+	scripts/reg-upgrade.sh scripts/reg-upgrade-quay.sh scripts/reg-upgrade-quay-remote.sh
 
 test_plan_id_coverage bundle 9 \
 	scripts/make-bundle.sh scripts/install-rpms.sh scripts/reg-save.sh
@@ -398,7 +402,7 @@ echo "--- Orphan emitters (START without any PLAN) ---"
 
 # Collect all PLAN IDs across all workflows
 _all_plan_ids=""
-for wf in install sync save load uninstall stop start bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade cluster-install; do
+for wf in install sync save load uninstall upgrade stop start bundle day2 day2-ntp day2-osus day2-virt cluster-shutdown cluster-startup cluster-upgrade cluster-install; do
 	_tmpf=$(capture_plans "$wf")
 	_all_plan_ids="$_all_plan_ids $(grep '^PLAN|' "$_tmpf" 2>/dev/null | cut -d'|' -f2)"
 	rm -f "$_tmpf"

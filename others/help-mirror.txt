@@ -39,6 +39,7 @@ Related commands:
 
   aba [-d mirror] stop                 # Stop the mirror registry (safe to copy data dir).
   aba [-d mirror] start                # Start a previously stopped mirror registry.
+  aba [-d mirror] upgrade              # Upgrade the installed Quay registry and renew its server cert (CA unchanged).
 
   aba [-d mirror] verify               # Verify mirror registry connection credentials are working.
 

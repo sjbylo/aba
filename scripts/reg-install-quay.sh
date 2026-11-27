@@ -26,73 +26,7 @@ if ! ip route show default | grep -q .; then
 fi
 
 # --- Quay-specific: verify SSH to localhost ---
-# The Quay mirror-registry installer uses Ansible, which requires SSH to localhost.
-# Try SSH first. Only attempt remediation if it fails.
-flag_file="$ABA_TMP/flag.$RANDOM"
-rm -f "$flag_file"
-
-_quay_ssh_ok=""
-if ssh -F "$ssh_conf_file" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 && [ -f "$flag_file" ]; then
-	_quay_ssh_ok=1
-fi
-rm -f "$flag_file"
-
-if [ -z "$_quay_ssh_ok" ]; then
-	aba_info "SSH to '$reg_host' failed — attempting to fix ..."
-
-	# Is sshd running?
-	if ! systemctl is-active --quiet sshd; then
-		aba_info "sshd is not running — starting and enabling ..."
-		if ! $SUDO systemctl enable --now sshd; then
-			aba_abort \
-				"Failed to start sshd." \
-				"The Quay mirror-registry installer requires SSH access to localhost." \
-				"Start sshd manually ('sudo systemctl start sshd') and try again."
-		fi
-	fi
-
-	# Ensure ~/.ssh exists with correct permissions (sshd StrictModes requires 700).
-	if [ ! -d ~/.ssh ]; then
-		mkdir -p ~/.ssh
-		chmod 700 ~/.ssh
-	elif [ "$(stat -c '%a' ~/.ssh)" != "700" ]; then
-		aba_info "Fixing ~/.ssh permissions ($(stat -c '%a' ~/.ssh) → 700) ..."
-		chmod 700 ~/.ssh
-	fi
-
-	# Ensure a test key pair exists so we can SSH to localhost.
-	temp_aba_key=~/.ssh/aba_check_ssh
-	temp_aba_pub_key=~/.ssh/aba_check_ssh.pub
-
-	if [ ! -s "$temp_aba_key" ]; then
-		if [ ! -w ~/.ssh ]; then
-			aba_abort \
-				"Cannot write to ~/.ssh to create SSH test key." \
-				"The Quay mirror-registry installer requires SSH access to localhost." \
-				"Fix permissions on ~/.ssh and try again."
-		fi
-		aba_debug "Creating test ssh key: $temp_aba_key"
-		ssh-keygen -t rsa -f "$temp_aba_key" -N '' >/dev/null
-		chmod 600 "$temp_aba_key" "$temp_aba_pub_key"
-		cat "$temp_aba_pub_key" >> ~/.ssh/authorized_keys
-		chmod 600 ~/.ssh/authorized_keys
-	fi
-
-	# Retry SSH after remediation
-	rm -f "$flag_file"
-	if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 || [ ! -f "$flag_file" ]; then
-		rm -f "$flag_file"
-		aba_warn "SSH to '$reg_host' failed — trying localhost instead ..."
-		if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" localhost "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 || [ ! -f "$flag_file" ]; then
-			aba_abort \
-				"For local Quay installation, SSH must work to localhost. The Quay installer requires this." \
-				"Tried: ssh -F $ssh_conf_file -i $temp_aba_key $reg_host" \
-				"Tried: ssh -F $ssh_conf_file -i $temp_aba_key localhost" \
-				"Check: sshd running? ~/.ssh permissions? firewall?"
-		fi
-	fi
-	rm -f "$flag_file"
-fi
+reg_quay_ensure_local_ssh
 
 reg_pre_install_stale_check quay
 
@@ -105,10 +39,7 @@ aba_info "Installing Quay registry on localhost ..."
 aba_progress "START|reg_download"
 
 # Ensure the quay_installer SSH key exists (used internally by mirror-registry)
-if [ ! -s $HOME/.ssh/quay_installer ]; then
-	ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N '' >/dev/null
-	cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
-fi
+reg_quay_installer_key
 
 aba_info "Installing mirror registry with command:"
 aba_info "./mirror-registry install -v --initUser $reg_user --quayHostname $reg_hostport $reg_root_opts --initPassword <hidden>"

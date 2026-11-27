@@ -109,6 +109,15 @@ case "$1" in
 		aba_progress "PLAN|start_verify|Verify running|3"
 		;;
 
+	upgrade)
+		aba_progress "PLAN|reg_config|Validate configuration|2"
+		aba_progress "PLAN|reg_download|Prepare registry software|10"
+		aba_progress "PLAN|reg_cert|Renew server certificate|2"
+		aba_progress "PLAN|reg_upgrade|Upgrade registry|15"
+		aba_progress "PLAN|reg_postcfg|Configure credentials|3"
+		aba_progress "PLAN|reg_verify|Verify connectivity|2"
+		;;
+
 	# ── Bundle workflow (called from _progress_plan-bundle Makefile target) ──
 
 	bundle)

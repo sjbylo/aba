@@ -4,7 +4,8 @@
 # already exists, so a Quay mirror keeps installing that binary.
 # Called from templates/Makefile.mirror (quay-tarball-pin), cwd = mirror dir.
 # No-op unless mirror.conf says reg_vendor=quay. omr, docker, and auto keep
-# whatever file is already there, including their own images.
+# whatever file is already there, including their own images, unless
+# QUAY_PIN_ANY_VENDOR=1 (set by the registry upgrade).
 # Prints "replaced" on stdout when the tarball was removed.
 
 set -euo pipefail
@@ -13,7 +14,10 @@ tarball=${1:?}
 sums_url=${2:?}
 
 vendor=$(grep '^reg_vendor=' mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//' || true)
-[ "${vendor:-}" = quay ] || exit 0
+# Upgrade sets QUAY_PIN_ANY_VENDOR=1: it always runs Quay, whatever reg_vendor says.
+if [ "${QUAY_PIN_ANY_VENDOR:-}" != 1 ]; then
+	[ "${vendor:-}" = quay ] || exit 0
+fi
 [ -f "$tarball" ] || exit 0
 
 sums=$(mktemp)

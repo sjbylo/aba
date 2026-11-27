@@ -11,7 +11,7 @@ source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $* in $PWD"
 
-reg_remote_pre_uninstall "Docker"
+reg_remote_load_state "Docker"
 
 if ask -n --auto-yes "Uninstall Docker registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
 

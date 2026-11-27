@@ -608,6 +608,36 @@ reg_ensure_remote_pkgs() {
 	fi
 }
 
+# --- _reg_fetch_ca ------------------------------------------------------------
+# Copy the registry root CA into $regcreds_dir/rootCA.pem.
+# Usage: _reg_fetch_ca <local_path>
+#        _reg_fetch_ca <user@host:path> --ssh
+_reg_fetch_ca() {
+	local ca_source="$1"
+
+	if [ "${2:-}" = "--ssh" ]; then
+		aba_info "Fetching root CA from remote host: $ca_source"
+		# Use ssh+cat instead of scp: podman :Z relabels volume files to
+		# container_file_t, which SELinux blocks sshd/sftp from reading.
+		# ssh+cat runs as the user shell (not sshd subsystem) so it works.
+		local _remote_host="${ca_source%%:*}"
+		local _remote_path="${ca_source#*:}"
+		# Write a temp file first, so a failed fetch keeps the current rootCA.pem.
+		if ! ssh -i "$reg_ssh_key" -F "$ssh_conf_file" "$_remote_host" "cat '$_remote_path'" > "$regcreds_dir/rootCA.pem.tmp"; then
+			rm -f "$regcreds_dir/rootCA.pem.tmp"
+			aba_abort "Failed to fetch root CA from remote host: $ca_source" \
+				"The registry install or upgrade may have failed - check the output above."
+		fi
+		if [ ! -s "$regcreds_dir/rootCA.pem.tmp" ]; then
+			rm -f "$regcreds_dir/rootCA.pem.tmp"
+			aba_abort "Root CA from $ca_source is empty - the registry may not have generated certificates."
+		fi
+		mv -f "$regcreds_dir/rootCA.pem.tmp" "$regcreds_dir/rootCA.pem"
+	else
+		cp "$ca_source" "$regcreds_dir/rootCA.pem"
+	fi
+}
+
 # --- reg_post_install ---------------------------------------------------------
 # Post-install steps common to all registry vendors:
 #   1. Back up old regcreds directory (if any)
@@ -640,24 +670,7 @@ reg_post_install() {
 	fi
 	mkdir -p "$regcreds_dir"
 
-	# Copy CA certificate to regcreds
-	if [ "$via_ssh" ]; then
-		aba_info "Fetching root CA from remote host: $ca_source"
-		# Use ssh+cat instead of scp: podman :Z relabels volume files to
-		# container_file_t, which SELinux blocks sshd/sftp from reading.
-		# ssh+cat runs as the user shell (not sshd subsystem) so it works.
-		local _remote_host="${ca_source%%:*}"
-		local _remote_path="${ca_source#*:}"
-		if ! ssh -i "$reg_ssh_key" -F "$ssh_conf_file" "$_remote_host" "cat '$_remote_path'" > "$regcreds_dir/rootCA.pem"; then
-			aba_abort "Failed to fetch root CA from remote host: $ca_source" \
-				"The registry install may have failed — check the output above."
-		fi
-		if [ ! -s "$regcreds_dir/rootCA.pem" ]; then
-			aba_abort "Root CA from $ca_source is empty — the registry may not have generated certificates."
-		fi
-	else
-		cp "$ca_source" "$regcreds_dir/rootCA.pem"
-	fi
+	_reg_fetch_ca "$ca_source" ${via_ssh:+--ssh}
 
 	# Trust the CA system-wide (updates /etc/pki/ca-trust/)
 	trust_root_ca "$regcreds_dir/rootCA.pem"
@@ -967,12 +980,12 @@ To uninstall: cd $PWD && aba uninstall"
 	fi
 }
 
-# --- reg_pre_uninstall ---------------------------------------------------------
-# Shared config setup for all uninstall scripts (local and remote).
+# --- reg_load_state -----------------------------------------------------------
+# Shared config setup for the uninstall and upgrade scripts (local and remote).
 # Loads config, sources state.sh, makes regcreds_dir available.
 # Sets: regcreds_dir, regcreds_display, plus all state.sh variables.
-# Usage: reg_pre_uninstall <vendor_label>
-reg_pre_uninstall() {
+# Usage: reg_load_state <vendor_label>
+reg_load_state() {
 	local vendor_label="${1:-registry}"
 
 	source <(normalize-aba-conf)
@@ -987,15 +1000,15 @@ reg_pre_uninstall() {
 	source "$regcreds_dir/state.sh"
 }
 
-# --- reg_remote_pre_uninstall -------------------------------------------------
-# Shared setup for remote uninstall scripts: config + SSH verification.
-# Extends reg_pre_uninstall with SSH connectivity check.
-# Sets: $_ssh, ssh_conf_file (in addition to everything from reg_pre_uninstall)
-# Usage: reg_remote_pre_uninstall <vendor_label>
-reg_remote_pre_uninstall() {
+# --- reg_remote_load_state ----------------------------------------------------
+# Shared setup for the remote uninstall and upgrade scripts: config + SSH verification.
+# Extends reg_load_state with SSH connectivity check.
+# Sets: $_ssh, ssh_conf_file (in addition to everything from reg_load_state)
+# Usage: reg_remote_load_state <vendor_label>
+reg_remote_load_state() {
 	local vendor_label="${1:-registry}"
 
-	reg_pre_uninstall "$vendor_label"
+	reg_load_state "$vendor_label"
 
 	ssh_conf_file=~/.aba/ssh.conf
 	_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
@@ -1571,9 +1584,17 @@ reg_remote_pre_install() {
 
 	reg_open_firewall --ssh
 
-	# Create remote working directory
+	reg_remote_work_dir reg-install
+}
+
+# --- reg_remote_work_dir ------------------------------------------------------
+# Create a working directory on the remote host, removed when the script exits.
+# Requires: $_ssh, reg_ssh_user, reg_ssh_key, reg_host, ssh_conf_file
+# Sets globals: remote_tmp, remote_dir, _scp, _target
+# Usage: reg_remote_work_dir <name_prefix>
+reg_remote_work_dir() {
 	remote_tmp="/tmp/.aba-${reg_ssh_user}"
-	remote_dir="$remote_tmp/reg-install-$$"
+	remote_dir="$remote_tmp/$1-$$"
 	$_ssh "mkdir -p $remote_dir"
 	trap '$_ssh "rm -rf $remote_dir" 2>/dev/null' EXIT
 
@@ -1590,7 +1611,13 @@ reg_remote_post_install() {
 	local remote_ca="$2"
 
 	reg_post_install "$_target:$remote_ca" "$vendor" --ssh
+	reg_wait_and_check_auth
+}
 
+# --- reg_wait_and_check_auth --------------------------------------------------
+# Wait until the registry answers on /v2/, then check the login once.
+# Requires: reg_host, reg_port, reg_user, reg_pw
+reg_wait_and_check_auth() {
 	# Phase 1: Wait for the registry HTTP endpoint to respond (no auth = no
 	# lockout risk).  Safe to retry freely — just checks connectivity + TLS.
 	if ! try_cmd -n 12 -d 5 -m "Wait for registry on ${reg_host}:${reg_port}" -- \
@@ -1610,6 +1637,211 @@ reg_remote_post_install() {
 			"Check registry credentials (reg_user=$reg_user in mirror.conf)." \
 			"Credentials saved. After fixing: $(aba_cmd verify)"
 	fi
+}
+
+# =============================================================================
+# Quay helpers shared by install and upgrade
+# =============================================================================
+
+# --- reg_quay_ensure_local_ssh ------------------------------------------------
+# The Quay mirror-registry installer uses Ansible, which requires SSH to localhost.
+# Try SSH first. Only attempt remediation if it fails.
+reg_quay_ensure_local_ssh() {
+	local flag_file="$ABA_TMP/flag.$RANDOM"
+	local _quay_ssh_ok=""
+	local temp_aba_key temp_aba_pub_key
+	rm -f "$flag_file"
+
+	if ssh -F "$ssh_conf_file" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 && [ -f "$flag_file" ]; then
+		_quay_ssh_ok=1
+	fi
+	rm -f "$flag_file"
+
+	[ -n "$_quay_ssh_ok" ] && return 0
+
+	aba_info "SSH to '$reg_host' failed - attempting to fix ..."
+
+	# Is sshd running?
+	if ! systemctl is-active --quiet sshd; then
+		aba_info "sshd is not running - starting and enabling ..."
+		if ! $SUDO systemctl enable --now sshd; then
+			aba_abort \
+				"Failed to start sshd." \
+				"The Quay mirror-registry installer requires SSH access to localhost." \
+				"Start sshd manually ('sudo systemctl start sshd') and try again."
+		fi
+	fi
+
+	# Ensure ~/.ssh exists with correct permissions (sshd StrictModes requires 700).
+	if [ ! -d ~/.ssh ]; then
+		mkdir -p ~/.ssh
+		chmod 700 ~/.ssh
+	elif [ "$(stat -c '%a' ~/.ssh)" != "700" ]; then
+		aba_info "Fixing ~/.ssh permissions ($(stat -c '%a' ~/.ssh) -> 700) ..."
+		chmod 700 ~/.ssh
+	fi
+
+	# Ensure a test key pair exists so we can SSH to localhost.
+	temp_aba_key=~/.ssh/aba_check_ssh
+	temp_aba_pub_key=~/.ssh/aba_check_ssh.pub
+
+	if [ ! -s "$temp_aba_key" ]; then
+		if [ ! -w ~/.ssh ]; then
+			aba_abort \
+				"Cannot write to ~/.ssh to create SSH test key." \
+				"The Quay mirror-registry installer requires SSH access to localhost." \
+				"Fix permissions on ~/.ssh and try again."
+		fi
+		aba_debug "Creating test ssh key: $temp_aba_key"
+		ssh-keygen -t rsa -f "$temp_aba_key" -N '' >/dev/null
+		chmod 600 "$temp_aba_key" "$temp_aba_pub_key"
+		cat "$temp_aba_pub_key" >> ~/.ssh/authorized_keys
+		chmod 600 ~/.ssh/authorized_keys
+	fi
+
+	# Retry SSH after remediation
+	rm -f "$flag_file"
+	if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 || [ ! -f "$flag_file" ]; then
+		rm -f "$flag_file"
+		aba_warn "SSH to '$reg_host' failed - trying localhost instead ..."
+		if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" localhost "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 || [ ! -f "$flag_file" ]; then
+			aba_abort \
+				"For local Quay installation, SSH must work to localhost. The Quay installer requires this." \
+				"Tried: ssh -F $ssh_conf_file -i $temp_aba_key $reg_host" \
+				"Tried: ssh -F $ssh_conf_file -i $temp_aba_key localhost" \
+				"Check: sshd running? ~/.ssh permissions? firewall?"
+		fi
+	fi
+	rm -f "$flag_file"
+}
+
+# --- reg_quay_installer_key ---------------------------------------------------
+# mirror-registry's internal Ansible SSHes back to the same host with
+# ~/.ssh/quay_installer. Create that key once on the registry host.
+# Usage: reg_quay_installer_key [ssh_cmd]
+reg_quay_installer_key() {
+	_reg_host_run "${1:-}" "if [ ! -s ~/.ssh/quay_installer ]; then mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/quay_installer -N '' >/dev/null && cat ~/.ssh/quay_installer.pub >> ~/.ssh/authorized_keys; fi"
+}
+
+# =============================================================================
+# Quay upgrade helpers
+# =============================================================================
+
+# --- reg_quay_prepare_tarball -------------------------------------------------
+# Make sure this mirror dir has the pinned 2.x Quay installer tarball. On a
+# connected host make fetches it. On a disconnected host the download fails
+# and the copy in mirror/ is used. The caller extracts it where it runs:
+# ensure_quay_registry and run_once stop after the first extract, so a newer
+# tarball would be ignored.
+# Sets: quay_tarball
+reg_quay_prepare_tarball() {
+	quay_tarball="mirror-registry-$ARCH.tar.gz"
+
+	# aba may have started this download in the background. Wait for it, so
+	# make does not write the same file at the same time.
+	run_once -q -w -i "$TASK_DL_QUAY_REG" >/dev/null 2>&1 || true
+	# The pin check normally runs only for reg_vendor=quay, and the default is
+	# auto. Upgrade always uses Quay, so an old 2.0.x tarball must go too.
+	if ! QUAY_PIN_ANY_VENDOR=1 make --no-print-directory download-quay-tarball; then
+		aba_warn "Could not download $quay_tarball. Using the copy in $PWD, if there is one."
+	fi
+
+	if [ ! -s "$quay_tarball" ]; then
+		if [ "$ARCH" = "arm64" ]; then
+			aba_abort "There is no Quay mirror-registry for aarch64."
+		fi
+		aba_abort "$quay_tarball not found in $PWD." \
+			"Copy $quay_tarball from the connected host into mirror/, then run the command again."
+	fi
+
+	# Only the Ansible 2.x installer has the upgrade subcommand and these flags.
+	# 3.x is the omr binary. Check the file, not reg_vendor in mirror.conf.
+	if ! tar tzf "$quay_tarball" 2>/dev/null | grep -qE '^(\./)?execution-environment\.tar$'; then
+		aba_abort "$quay_tarball is not the pinned 2.x Quay installer." \
+			"Remove it, then run '$(aba_cmd upgrade)' again on the connected host."
+	fi
+}
+
+# --- reg_leaf_days ------------------------------------------------------------
+# Leaf cert lifetime in days: one year, and never past the CA end date.
+# Returns 1 when the CA has less than 30 days left.
+# Usage: reg_leaf_days <ca_end_epoch> <now_epoch>
+reg_leaf_days() {
+	local _left=$(( ($1 - $2) / 86400 ))
+	local _days
+
+	if [ "$_left" -lt 30 ]; then
+		return 1
+	fi
+	_days=$(( _left - 1 ))
+	if [ "$_days" -gt 365 ]; then
+		_days=365
+	fi
+	echo "$_days"
+}
+
+# --- reg_quay_check_ca --------------------------------------------------------
+# Read the Quay CA end date on the registry host and pick the leaf lifetime.
+# A new CA would break trust on every cluster that uses this registry, so a
+# CA near expiry stops here instead.
+# Usage: reg_quay_check_ca [ssh_cmd]
+# Sets: leaf_days
+reg_quay_check_ca() {
+	local ssh_cmd="${1:-}"
+	local _ca="$reg_root/quay-rootCA/rootCA.pem"
+	local _end=""
+
+	_end=$(_reg_host_run "$ssh_cmd" "cat '$_ca'" | openssl x509 -noout -enddate 2>/dev/null) || true
+	_end="${_end#notAfter=}"
+	if [ -z "$_end" ]; then
+		aba_abort "Cannot read the Quay CA certificate $_ca${ssh_cmd:+ on $reg_host}."
+	fi
+
+	# leaf_days is read by the caller.
+	# shellcheck disable=SC2034
+	if ! leaf_days=$(reg_leaf_days "$(date -d "$_end" +%s)" "$(date +%s)"); then
+		aba_abort "Quay CA expires on $_end. A new CA breaks trust on clusters that use this registry."
+	fi
+}
+
+# --- reg_quay_issue_leaf ------------------------------------------------------
+# Sign a new server cert with the existing Quay CA, on the registry host: the
+# CA key is there, not on the bastion. The CA is not replaced, so clusters that
+# trust rootCA.pem keep working. A random serial means no rootCA.srl is written.
+# Writes only ssl.cert and ssl.key into <out_dir>.
+# Usage: reg_quay_issue_leaf <ssh_cmd|""> <days> <out_dir>
+reg_quay_issue_leaf() {
+	local ssh_cmd="$1"
+	local days="$2"
+	local out_dir="$3"
+	local _ca="$reg_root/quay-rootCA"
+
+	aba_info "Issuing a new server certificate for $reg_host ($days days) from the Quay CA ..."
+
+	if ! _reg_host_run "$ssh_cmd" "set -e
+umask 077
+mkdir -p '$out_dir'
+cd '$out_dir'
+openssl req -new -newkey rsa:2048 -nodes -sha256 -subj '/CN=$reg_host' -keyout ssl.key -out ssl.csr 2>/dev/null
+printf '%s\n' 'subjectAltName=DNS:$reg_host' 'extendedKeyUsage=serverAuth' 'basicConstraints=CA:FALSE' > ssl.ext
+openssl x509 -req -in ssl.csr -CA '$_ca/rootCA.pem' -CAkey '$_ca/rootCA.key' -set_serial 0x\$(openssl rand -hex 16) -days $days -sha256 -extfile ssl.ext > ssl.cert
+rm -f ssl.csr ssl.ext"; then
+		aba_abort "Failed to issue a new certificate from the Quay CA in $_ca${ssh_cmd:+ on $reg_host}."
+	fi
+}
+
+# --- reg_post_upgrade ---------------------------------------------------------
+# Store and trust the CA the same way install does, then mark the registry as
+# running. The CA and the login do not change, so the pull secret stays.
+# last_action is left alone: mirror-status.sh reads it (sync, load) to tell
+# whether the mirror holds images.
+# Usage: reg_post_upgrade <local_ca_path>
+#        reg_post_upgrade <user@host:ca_path> --ssh
+reg_post_upgrade() {
+	_reg_fetch_ca "$1" "${2:-}"
+	trust_root_ca "$regcreds_dir/rootCA.pem"
+
+	replace-value-conf -q -n reg_running -v true -f "$regcreds_dir/state.sh"
 }
 
 # --- reg_stop_vendor ----------------------------------------------------------

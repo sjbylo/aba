@@ -658,6 +658,9 @@ do
 			cat $ABA_ROOT/others/help-aba.txt
 		elif [ "$_ht" = "mirror" -o "$_ht" = "save" -o "$_ht" = "load" -o "$_ht" = "sync" -o "$_ht" = "register" -o "$_ht" = "unregister" -o "$_ht" = "install" -o "$_ht" = "uninstall" -o "$_ht" = "verify" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
+		elif [ "$_ht" = "upgrade" ] && grep -qs '^# Mirror Makefile' Makefile; then
+			# In a mirror dir, upgrade is the registry upgrade.
+			cat $ABA_ROOT/others/help-mirror.txt
 		elif [ "$_ht" = "cluster" -o "$_ht" = "upgrade" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
 		elif [ "$_ht" = "bundle" -o "$_ht" = "bundle-primed" ]; then
@@ -1622,6 +1625,17 @@ _ensure_vm_platform_ready() {
 
 if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
+
+	# In a mirror dir, upgrade means the registry. Run it before the cluster
+	# guard and the cluster-only checks below. Cluster dirs are unchanged.
+	if [ "$cur_target" = "upgrade" ] && grep -qs '^# Mirror Makefile' Makefile; then
+		if [ "${upgrade_to:-}${upgrade_dry_run:-}${upgrade_skip_day2:-}${upgrade_allow_not_recommended:-}${upgrade_shell:-}${upgrade_wait:-}${opt_force:-}" ]; then
+			aba_abort "--to, --dry-run, --skip-day2, --allow-not-recommended, --shell, --wait and --force apply to cluster upgrade only." \
+				"Upgrade the mirror registry with: $(aba_cmd upgrade)"
+		fi
+		aba_debug "Running: make -s upgrade (mirror registry) from directory: $PWD"
+		exec make -s upgrade
+	fi
 
 	# --validate: validate name and exit (no side effects)
 	if [ "$_cli_validate_only" ] && [ "$cur_target" = "cluster" ]; then

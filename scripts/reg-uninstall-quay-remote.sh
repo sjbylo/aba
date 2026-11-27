@@ -12,7 +12,7 @@ source scripts/reg-common.sh
 
 aba_debug "Starting: $0 $* in $PWD"
 
-reg_remote_pre_uninstall "Quay"
+reg_remote_load_state "Quay"
 
 if ask -n --auto-yes "Uninstall Quay registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
 

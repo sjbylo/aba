@@ -27,9 +27,7 @@ if ! ensure_quay_registry; then
 	aba_abort "Failed to extract mirror-registry:\n$error_msg"
 fi
 
-# mirror-registry's internal Ansible needs quay_installer to SSH back to
-# the same host.
-$_ssh "if [ ! -s ~/.ssh/quay_installer ]; then mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/quay_installer -N '' >/dev/null && cat ~/.ssh/quay_installer.pub >> ~/.ssh/authorized_keys; fi"
+reg_quay_installer_key "$_ssh"
 
 aba_info "Copying mirror-registry tarball to remote host ..."
 $_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
