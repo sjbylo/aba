@@ -678,7 +678,36 @@ _cleanup_children() {
 		wait || true
 	fi
 }
-trap '_cleanup_children' EXIT INT TERM HUP
+
+# The golden VM is only needed while it is built and while pool VMs are
+# cloned from it. A build that stops before the snapshot step used to leave
+# aba-e2e-golden-* powered on. Shut it off when this script is finished.
+_golden_power_off() {
+	local _wait="${1:-0}"
+	local _state _tries
+
+	[ -n "${_GOLDEN_NAME:-}" ] || return 0
+	vm_exists "$_GOLDEN_NAME" || return 0
+	_tries=0
+	while true; do
+		_state=$(govc vm.info "$_GOLDEN_NAME" 2>/dev/null | awk '/Power state:/{print $NF; exit}') || true
+		[ "$_state" = "poweredOff" ] && return 0
+		if [ "$_tries" -ge "$_wait" ]; then
+			break
+		fi
+		sleep 2
+		_tries=$(( _tries + 1 ))
+	done
+	echo "  Powering off $_GOLDEN_NAME ..."
+	govc vm.power -off "$_GOLDEN_NAME" || true
+}
+
+_on_exit() {
+	_cleanup_children
+	_golden_power_off
+}
+trap '_cleanup_children' INT TERM HUP
+trap '_on_exit' EXIT
 
 # =============================================================================
 # --verify: run post-config checks on all pools, skip infra setup
@@ -857,23 +886,16 @@ _prepare_golden() {
 	_vm_annotate "$_GOLDEN_NAME" "Shutting down for snapshot"
 	_essh "${user}@${ip}" -- "sudo systemctl enable expand-root.service" || true
 	_essh "${user}@${ip}" -- "sudo rm -f /var/lib/expand-root.done" || true
-	_essh "${user}@${ip}" -- "sudo poweroff" || true
+	# Guest shutdown in the background. _essh is a function, so timeout
+	# cannot wrap it, and a hung ssh used to block the power-off below.
+	local _guest_off
+	_essh "${user}@${ip}" -- "sudo poweroff" || true &
+	_guest_off=$!
 
-	# Poll power state instead of blind sleep -- more correct and often faster.
 	echo "  Waiting for golden VM to power off ..."
-	local _pw_tries=0
-	while [ "$_pw_tries" -lt 30 ]; do
-		local _pw_state
-		_pw_state=$(govc vm.info "$_GOLDEN_NAME" | awk '/Power state:/{print $NF}') || true
-		[ "$_pw_state" = "poweredOff" ] && break
-		sleep 2
-		_pw_tries=$(( _pw_tries + 1 ))
-	done
-	# Force off if guest shutdown didn't complete within 60s
-	if [ "$_pw_state" != "poweredOff" ]; then
-		echo "  Golden VM not off after 60s -- forcing power off"
-		govc vm.power -off "$_GOLDEN_NAME" || true
-	fi
+	_golden_power_off 30
+	kill "$_guest_off" 2>/dev/null || true
+	wait "$_guest_off" 2>/dev/null || true
 	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
 	_vm_annotate "$_GOLDEN_NAME" "Ready (golden-ready snapshot created) | OS: $_RHEL_VER"
 

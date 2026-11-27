@@ -93,14 +93,6 @@ E2E_IS_RETRY="${1:-}"   # optional: "retry" when run.sh re-dispatched this suite
 LOCK_FILE="${E2E_RC_PREFIX}-${SUITE}.lock"
 RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
 
-# KVM1 is down. A dispatcher that already queued these must not start them.
-# /tmp/e2e-suite-hold.txt on the bastion is the same list for the dispatcher.
-if [ "$SUITE" = "kvm-lifecycle" ] || [ "$SUITE" = "kvm-network" ]; then
-	echo "  HOLD: $SUITE is not running (KVM host is down)."
-	echo "3" > "$RC_FILE"
-	exit 3
-fi
-
 # --- Concurrent run protection -----------------------------------------------
 
 _LOCK_MAX_AGE=86400  # 24 hours
@@ -201,14 +193,12 @@ _print_fs_snapshot() {
 }
 
 _cleanup_non_mirror_local() {
-	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
-	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
-	rm -rf ~/.oc-mirror ~/.cache/agent
-	rm -rf ~/tmp/*
+	# Bins, oc-mirror, the agent cache, and ~/tmp are a 3/10 draw.
+	# CLI tarballs and mirror archives are not.
 	rm -f ~/aba/cli/*.tar.gz
 
 	# When switching between --user root and --user steve (or any user), the
-	# OTHER user's home may still contain large artifacts from a previous run.
+	# OTHER user's home may still contain large archives from a previous run.
 	local _my_home
 	_my_home=$(eval echo "~")
 	local _h
@@ -216,12 +206,9 @@ _cleanup_non_mirror_local() {
 		[ -d "$_h" ] || continue
 		[ "$_h" = "$_my_home" ] && continue
 		if [ -d "$_h/aba" ]; then
-			echo "  Cleaning stale ABA artifacts in $_h ..."
+			echo "  Cleaning stale mirror archives in $_h ..."
 			sudo rm -rf "$_h/aba/mirror/data/mirror_"*.tar
 			sudo rm -rf "$_h/aba/cli/"*.tar.gz
-			sudo rm -rf "$_h/.oc-mirror"
-			sudo rm -rf "$_h/.cache/agent"
-			sudo rm -rf "$_h/tmp/"*
 		fi
 	done
 }
@@ -244,20 +231,25 @@ _verify_no_registry_data_dirs() {
 			echo "  FATAL: Cannot SSH to $remote_target -- cannot verify registry data dirs on $label"
 			return 1
 		fi
+		# A keep draw left the registry on purpose. SSH still has to work.
+		if [ -n "${_E2E_DIS_TREE_KEPT:-}" ]; then
+			echo "  $label: registry leftovers kept (not this run's 3/10 tree reset)"
+			return 0
+		fi
 	fi
 
 	if [ -n "$remote_target" ]; then
 		local _dis_fqdn
 		_dis_fqdn=$(echo "$remote_target" | sed 's/.*@//')
 		local _default_user="${VM_DEFAULT_USER:-steve}"
-		for _check_user in root "$_default_user"; do
+		for _check_user in root "$_default_user" testy; do
 			# Glob: e2e-mirror-* dirs — only flag if registry still installed (.available)
 			local _found
-			_found=$(_essh "${_check_user}@${_dis_fqdn}" "for d in ~/e2e-mirror-* ~/aba/e2e-mirror-*; do [ -f \"\$d/.available\" ] && echo \"\$d\"; done" || true)
+			_found=$(_e2e_dis_as "$_check_user" "for d in ~/e2e-mirror-* ~/aba/e2e-mirror-*; do [ -f \"\$d/.available\" ] && echo \"\$d\"; done" || true)
 			[ -n "$_found" ] && _leftovers+="$(echo "$_found" | sed "s/^/  ~${_check_user}: /")"$'\n'
 			# ABA-internal dirs — only flag if registry still installed
 			for _dir in $_E2E_ABA_INTERNAL_DIRS; do
-				_essh "${_check_user}@${_dis_fqdn}" "test -f ~/$_dir/.available" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
+				_e2e_dis_as "$_check_user" "test -f ~/$_dir/.available" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
 			done
 		done
 	else
@@ -815,15 +807,8 @@ _pre_suite_cleanup() {
 		sleep 2
 	fi
 
-	# Purge all oc-mirror caches (can grow to many GB across nested dirs).
-	# Search both /root/ and /home/ so --user root cleans steve leftovers and vice versa.
-	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf
-	echo "  Purged oc-mirror caches"
-
-	# Prune dangling/unused podman images (can accumulate 60GB+ over repeated suite runs)
-	podman image prune -af || true
-	sudo podman image prune -af || true
-	echo "  Pruned unused podman images"
+	# oc-mirror caches and unused podman images are a 3/10 draw later.
+	# Deleting them on every suite hid bugs that only show up with leftovers.
 
 	local _had_cleanup=""
 	shopt -s nullglob
@@ -841,14 +826,9 @@ _pre_suite_cleanup() {
 
 	[ -n "$_had_cleanup" ] && echo "  Pre-suite cleanup complete."
 
-	# Clean up leftover ABA DNS/NTP on disN from a crashed/interrupted suite.
-	# Only airgapped-local-reg sets these up, but any suite may follow on the
-	# same pool.  Safe to run unconditionally -- aba remove is a no-op if not configured.
+	# NTP on disN from a crashed suite. ABA DNS confs are a 3/10 draw.
+	# aba remove dns stops dnsmasq, so that command is not used here.
 	if [ -n "${INTERNAL_BASTION:-}" ]; then
-		if _essh "$INTERNAL_BASTION" "test -f /etc/dnsmasq.d/aba-upstream.conf" 2>/dev/null; then
-			echo "  Cleaning up leftover ABA DNS on disN ..."
-			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove dns -y" 2>/dev/null || true
-		fi
 		if _essh "$INTERNAL_BASTION" "grep -q '^allow ' /etc/chrony.conf" 2>/dev/null; then
 			echo "  Cleaning up leftover ABA NTP on disN ..."
 			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove ntp -y" 2>/dev/null || true
@@ -967,6 +947,7 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	scp -q "$_ABA_ROOT/test/lib.sh" "$_dis_host:/tmp/.e2e-lib.sh"
 	_essh "$_dis_host" "source /tmp/.e2e-lib.sh && int_down; rm -f /tmp/.e2e-lib.sh"
 
+	_e2e_maybe_reset_host_state
 	_e2e_maybe_reset_registries_d
 	_e2e_maybe_reset_rpms
 	if ! _e2e_maybe_reset_container_auth; then
@@ -979,18 +960,11 @@ else
 	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
 fi
 
-# Ensure conN ~/.vmware.conf has the correct pool-specific VC_FOLDER + GOVC_DATASTORE.
-# The golden template bakes in default values; suites cp ~/.vmware.conf → ./vmware.conf,
-# so the source must be correct before any suite starts.
-if [ -f ~/.vmware.conf ]; then
-	if [ -n "${VC_FOLDER:-}" ]; then
-		sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
-		echo "  conN vmware.conf: VC_FOLDER=${VC_FOLDER}"
-	fi
-	if [ -n "${VM_DATASTORE:-}" ]; then
-		sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
-		echo "  conN vmware.conf: GOVC_DATASTORE=${VM_DATASTORE}"
-	fi
+# conN and disN must name this pool's folder before the suite copies
+# vmware.conf. abatesting, or an e2e VM already in that folder, aborts.
+if ! _e2e_enforce_pool_folder; then
+	echo "99" > "$RC_FILE"
+	exit 99
 fi
 
 # Post-cleanup filesystem snapshot (debug: catch leftover files before suite starts)
@@ -1074,6 +1048,7 @@ while true; do
 			scp -q "$_ABA_ROOT/test/lib.sh" "$_dis_host:/tmp/.e2e-lib.sh"
 			_essh "$_dis_host" "source /tmp/.e2e-lib.sh && int_down; rm -f /tmp/.e2e-lib.sh"
 
+			_e2e_maybe_reset_host_state
 			_e2e_maybe_reset_registries_d
 			_e2e_maybe_reset_rpms
 			if ! _e2e_maybe_reset_container_auth; then
@@ -1083,10 +1058,10 @@ while true; do
 			_e2e_maybe_reset_catalog_indexes
 			_ensure_pool_registry
 		fi
-		# Re-apply pool-specific vmware.conf on conN (same as initial path)
-		if [ -f ~/.vmware.conf ]; then
-			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
-			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
+		# Same gate as the initial path, including a kept disN tree.
+		if ! _e2e_enforce_pool_folder; then
+			echo "99" > "$RC_FILE"
+			exit 99
 		fi
 		# Re-copy test code from source (~/aba/test/e2e/) into run/ so
 		# auto-deployed changes take effect on restart.

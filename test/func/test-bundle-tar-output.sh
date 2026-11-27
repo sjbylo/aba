@@ -27,9 +27,13 @@ ERR=$WORK/stderr.log
 EXT=$WORK/extract
 
 # backup.sh updates this on success. Put the user's stamp back afterwards.
-_prev_backup=$HOME/.aba.previous.backup
+_prev_backup=$HOME/.aba/.previous.backup
 _prev_mtime=
 [ -f "$_prev_backup" ] && _prev_mtime=$(stat -c %Y "$_prev_backup")
+# backup.sh also deletes a leftover at the pre-move path. Put that back too.
+_old_backup=$HOME/.aba.previous.backup
+_old_mtime=
+[ -f "$_old_backup" ] && _old_mtime=$(stat -c %Y "$_old_backup")
 _real_isc=$ROOT/mirror/data/imageset-config.yaml
 _real_isc_mtime=
 [ -f "$_real_isc" ] && _real_isc_mtime=$(stat -c %Y "$_real_isc")
@@ -38,6 +42,9 @@ cleanup() {
 	rm -rf "$WORK"
 	if [ -n "$_prev_mtime" ] && [ -f "$_prev_backup" ]; then
 		touch -d "@$_prev_mtime" "$_prev_backup"
+	fi
+	if [ -n "$_old_mtime" ]; then
+		touch -d "@$_old_mtime" "$_old_backup"
 	fi
 }
 trap cleanup EXIT

@@ -159,18 +159,9 @@ if [ -f mirror/mirror.conf ] && [ -f .bundle ] && [ mirror/mirror.conf -ot .bund
 	echo "" >&2
 fi
 
+# The config template is copied below, before include_all.sh is sourced.
+# That load writes ssh.conf.
 mkdir -p ~/.aba
-
-# Always write ssh.conf so upgrades can add new options (e.g. BatchMode)
-cat > ~/.aba/ssh.conf <<END
-StrictHostKeyChecking no
-UserKnownHostsFile=/dev/null
-ConnectTimeout=15
-ServerAliveInterval=30
-ServerAliveCountMax=10
-BatchMode=yes
-LogLevel=ERROR
-END
 
 # Create user config file if needed
 if [ ! -f ~/.aba/config ]; then

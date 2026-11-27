@@ -11,6 +11,7 @@
 #   - Light bundle creation (specific operator subset)
 #   - Full bundle creation (all operators)
 #   - Bundle tar verification (contents, mirror_000001.tar presence)
+#   - Fresh disconnected unpack: rm -rf ~/aba, then extract, then ./install
 #   - Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) in bundle + ~/bin on disco
 #
 # Prerequisites:
@@ -46,6 +47,7 @@ plan_tests \
     "Bundle without operator filters: verify contents" \
     "All-operators imageset: generate and verify YAML" \
     "mirror clean: removes files and re-extraction works" \
+    "Fresh unpack: remove ~/aba, extract, install" \
     "Load bundle to internal bastion" \
     "Bare-metal simulation: platform=bm two-step install" \
     "Primed bundle: create and transfer to disco" \
@@ -71,12 +73,12 @@ test_begin "Setup: clean slate"
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer*"
+    "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba/.previous.backup ~/.aba.previous.backup ~/.ssh/quay_installer*"
 
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror -prune -exec rm -rf {} +; sudo find /root /home -path '*/aba/*' -type d -name .oc-mirror -prune -exec rm -rf {} +"
 
 e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
     "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
@@ -271,6 +273,26 @@ e2e_run "Re-extract mirror-registry after clean" \
     "make -C mirror mirror-registry"
 e2e_run "Verify mirror-registry re-extracted" \
     "test -x mirror/mirror-registry"
+
+test_end 0
+
+# ============================================================================
+# 8b. Documented disconnected install: the aba directory is removed, then the
+#     bundle is extracted, then ./install. A stale file planted beforehand
+#     must be gone. The extract below is left unchanged.
+# ============================================================================
+test_begin "Fresh unpack: remove ~/aba, extract, install"
+
+e2e_run_remote "Plant a stale file in an existing ~/aba" \
+    "mkdir -p ~/aba && echo stale > ~/aba/.e2e-stale-unpack"
+e2e_run "Remove ~/aba on disN and extract the bundle" \
+    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+e2e_run_remote "Stale file is gone and the archive tree is present" \
+    "test ! -e ~/aba/.e2e-stale-unpack && test -f ~/aba/aba.conf && test -f ~/aba/install"
+e2e_run_remote "Install the extracted tree" \
+    "cd ~/aba && ./install"
+e2e_run_remote "Bundle marker is present after install" \
+    "test -f ~/aba/.bundle"
 
 test_end 0
 

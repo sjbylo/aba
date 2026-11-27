@@ -42,6 +42,14 @@ ABA_TMP="/tmp/.aba-${USER:-$(id -un)}"
 mkdir -p "$ABA_TMP"
 chmod 700 "$ABA_TMP"
 
+# Once per process. A cluster make recipe is a new process and sources this
+# file before it uses ssh. install calls the same helper on its own.
+if [ -z "${_ABA_SSH_CONF_ENSURED:-}" ]; then
+	source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/ensure-ssh-conf.sh"
+	ensure_ssh_conf
+	_ABA_SSH_CONF_ENSURED=1
+fi
+
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
 # Registry vendor name for the new Go-based Quay mirror registry.

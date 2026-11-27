@@ -4216,3 +4216,35 @@ Then re-download the main operators with that pin and replace the size data `est
 
 **Workaround:** None until 2.0.1 is the oc-mirror ABA runs. Estimates keep assuming every architecture.
 
+---
+
+## #B123: Show version-cache curl errors only on the CLI terminal
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-11-26
+
+**Problem:** When OpenShift or OKD version data is cached to disk and `curl` fails, the user never sees curl's own error (`curl: (6) …`, `curl: (28) …`). The CLI abort says the version fetch failed and then prints the `run_once` error log, which does not contain that line.
+
+**Root cause:** `_fetch_cached` in `scripts/include_all.sh` runs `curl -f -s`. `-s` hides both the progress meter and curl's error. The helper is documented as never printing errors; on failure it only calls `aba_debug`. A stale cache file still counts as success. The fetch is started by `aba_version_fetch_start` through background `run_once`, whose stderr is the task `log.err`, so `[ -t 2 ]` is false even while the `aba` prompt is on screen. `try_cmd -q` records `[ABA] Failed after N attempts: curl` in that log, without curl's reason. Some callers also redirect stderr to `/dev/null`.
+
+**Proposed fix:** Show curl's error only when the CLI terminal can be written. When stdout is a tty, `aba` duplicates it onto `ABA_TTY_FD` and exports that fd. The background fetch inherits it. In `_fetch_cached`, if `ABA_TTY_FD` is a terminal, run curl with `-sS` and send its stderr to that fd, including when a stale cache is kept. Otherwise keep `-s` and stay quiet. Do not key off `[ -t 2 ]`: that fd is the task log, not the terminal. The TUI has a terminal and does not set `ABA_TTY_FD`, so the dialog, tests, and pipes stay quiet.
+
+**Workaround:** `DEBUG_ABA=1` logs `fetch failed: <url>` and still omits curl's reason. Run the same URL with curl by hand to see it.
+
+---
+
+## #B124: Measure `aba` startup and make the slow part faster
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-11-27
+
+**Problem:** `aba` does a lot of work before the command the user asked for. There is no measurement of that CLI startup path, so a change that is supposed to make it faster cannot be checked, and a change that makes it slower is easy to miss.
+
+**Root cause:** Every `aba` runs `install -q` first. On a connected host that runs `scripts/install-rpms.sh`, which sources `scripts/include_all.sh`. `aba.sh` then sources `include_all.sh` again. That file is large. Loading it rewrites `~/.aba/ssh.conf` and can start a background version fetch. #B89 timed the TUI (`abatui2.sh`) on 2026-11-02 and found the connectivity wait and the RPM check. It did not time the CLI, and the startup path has grown since then.
+
+**Proposed fix:** Time a command that does no mirror or cluster work, such as `aba -h`, and record each stage: `install -q`, the RPM check, sourcing `include_all.sh`, writing `ssh.conf`, and the version fetch. Keep that breakdown. Speed up the stage that dominates. #B89 already names one candidate: cache the RPM check so later starts skip `dnf`. Do not change behavior until the numbers say which stage is worth it.
+
+**Workaround:** None. The cost is paid on every `aba`.
+

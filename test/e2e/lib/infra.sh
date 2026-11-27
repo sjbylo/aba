@@ -108,7 +108,12 @@ _ensure_pool_infrastructure() {
 	if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; then
 		_print_box "1;43;30" "⟳  OS RECLONE: Rebuilding pools ${_pools_needing_reclone[*]}"
 		for _p in "${_pools_needing_reclone[@]}"; do
-			local _pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
+			# pools.conf VC_FOLDER is the pool folder itself (aba-e2e/poolN).
+			# The shell default VC_FOLDER is the production folder (abatesting),
+			# and appending /poolN there finds nothing, so the old VMs were reused.
+			local _pool_folder
+			_pool_folder=$(_pool_conf_get "${_RUN_DIR}/pools.conf" "$_p" VC_FOLDER)
+			[ -n "$_pool_folder" ] || _pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
 
 			# Process cleanup files first (delete clusters/mirrors via aba)
 			local _try_user _try_host _has_cleanup
@@ -149,7 +154,9 @@ _ensure_pool_infrastructure() {
 	# When recreating VMs, destroy orphaned cluster VMs in pool folders first
 	if [ -n "${CLI_RECREATE_VMS:-}" ]; then
 		for _p in $CLI_POOL_LIST; do
-			local _pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
+			local _pool_folder
+			_pool_folder=$(_pool_conf_get "${_RUN_DIR}/pools.conf" "$_p" VC_FOLDER)
+			[ -n "$_pool_folder" ] || _pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
 			local _orphans
 			_orphans=$(govc find "$_pool_folder" -type m | grep -v "/con${_p}$" | grep -v "/dis${_p}$") || true
 			if [ -n "$_orphans" ]; then

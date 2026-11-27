@@ -79,14 +79,14 @@ suite_reapply_config() {
 # Pass --remote to also clean disN.
 suite_cleanup_oc_mirror_cache() {
 	e2e_run "Remove oc-mirror caches (conN)" \
-		"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
-	e2e_run "Remove stale oc-mirror temp dirs >1 day old (conN)" \
-		"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 | xargs rm -rf"
+		"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror -prune -exec rm -rf {} +; sudo find /root /home -path '*/aba/*' -type d -name .oc-mirror -prune -exec rm -rf {} +"
+	e2e_run "Remove oc-mirror temp dirs (conN)" \
+		"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -exec rm -rf {} +"
 	if [ "${1:-}" = "--remote" ]; then
 		e2e_run_remote -q "Remove oc-mirror caches (disN)" \
-			"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
-		e2e_run_remote -q "Remove stale oc-mirror temp dirs >1 day old (disN)" \
-			"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 | xargs rm -rf"
+			"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror -prune -exec rm -rf {} +; sudo find /root /home -path '*/aba/*' -type d -name .oc-mirror -prune -exec rm -rf {} +"
+		e2e_run_remote -q "Remove oc-mirror temp dirs (disN)" \
+			"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -exec rm -rf {} +"
 	fi
 }
 

@@ -2,7 +2,7 @@
 # INTENT:      Create a tar archive (bundle) of the ABA repo for air-gap transfer
 # CALLED BY:   make tarrepo, make tar, aba bundle, aba tar
 # CWD:         ABA repo root
-# ARGS:        [--inc] incremental backup (based on ~/.aba.previous.backup timestamp)
+# ARGS:        [--inc] incremental backup (based on ~/.aba/.previous.backup timestamp)
 #              [--repo] exclude mirror_*.tar files (light bundle — user copies them separately)
 #              [file] output path (default: /tmp/aba-backup-$USER.tar; "-" for stdout)
 # PRODUCES:    tar archive with .bundle marker; ISC locked for disconnected side
@@ -15,7 +15,7 @@
 # ENV:         None required (sources scripts/include_all.sh)
 #
 # Usage: backup.sh [--inc] [--repo] [file]
-#                   --inc	incremental backup based on the ~/.aba.previous.backup flag file's timestamp
+#                   --inc	incremental backup based on the ~/.aba/.previous.backup flag file's timestamp
 #                   --repo	exclude all */mirror_*tar files from the archive due to disk space restictions.  Copy them separately, if needed.
 
 source scripts/include_all.sh
@@ -73,8 +73,12 @@ _restore_cleanup() {
 }
 trap '_restore_cleanup' EXIT
 
-# If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
-[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
+# If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past)
+# The stamp lives inside ~/.aba. Drop a leftover at the old path so it cannot
+# keep an incremental bundle on the previous timestamp.
+mkdir -p ~/.aba
+rm -f ~/.aba.previous.backup
+[ ! -f ~/.aba/.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba/.previous.backup 
 
 # Notes:
 # For the bundle we prefer only install files in cli/ and nothing under ~/bin
@@ -240,7 +244,7 @@ file_list=$(find				\
 								\
 	\( -type f -o -type l \)				\
 								\
-	-newer ~/.aba.previous.backup 				\
+	-newer ~/.aba/.previous.backup 				\
 	-print							\
 )
 
@@ -325,7 +329,7 @@ set -e
 # If using 'repo only, then you always want the whole repo to be backed up (so no need to use the timestamp file).
 # NOTE: ONLY INC BACKUPS USE THIS FILE!!! See above. 
 # Upon success, make a note of the time FIXME: Remove the 'inc' feature
-touch ~/.aba.previous.backup
+touch ~/.aba/.previous.backup
 
 if [ "$dest" != "-" ]; then
 	_sz=$(du -sh "$dest" 2>/dev/null | awk '{print $1}') || _sz=""

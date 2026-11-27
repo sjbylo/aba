@@ -241,6 +241,42 @@ case "$CLI_COMMAND" in
 
 		export _E2E_DAEMONIZED=1
 
+		# After a clean cycle only. A crash restart must not clear ~/.aba.
+		# run_once -G runs as that user first, so a setsid job is killed
+		# before its directory disappears. The directory itself stays.
+		_e2e_cycle_clear_aba_homes() {
+			local _p _side _target
+			_daemon_log "Cycle passed. Clearing contents of ~/.aba on conN and disN."
+			for _p in $CLI_POOL_LIST; do
+				for _side in con dis; do
+					if [ "$_side" = con ]; then
+						_target=$(_con_target "$_p")
+					else
+						_target=$(_dis_target "$_p")
+					fi
+					if _essh "$_target" "bash -s" <<-'EOF'
+						for u in root steve testy; do
+							id "$u" >/dev/null 2>&1 || continue
+							sudo -u "$u" -H bash -s <<-'USER' || echo "  WARNING: could not clear ~/.aba for $u"
+						if [ -f "$HOME/aba/scripts/include_all.sh" ]; then
+							source "$HOME/aba/scripts/include_all.sh" && run_once -G || true
+						fi
+						if [ -d "$HOME/.aba" ]; then
+							find "$HOME/.aba" -mindepth 1 -delete
+						fi
+						rm -f "$HOME/.aba.previous.backup"
+						USER
+						done
+						EOF
+					then
+						_daemon_log "  cleared ~/.aba on $_target"
+					else
+						_daemon_log "  WARNING: could not clear ~/.aba on $_target"
+					fi
+				done
+			done
+		}
+
 		while true; do
 			# Build per-cycle args: add --force only on the very first launch
 			_cycle_args=("${_daemon_args[@]}")
@@ -258,6 +294,7 @@ case "$CLI_COMMAND" in
 
 			if [ "$_drc" -eq 0 ]; then
 				_daemon_log "Dispatcher exited cleanly (all suites completed). Restarting full cycle ..."
+				_e2e_cycle_clear_aba_homes
 				_daemon_crashes=0
 				_daemon_backoff=$_DAEMON_BACKOFF
 				if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then

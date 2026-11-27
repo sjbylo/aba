@@ -16,6 +16,9 @@
 # =============================================================================
 
 _E2E_LIB_DIR_VMPROV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! declare -F _e2e_vc_folder_allowed >/dev/null 2>&1; then
+	source "$_E2E_LIB_DIR_VMPROV/vc-folder.sh"
+fi
 
 # Source remote helpers if not already loaded
 if ! type _wait_for_ssh &>/dev/null; then
@@ -409,10 +412,6 @@ _vm_cleanup_caches() {
 		rm -f ~/.ssh/quay_installer*
 		rm -rf ~/.oc-mirror/.cache
 		rm -rf ~/*/.oc-mirror/.cache
-		if [ -s ~/.vmware.conf ]; then
-		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g" ~/.vmware.conf
-		    [ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
-		fi
 	CACHEEOF
 }
 
@@ -453,8 +452,53 @@ _vm_cleanup_home() {
 	HOMEEOF
 }
 
+# --- _vm_apply_pool_vc_folder ----------------------------------------------
+# The file just copied is the bastion's vmware.conf, whose VC_FOLDER is the
+# production folder. Rewrite the user and root copies to this pool's folder.
+# A value that is not /Datacenter/vm/aba-e2e/poolN aborts the configure.
+
+_vm_apply_pool_vc_folder() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+	local folder="${VC_FOLDER:-}"
+	local ds="${VM_DATASTORE:-}"
+
+	if ! _e2e_vc_folder_allowed "$folder"; then
+		echo "  FATAL: VC_FOLDER '${folder}' is not /Datacenter/vm/aba-e2e/poolN. Refusing to configure $host." >&2
+		echo "  abatesting is the production folder and must not be used by e2e." >&2
+		return 1
+	fi
+
+	echo "  [vm] VC_FOLDER=$folder on $host (user and root)"
+	_essh "${user}@${host}" -- bash -s -- "$folder" "$ds" <<'EOF'
+set -e
+folder="$1"
+ds="$2"
+rewrite() {
+	file="$1"
+	as_root="${2:-}"
+	run() { if [ -n "$as_root" ]; then sudo "$@"; else "$@"; fi; }
+	run test -e "$file" || return 0
+	run test -s "$file" || return 0
+	run grep -q 'VC_FOLDER=' "$file" || return 0
+	run sed -i -E "s#^[#[:space:]]*(export[[:space:]]+)?VC_FOLDER=.*#VC_FOLDER=${folder}#" "$file"
+	if [ -n "$ds" ]; then
+		run sed -i -E "s#^[#[:space:]]*(export[[:space:]]+)?GOVC_DATASTORE=.*#GOVC_DATASTORE=${ds}#" "$file"
+	fi
+	if run grep -q abatesting "$file"; then
+		echo "FATAL: $file still contains abatesting" >&2
+		return 1
+	fi
+	run grep -qx "VC_FOLDER=${folder}" "$file"
+}
+rewrite "$HOME/.vmware.conf"
+rewrite /root/.vmware.conf root
+EOF
+}
+
 # --- _vm_setup_vmware_conf -------------------------------------------------
-# Copy vmware.conf to the VM (both user and root accounts).
+# Copy vmware.conf to the VM (both user and root accounts), then point
+# VC_FOLDER at this pool. The copy alone would leave the production folder.
 
 _vm_setup_vmware_conf() {
 	local host="$1"
@@ -462,10 +506,13 @@ _vm_setup_vmware_conf() {
 	local vf="${VMWARE_CONF:-$HOME/.vmware.conf}"
 
 	echo "  [vm] Copying vmware.conf to $host ..."
-	if [ -f "$vf" ]; then
-		_escp "$vf" "${user}@${host}:"
-		_essh "${user}@${host}" -- "sudo cp /home/${user}/.vmware.conf /root/.vmware.conf && sudo chmod 600 /root/.vmware.conf"
+	if [ ! -f "$vf" ]; then
+		echo "  FATAL: $vf missing. Cannot configure $host." >&2
+		return 1
 	fi
+	_escp "$vf" "${user}@${host}:"
+	_essh "${user}@${host}" -- "sudo cp /home/${user}/.vmware.conf /root/.vmware.conf && sudo chmod 600 /root/.vmware.conf"
+	_vm_apply_pool_vc_folder "$host" "$user"
 }
 
 # --- _vm_setup_kvm_conf ----------------------------------------------------

@@ -293,7 +293,7 @@ test_begin "Setup: install aba and configure"
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches" \
-	"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
+	"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror -prune -exec rm -rf {} +; sudo find /root /home -path '*/aba/*' -type d -name .oc-mirror -prune -exec rm -rf {} +"
 
 e2e_run "Install aba (verify idempotent)" \
 	"../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
