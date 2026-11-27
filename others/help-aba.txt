@@ -18,6 +18,7 @@ Main commands:
   aba [-d <cluster>] deploy-primed      # Primed deployment pipeline (beta). See 'aba deploy --help'
   aba transfer-primed                   # Config-only transfer tar (beta). See 'aba transfer --help'
   aba [-d <cluster>] upgrade --to <ver> # Upgrade a cluster to a target OCP version. See 'aba cluster --help'
+  aba -d mirror upgrade                 # Upgrade the installed Quay mirror registry. See 'aba mirror --help'
   aba [-d <cluster>] upgrade-mon         # Monitor an in-progress upgrade (Ctrl-C to detach)
   aba import                            # Import an existing OpenShift cluster. See 'aba import --help'
   aba [-d <cluster>] terminal|term      # Interactive shell logged into the cluster (oc ready, bash completion)

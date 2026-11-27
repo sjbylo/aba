@@ -1811,6 +1811,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba -d mirror uninstall --delete-data` | Uninstall the registry and remove all data          |
 | `aba -d mirror stop`      | Stop the mirror registry (data preserved; safe to copy data dir) |
 | `aba -d mirror start`     | Start a previously stopped mirror registry                    |
+| `aba -d mirror upgrade`   | Upgrade the installed Quay registry and renew its server cert (CA unchanged) |
 
 
 ### Cluster Commands
