@@ -85,5 +85,25 @@ else
 	_fail "missing reg_vendor removed the tarball"
 fi
 
+# Upgrade override: any reg_vendor, the tarball that is not the pin goes.
+echo 'reg_vendor=auto' > mirror.conf
+echo 'old-2.0.x' > mirror-registry-amd64.tar.gz
+_sums_for 0000000000000000000000000000000000000000000000000000000000000000
+out=$(QUAY_PIN_ANY_VENDOR=1 "$ROOT/scripts/quay-tarball-pin.sh" mirror-registry-amd64.tar.gz "file://${tmp}/sums" 2>/dev/null || true)
+if [ ! -f mirror-registry-amd64.tar.gz ] && [ -f omr-image.tgz ] && [ "$out" = replaced ]; then
+	_ok "QUAY_PIN_ANY_VENDOR=1 replaces a tarball that is not the pin (reg_vendor=auto)"
+else
+	_fail "override did not replace the tarball (out=${out:-empty})"
+fi
+
+# Upgrade override offline: no checksums, the file stays.
+echo 'old-2.0.x' > mirror-registry-amd64.tar.gz
+out=$(QUAY_PIN_ANY_VENDOR=1 "$ROOT/scripts/quay-tarball-pin.sh" mirror-registry-amd64.tar.gz "file://${tmp}/no-such-sums" 2>/dev/null || true)
+if [ -f mirror-registry-amd64.tar.gz ] && [ -z "$out" ]; then
+	_ok "QUAY_PIN_ANY_VENDOR=1 without checksums leaves the tarball"
+else
+	_fail "override offline removed the tarball (out=${out:-empty})"
+fi
+
 echo "Results: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
