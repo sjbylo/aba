@@ -451,6 +451,15 @@ start: .init _progress_plan-start   ## Start a previously stopped mirror registr
 _progress_plan-start:
 	@$(SCRIPTS)/progress-plan.sh start
 
+# Reads ~/.aba/mirror/<name>/state.sh, not mirror.conf, so only .init is needed.
+.PHONY: upgrade
+upgrade: .init _progress_plan-upgrade   ## Upgrade the installed Quay mirror registry and renew its server cert.
+	$(SCRIPTS)/reg-upgrade.sh
+
+.PHONY: _progress_plan-upgrade
+_progress_plan-upgrade:
+	@$(SCRIPTS)/progress-plan.sh upgrade
+
 .PHONY: cluster
 cluster:
 	@echo [ABA] "Run: 'aba cluster ...' from ABA's top-level directory" >&2

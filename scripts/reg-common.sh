@@ -1723,6 +1723,127 @@ reg_quay_installer_key() {
 	_reg_host_run "${1:-}" "if [ ! -s ~/.ssh/quay_installer ]; then mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/quay_installer -N '' >/dev/null && cat ~/.ssh/quay_installer.pub >> ~/.ssh/authorized_keys; fi"
 }
 
+# =============================================================================
+# Quay upgrade helpers
+# =============================================================================
+
+# --- reg_quay_prepare_tarball -------------------------------------------------
+# Make sure this mirror dir has the pinned 2.x Quay installer tarball. On a
+# connected host make fetches it. On a disconnected host the download fails
+# and the copy in mirror/ is used. The caller extracts it where it runs:
+# ensure_quay_registry and run_once stop after the first extract, so a newer
+# tarball would be ignored.
+# Sets: quay_tarball
+reg_quay_prepare_tarball() {
+	quay_tarball="mirror-registry-$ARCH.tar.gz"
+
+	# aba may have started this download in the background. Wait for it, so
+	# make does not write the same file at the same time.
+	run_once -q -w -i "$TASK_DL_QUAY_REG" >/dev/null 2>&1 || true
+	# The pin check normally runs only for reg_vendor=quay, and the default is
+	# auto. Upgrade always uses Quay, so an old 2.0.x tarball must go too.
+	if ! QUAY_PIN_ANY_VENDOR=1 make --no-print-directory download-quay-tarball; then
+		aba_warn "Could not download $quay_tarball. Using the copy in $PWD, if there is one."
+	fi
+
+	if [ ! -s "$quay_tarball" ]; then
+		if [ "$ARCH" = "arm64" ]; then
+			aba_abort "There is no Quay mirror-registry for aarch64."
+		fi
+		aba_abort "$quay_tarball not found in $PWD." \
+			"Copy $quay_tarball from the connected host into mirror/, then run the command again."
+	fi
+
+	# Only the Ansible 2.x installer has the upgrade subcommand and these flags.
+	# 3.x is the omr binary. Check the file, not reg_vendor in mirror.conf.
+	if ! tar tzf "$quay_tarball" 2>/dev/null | grep -qE '^(\./)?execution-environment\.tar$'; then
+		aba_abort "$quay_tarball is not the pinned 2.x Quay installer." \
+			"Remove it, then run '$(aba_cmd upgrade)' again on the connected host."
+	fi
+}
+
+# --- reg_leaf_days ------------------------------------------------------------
+# Leaf cert lifetime in days: one year, and never past the CA end date.
+# Returns 1 when the CA has less than 30 days left.
+# Usage: reg_leaf_days <ca_end_epoch> <now_epoch>
+reg_leaf_days() {
+	local _left=$(( ($1 - $2) / 86400 ))
+	local _days
+
+	if [ "$_left" -lt 30 ]; then
+		return 1
+	fi
+	_days=$(( _left - 1 ))
+	if [ "$_days" -gt 365 ]; then
+		_days=365
+	fi
+	echo "$_days"
+}
+
+# --- reg_quay_check_ca --------------------------------------------------------
+# Read the Quay CA end date on the registry host and pick the leaf lifetime.
+# A new CA would break trust on every cluster that uses this registry, so a
+# CA near expiry stops here instead.
+# Usage: reg_quay_check_ca [ssh_cmd]
+# Sets: leaf_days
+reg_quay_check_ca() {
+	local ssh_cmd="${1:-}"
+	local _ca="$reg_root/quay-rootCA/rootCA.pem"
+	local _end=""
+
+	_end=$(_reg_host_run "$ssh_cmd" "cat '$_ca'" | openssl x509 -noout -enddate 2>/dev/null) || true
+	_end="${_end#notAfter=}"
+	if [ -z "$_end" ]; then
+		aba_abort "Cannot read the Quay CA certificate $_ca${ssh_cmd:+ on $reg_host}."
+	fi
+
+	# leaf_days is read by the caller.
+	# shellcheck disable=SC2034
+	if ! leaf_days=$(reg_leaf_days "$(date -d "$_end" +%s)" "$(date +%s)"); then
+		aba_abort "Quay CA expires on $_end. A new CA breaks trust on clusters that use this registry."
+	fi
+}
+
+# --- reg_quay_issue_leaf ------------------------------------------------------
+# Sign a new server cert with the existing Quay CA, on the registry host: the
+# CA key is there, not on the bastion. The CA is not replaced, so clusters that
+# trust rootCA.pem keep working. A random serial means no rootCA.srl is written.
+# Writes only ssl.cert and ssl.key into <out_dir>.
+# Usage: reg_quay_issue_leaf <ssh_cmd|""> <days> <out_dir>
+reg_quay_issue_leaf() {
+	local ssh_cmd="$1"
+	local days="$2"
+	local out_dir="$3"
+	local _ca="$reg_root/quay-rootCA"
+
+	aba_info "Issuing a new server certificate for $reg_host ($days days) from the Quay CA ..."
+
+	if ! _reg_host_run "$ssh_cmd" "set -e
+umask 077
+mkdir -p '$out_dir'
+cd '$out_dir'
+openssl req -new -newkey rsa:2048 -nodes -sha256 -subj '/CN=$reg_host' -keyout ssl.key -out ssl.csr 2>/dev/null
+printf '%s\n' 'subjectAltName=DNS:$reg_host' 'extendedKeyUsage=serverAuth' 'basicConstraints=CA:FALSE' > ssl.ext
+openssl x509 -req -in ssl.csr -CA '$_ca/rootCA.pem' -CAkey '$_ca/rootCA.key' -set_serial 0x\$(openssl rand -hex 16) -days $days -sha256 -extfile ssl.ext > ssl.cert
+rm -f ssl.csr ssl.ext"; then
+		aba_abort "Failed to issue a new certificate from the Quay CA in $_ca${ssh_cmd:+ on $reg_host}."
+	fi
+}
+
+# --- reg_post_upgrade ---------------------------------------------------------
+# Store and trust the CA the same way install does, then mark the registry as
+# running. The CA and the login do not change, so the pull secret stays.
+# last_action is left alone: mirror-status.sh reads it (sync, load) to tell
+# whether the mirror holds images.
+# Usage: reg_post_upgrade <local_ca_path>
+#        reg_post_upgrade <user@host:ca_path> --ssh
+reg_post_upgrade() {
+	_reg_fetch_ca "$1" "${2:-}"
+	trust_root_ca "$regcreds_dir/rootCA.pem"
+
+	replace-value-conf -q -n reg_running -v true -f "$regcreds_dir/state.sh"
+}
+
 # --- reg_stop_vendor ----------------------------------------------------------
 # Stop a running registry without removing data or config.
 # Idempotent: if already stopped, prints info and returns 0.

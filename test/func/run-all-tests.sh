@@ -214,6 +214,7 @@ unit_tests=(
 	test/func/test-reg-generate-password.sh
 	test/func/test-reg-check-v2-auth.sh
 	test/func/test-reg-idempotent-install.sh
+	test/func/test-reg-upgrade.sh
 	test/func/test-state-management.sh
 
 	# Bundle / backup

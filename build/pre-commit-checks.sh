@@ -362,7 +362,9 @@ fi
 # rpms_ext is the Makefile package prereq. Vendor scripts start at
 # DONE|reg_config (the dispatcher emits START|reg_config) and own every
 # later START/DONE pair.
-echo -e "${YELLOW}[9/9] Checking progress events in registry install scripts...${NC}"
+# progress-plan.sh "upgrade": every reg-upgrade-*.sh emits START and DONE
+# for each of its steps (the dispatcher emits none).
+echo -e "${YELLOW}[9/9] Checking progress events in registry install and upgrade scripts...${NC}"
 _progress_failed=0
 
 # Extract only the install case's PLAN step IDs from progress-plan.sh
@@ -410,13 +412,38 @@ else
         fi
     done
 
+    # Upgrade: each reg-upgrade-*.sh vendor script owns every planned step.
+    _upgrade_ids=()
+    while IFS= read -r line; do
+        if [[ "$line" =~ aba_progress.*PLAN\|([a-z_0-9]+)\| ]]; then
+            _upgrade_ids+=("${BASH_REMATCH[1]}")
+        fi
+    done < <(awk '/^\tupgrade\)$/{found=1; next} found && /^\t\t;;$/{exit} found' scripts/progress-plan.sh)
+
+    if [ ${#_upgrade_ids[@]} -eq 0 ]; then
+        echo -e "${RED}      ✗ No PLAN IDs found in progress-plan.sh upgrade case${NC}"
+        _progress_failed=1
+    fi
+    for script in scripts/reg-upgrade-*.sh; do
+        [ -f "$script" ] || continue
+        _missing=()
+        for id in "${_upgrade_ids[@]}"; do
+            grep -q "aba_progress \"START|${id}\"" "$script" || _missing+=("START|$id")
+            grep -q "aba_progress \"DONE|${id}\"" "$script" || _missing+=("DONE|$id")
+        done
+        if [ ${#_missing[@]} -gt 0 ]; then
+            echo -e "${RED}      ✗ $script: missing events: ${_missing[*]}${NC}"
+            _progress_failed=1
+        fi
+    done
+
     if [ $_progress_failed -eq 1 ]; then
         echo -e "${RED}      ✗ Progress event check FAILED${NC}"
         echo -e "${RED}        Scripts must emit aba_progress START|<id> and DONE|<id> for every${NC}"
         echo -e "${RED}        step declared in progress-plan.sh. See reg-install-docker.sh as reference.${NC}\n"
         exit 1
     fi
-    echo -e "${GREEN}      ✓ All registry install scripts emit progress events for all planned steps${NC}\n"
+    echo -e "${GREEN}      ✓ All registry install and upgrade scripts emit progress events for all planned steps${NC}\n"
 fi
 
 echo -e "${GREEN}=== All Pre-Commit Checks Passed! ===${NC}"
