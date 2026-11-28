@@ -557,7 +557,7 @@ Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster
 
 ### Bring your own imageset-config.yaml
 
-To mirror the contents of an ImageSetConfiguration file you already have, pass it with `--imageset`:
+To create an install bundle from an ImageSetConfiguration file you already have, pass it with `--imageset`:
 
 ```
 aba bundle \
@@ -567,6 +567,14 @@ aba bundle \
     --imageset ~/imageset.yaml \
     --platform bm \
     --out ~/ocp-bundle
+```
+
+`aba save` and `aba sync` can use your imageset-config.yaml in the same way.
+
+You can also copy the file into place:
+
+```
+cp ~/imageset.yaml mirror/data/imageset-config.yaml
 ```
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
