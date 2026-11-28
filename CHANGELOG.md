@@ -7,6 +7,7 @@
 ### Fixed
 
 - **The OpenShift Mirror Registry image pull logs in first** — `save` and a local `omr` install write the pull secret into the container auth files before `podman pull`. `registry.redhat.io` rejects the pull without that login.
+- **A bundle leaves a caller-owned ImageSet file locked** — `backup.sh` saves the file's timestamps, touches the copy that goes into the archive, then puts the timestamps back. An ABA-written file stays unlocked on the host that built the bundle.
 
 ---
 

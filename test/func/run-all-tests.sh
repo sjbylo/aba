@@ -221,6 +221,7 @@ unit_tests=(
 	# Bundle / backup
 	test/func/test-primed-bundle-scenarios.sh
 	test/func/test-backup-repo-dir-name.sh
+	test/func/test-backup-isc-mtime.sh
 	test/func/test-bundle-sort-order.sh
 	test/func/test-transfer-primed.sh
 	test/func/test-deploy-primed.sh

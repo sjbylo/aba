@@ -7,9 +7,10 @@
 #              [file] output path (default: /tmp/aba-backup-$USER.tar; "-" for stdout)
 # PRODUCES:    tar archive with .bundle marker; ISC locked for disconnected side
 # SIDE EFFECTS:
-#   - Temporarily touches mirror/data/imageset-config.yaml to lock ISC in the tar
-#   - Creates mirror/data/.isc-pinned if ISC was user-edited (bundle-only flag)
-#   - Restores source repo after tar (touch .created, rm .isc-pinned) — user's workflow unaffected
+#   - Saves the ImageSet and .created mtimes, then touches the ImageSet file
+#     so the archive stores it as newer than .created
+#   - Adds .isc-pinned to the archive when the file was already newer
+#   - Puts the saved mtimes back on the source and removes the source pin
 #   - Removes .aba.conf.seen so user is prompted to edit aba.conf on the disconnected side
 # IDEMPOTENT:  Yes (produces same tar for same inputs; refuses to overwrite existing output)
 # ENV:         None required (sources scripts/include_all.sh)
@@ -53,12 +54,27 @@ repo_dir=$(basename "$PWD")
 # Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
-# If script exits early (crash, Ctrl-C, tar failure): restore source repo to unlocked state.
-# .bundle is a temp marker for tar --transform; .isc-pinned + ISC timestamp must be restored
-# so the user's repo doesn't get stuck in a "locked" state after an interrupted bundle.
+# The ImageSet mtimes change only so the archive stores a locked file.
+# EXIT puts those mtimes back, including after a successful tar.
+_isc_yaml="${repo_dir}/mirror/data/imageset-config.yaml"
+_isc_created="${repo_dir}/mirror/data/.created"
+_isc_pin="${repo_dir}/mirror/data/.isc-pinned"
+_isc_yaml_stamp=
+_isc_created_stamp=
 _restore_cleanup() {
-	rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"
-	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
+	rm -f "${repo_dir}/.bundle"
+	if [ -n "${_isc_yaml_stamp:-}" ] && [ -f "${_isc_yaml_stamp}" ]; then
+		touch -r "${_isc_yaml_stamp}" "${_isc_yaml}"
+		rm -f "${_isc_yaml_stamp}"
+	fi
+	if [ -n "${_isc_created_stamp:-}" ] && [ -f "${_isc_created_stamp}" ]; then
+		touch -r "${_isc_created_stamp}" "${_isc_created}"
+		rm -f "${_isc_created_stamp}"
+	fi
+	# The pin travels in the archive. The source does not keep it.
+	if [ -n "${_isc_yaml_stamp:-}" ]; then
+		rm -f "${_isc_pin}"
+	fi
 	# Restore per-dir symlinks and remove .primed markers from the SOURCE repo
 	# (.primed only belongs in the tar, not in the connected-side working tree)
 	local _i=0
@@ -289,13 +305,22 @@ out_file_list=$(echo $file_list | cut -c-90)
 # during oc-mirror load because the new ISC doesn't match the tar contents.
 # .isc-pinned = user hand-edited the ISC before bundling, so the load side should NOT
 # auto-unlock it (the user's customizations must persist permanently).
-if [ -f "${repo_dir}/mirror/data/imageset-config.yaml" ] && [ -f "${repo_dir}/mirror/data/.created" ]; then
-	if [ "${repo_dir}/mirror/data/imageset-config.yaml" -nt "${repo_dir}/mirror/data/.created" ]; then
-		touch "${repo_dir}/mirror/data/.isc-pinned"
+if [ -f "${_isc_yaml}" ] && [ -f "${_isc_created}" ]; then
+	_isc_yaml_stamp=$(mktemp)
+	_isc_created_stamp=$(mktemp)
+	touch -r "${_isc_yaml}" "${_isc_yaml_stamp}"
+	touch -r "${_isc_created}" "${_isc_created_stamp}"
+	if [ "${_isc_yaml}" -nt "${_isc_created}" ]; then
+		touch "${_isc_pin}"
+		# find already ran, so a pin created here is not in the list yet.
+		if ! printf '%s\n' "$file_list" | grep -qx "${_isc_pin}"; then
+			file_list="${file_list}
+${_isc_pin}"
+		fi
 	else
-		rm -f "${repo_dir}/mirror/data/.isc-pinned"
+		rm -f "${_isc_pin}"
 	fi
-	touch "${repo_dir}/mirror/data/imageset-config.yaml"
+	touch "${_isc_yaml}"
 fi
 
 aba_debug "Running: 'tar cf $dest $out_file_list...' from inside $PWD"
@@ -304,12 +329,6 @@ set +e   # Needed so we can capture the return code from tar and not just exit (
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
 ret=$?
 rm -f "${repo_dir}/.bundle"  # Also cleaned up by EXIT trap, but explicit here for clarity
-
-# Restore source repo after tar: touch .created so it's newer than ISC again.
-# Without this, the user's connected-side repo would stay "locked" and
-# subsequent 'aba save'/'aba sync' would skip ISC regeneration even after config changes.
-[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
-rm -f "${repo_dir}/mirror/data/.isc-pinned"
 
 if [ $ret -ne 0 ]; then
 	echo >&2
