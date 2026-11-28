@@ -314,9 +314,12 @@ $(DOCKER_REG_FILE):
 	@$(SCRIPTS)/download-docker-reg-image.sh $(DOCKER_REG_IMAGE) $(DOCKER_REG_FILE)
 
 # omr registry image (Go-based single-binary Quay mirror registry)
+# registry.redhat.io rejects the pull until the pull secret is in the container
+# auth files. reg-save.sh writes those files only after this recipe has finished.
 OMR_IMAGE ?= registry.redhat.io/openshift/mirror-registry-rhel9:v3.0
 OMR_FILE  := omr-image.tgz
 $(OMR_FILE):
+	@scripts/create-containers-auth.sh
 	@echo "[ABA] Pulling $(OMR_IMAGE) and saving to $(OMR_FILE) ..."
 	@podman pull $(OMR_IMAGE) && podman save -o $(OMR_FILE) $(OMR_IMAGE)
 

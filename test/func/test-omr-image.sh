@@ -38,5 +38,21 @@ else
 	_fail "download-omr-image does not pull ${image}"
 fi
 
+auth_line=$(printf '%s\n' "$dry" | grep -n 'create-containers-auth.sh' | head -1 | cut -d: -f1)
+pull_line=$(printf '%s\n' "$dry" | grep -n "podman pull ${image}" | head -1 | cut -d: -f1)
+if [ -n "$auth_line" ] && [ -n "$pull_line" ] && [ "$auth_line" -lt "$pull_line" ]; then
+	_ok "download-omr-image creates container auth before the pull"
+else
+	_fail "download-omr-image does not create container auth before the pull"
+fi
+
+inst_auth=$(grep -n 'create-containers-auth.sh' scripts/reg-install-omr.sh | head -1 | cut -d: -f1)
+inst_pull=$(grep -n 'podman pull "\$_OMR_IMAGE"' scripts/reg-install-omr.sh | head -1 | cut -d: -f1)
+if [ -n "$inst_auth" ] && [ -n "$inst_pull" ] && [ "$inst_auth" -lt "$inst_pull" ]; then
+	_ok "reg-install-omr.sh creates container auth before the pull"
+else
+	_fail "reg-install-omr.sh does not create container auth before the pull"
+fi
+
 echo "Results: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

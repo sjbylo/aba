@@ -26,6 +26,8 @@ aba_info "Installing $_OMR_VENDOR registry on localhost ..."
 if [ ! -f "$_OMR_IMAGE_FILE" ]; then
 	if ! podman image exists "$_OMR_IMAGE" 2>/dev/null; then
 		aba_info "Pulling $_OMR_VENDOR image: $_OMR_IMAGE ..."
+		# registry.redhat.io rejects this pull until the pull secret is in the container auth files.
+		scripts/create-containers-auth.sh || exit 1
 		if ! podman pull "$_OMR_IMAGE"; then
 			aba_abort "Failed to pull $_OMR_VENDOR image: $_OMR_IMAGE" \
 				"Check network connectivity and registry credentials."

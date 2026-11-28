@@ -4,6 +4,10 @@
 
 - **A caller-owned ImageSet file skips catalog and version fetches** — `--imageset` copies the file into `mirror/data` and stamps `.created` older than it. The same skip applies when that file is already newer than `.created`.
 
+### Fixed
+
+- **The OpenShift Mirror Registry image pull logs in first** — `save` and a local `omr` install write the pull secret into the container auth files before `podman pull`. `registry.redhat.io` rejects the pull without that login.
+
 ---
 
 ## [1.4.10](https://github.com/sjbylo/aba/releases/tag/v1.4.10) - 2026-11-26
