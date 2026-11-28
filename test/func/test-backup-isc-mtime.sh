@@ -85,6 +85,30 @@ if run_backup "$CALLER" "$WORK/caller.tar"; then
 	fi
 fi
 
+# A stale pin is already on disk and the ImageSet file is ABA-written.
+# find lists the pin, then backup.sh must drop that name before deleting it.
+STALE=$WORK/stale-pin
+setup_repo "$STALE"
+printf '%s\n' '# aba-written' > "$STALE/mirror/data/imageset-config.yaml"
+touch -d '2020-01-01 00:00:00' "$STALE/mirror/data/imageset-config.yaml"
+touch -d '2020-01-02 00:00:00' "$STALE/mirror/data/.created"
+printf 'stale\n' > "$STALE/mirror/data/.isc-pinned"
+if run_backup "$STALE" "$WORK/stale.tar"; then
+	if [ ! -f "$STALE/mirror/data/.isc-pinned" ]; then
+		_pass "stale pin is removed from the source"
+	else
+		_fail "stale pin was left on the source"
+	fi
+	mkdir -p "$WORK/stale-x"
+	tar -xf "$WORK/stale.tar" -C "$WORK/stale-x"
+	if [ ! -f "$WORK/stale-x/aba/mirror/data/.isc-pinned" ] \
+		&& [ "$WORK/stale-x/aba/mirror/data/imageset-config.yaml" -nt "$WORK/stale-x/aba/mirror/data/.created" ]; then
+		_pass "stale pin is not in the archive"
+	else
+		_fail "stale pin was archived or the ImageSet file was not locked"
+	fi
+fi
+
 # ABA-written: .created is newer than the ImageSet file.
 ABA=$WORK/aba-owned
 setup_repo "$ABA"

@@ -48,10 +48,9 @@ if [ "$dest" != "-" ]; then
 	[ -s $dest ] && aba_abort "File $dest already exists. Aborting!" 
 fi
 
-# Capture actual repo directory name before cd (needed when repo is not named "aba")
+# Tar from the parent so every path starts with this repo's name. --transform
+# rewrites that name to aba, so a tree that is not named aba still unpacks as aba/.
 repo_dir=$(basename "$PWD")
-
-# Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
 # The ImageSet mtimes change only so the archive stores a locked file.
@@ -89,7 +88,8 @@ _restore_cleanup() {
 }
 trap '_restore_cleanup' EXIT
 
-# If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past)
+# A full backup, and the first run, stamp the cutoff at 1970-01-01 so -newer
+# includes every file. An incremental run keeps the previous stamp.
 # The stamp lives inside ~/.aba. Drop a leftover at the old path so it cannot
 # keep an incremental bundle on the previous timestamp.
 mkdir -p ~/.aba
@@ -299,12 +299,17 @@ fi
 
 out_file_list=$(echo $file_list | cut -c-90)
 
-# Bundle ISC protection: make ISC newer than .created so reg-create-imageset-config.sh
-# will skip regeneration on the disconnected side. Without this, the ISC gets regenerated
-# from local config (which may lack ocp_upgrade_to, etc.) causing "no release images found"
-# during oc-mirror load because the new ISC doesn't match the tar contents.
-# .isc-pinned = user hand-edited the ISC before bundling, so the load side should NOT
-# auto-unlock it (the user's customizations must persist permanently).
+# The archive must store the ImageSet file newer than .created. The disconnected
+# host otherwise regenerates it from local config (which may lack ocp_upgrade_to)
+# and oc-mirror load fails with "no release images found" because the new file
+# does not match the tar contents.
+# Snapshots keep the source mtimes. EXIT copies them back: a caller-owned file
+# stays newer than .created, and an ABA-written file stays unlocked so the next
+# save can regenerate it. The comparison below happens before that touch. A file
+# already newer is caller-owned, so the archive also gets .isc-pinned and load
+# will not unlock it. Equal mtimes are not caller-owned. find has already run,
+# so a new pin is appended to the list and a stale pin is removed from the list
+# before that file is deleted.
 if [ -f "${_isc_yaml}" ] && [ -f "${_isc_created}" ]; then
 	_isc_yaml_stamp=$(mktemp)
 	_isc_created_stamp=$(mktemp)
@@ -318,8 +323,12 @@ if [ -f "${_isc_yaml}" ] && [ -f "${_isc_created}" ]; then
 ${_isc_pin}"
 		fi
 	else
+		# find already listed a stale pin. Drop the name before
+		# deleting the file, or tar exits 2.
+		file_list=$(printf '%s\n' "$file_list" | grep -vx "${_isc_pin}" || true)
 		rm -f "${_isc_pin}"
 	fi
+	# tar reads this touched file. EXIT puts the snapshot mtimes back.
 	touch "${_isc_yaml}"
 fi
 
