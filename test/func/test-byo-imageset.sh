@@ -1,7 +1,7 @@
 #!/bin/bash
 # Test: a caller-owned ImageSet file skips catalog and version fetches.
-# The ownership test itself is unchanged: the YAML must be newer than .created,
-# and a missing .created is not user-managed.
+# A non-empty file with no .created beside it is caller-owned.
+# Equal timestamps are not.
 
 _tmp=$(mktemp -d)
 trap 'rm -rf "$_tmp"' EXIT
@@ -42,9 +42,9 @@ cd "$_tmp/repo"
 cp "$_good" "$_tmp/repo/mirror/data/imageset-config.yaml"
 rm -f "$_tmp/repo/mirror/data/.created"
 if aba_isc_is_user_managed; then
-	_fail "missing .created counted as user-managed"
+	_pass "a file with no .created is caller-owned"
 else
-	_pass "missing .created is not user-managed"
+	_fail "a file with no .created was not caller-owned"
 fi
 
 touch "$_tmp/repo/mirror/data/imageset-config.yaml" "$_tmp/repo/mirror/data/.created"
@@ -101,6 +101,12 @@ if aba_isc_is_user_managed "$(_aba_isc_file)"; then
 	_pass "the mirror directory file is user-managed"
 else
 	_fail "the mirror directory file was not user-managed"
+fi
+
+if grep -q 'aba_isc_is_user_managed data/imageset-config.yaml' "$_repo/scripts/reg-load.sh"; then
+	_pass "load uses the ownership test"
+else
+	_fail "load does not use the ownership test"
 fi
 
 _nfiles() {

@@ -213,8 +213,8 @@ _isc_exists=false
 _isc_user_managed=false
 if [ -f "$_isc" ] && [ -s "$_isc" ]; then
 	_isc_exists=true
-	# User-managed: ISC is strictly newer than data/.created
-	if [ -f data/.created ] && [ "$_isc" -nt data/.created ]; then
+	# Caller-owned: no .created beside the file, or the file is newer than .created.
+	if [ ! -f data/.created ] || [ "$_isc" -nt data/.created ]; then
 		_isc_user_managed=true
 	fi
 fi

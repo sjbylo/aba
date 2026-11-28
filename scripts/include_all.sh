@@ -7185,16 +7185,19 @@ _aba_isc_file() {
 	fi
 }
 
-# Returns 0 if the ISC file has been manually edited by the user (newer than .created).
-# The .created sentinel is touched after every ABA-managed ISC generation.
-# A missing .created means ABA never generated the ISC — not user-managed.
+# Returns 0 when the caller owns the ImageSet file.
+# A non-empty file with no .created beside it was not written by ABA.
+# A file strictly newer than .created was edited after ABA wrote it.
+# Equal timestamps are not caller-owned.
 aba_isc_is_user_managed() {
 	local _isc="${1:-mirror/data/imageset-config.yaml}"
-	[[ -f "$_isc" && -f "${_isc%/*}/.created" && "$_isc" -nt "${_isc%/*}/.created" ]]
+	local _created="${_isc%/*}/.created"
+	[[ -s "$_isc" && ! -f "$_created" ]] && return 0
+	[[ -f "$_isc" && -f "$_created" && "$_isc" -nt "$_created" ]]
 }
 
 # Copy a caller-owned ImageSet file into place.
-# .created is stamped in the past so the existing newer-than-.created test keeps the file.
+# .created is stamped in the past so the archive stores the same pair a hand-edit would.
 aba_isc_install_user_file() {
 	local src="$1" dest dir
 	[ -s "$src" ] || aba_abort "file not found or empty: $src"

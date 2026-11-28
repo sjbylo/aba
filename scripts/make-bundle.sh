@@ -192,7 +192,7 @@ fi
 aba_debug "Checking if repository is already in use"
 if [ -d mirror/data ]; then
 	aba_debug "mirror/data directory exists, checking for existing files"
-	if [ mirror/data/imageset-config.yaml -nt mirror/data/.created ]; then
+	if aba_isc_is_user_managed mirror/data/imageset-config.yaml; then
 		aba_debug "imageset-config.yaml has been modified since creation"
 		# Detect if any image-set archive files exist
 		ls mirror/data/mirror_*\.tar >/dev/null 2>&1 && image_set_files_exist=1

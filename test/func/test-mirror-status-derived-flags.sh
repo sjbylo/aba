@@ -96,11 +96,11 @@ else
 	_fail "ISC present → isc_exists should be true, got '$(get_key "$out" isc_exists)'"
 fi
 
-# ISC not user-managed (no .created marker)
-if [ "$(get_key "$out" isc_user_managed)" = "false" ]; then
-	_pass "No .created marker → isc_user_managed=false"
+# ISC caller-owned when it stands alone (no .created marker)
+if [ "$(get_key "$out" isc_user_managed)" = "true" ]; then
+	_pass "No .created marker → isc_user_managed=true"
 else
-	_fail "No .created marker → isc_user_managed should be false, got '$(get_key "$out" isc_user_managed)'"
+	_fail "No .created marker → isc_user_managed should be true, got '$(get_key "$out" isc_user_managed)'"
 fi
 
 # ISC user-managed: ISC is newer than data/.created
@@ -235,6 +235,8 @@ fi
 # Platform excluded, ISC not user-managed → true
 setup_mirror_dir
 write_isc 0
+sleep 0.1
+touch "$_tmp/mirror/data/.created"
 sed -i "s/^excl_platform=.*/excl_platform=true/" "$_tmp/aba.conf"
 out=$(run_status)
 if [ "$(get_key "$out" transfer_excl_release)" = "true" ]; then

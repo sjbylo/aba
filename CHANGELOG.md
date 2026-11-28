@@ -3,6 +3,7 @@
 ### Changed
 
 - **A caller-owned ImageSet file skips catalog and version fetches** — `--imageset` copies the file into `mirror/data` and stamps `.created` older than it. The same skip applies when that file is already newer than `.created`.
+- **A standalone imageset-config.yaml is caller-owned** — a non-empty `mirror/data/imageset-config.yaml` with no `.created` beside it is kept by save, sync, bundle, and load. A file that is not newer than `.created` is still regenerated. Deleting `.created` no longer causes regeneration.
 
 ### Fixed
 

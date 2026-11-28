@@ -8,7 +8,7 @@
 #              in cross-minor upgrade mode the indexes of both the source and target minor)
 # PRODUCES:    data/imageset-config.yaml, touches data/.created after generation
 # GUARDS:
-#   - Skips regeneration if ISC is strictly newer than data/.created (user/bundle ownership)
+#   - Skips regeneration if the ISC stands alone or is strictly newer than data/.created
 #   - In bundle mode (.bundle exists): prints info message explaining ISC is preserved
 #   - In non-bundle mode: prints warning with instructions to force regeneration
 # IDEMPOTENT:  Yes (same config inputs produce same ISC; user edits are preserved)
@@ -252,15 +252,15 @@ _resolve_operators_json() {
 }
 
 # ISC regeneration guard:
-#   Regenerate if: ISC doesn't exist/empty, OR .created is missing, OR ISC is NOT strictly newer than .created.
-#   Skip if: user edited the ISC after generation (ISC is strictly newer than .created).
-#   To force regeneration: aba --force -d mirror imagesetconf (or: rm data/.created)
-#   Using "! ISC -nt .created" instead of ".created -nt ISC" so that equal timestamps
-#   also trigger regeneration (needed on platforms like System Z/s390x).
-#   The .created file is touched at the end of each generation cycle.
-#   This allows users to customize the ISC and run 'aba save' or 'aba sync' again without losing edits.
+#   Regenerate if: ISC doesn't exist or is empty, OR .created exists and the ISC
+#   is not strictly newer than it.
+#   Skip if: the ISC stands alone (no .created), or the caller edited it after
+#   ABA wrote it. Equal timestamps still regenerate (s390x).
+#   To force regeneration: aba --force -d mirror imagesetconf
+#   Deleting .created does not regenerate a file that is already there.
 if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
-   [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imageset-config.yaml -nt data/.created ]; then
+   [ ! -s data/imageset-config.yaml ] || \
+   { [ -f data/.created ] && [ ! data/imageset-config.yaml -nt data/.created ]; }; then
 	aba_debug "Generating new imageset-config.yaml"
 	{ [ ! "$ocp_channel" ] || [ ! "$ocp_version" ]; } && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
