@@ -4,6 +4,7 @@ Usage:
   aba bundle \
     -c, --channel <channel>                   # Choose OpenShift install channel (fast, stable, candidate).
     -v, --version <version>                   # OpenShift version to install (x.y.z, x.y, latest|l or previous|p).
+        --imageset <path/to/file>             # Use this ImageSet file. ABA does not regenerate it.
     -o, --out /path/to/file                   # File to write install bundle to.
     -S, --pull-secret ~/.pull-secret.json     # Location of your Red Hat pull secret.
     -P, --op-sets [<list of operator sets>]   # Provide names of sets of operators: ocp, odf, virt, ai etc.

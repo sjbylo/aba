@@ -9,7 +9,7 @@
 #   - Clean-slate aba install
 #   - aba CLI configuration (aba.conf, vmware.conf, NTP, operator-sets)
 #   - Light bundle creation (specific operator subset)
-#   - Full bundle creation (all operators)
+#   - Bundle from a caller-owned ImageSet file (--imageset), release images only
 #   - Bundle tar verification (contents, mirror_000001.tar presence)
 #   - Fresh disconnected unpack: rm -rf ~/aba, then extract, then ./install
 #   - Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) in bundle + ~/bin on disco
@@ -43,8 +43,8 @@ plan_tests \
     "Setup: install and configure aba" \
     "Bundle with operator filters: create" \
     "Bundle with operator filters: verify contents" \
-    "Bundle without operator filters: create" \
-    "Bundle without operator filters: verify contents" \
+    "Bundle from a caller-owned ImageSet file: create" \
+    "Bundle from a caller-owned ImageSet file: verify contents" \
     "All-operators imageset: generate and verify YAML" \
     "mirror clean: removes files and re-extraction works" \
     "Fresh unpack: remove ~/aba, extract, install" \
@@ -163,22 +163,41 @@ e2e_run -q "Clean up light bundle" "rm -fv ~/tmp/delete-me*tar"
 test_end 0
 
 # ============================================================================
-# 5. Bundle WITHOUT operator filters (zero operators -- smallest bundle)
+# 5. Bundle from a caller-owned ImageSet file (zero operators -- smallest bundle)
+#    Version and channel are already known. --imageset copies the file into
+#    place, so ABA does not generate one.
 # ============================================================================
-test_begin "Bundle without operator filters: create"
+test_begin "Bundle from a caller-owned ImageSet file: create"
 
 e2e_run -q "Clean previous bundles" "rm -fv ~/tmp/delete-me*tar"
 
-# No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
-e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o ~/tmp/delete-me -y"
+_byo_major=$(printf '%s\n' "$ocp_version" | cut -d. -f1-2)
+mkdir -p "$HOME/tmp"
+cat > "$HOME/tmp/byo-imageset.yaml" <<EOF
+# e2e-byo-imageset
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    channels:
+    - name: ${ocp_channel}-${_byo_major}
+      minVersion: ${ocp_version}
+      maxVersion: ${ocp_version}
+      type: ocp
+    graph: true
+EOF
+
+e2e_run -r 3 2 "Create bundle from caller-owned ImageSet file (channel=$ocp_channel version=$ocp_version)" \
+    "aba -c $ocp_channel -v $ocp_version --imageset $HOME/tmp/byo-imageset.yaml -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o ~/tmp/delete-me -y"
+e2e_run "Caller-owned ImageSet file was kept" \
+    "grep -q 'e2e-byo-imageset' mirror/data/imageset-config.yaml && [ mirror/data/imageset-config.yaml -nt mirror/data/.created ]"
 
 test_end 0
 
 # ============================================================================
-# 6. Bundle without operator filters: verify contents
+# 6. Bundle from a caller-owned ImageSet file: verify contents
 # ============================================================================
-test_begin "Bundle without operator filters: verify contents"
+test_begin "Bundle from a caller-owned ImageSet file: verify contents"
 
 e2e_run "Show tar file size" "ls -l ~/tmp/delete-me*tar"
 e2e_run "Show tar file size (human)" "ls -lh ~/tmp/delete-me*tar"

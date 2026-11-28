@@ -147,7 +147,14 @@ if [ "$force" ]; then
 	if [ -d mirror/data ]; then
 		aba_debug "Cleaning ABA-owned files in mirror/data (preserving oc-mirror working-dir/)"
 		aba_warn "Deleting ABA-owned files under aba/mirror/data/ (--force set)" >&2
-		rm -f mirror/data/imageset*.yaml mirror/data/mirror_*.tar mirror/data/aba-transfer*.* mirror/data/.created mirror/data/.isc-pinned
+		# A caller-owned ImageSet file stays. The archives are still removed
+		# so the next save writes them again from that file.
+		if aba_isc_is_user_managed; then
+			aba_warn "Keeping user-managed imageset-config.yaml (--force set)" >&2
+			rm -f mirror/data/mirror_*.tar mirror/data/aba-transfer*.* mirror/data/.isc-pinned
+		else
+			rm -f mirror/data/imageset*.yaml mirror/data/mirror_*.tar mirror/data/aba-transfer*.* mirror/data/.created mirror/data/.isc-pinned
+		fi
 		aba_debug "ABA-owned files removed (working-dir/ preserved)"
 	else
 		aba_debug "mirror/data directory doesn't exist"

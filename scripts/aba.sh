@@ -69,6 +69,8 @@ dir_already_set=false # Only process first --dir/-d
 _CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
 _CLI_DISTRIBUTION="" # Extracted from --distribution, applied after aba.conf is loaded
 _CLI_DISTRIBUTION_SET="" # 1 when the flag was present, even if its value was missing
+_CLI_IMAGESET="" # Extracted from --imageset, installed before -v starts any fetch
+_CLI_ORIG_PWD=$PWD
 i=1
 
 while [ $i -le $# ]; do
@@ -170,6 +172,23 @@ while [ $i -le $# ]; do
 				candidate|c) chan=candidate ;;
 			esac
 			new_args+=("$arg" "$chan")
+			;;
+
+		--imageset)
+			# Taken out of the main parse so the file is in place before -v
+			# starts a catalog or version fetch, whichever flag is first.
+			i=$((i + 1))
+			_CLI_IMAGESET="${!i}"
+			if [[ -z "${_CLI_IMAGESET:-}" || "$_CLI_IMAGESET" =~ ^- ]]; then
+				echo "Error: missing argument after option --imageset" >&2
+				exit 1
+			fi
+			# Paths are relative to the directory aba was started in.
+			# -d may change directory before the file is copied.
+			case "$_CLI_IMAGESET" in
+				/*) ;;
+				*) _CLI_IMAGESET="$_CLI_ORIG_PWD/$_CLI_IMAGESET" ;;
+			esac
 			;;
 
 		--distribution)
@@ -1558,6 +1577,11 @@ for i in imgs:
 	fi
 done
 }
+
+# --imageset was stored before this parse so -v cannot start a fetch first.
+if [ -n "${_CLI_IMAGESET:-}" ]; then
+	aba_isc_install_user_file "$_CLI_IMAGESET"
+fi
 
 aba_parse_args "$@"
 

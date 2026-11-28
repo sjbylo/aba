@@ -3972,6 +3972,8 @@ _ocp_fetch_older_version() {
 # Returns: 0 if path exists, 1 if source not in graph, 2 if no path to target
 ############################################
 verify_upgrade_path_exists() {
+	# The ImageSet file already states the versions. Do not fetch the graph.
+	aba_isc_is_user_managed "$(_aba_isc_file)" && return 0
 	local current_ver="${1:-}"
 	local target_ver="${2:-}"
 	local channel="${3:-${ocp_channel:-stable}}"
@@ -5877,6 +5879,9 @@ download_all_catalogs() {
 	local version_short="${1}"
 	local ttl="${2:-}"
 
+	# Indexes exist only so ABA can write the ImageSet file.
+	aba_isc_is_user_managed "$(_aba_isc_file)" && return 0
+
 	if [[ -z "$version_short" ]]; then
 		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
 		return 1
@@ -5921,7 +5926,10 @@ download_all_catalogs() {
 #       may be redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
 wait_for_all_catalogs() {
 	local version_short="${1}"
-	
+
+	# Indexes exist only so ABA can write the ImageSet file.
+	aba_isc_is_user_managed "$(_aba_isc_file)" && return 0
+
 	if [[ -z "$version_short" ]]; then
 		echo_red "[ABA] Error: wait_for_all_catalogs requires version (e.g., 4.19)" >&2
 		return 1
@@ -7166,12 +7174,41 @@ aba_version_fetch_wait() {
 
 # --- ISC helpers ---
 
+# Where the ImageSet file lives from this working directory.
+# Make runs inside the mirror, so the file is data/imageset-config.yaml.
+# aba from the repo root still has it under mirror/data/.
+_aba_isc_file() {
+	if [ -s Makefile ] && grep -q "Mirror Makefile" Makefile; then
+		printf '%s\n' "data/imageset-config.yaml"
+	else
+		printf '%s\n' "${ABA_ROOT:-.}/mirror/data/imageset-config.yaml"
+	fi
+}
+
 # Returns 0 if the ISC file has been manually edited by the user (newer than .created).
 # The .created sentinel is touched after every ABA-managed ISC generation.
 # A missing .created means ABA never generated the ISC — not user-managed.
 aba_isc_is_user_managed() {
 	local _isc="${1:-mirror/data/imageset-config.yaml}"
 	[[ -f "$_isc" && -f "${_isc%/*}/.created" && "$_isc" -nt "${_isc%/*}/.created" ]]
+}
+
+# Copy a caller-owned ImageSet file into place.
+# .created is stamped in the past so the existing newer-than-.created test keeps the file.
+aba_isc_install_user_file() {
+	local src="$1" dest dir
+	[ -s "$src" ] || aba_abort "file not found or empty: $src"
+	# jq exits 0 when its input is empty, so a failed parse must be checked on its own.
+	local json
+	json=$(yaml2json < "$src") || aba_abort "Image set file is not YAML: $src"
+	printf '%s\n' "$json" | jq -e '.mirror | type == "object"' >/dev/null \
+		|| aba_abort "Image set file has no mirror: key: $src"
+	dest="$(_aba_isc_file)"
+	dir=$(dirname "$dest")
+	mkdir -p "$dir"
+	cp "$src" "$dest"
+	touch -d '2000-01-01' "$dir/.created"
+	touch "$dest"
 }
 
 # --- ISC generation ---
@@ -7470,7 +7507,11 @@ fetch_latest_version() { dist_fetch_latest_version "$@"; }
 fetch_latest_z_version() { dist_fetch_latest_z_version "$@"; }
 fetch_previous_version() { dist_fetch_previous_version "$@"; }
 fetch_older_version() { dist_fetch_older_version "$@"; }
-verify_release_version_exists() { dist_verify_release "$@"; }
+verify_release_version_exists() {
+	# The caller already named the version. Do not fetch the graph to prove it.
+	aba_isc_is_user_managed "$(_aba_isc_file)" && return 0
+	dist_verify_release "$@"
+}
 
 # aba.sh sets _ABA_DIST_HOLD when aba.conf does not exist yet. It writes
 # the key, then calls dist_load itself. Every other source loads now.

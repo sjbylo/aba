@@ -56,6 +56,7 @@ Options:
       --distribution <ocp|okd>          # Install OpenShift (default) or OKD. OKD uses stable and candidate.
   -c, --channel <fast|stable|candidate> # Set the OpenShift installation channel, e.g. fast|f, stable|s, eus or candidate|c
   -v, --version <version>               # Set (x.y.z) or (x.y) OpenShift version, e.g. 4.19.20 or 4.19 or 'latest' or 'l' or 'previous' or 'p'
+      --imageset <path/to/file>         # Use this ImageSet file. ABA does not regenerate it.
       --upgrade-to <version>            # Set upgrade version in mirror.conf (use from mirror or cluster dir)
   -p, --platform <vmw|bm|kvm>           # Set target platform: vmw (vCenter/ESXi), bm (bare metal) or kvm (KVM/libvirt)
   -b, --base-domain, --domain <domain>  # Set the OpenShift base domain, e.g. company.com

@@ -11,6 +11,10 @@ set -eo pipefail
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 source scripts/include_all.sh
+# Indexes exist only so ABA can write the ImageSet file.
+# This wait does not call wait_for_all_catalogs. A task that was never
+# started makes run_once -w fail, so return before that wait.
+aba_isc_is_user_managed "$(_aba_isc_file)" && exit 0
 aba_debug "Starting: $0 $* in $PWD"
 
 # Get OCP version from aba.conf
