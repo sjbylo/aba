@@ -555,6 +555,20 @@ For VMware/KVM, this creates VMs and completes the installation automatically.
 For bare metal, set MACs (`macs.conf` or `agent-config.yaml`) before install; optionally set `disk_hint` in `cluster.conf` if the default install disk is wrong. One continuous `aba install` prompts you to review config and confirm servers are booted.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
+### Bring your own imageset-config.yaml
+
+To mirror the contents of an ImageSetConfiguration file you already have, pass it with `--imageset`:
+
+```
+aba bundle \
+    --pull-secret "~/.pull-secret.json" \
+    --channel stable \
+    --version 4.18.12 \
+    --imageset ~/imageset.yaml \
+    --platform bm \
+    --out ~/ocp-bundle
+```
+
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
 
 Use light bundles when the standard `aba bundle` is impractical — typically because:
