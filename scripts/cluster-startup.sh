@@ -204,21 +204,21 @@ fi
 aba_progress "DONE|su_api"
 aba_progress "START|su_nodes"
 
-uncordon_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC adm uncordon ${node}; done; }
-
+# Re-read after each uncordon. oc adm uncordon can exit 0 and leave the cordon.
 sleep 5 	# Sometimes need to wait to avoid uncordon errors!
 
 aba_info "Making all nodes schedulable (uncordon):"
-if ! aba_wait_show "Uncordon all nodes" 5 600 uncordon_all_nodes; then
-	aba_warn "Uncordon did not fully complete after 10 minutes, continuing ..."
+if ! aba_wait_show "Uncordon all nodes" 5 600 cluster_uncordon_unschedulable; then
+	aba_progress "FAIL|su_nodes"
+	aba_progress "ERROR|Nodes still unschedulable after 10 min"
+	aba_progress "NEXT|Check 'oc get nodes', then run aba rescue"
+	aba_abort "Nodes are still unschedulable after 10 minutes."
 fi
 
 # Wait for this command to work!
 if ! aba_wait_show "Waiting for cluster API after uncordon" 10 300 _cluster_startup_oc_get_nodes; then
 	aba_warn "Could not reach cluster API after 5 minutes, continuing ..."
 fi
-
-all_nodes_ready() { aba_debug "Running: $OC get nodes (all_nodes_ready check)"; [ -z "$($OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v ^True$)" ]; }
 
 check_and_approve_csrs() {
 	# Keep on watching for and approving those CSRs ...
@@ -246,14 +246,20 @@ trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_r
 aba_progress "DONE|su_nodes"
 
 aba_progress "START|su_nodes_ready"
-# Wait for all nodes in Ready state
-if ! all_nodes_ready; then
-	if ! aba_wait_show "Waiting for all nodes Ready (Ctrl-C to skip)" 10 600 all_nodes_ready; then
+# Wait for all nodes in Ready state. SchedulingDisabled must not pass this.
+if ! cluster_all_nodes_ready; then
+	if ! aba_wait_show "Waiting for all nodes Ready (Ctrl-C to skip)" 10 600 cluster_all_nodes_ready; then
+		if ! cluster_nodes_schedulable; then
+			aba_progress "FAIL|su_nodes_ready"
+			aba_progress "ERROR|Nodes are Ready but still unschedulable"
+			aba_progress "NEXT|Check 'oc get nodes', then run aba rescue"
+			aba_abort "Nodes are still unschedulable."
+		fi
 		aba_warn "Not all nodes are 'Ready' yet, but continuing ..."
 	fi
 fi
 
-if all_nodes_ready; then
+if cluster_all_nodes_ready; then
 	aba_success "All nodes are ready!"
 fi
 

@@ -198,6 +198,7 @@ unit_tests=(
 	test/func/test-vm-power-helpers.sh
 	test/func/test-vm-provider.sh
 	test/func/test-cluster-shutdown.sh
+	test/func/test-uncordon-schedulable.sh
 	test/func/test-vmw-kvm-verify.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
@@ -228,6 +229,7 @@ unit_tests=(
 	test/func/test-day2-connected-cluster.sh
 	test/func/test-day2-waves.sh
 	test/func/test-day2-wait-gate-abort.sh
+	test/func/test-upgrade-cv-reread.sh
 	test/func/test-operator-sets.sh
 	test/func/test-catalog-index-format.sh
 	test/func/test-index-symlink.sh

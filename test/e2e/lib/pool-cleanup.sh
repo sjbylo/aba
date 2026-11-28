@@ -671,8 +671,11 @@ _e2e_podman_prune_run() {
 		|| echo "  WARNING: podman prune failed on disN"
 }
 
-# Delete /etc/dnsmasq.d/aba-*.conf and restart dnsmasq.
+# Delete ABA-managed dnsmasq records and restart dnsmasq.
 # Never aba remove dns (that stops dnsmasq). Never e2e-pool.conf.
+# aba-upstream.conf is the marker from tools/setup-dns.sh. infra-dns.sh
+# refuses to write mirror or cluster records when that file is missing, so
+# the random delete must leave it in place.
 # E2E_DNS_DIR overrides the directory for tests and skips the restart.
 _e2e_dns_reset_script() {
 	cat <<-'EOF'
@@ -681,7 +684,7 @@ _e2e_dns_reset_script() {
 	for f in "$dnsdir"/aba-*.conf; do
 		[ -e "$f" ] || continue
 		case "$f" in
-			*/e2e-pool.conf) continue ;;
+			*/e2e-pool.conf|*/aba-upstream.conf) continue ;;
 		esac
 		rm -f "$f"
 		removed=1
@@ -699,11 +702,11 @@ _e2e_dns_reset_run() {
 		bash -s <<<"$script"
 		return
 	fi
-	echo "  ABA DNS: removing aba-*.conf on conN"
+	echo "  ABA DNS: removing ABA-managed aba-*.conf on conN (keeping aba-upstream.conf)"
 	sudo bash -s <<<"$script" || echo "  WARNING: ABA DNS reset failed on conN"
 	_dis="${DIS_VM}.${VM_BASE_DOMAIN}"
 	_user="${VM_DEFAULT_USER:-steve}"
-	echo "  ABA DNS: removing aba-*.conf on disN"
+	echo "  ABA DNS: removing ABA-managed aba-*.conf on disN (keeping aba-upstream.conf)"
 	_essh "${_user}@${_dis}" "sudo bash -s" <<<"$script" \
 		|| echo "  WARNING: ABA DNS reset failed on disN"
 }

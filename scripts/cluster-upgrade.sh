@@ -390,6 +390,76 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest $opt_force $_opt_warn"
 	fi
 
+	# Read ClusterVersion.
+	# Return 0 and set _cv_upgradeable / _cv_upg_msg when Upgradeable=False.
+	# Return 1 when the object was read and that condition is not False.
+	# Return 2 when oc or jq could not be read. A previous reason stays.
+	# The message is stored for the abort text. It is not inspected.
+	_cv_read_upgradeable() {
+		local json reason
+		json=$(oc get clusterversion version -o json 2>/dev/null) || return 2
+		[ -n "$json" ] || return 2
+		reason=$(printf '%s\n' "$json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .reason // "unknown"' 2>/dev/null) || return 2
+		if [ -z "$reason" ]; then
+			return 1
+		fi
+		_cv_upgradeable=$reason
+		_cv_upg_msg=$(printf '%s\n' "$json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .message // ""' 2>/dev/null) || _cv_upg_msg=""
+		return 0
+	}
+
+	# try_cmd stops when this returns 0. Upgradeable=False and an unreadable
+	# API both return 1 so the same wait covers both.
+	_cv_upgradeable_ready() {
+		local rc=0
+		_cv_read_upgradeable || rc=$?
+		[ "$rc" -eq 1 ]
+	}
+
+	# Warn, wait out a transient Upgradeable=False, or abort.
+	# --force is the only bypass and does not wait.
+	# Do not --auto-yes here: ask=false must not bypass admin-ack /
+	# Upgradeable=False gates. Use --force to proceed intentionally.
+	# Do not decide this by reading oc output. Matching
+	# phrases in the condition message ("unable to handle the request",
+	# "context deadline exceeded", "connection refused", a TLS handshake
+	# error) is too weak and can break when the wording changes.
+	# try_cmd re-reads ClusterVersion every 15 seconds (13 attempts, 3 minutes).
+	# Anything still False when that wait ends, including AdminAckRequired,
+	# is a hard stop.
+	# Usage: cluster_upgrade_upgradeable_gate [delay_seconds] [attempts]
+	cluster_upgrade_upgradeable_gate() {
+		local delay="${1:-15}"
+		local attempts="${2:-13}"
+		local rc=0
+
+		_cv_upgradeable=
+		_cv_upg_msg=
+		_cv_read_upgradeable || rc=$?
+		if [ "$rc" -eq 1 ]; then
+			return 0
+		fi
+		if [ "$rc" -eq 0 ]; then
+			echo
+			aba_warn "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)" \
+				"$_cv_upg_msg"
+			echo
+			if [ -n "$opt_force" ]; then
+				aba_info "--force specified: proceeding despite Upgradeable=False"
+				return 0
+			fi
+		fi
+		if try_cmd -n "$attempts" -d "$delay" -m "ClusterVersion Upgradeable" -- _cv_upgradeable_ready; then
+			return 0
+		fi
+		if [ -n "$_cv_upgradeable" ]; then
+			aba_abort "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)." \
+				"$_cv_upg_msg" \
+				"Resolve the condition, or re-run with --force to bypass upgrade safety checks."
+		fi
+		return 0
+	}
+
 	# Pre-flight: check ClusterVersion conditions using structured JSON.
 	# Don't hardcode reasons — just check status and report reason/message verbatim.
 	_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
@@ -400,28 +470,11 @@ if [ ! "$upgrade_already_running" ]; then
 			aba_warn "Cluster is reporting Failing=$_cv_failing" \
 				"$_cv_fail_msg"
 		fi
-
-		_cv_upgradeable=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .reason // "unknown"' 2>/dev/null) || true
-		if [ -n "$_cv_upgradeable" ]; then
-			_cv_upg_msg=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .message // ""' 2>/dev/null) || true
-			echo
-			aba_warn "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)" \
-				"$_cv_upg_msg" \
-				"" \
-				"ABA cannot resolve this automatically." \
-				"Review the message above and follow any referenced documentation."
-			echo
-			if [ -n "$opt_force" ]; then
-				aba_info "--force specified: proceeding despite Upgradeable=False"
-			else
-				# Do not --auto-yes here: ask=false must not bypass admin-ack /
-				# Upgradeable=False gates. Use --force to proceed intentionally.
-				aba_abort "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)." \
-					"$_cv_upg_msg" \
-					"Resolve the condition, or re-run with --force to bypass upgrade safety checks."
-			fi
-		fi
 	fi
+
+	# Re-reads ClusterVersion. A False that clears is the post-day2 API blip.
+	# A False that remains is a hard stop. See cluster_upgrade_upgradeable_gate.
+	cluster_upgrade_upgradeable_gate
 
 	# Pre-flight: check if target version is an available upgrade.
 	# Parse text output of 'oc adm upgrade' (oc <4.18 lacks -o json for this subcommand).

@@ -59,6 +59,21 @@ if [[ "\$args" == *"get nodes"* && "\$args" == *"Ready"* ]]; then
 	for _n in \$NODES; do echo True; done
 	exit 0
 fi
+# First read is still cordoned. After every node was uncordoned, the re-read is clean.
+if [[ "\$args" == *"node.kubernetes.io/unschedulable"* ]]; then
+	_done=1
+	for _n in \$NODES; do
+		grep -q "adm uncordon \$_n" "$WORK/oc.log" || _done=
+	done
+	for _n in \$NODES; do
+		if [ "\$_done" ]; then
+			printf '%s||\n' "\$_n"
+		else
+			printf '%s|true|yes\n' "\$_n"
+		fi
+	done
+	exit 0
+fi
 if [[ "\$args" == *"get nodes"* && "\$args" == *"metadata.name"* ]]; then
 	echo "\$NODES"
 	exit 0

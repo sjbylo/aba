@@ -40,12 +40,14 @@ fi
 # Now rescue the cluster ...
 export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost-recovery.kubeconfig
 
-aba_debug "Running: oc get nodes (check SchedulingDisabled)"
-if oc get nodes | grep -q SchedulingDisabled; then
+# Same read as startup. A grep of SchedulingDisabled misses a leftover taint,
+# and oc adm uncordon can exit 0 without clearing the cordon.
+if ! cluster_nodes_schedulable; then
 	add_pause=1
 	aba_info "Setting nodes scheduling enabled"
-	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do aba_debug "Running: oc adm uncordon $node"; oc adm uncordon ${node} & done
-	wait
+	if ! try_cmd -Q -n 6 -d 5 -- cluster_uncordon_unschedulable; then
+		aba_abort "Nodes are still unschedulable."
+	fi
 else
 	aba_info "No nodes set to 'SchedulingDisabled'.  Nothing to do!"
 fi

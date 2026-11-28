@@ -161,12 +161,14 @@ echo "=== ABA DNS glob ==="
 
 mkdir -p "$WORK/dns"
 echo a > "$WORK/dns/aba-upstream.conf"
+echo m > "$WORK/dns/aba-mirror.conf"
 echo p > "$WORK/dns/e2e-pool.conf"
 export E2E_DNS_DIR="$WORK/dns"
 if _e2e_dns_reset_run \
-	&& [ ! -e "$WORK/dns/aba-upstream.conf" ] \
+	&& [ -f "$WORK/dns/aba-upstream.conf" ] \
+	&& [ ! -e "$WORK/dns/aba-mirror.conf" ] \
 	&& [ -f "$WORK/dns/e2e-pool.conf" ]; then
-	_pass "aba-*.conf is removed and e2e-pool.conf stays"
+	_pass "ABA DNS records are removed and the setup-dns marker stays"
 else
 	_fail "DNS reset touched the wrong file"
 fi

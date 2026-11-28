@@ -2082,6 +2082,59 @@ cluster_api_reachable() {
 	timeout 3 bash -c "</dev/tcp/$_host/$_port" 2>/dev/null
 }
 
+# oc adm uncordon exits 0 when the patch fails. kubectl prints the error and
+# returns success, so the exit code is not the result. A node can take new
+# pods only when a fresh read shows spec.unschedulable clear and no
+# node.kubernetes.io/unschedulable taint. The scheduler honors both.
+# Ready=True still includes SchedulingDisabled.
+# One read: name|spec.unschedulable|yes.
+# Repeated tabs are one separator in bash, which would hide the taint.
+_cluster_node_sched_lines() {
+	local oc_cmd=${OC:-oc}
+	aba_debug "Running: $oc_cmd get nodes (schedulable check)"
+	$oc_cmd get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.spec.unschedulable}{"|"}{range .spec.taints[?(@.key=="node.kubernetes.io/unschedulable")]}yes{end}{"\n"}{end}'
+}
+
+# Return 0 when every node is schedulable. No nodes, or a failed read, is not success.
+cluster_nodes_schedulable() {
+	local lines name unsched taint saw=
+	lines=$(_cluster_node_sched_lines) || return 1
+	[ -n "$lines" ] || return 1
+	while IFS='|' read -r name unsched taint || [ -n "$name" ]; do
+		[ -n "$name" ] || continue
+		saw=1
+		if [ "$unsched" = "true" ] || [ -n "$taint" ]; then
+			return 1
+		fi
+	done <<< "$lines"
+	[ -n "$saw" ]
+}
+
+# Uncordon nodes that are still blocked, then re-read. Ignore oc's exit code.
+cluster_uncordon_unschedulable() {
+	local lines name unsched taint oc_cmd=${OC:-oc}
+	lines=$(_cluster_node_sched_lines) || return 1
+	[ -n "$lines" ] || return 1
+	while IFS='|' read -r name unsched taint || [ -n "$name" ]; do
+		[ -n "$name" ] || continue
+		if [ "$unsched" = "true" ] || [ -n "$taint" ]; then
+			aba_debug "Running: $oc_cmd adm uncordon $name"
+			$oc_cmd adm uncordon "$name" || true
+		fi
+	done <<< "$lines"
+	cluster_nodes_schedulable
+}
+
+# Ready=True is not enough: SchedulingDisabled is Ready and still unschedulable.
+cluster_all_nodes_ready() {
+	local oc_cmd=${OC:-oc} ready
+	aba_debug "Running: $oc_cmd get nodes (all_nodes_ready check)"
+	cluster_nodes_schedulable || return 1
+	ready=$($oc_cmd get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
+	[ -n "$ready" ] || return 1
+	[ -z "$(printf '%s\n' "$ready" | grep -v '^True$')" ]
+}
+
 # Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
 # Copies auth, config backups, and creates clusterstate symlink.
 # Must be called from the cluster directory (e.g. ~/aba/sno/).
